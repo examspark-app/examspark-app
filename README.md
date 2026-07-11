@@ -1,17 +1,50 @@
-# examspark_frontend
+# ExamSpark Project
 
-A new Flutter project.
+**AI Study Platform** for India — ChatGPT-simple conversation + Study Workspace. Not a notes app. Not a chatbot.
 
-## Getting Started
+**Canonical app:** [`examspark_frontend/`](examspark_frontend/) — run all Flutter commands from here.
 
-This project is a starting point for a Flutter application.
+**Backend:** [`examspark_backend/`](examspark_backend/)
 
-A few resources to get you started if this is your first Flutter project:
+---
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+## Start Here (for humans + AI)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+| Doc | Purpose |
+|-----|---------|
+| [**IA_SCREEN_HIERARCHY.md**](IA_SCREEN_HIERARCHY.md) | **Phase 1** — every screen explained (simple) |
+| [**FEATURES_MASTER.md**](FEATURES_MASTER.md) | **Every feature** — status, screen, dependencies |
+| [**DATA_STORAGE_POLICY.md**](DATA_STORAGE_POLICY.md) | **Where data lives** — temp, R2, Postgres, vectors |
+| [**APP_FLOW.md**](APP_FLOW.md) | **Full user journey** — Guest → Ask AI |
+| [**DEVELOPMENT_WORKFLOW.md**](DEVELOPMENT_WORKFLOW.md) | **Official workflow** — phases 1A–6, models, founder rules |
+| [**PROJECT_WORKING_RULES.md**](PROJECT_WORKING_RULES.md) | **Read first** — how we work |
+| [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) | Phase status — **1B wireframes NEXT** |
+| [TODO.md](TODO.md) | Pending tasks |
+| [CHANGELOG.md](CHANGELOG.md) | What changed |
+| [FEATURES.md](FEATURES.md) | Feature checklist (lighter) |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Architecture index |
+
+## Product & UX
+
+[PRD.md](PRD.md) · [UX_ARCHITECTURE.md](UX_ARCHITECTURE.md) · [examspark_frontend/PRODUCT_VISION.md](examspark_frontend/PRODUCT_VISION.md)
+
+## Technical & Business Rules
+
+[TECH_STACK.md](TECH_STACK.md) · [PROJECT_CORE_RULES.md](PROJECT_CORE_RULES.md) · [CREDIT_ECONOMY.md](CREDIT_ECONOMY.md) · [TEACHER_PLATFORM.md](TEACHER_PLATFORM.md) · [PAYMENT_ARCHITECTURE.md](PAYMENT_ARCHITECTURE.md)
+
+---
+
+## Important
+
+- Root-level `lib/` (if present) is **deprecated** — use `examspark_frontend/lib/` only.
+- Founder is non-developer: external setup (Supabase, R2, Razorpay…) requires **manual step-by-step** guides.
+- Work **phase by phase** — ask before next phase.
+- Decisions saved in docs — **not** chat history.
+
+## Run
+
+```bash
+cd examspark_frontend
+flutter pub get
+flutter run -d chrome
+```

@@ -1,0 +1,64 @@
+---
+description: ExamSpark Credit Economy v2 — session-based costs + plan-tier gating
+alwaysApply: true
+---
+
+# ExamSpark Credit Economy Rule (v2)
+
+Full spec: [`CREDIT_ECONOMY.md`](CREDIT_ECONOMY.md)
+
+## Core Principle
+
+- Users see **Credits only** — never rupee amounts for AI actions
+- Internal (backend only): **1 Credit ≈ ₹0.15** charged-value — never in UI
+- Credits are **feature/session-based** — never per-minute in UI or config copy
+
+## Locked Credit Costs (v2)
+
+| Feature | Credits |
+|---------|---------|
+| Record ≤30 min | 40 |
+| Record 30–60 min | 80 |
+| Record 60–90 min | 120 |
+| Summary | Included with recording |
+| Ask AI (Normal) | 5 |
+| Ask AI (Deep) | 12 |
+| Flashcards | 20 |
+| Quiz (20 MCQ) | 25 |
+| Important Questions | 20 |
+| Revision Notes | 20 |
+| Formula Sheet | 15 |
+| Mind Map | 30 |
+| Diagram/Image | 25 |
+| PDF Analysis | 20 |
+| OCR Image | 15 |
+| Translate | 8 |
+| Voice Read | 5 |
+
+## Plans (v2)
+
+| Plan | Credits/mo | Unlocks |
+|------|------------|---------|
+| Free | 50 | Ask AI only |
+| ₹199 | 1,300 | + PDF, Diagram, study features |
+| ₹499 | 3,500 | + Audio Recording |
+| ₹999 | 8,000 | Full access |
+| Teacher ₹1999 | 20,000 | Bulk record + B2B tools |
+
+## Dashboard UX
+
+- Show **one primary translated stat** + raw credit balance (e.g. "≈ 15 Lecture Sessions")
+- If multiple estimates shown, include shared-pool disclaimer
+
+## Server-Side Check Order
+
+1. Plan tier unlocks feature? → if no: 🔒 locked modal
+2. Enough credits? → if no: insufficient credits modal
+3. Deduct credits server-side only
+
+## Code
+
+- [`credit_costs.dart`](examspark_frontend/lib/core/constants/credit_costs.dart)
+- [`credit_usage_display.dart`](examspark_frontend/lib/core/constants/credit_usage_display.dart)
+- [`plan_tier_gating.dart`](examspark_frontend/lib/core/constants/plan_tier_gating.dart)
+- [`subscription_plans.dart`](examspark_frontend/lib/core/payments/subscription_plans.dart)

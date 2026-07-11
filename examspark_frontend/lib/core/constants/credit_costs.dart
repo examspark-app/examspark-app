@@ -1,51 +1,110 @@
-/// Immutable credit cost constants for ExamSpark enterprise features
-/// All values are in credits and match the Master Setup Prompt specification
+/// Credit Economy v2 — feature/session-based, never per-minute in UI.
 class CreditCosts {
   CreditCosts._();
 
-  // Transcription costs
-  static const int whisperTurboHour = 37;
-  static const int whisperNonTurboHour = 99;
+  /// Backend only — never show in UI. Charged-value per credit.
+  static const double internalRupeePerCredit = 0.15;
 
-  // LLM processing costs
-  static const int qwen3Text = 1;
-  static const int qwen3VL = 2;
+  // Recording by session duration bucket (NOT per-minute)
+  static const int recordUpTo30Min = 40;
+  static const int record30To60Min = 80;
+  static const int record60To90Min = 120;
+  static const int summaryWithRecording = 0;
 
-  // Feature generation costs (each = 1 credit)
-  static const int mcqGeneration = 1;
-  static const int revisionGeneration = 1;
-  static const int importantQuestionsGeneration = 1;
-  static const int answerKeyGeneration = 1;
-  static const int flashcardGeneration = 1;
-  
-  // RAG and ingest costs
-  static const int ragQuery = 1;
-  static const int pdfTextIngest = 1;
+  // Ask AI
+  static const int askAiNormal = 5;
+  static const int askAiDeep = 12;
 
-  // Helper method to get cost by action type
-  static int getCostForAction(String action, {bool useTurbo = true}) {
+  // Generated content
+  static const int flashcards = 20;
+  static const int quiz20Mcq = 25;
+  static const int importantQuestions = 20;
+  static const int revisionNotes = 20;
+  static const int formulaSheet = 15;
+  static const int mindMap = 30;
+
+  // Vision / documents
+  static const int diagramImage = 25;
+  static const int pdfAnalysis = 20;
+  static const int ocrImage = 15;
+
+  // Other
+  static const int translate = 8;
+  static const int voiceRead = 5;
+
+  // Legacy aliases (existing code paths)
+  static const int recordLecture = record30To60Min;
+  static const int whisperTurboHour = record30To60Min;
+  static const int whisperNonTurboHour = record30To60Min;
+  static const int askAi = askAiNormal;
+  static const int ragQuery = askAiNormal;
+  static const int pdfTextIngest = pdfAnalysis;
+  static const int qwen3VL = diagramImage;
+  static const int flashcardGeneration = flashcards;
+  static const int mcqGeneration = quiz20Mcq;
+  static const int revisionGeneration = revisionNotes;
+  static const int importantQuestionsGeneration = importantQuestions;
+  static const int answerKeyGeneration = quiz20Mcq;
+  static const int mindMapGeneration = mindMap;
+  static const int qwen3Text = askAiNormal;
+
+  /// Duration bucket for recording — never expose per-minute rate to user.
+  static int recordCreditsForDurationMinutes(int minutes) {
+    if (minutes <= 30) return recordUpTo30Min;
+    if (minutes <= 60) return record30To60Min;
+    if (minutes <= 90) return record60To90Min;
+    return record60To90Min;
+  }
+
+  static int getCostForAction(String action, {bool useTurbo = true, bool deep = false}) {
     switch (action.toLowerCase()) {
       case 'transcribe':
-        return useTurbo ? whisperTurboHour : whisperNonTurboHour;
+      case 'record':
+      case 'record_lecture':
+        return record30To60Min;
+      case 'pdf':
+      case 'pdf_ingest':
+      case 'pdf_analysis':
+        return pdfAnalysis;
+      case 'diagram':
+      case 'diagram_analysis':
+      case 'qwen3_vl':
+      case 'image':
+      case 'photo':
+        return diagramImage;
+      case 'ocr':
+      case 'ocr_image':
+        return ocrImage;
+      case 'rag':
+      case 'ask_ai':
+      case 'ask-rag':
+        return deep ? askAiDeep : askAiNormal;
+      case 'flashcard':
+      case 'flashcards':
+        return flashcards;
       case 'mcq':
-        return mcqGeneration;
+      case 'quiz':
+        return quiz20Mcq;
       case 'revision':
       case 'revision_sheet':
-        return revisionGeneration;
+        return revisionNotes;
       case 'important_questions':
-        return importantQuestionsGeneration;
+        return importantQuestions;
       case 'answer_key':
-        return answerKeyGeneration;
-      case 'flashcard':
-        return flashcardGeneration;
-      case 'rag':
-        return ragQuery;
-      case 'pdf_ingest':
-        return pdfTextIngest;
-      case 'qwen3_vl':
-        return qwen3VL;
+        return quiz20Mcq;
+      case 'mind_map':
+        return mindMap;
+      case 'formula':
+      case 'formula_sheet':
+        return formulaSheet;
+      case 'translate':
+        return translate;
+      case 'voice_read':
+        return voiceRead;
+      case 'summary':
+        return summaryWithRecording;
       case 'qwen3_text':
-        return qwen3Text;
+        return askAiNormal;
       default:
         return 0;
     }

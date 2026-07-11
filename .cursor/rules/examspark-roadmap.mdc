@@ -1,0 +1,69 @@
+---
+description: ExamSpark phased roadmap — current phase, canonical paths, do-not-break list
+alwaysApply: true
+---
+
+# ExamSpark Roadmap Rule
+
+**Official workflow:** [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md)
+
+## Current Phase
+
+| Phase | Status |
+|-------|--------|
+| **1A** Product Foundation | 🔒 LOCKED |
+| **1B** Wireframes | 🔵 NEXT |
+| **2** Flutter UI | Blocked until 1B approved |
+
+Canonical Flutter: `examspark_frontend/lib/` only.
+
+## Sonnet Workflow Phases
+
+| Phase | Focus | Model | Status |
+|-------|-------|-------|--------|
+| **1A** | Docs, IA, flows | Sonnet 5 High | 🔒 Locked |
+| **1B** | Low-fi wireframes (mobile + desktop) | Sonnet 5 High | 🔵 Next |
+| **2** | Flutter UI + StudyWorkspace | Sonnet 5 High | Blocked |
+| **3** | UI polish | GPT-5.5 Medium | Pending |
+| **4** | Supabase, DB, RAG, R2 | Sonnet 5 High | Pending |
+| **5** | FastAPI, AI, payments | Sonnet 5 High | Pending |
+| **6** | Final polish | GPT-5.5 Medium | Pending |
+
+**UI Rule:** Wireframes (1B) before Flutter (2). **Never auto-start next phase.**
+
+**❌ Abhi mat karo:** Phase 2 Flutter until 1B approved · SQL/RAG live · Payments · Backend deploy
+
+Legacy scaffold: `examspark_frontend/ROADMAP.md`
+
+## Do Not Break
+
+- App entry: `AuthGate` in `examspark_frontend/lib/main.dart`
+- Canonical code: `examspark_frontend/lib/` only — no root `lib/` mirror
+- **Never rewrite Supabase auth** — UI restyle only
+- Keep `LectureService`, `RecordingService`, edge function wiring in Phase 2
+
+## Implementation Rules
+
+- Compare before deleting duplicate files; merge unique code first
+- Never delete files without founder confirmation
+- Every code task: Manual Setup Checklist + .env Checklist
+- Update `examspark_frontend/ROADMAP.md` checkboxes when completing work
+
+## Platform Targets
+
+| Platform | Now | ~3 months |
+|----------|-----|-----------|
+| Web | Ship | Maintain |
+| Android | Ship | Play Store |
+| iOS | Structure ready | App Store upload |
+
+## Manual Ops — Guide Founder Step-by-Step
+
+When Supabase SQL, `.env` keys, edge deploy, or backend hosting is needed:
+1. Numbered steps with exact dashboard paths and commands
+2. Verify checkpoint after each step
+3. Wait for founder confirmation before next phase
+
+## Tech Stack
+
+[`TECH_STACK.md`](TECH_STACK.md) · [`examspark-tech-stack.mdc`](examspark-tech-stack.mdc) · [`examspark-credit-economy.mdc`](examspark-credit-economy.mdc)

@@ -1,4 +1,4 @@
-import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' as supabase;
 
 /// Standardized Supabase client for authentication and Edge Function integration
 class SupabaseClient {
@@ -6,64 +6,62 @@ class SupabaseClient {
 
   static final SupabaseClient instance = SupabaseClient._();
 
-  late final Supabase _supabase;
+  late final supabase.SupabaseClient _client;
   bool _isInitialized = false;
 
-  /// Initialize Supabase with environment configuration
+  bool get isInitialized => _isInitialized;
+
   Future<void> initialize({
     required String url,
     required String anonKey,
   }) async {
     if (_isInitialized) return;
 
-    await Supabase.initialize(
+    await supabase.Supabase.initialize(
       url: url,
       anonKey: anonKey,
     );
 
-    _supabase = Supabase.instance;
+    _client = supabase.Supabase.instance.client;
     _isInitialized = true;
   }
 
-  /// Get the underlying Supabase client
-  Supabase get client {
+  supabase.SupabaseClient get client {
     if (!_isInitialized) {
       throw StateError('SupabaseClient not initialized. Call initialize() first.');
     }
-    return _supabase;
+    return _client;
   }
 
-  /// Get current authenticated user
-  User? get currentUser => client.auth.currentUser;
+  supabase.User? get currentUser {
+    if (!_isInitialized) return null;
+    return client.auth.currentUser;
+  }
 
-  /// Sign in with email and password
-  Future<AuthResponse> signInWithEmail({
+  Future<supabase.AuthResponse> signInWithEmail({
     required String email,
     required String password,
   }) async {
-    return await client.auth.signInWithPassword(
+    return client.auth.signInWithPassword(
       email: email,
       password: password,
     );
   }
 
-  /// Sign up with email and password
-  Future<AuthResponse> signUpWithEmail({
+  Future<supabase.AuthResponse> signUpWithEmail({
     required String email,
     required String password,
   }) async {
-    return await client.auth.signUp(
+    return client.auth.signUp(
       email: email,
       password: password,
     );
   }
 
-  /// Sign out current user
   Future<void> signOut() async {
     await client.auth.signOut();
   }
 
-  /// Invoke Edge Function with authentication
   Future<Map<String, dynamic>> invokeEdgeFunction({
     required String functionName,
     required Map<String, dynamic> body,
@@ -80,7 +78,6 @@ class SupabaseClient {
     return response.data as Map<String, dynamic>;
   }
 
-  /// Get user profile from database
   Future<Map<String, dynamic>?> getUserProfile(String userId) async {
     final response = await client
         .from('users')
@@ -91,7 +88,6 @@ class SupabaseClient {
     return response;
   }
 
-  /// Update user credits balance
   Future<void> updateCredits(String userId, int newBalance) async {
     await client
         .from('users')
@@ -99,7 +95,6 @@ class SupabaseClient {
         .eq('id', userId);
   }
 
-  /// Get user's credit transaction history
   Future<List<Map<String, dynamic>>> getCreditTransactions(String userId) async {
     final response = await client
         .from('credit_transactions')
@@ -107,10 +102,9 @@ class SupabaseClient {
         .eq('user_id', userId)
         .order('created_at', ascending: false);
 
-    return response as List<Map<String, dynamic>>;
+    return List<Map<String, dynamic>>.from(response as List);
   }
 
-  /// Stream real-time user profile updates
   Stream<Map<String, dynamic>> userProfileStream(String userId) {
     return client
         .from('users')

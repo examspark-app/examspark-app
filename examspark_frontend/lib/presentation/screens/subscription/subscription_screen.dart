@@ -1,5 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/core/payments/payment_service.dart';
+import 'package:examspark_frontend/core/payments/models/payment_result.dart';
+import 'package:examspark_frontend/core/payments/subscription_plans.dart';
+import 'package:examspark_frontend/core/constants/credit_costs.dart';
 
 /// Subscription Screen & Credit Management
 /// Plan selection and credit purchase interface
@@ -17,78 +21,19 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   int _totalCredits = 5000;
   String _renewalDate = 'Feb 15, 2026';
 
-  // Available plans
-  final List<SubscriptionPlan> _plans = [
-    SubscriptionPlan(
-      id: 'free',
-      name: 'Free',
-      price: 0,
-      credits: 100,
-      features: [
-        '100 credits/month',
-        'Basic transcription',
-        'Standard support',
-      ],
-      isPopular: false,
-    ),
-    SubscriptionPlan(
-      id: 'starter',
-      name: 'Starter',
-      price: 99,
-      credits: 500,
-      features: [
-        '500 credits/month',
-        'Fast transcription',
-        'Priority support',
-        'RAG access',
-      ],
-      isPopular: false,
-    ),
-    SubscriptionPlan(
-      id: 'growth',
-      name: 'Growth',
-      price: 499,
-      credits: 2500,
-      features: [
-        '2,500 credits/month',
-        'High accuracy mode',
-        'Priority processing',
-        'Advanced RAG',
-        'Export features',
-      ],
-      isPopular: false,
-    ),
-    SubscriptionPlan(
-      id: 'standard',
-      name: 'Standard',
-      price: 999,
-      credits: 5000,
-      features: [
-        '5,000 credits/month',
-        'All Growth features',
-        'API access',
-        'Team collaboration',
-        'Analytics dashboard',
-      ],
-      isPopular: true,
-    ),
-    SubscriptionPlan(
-      id: 'teacher',
-      name: 'Teacher',
-      price: 1999,
-      credits: 8000,
-      features: [
-        '8,000 credits/month',
-        'PDF export',
-        'Branded PDF & shareable link',
-        'Class folders management',
-        'Logo branding',
-        'Student analytics',
-        'Bulk processing',
-      ],
-      isPopular: false,
-    ),
-  ];
+  // Available plans (from canonical catalog — Credit Economy v2)
+  late final List<SubscriptionPlan> _plans = SubscriptionPlans.all
+      .map(
+        (p) => SubscriptionPlan(
+          id: p.id,
+          name: p.name,
+          price: p.priceInr,
+          credits: p.monthlyCredits,
+          features: p.features,
+          isPopular: p.isPopular,
+        ),
+      )
+      .toList();
 
   @override
   Widget build(BuildContext context) {
@@ -141,6 +86,32 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
             // Extra Hours Add-on Section
             _buildExtraHoursSection(),
+
+            const SizedBox(height: 32),
+
+            // Credit Top-ups
+            Text(
+              'Credit Top-ups',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildTopUpOptions(),
+
+            const SizedBox(height: 32),
+
+            // Credit Cost Reference
+            Text(
+              'Credit Costs',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                fontSize: 20,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 16),
+            _buildCostReference(),
           ],
         ),
       ),
@@ -288,6 +259,161 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
+  Widget _buildTopUpOptions() {
+    const topUps = [
+      (50, 4.99),
+      (100, 8.99),
+      (250, 19.99),
+      (500, 34.99),
+      (1000, 59.99),
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 2.5,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: topUps.length,
+      itemBuilder: (context, index) {
+        final (credits, price) = topUps[index];
+        return InkWell(
+          onTap: () => _handleTopUp(credits, price),
+          borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+          child: Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: AppTheme.getCardBorder(context)),
+              borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+              color: AppTheme.getCardBackground(context),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  '$credits',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Text(
+                  'credits',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(width: 8),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.getAccentTint(context),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    '\$$price',
+                    style: TextStyle(
+                      color: AppTheme.accentColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCostReference() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.getCardBackground(context),
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        border: Border.all(color: AppTheme.getCardBorder(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Feature Credit Costs',
+            style: Theme.of(context).textTheme.bodyLarge,
+          ),
+          const SizedBox(height: 12),
+          _buildCostRow('Record ≤30 min', CreditCosts.recordUpTo30Min),
+          _buildCostRow('Record 30–60 min', CreditCosts.record30To60Min),
+          _buildCostRow('Record 60–90 min', CreditCosts.record60To90Min),
+          _buildCostRow('Ask AI (Normal)', CreditCosts.askAiNormal),
+          _buildCostRow('Ask AI (Deep)', CreditCosts.askAiDeep),
+          _buildCostRow('PDF Analysis', CreditCosts.pdfAnalysis),
+          _buildCostRow('Diagram / Image', CreditCosts.diagramImage),
+          _buildCostRow('Quiz (20 MCQ)', CreditCosts.quiz20Mcq),
+          _buildCostRow('Flashcards', CreditCosts.flashcards),
+          _buildCostRow('Mind Map', CreditCosts.mindMap),
+          _buildCostRow('Formula Sheet', CreditCosts.formulaSheet),
+          _buildCostRow('Translate', CreditCosts.translate),
+          _buildCostRow('Voice Read', CreditCosts.voiceRead),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCostRow(String feature, int cost) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(feature, style: Theme.of(context).textTheme.bodyMedium),
+          Text(
+            '$cost credits',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              fontWeight: FontWeight.bold,
+              color: AppTheme.accentColor,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _handleTopUp(int credits, double price) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        ),
+        title: const Text('Purchase Credits'),
+        content: Text('Purchase $credits credits for \$$price?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              // TODO: Credit pack purchase via PaymentService.purchaseCreditPack
+              if (!mounted) return;
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text(
+                    'Credit packs pending — payment gateway not connected (TODO)',
+                  ),
+                ),
+              );
+            },
+            child: const Text('Purchase'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _showExtraHoursPicker() {
     showModalBottomSheet(
       context: context,
@@ -308,35 +434,42 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  /// PENDING PAYMENT GATEWAY INTEGRATION
-  /// This method is a placeholder for payment gateway integration
-  /// TODO: Insert chosen Razorpay/Stripe production keys and plugin config here
-  void _initiatePaymentGatewayCheckout(SubscriptionPlan plan) {
-    // PENDING: Insert chosen Razorpay/Stripe production keys and plugin config here
-    // 
-    // Example Razorpay integration:
-    // var options = {
-    //   'key': 'YOUR_RAZORPAY_KEY',
-    //   'amount': plan.price * 100, // Amount in paise
-    //   'name': 'ExamSpark',
-    //   'description': '${plan.name} Plan',
-    //   'prefill': {'contact': '', 'email': ''},
-    // };
-    // razorpay.open(options);
-    
-    // Example Stripe integration:
-    // await Stripe.instance.initPaymentSheet(
-    //   paymentSheetParameters: SetupPaymentSheetParameters(
-    //     merchantDisplayName: 'ExamSpark',
-    //     paymentIntentClientSecret: paymentIntentClientSecret,
-    //     // ... other parameters
-    //   ),
-    // );
-    // await Stripe.instance.presentPaymentSheet();
+  /// Payment flow: create order → pending → verify (no fake success).
+  void _initiatePaymentGatewayCheckout(SubscriptionPlan plan) async {
+    final planDef = SubscriptionPlans.all.firstWhere(
+      (p) => p.id == plan.id,
+      orElse: () => SubscriptionPlans.plan199,
+    );
 
-    // SIMULATED SUCCESS CALLBACK
-    // In production, this would be triggered after successful payment
-    _showPaymentSuccessSheet(plan);
+    final result = await PaymentService.instance.purchasePlan(
+      userId: 'current_user', // TODO: Supabase auth user id
+      plan: planDef,
+    );
+
+    if (!mounted) return;
+
+    if (result.status == PaymentResultStatus.verified) {
+      _showPaymentSuccessSheet(plan);
+      return;
+    }
+
+    if (result.status == PaymentResultStatus.pending ||
+        result.status == PaymentResultStatus.orderCreated) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            result.orderId != null
+                ? 'Order ${result.orderId} pending — complete payment when gateway is connected'
+                : result.message,
+          ),
+        ),
+      );
+      return;
+    }
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(result.message)),
+    );
   }
 
   void _showPaymentSuccessSheet(SubscriptionPlan plan) {

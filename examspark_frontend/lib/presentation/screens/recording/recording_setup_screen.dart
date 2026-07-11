@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/screens/recording/widgets/audio_level_indicator.dart';
+import 'package:examspark_frontend/presentation/screens/recording/widgets/camera_preview_placeholder.dart';
 
-/// Screen 1: Recording Setup Screen
-/// User chooses transcription quality before starting recording
 class RecordingSetupScreen extends StatefulWidget {
   const RecordingSetupScreen({super.key});
 
@@ -11,234 +11,144 @@ class RecordingSetupScreen extends StatefulWidget {
 }
 
 class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
-  // Selected transcription quality (default: fast)
-  TranscriptionQuality _selectedQuality = TranscriptionQuality.fast;
+  static const _subjects = [
+    'Mathematics',
+    'Physics',
+    'Chemistry',
+    'Biology',
+    'Computer Science',
+    'History',
+    'English',
+    'Economics',
+    'Other',
+  ];
+
+  final _topicController = TextEditingController();
+  final _formKey = GlobalKey<FormState>();
+  String? _selectedSubject;
+
+  @override
+  void dispose() {
+    _topicController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
-          onPressed: () => Navigator.pop(context),
-        ),
-        title: const Text('New Lecture'),
-      ),
-      body: Column(
-        children: [
-          // Scrollable content area
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(AppTheme.screenPadding),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Heading Section
-                  const Text(
-                    'Choose transcription quality',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'You can change this anytime',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Selectable Cards
-                  SelectableOptionCard(
-                    icon: Icons.bolt_outlined,
-                    title: 'Fast (Recommended)',
-                    subtitle: 'Best for clear classroom audio',
-                    isSelected: _selectedQuality == TranscriptionQuality.fast,
-                    onTap: () => setState(() => _selectedQuality = TranscriptionQuality.fast),
-                  ),
-                  const SizedBox(height: AppTheme.elementSpacing),
-                  SelectableOptionCard(
-                    icon: Icons.shield_outlined,
-                    title: 'High Accuracy',
-                    subtitle: 'Best for noisy rooms or unclear speech',
-                    isSelected: _selectedQuality == TranscriptionQuality.highAccuracy,
-                    onTap: () => setState(() => _selectedQuality = TranscriptionQuality.highAccuracy),
-                  ),
-                ],
-              ),
-            ),
-          ),
-
-          // Bottom Fixed Button
-          Container(
-            padding: const EdgeInsets.all(AppTheme.screenPadding),
-            child: SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton(
-                onPressed: _handleContinue,
-                child: const Text('Continue'),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _handleContinue() {
-    // Navigate to next screen (Recording/Upload screen)
-    // Placeholder for now
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (context) => const PlaceholderScreen(
-          title: 'Recording/Upload',
-          message: 'This screen will be built next',
-        ),
-      ),
-    );
-  }
-}
-
-/// Reusable selectable option card widget
-class SelectableOptionCard extends StatelessWidget {
-  final IconData icon;
-  final String title;
-  final String subtitle;
-  final bool isSelected;
-  final VoidCallback onTap;
-
-  const SelectableOptionCard({
-    super.key,
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.isSelected,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 150),
-      curve: Curves.easeInOut,
-      decoration: BoxDecoration(
-        color: isSelected
-            ? AppTheme.getAccentTint(context)
-            : AppTheme.getCardBackground(context),
-        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-        border: Border.all(
-          color: isSelected ? AppTheme.accentColor : AppTheme.getCardBorder(context),
-          width: isSelected ? 2 : 1,
-        ),
-      ),
-      child: Material(
-        color: Colors.transparent,
-        child: InkWell(
-          onTap: onTap,
-          borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-          child: Padding(
-            padding: const EdgeInsets.all(AppTheme.cardPadding),
-            child: Row(
-              children: [
-                // Icon
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: isSelected
-                        ? AppTheme.accentColor.withOpacity(0.1)
-                        : (isDark ? Colors.grey[800] : Colors.grey[100]),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Icon(
-                    icon,
-                    size: 24,
-                    color: isSelected
-                        ? AppTheme.accentColor
-                        : AppTheme.getPrimaryText(context),
-                  ),
-                ),
-                const SizedBox(width: 16),
-
-                // Text content
-                Expanded(
+      appBar: AppBar(title: const Text('Recording Setup')),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(AppTheme.screenPadding),
+                child: Form(
+                  key: _formKey,
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        title,
-                        style: theme.textTheme.bodyLarge,
+                        'Prepare your lecture',
+                        style: Theme.of(context).textTheme.displayLarge,
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        subtitle,
-                        style: theme.textTheme.bodySmall,
+                        'Set up your camera and enter lecture details before you start.',
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 20),
+                      const CameraPreviewPlaceholder(),
+                      const SizedBox(height: 12),
+                      const AudioLevelIndicator(),
+                      const SizedBox(height: 24),
+                      Text('Subject', style: Theme.of(context).textTheme.bodyLarge),
+                      const SizedBox(height: 8),
+                      DropdownButtonFormField<String>(
+                        initialValue: _selectedSubject,
+                        decoration: _inputDecoration(context, hint: 'Select a subject'),
+                        items: _subjects
+                            .map((s) => DropdownMenuItem(value: s, child: Text(s)))
+                            .toList(),
+                        onChanged: (v) => setState(() => _selectedSubject = v),
+                        validator: (v) => v == null ? 'Please select a subject' : null,
+                      ),
+                      const SizedBox(height: AppTheme.elementSpacing),
+                      Text('Lecture Topic', style: Theme.of(context).textTheme.bodyLarge),
+                      const SizedBox(height: 8),
+                      TextFormField(
+                        controller: _topicController,
+                        decoration: _inputDecoration(context, hint: 'e.g. Introduction to Calculus'),
+                        textCapitalization: TextCapitalization.sentences,
+                        validator: (v) =>
+                            v == null || v.trim().isEmpty ? 'Please enter a lecture topic' : null,
                       ),
                     ],
                   ),
                 ),
-
-                // Selection indicator
-                if (isSelected)
-                  Icon(
-                    Icons.check_circle,
-                    color: AppTheme.accentColor,
-                    size: 24,
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(AppTheme.screenPadding),
+              child: SizedBox(
+                width: double.infinity,
+                height: 52,
+                child: ElevatedButton.icon(
+                  onPressed: _handleStartRecording,
+                  icon: const Icon(Icons.fiber_manual_record, size: 20),
+                  label: const Text('Start Recording'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accentColor,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+                    ),
                   ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Transcription quality options
-enum TranscriptionQuality {
-  fast,
-  highAccuracy,
-}
-
-/// Placeholder screen for navigation
-class PlaceholderScreen extends StatelessWidget {
-  final String title;
-  final String message;
-
-  const PlaceholderScreen({
-    super.key,
-    required this.title,
-    required this.message,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(title),
-      ),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.construction,
-              size: 64,
-              color: AppTheme.getSecondaryText(context),
-            ),
-            const SizedBox(height: 16),
-            Text(
-              message,
-              style: Theme.of(context).textTheme.bodyMedium,
-              textAlign: TextAlign.center,
+                ),
+              ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  InputDecoration _inputDecoration(BuildContext context, {required String hint}) {
+    return InputDecoration(
+      hintText: hint,
+      filled: true,
+      fillColor: AppTheme.getCardBackground(context),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        borderSide: BorderSide(color: AppTheme.getCardBorder(context)),
+      ),
+      enabledBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        borderSide: BorderSide(color: AppTheme.getCardBorder(context)),
+      ),
+      focusedBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        borderSide: const BorderSide(color: AppTheme.accentColor, width: 2),
+      ),
+      errorBorder: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        borderSide: const BorderSide(color: Colors.redAccent),
+      ),
+    );
+  }
+
+  void _handleStartRecording() {
+    if (!_formKey.currentState!.validate()) return;
+
+    Navigator.pushNamed(
+      context,
+      '/recorder',
+      arguments: {
+        'subject': _selectedSubject,
+        'topic': _topicController.text.trim(),
+      },
     );
   }
 }

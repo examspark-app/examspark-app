@@ -1,28 +1,38 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
+import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/services/recording_service.dart';
 
-/// Screen 1: Recording Setup Screen
-/// User makes transcription quality choice before starting
+/// Recording flow: quality choice → record / upload
 class RecorderScreen extends StatefulWidget {
-  const RecorderScreen({super.key});
+  final String? subject;
+  final String? topic;
+
+  const RecorderScreen({super.key, this.subject, this.topic});
 
   @override
   State<RecorderScreen> createState() => _RecorderScreenState();
 }
 
 class _RecorderScreenState extends State<RecorderScreen> {
-  // Screen 1: Transcription Quality Choice
-  bool _useHighAccuracy = false; // false = Fast (Turbo), true = High Accuracy (Non-Turbo)
-  
-  // Screen 2: Input Method Selection
+  bool _useHighAccuracy = false;
   InputMethod _selectedInputMethod = InputMethod.record;
-  
-  // Recording State
   bool _isRecording = false;
+  bool _isProcessing = false;
   String _recordingDuration = '00:00';
-  
-  // Navigation between screens
-  int _currentScreen = 1; // 1 = Setup, 2 = Recording/Upload
+  int _currentScreen = 1;
+  String? _recordingPath;
+
+  final _recordingService = RecordingService.instance;
+  final _lectureService = LectureService.instance;
+
+  @override
+  void dispose() {
+    _recordingService.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -75,7 +85,6 @@ class _RecorderScreenState extends State<RecorderScreen> {
             isSelected: !_useHighAccuracy,
             onTap: () => setState(() => _useHighAccuracy = false),
             icon: Icons.speed,
-            credits: CreditCosts.whisperTurboHour,
           ),
           const SizedBox(height: 16),
           
@@ -86,7 +95,32 @@ class _RecorderScreenState extends State<RecorderScreen> {
             isSelected: _useHighAccuracy,
             onTap: () => setState(() => _useHighAccuracy = true),
             icon: Icons.high_quality,
-            credits: CreditCosts.whisperStandardHour,
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.green[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.green[200]!),
+            ),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(Icons.payments_outlined, color: Colors.green[800], size: 20),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Recording cost (per session): '
+                    '≤30 min ${CreditCosts.recordUpTo30Min} · '
+                    '30–60 min ${CreditCosts.record30To60Min} · '
+                    '60–90 min ${CreditCosts.record60To90Min} credits. '
+                    'Summary included.',
+                    style: TextStyle(fontSize: 13, color: Colors.green[900]),
+                  ),
+                ),
+              ],
+            ),
           ),
           const SizedBox(height: 32),
           
@@ -149,7 +183,6 @@ class _RecorderScreenState extends State<RecorderScreen> {
     required bool isSelected,
     required VoidCallback onTap,
     required IconData icon,
-    required int credits,
   }) {
     return GestureDetector(
       onTap: onTap,
@@ -208,22 +241,6 @@ class _RecorderScreenState extends State<RecorderScreen> {
                     ),
                   ),
                 ],
-              ),
-            ),
-            const SizedBox(width: 12),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-              decoration: BoxDecoration(
-                color: isSelected ? Colors.white : Colors.grey[100],
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Text(
-                '$credits cr',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: isSelected ? Colors.black87 : Colors.grey[700],
-                ),
               ),
             ),
           ],
@@ -521,25 +538,108 @@ class _RecorderScreenState extends State<RecorderScreen> {
     );
   }
 
-  void _toggleRecording() {
-    setState(() => _isRecording = !_isRecording);
-    
+  Future<void> _toggleRecording() async {
+    if (_isProcessing) return;
+
     if (!_isRecording) {
-      // Recording stopped - navigate to processing screen
-      Navigator.pushNamed(context, '/processing');
+      try {
+        await _recordingService.start();
+        setState(() {
+          _isRecording = true;
+        });
+        _tickDuration();
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not start recording: $e')),
+          );
+        }
+      }
+      return;
+    }
+
+    setState(() {
+      _isRecording = false;
+      _isProcessing = true;
+    });
+
+    try {
+      _recordingPath = await _recordingService.stop();
+      final bytes = await _recordingService.readRecordingBytes(_recordingPath);
+      if (bytes == null || bytes.isEmpty) {
+        throw StateError('No audio captured');
+      }
+      await _startProcessingWithAudio(bytes);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Recording failed: $e')),
+        );
+        setState(() => _isProcessing = false);
+      }
     }
   }
 
-  void _handleAudioUpload() {
-    // Handle audio file upload
-    // Navigate to processing screen after upload
-    Navigator.pushNamed(context, '/processing');
+  void _tickDuration() {
+    if (!_isRecording) return;
+    Future<void>.delayed(const Duration(seconds: 1), () {
+      if (!mounted || !_isRecording) return;
+      setState(() {
+        _recordingDuration = _recordingService.formattedDuration;
+      });
+      _tickDuration();
+    });
   }
 
-  void _handleDocumentUpload() {
-    // Handle document/photo upload
-    // Navigate to processing screen after upload
-    Navigator.pushNamed(context, '/processing');
+  Future<void> _startProcessingWithAudio(List<int> audioBytes) async {
+    final title = widget.topic?.isNotEmpty == true
+        ? widget.topic!
+        : widget.subject ?? 'New Lecture';
+
+    final lectureId = await _lectureService.createLecture(
+      title: title,
+      subject: widget.subject,
+      topic: widget.topic,
+      highAccuracy: _useHighAccuracy,
+    );
+
+    if (!mounted) return;
+
+    Navigator.pushReplacementNamed(
+      context,
+      '/processing',
+      arguments: {'lectureId': lectureId},
+    );
+
+    await _lectureService.invokeProcessing(
+      lectureId: lectureId,
+      audioBytes: Uint8List.fromList(audioBytes),
+      highAccuracy: _useHighAccuracy,
+    );
+  }
+
+  Future<void> _handleAudioUpload() async {
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+    try {
+      final bytes = await _recordingService.pickAudioFile();
+      if (bytes == null) {
+        setState(() => _isProcessing = false);
+        return;
+      }
+      await _startProcessingWithAudio(bytes);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+        setState(() => _isProcessing = false);
+      }
+    }
+  }
+
+  Future<void> _handleDocumentUpload() async {
+    await _handleAudioUpload();
   }
 
   void _showInfoDialog() {
@@ -557,14 +657,21 @@ class _RecorderScreenState extends State<RecorderScreen> {
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
-              Text('Best for clear classroom audio (${CreditCosts.whisperTurboHour} credits)'),
+              const Text('Best for clear classroom audio'),
               const SizedBox(height: 12),
               const Text(
                 'High Accuracy (Noisy Audio):',
                 style: TextStyle(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 4),
-              Text('Best for noisy rooms or unclear speech (${CreditCosts.whisperStandardHour} credits)'),
+              const Text('Best for noisy rooms or unclear speech'),
+              const SizedBox(height: 16),
+              Text(
+                'Cost is per session (not per minute): '
+                '≤30 min ${CreditCosts.recordUpTo30Min}, '
+                '30–60 min ${CreditCosts.record30To60Min}, '
+                '60–90 min ${CreditCosts.record60To90Min} credits.',
+              ),
             ],
           ),
         ),

@@ -1,0 +1,110 @@
+---
+description: ExamSpark product vision — save-on-demand, discuss before implement
+alwaysApply: true
+---
+
+# ExamSpark Product Vision Rule
+
+## Status
+
+**Product vision + UX architecture saved Jul 2026.** Implement per saved docs; confirm with founder if section still TBD.
+
+Full vision doc: [`examspark_frontend/PRODUCT_VISION.md`](examspark_frontend/PRODUCT_VISION.md)
+PRD: [`PRD.md`](PRD.md)
+UX: [`UX_ARCHITECTURE.md`](UX_ARCHITECTURE.md)
+Tech stack: [`TECH_STACK.md`](TECH_STACK.md) + [`examspark-tech-stack.mdc`](examspark-tech-stack.mdc)
+Teacher platform: [`TEACHER_PLATFORM.md`](TEACHER_PLATFORM.md) + [`examspark-teacher-platform.mdc`](examspark-teacher-platform.mdc)
+Credit economy: [`CREDIT_ECONOMY.md`](CREDIT_ECONOMY.md) + [`examspark-credit-economy.mdc`](examspark-credit-economy.mdc)
+Core rules: [`PROJECT_CORE_RULES.md`](PROJECT_CORE_RULES.md) + [`examspark-core-rules.mdc`](examspark-core-rules.mdc)
+Working rules: [`PROJECT_WORKING_RULES.md`](PROJECT_WORKING_RULES.md) + [`examspark-working-rules.mdc`](examspark-working-rules.mdc)
+UX rule: [`examspark-ux-architecture.mdc`](examspark-ux-architecture.mdc)
+Project docs: `PROJECT_ROADMAP.md` · `FEATURES.md` · `ARCHITECTURE.md` · `TODO.md` · `CHANGELOG.md`
+Discussion tracker: [`.cursor/plans/examspark_product_vision.plan.md`](.cursor/plans/examspark_product_vision.plan.md)
+
+One-liner:
+> ExamSpark — Premium AI learning for India. ChatGPT-simple home + Study Workspace for lectures, groups, and revision.
+
+---
+
+## Save Policy (Founder Controls When to Persist)
+
+**Discussion ≠ Save.** Talking about the idea does NOT write to files automatically.
+
+| Founder says | AI does |
+|--------------|---------|
+| Discuss / brainstorm only | Chat only — no file edits |
+| "save" / "save karo" / "save kar do" | Save all discussed-but-unsaved content to vision files |
+| "save [part]" / e.g. "save monetization" | Update ONLY that section in `PRODUCT_VISION.md` + rule summary if needed + plan tracker |
+| "edit [part]" / change idea | Discuss the change in chat; persist only when founder says save |
+| "save all" | Full sync: `PRODUCT_VISION.md` + this rule + plan file |
+
+After any save:
+1. Update `PRODUCT_VISION.md` (full or partial section)
+2. Update short summary in this rule (if one-liner or key decisions changed)
+3. Append to decisions log in plan file + `PRODUCT_VISION.md` changelog
+4. If roadmap priorities shift, propose realign to `ROADMAP.md` — do not auto-edit without founder approval
+
+---
+
+## Implementation Guardrails
+
+- If any `PRODUCT_VISION.md` section still says `TBD`, do NOT implement new features in that area without founder confirmation
+- Existing code: do not change unless bug fix or founder explicitly requests
+- Technical phases live in [`examspark-roadmap.mdc`](examspark-roadmap.mdc) — product vision is separate; vision wins on *what* to build, roadmap on *how/when*
+
+---
+
+## Sections (for partial save commands)
+
+Founder can say "save [name]" for any of these:
+
+- `one-liner`
+- `problem`
+- `target-users`
+- `user-flows`
+- `features` (must-have / nice-to-have)
+- `monetization`
+- `differentiators`
+- `constraints`
+- `non-goals`
+- `platforms`
+- `manual-ops`
+- `tech-stack`
+- `credit-economy`
+- `teacher-platform`
+- `ux` / `ux-architecture`
+- `prd`
+- `audio-policy`
+- `core-rules` / `save core-rules`
+
+---
+
+## Manual Operations — AI Must Guide Founder
+
+Founder does hands-on tasks; AI provides **step-by-step** instructions until complete.
+
+**Always guide end-to-end when asked:**
+- Supabase: SQL run, RLS, storage buckets, edge function deploy
+- `.env`: which file, which key, where to paste from dashboard
+- Backend: FastAPI deploy, env vars, CORS, webhook URLs
+- Payments: Razorpay/Stripe webhook setup
+- Android/iOS build & store (iOS App Store only when founder ready — ~3 months)
+
+**Format:** numbered steps, exact paths, copy-paste commands, "verify" checkpoint after each step.
+
+Do not say "configure Supabase" without showing how.
+
+---
+
+## Platform Targets
+
+| Platform | Status |
+|----------|--------|
+| Web | Active — build & deploy |
+| Android | Active — build & deploy |
+| iOS | Structure ready now; **App Store upload in ~3 months** |
+
+- Keep `examspark_frontend/ios/` build-ready (Info.plist permissions, bundle ID, signing config placeholders)
+- Do not block Web/Android work for App Store submission prep
+- When founder asks iOS deploy: guide TestFlight → App Store Connect full flow
+

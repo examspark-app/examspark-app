@@ -27,6 +27,45 @@ class _ProcessingScreenState extends State<ProcessingScreen>
   bool _hasError = false;
   String _errorMessage = '';
 
+  final List<ProcessingStep> _steps = const [
+    ProcessingStep(
+      icon: Icons.content_cut,
+      title: 'Splitting audio into segments...',
+      subtitle: 'Preparing for parallel processing',
+    ),
+    ProcessingStep(
+      icon: Icons.transcribe,
+      title: 'Transcribing...',
+      subtitle: 'Converting speech to text using AI',
+    ),
+    ProcessingStep(
+      icon: Icons.search,
+      title: 'Saving for smart search (RAG)...',
+      subtitle: 'Indexing for future Q&A',
+    ),
+    ProcessingStep(
+      icon: Icons.note_add,
+      title: 'Generating your notes...',
+      subtitle: 'Creating structured learning content',
+    ),
+  ];
+
+  int get _currentStepIndex {
+    switch (_currentStage) {
+      case ProcessingStage.splitting:
+        return 0;
+      case ProcessingStage.transcribing:
+        return 1;
+      case ProcessingStage.indexing:
+        return 2;
+      case ProcessingStage.generating:
+      case ProcessingStage.almostDone:
+        return 3;
+      case ProcessingStage.done:
+        return _steps.length;
+    }
+  }
+
   @override
   void initState() {
     super.initState();
@@ -226,77 +265,98 @@ class _ProcessingScreenState extends State<ProcessingScreen>
                 ),
               ),
 
-              // Centered content
+              // Progress overview + step list
               Expanded(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Animated icon
-                    AnimatedBuilder(
-                      animation: _animationController,
-                      builder: (context, child) {
-                        return Transform.scale(
-                          scale: _scaleAnimation.value,
-                          child: Opacity(
-                            opacity: _opacityAnimation.value,
-                            child: Container(
-                              width: 120,
-                              height: 120,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: AppTheme.accentColor.withOpacity(0.1),
-                              ),
-                              child: Icon(
-                                _getStageIcon(),
-                                size: 48,
-                                color: AppTheme.accentColor,
+                child: SingleChildScrollView(
+                  child: Column(
+                    children: [
+                      // Animated icon + overall progress
+                      AnimatedBuilder(
+                        animation: _animationController,
+                        builder: (context, child) {
+                          return Transform.scale(
+                            scale: _scaleAnimation.value,
+                            child: Opacity(
+                              opacity: _opacityAnimation.value,
+                              child: Container(
+                                width: 80,
+                                height: 80,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: AppTheme.accentColor.withValues(alpha: 0.1),
+                                ),
+                                child: Icon(
+                                  _getStageIcon(),
+                                  size: 36,
+                                  color: AppTheme.accentColor,
+                                ),
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Stage text
-                    Text(
-                      _getStageTitle(),
-                      style: Theme.of(context).textTheme.displayLarge,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Subtext
-                    Text(
-                      _getStageSubtitle(),
-                      style: Theme.of(context).textTheme.bodySmall,
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 32),
-
-                    // Progress bar
-                    Container(
-                      margin: const EdgeInsets.symmetric(horizontal: 24),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(2),
-                        child: LinearProgressIndicator(
-                          value: _progressValue,
-                          minHeight: 4,
-                          backgroundColor: AppTheme.getCardBorder(context),
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            AppTheme.accentColor,
-                          ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        _getStageTitle(),
+                        style: Theme.of(context).textTheme.displayLarge,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _getStageSubtitle(),
+                        style: Theme.of(context).textTheme.bodySmall,
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 20),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppTheme.getCardBackground(context),
+                          borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+                          border: Border.all(color: AppTheme.getCardBorder(context)),
+                        ),
+                        child: Column(
+                          children: [
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(2),
+                              child: LinearProgressIndicator(
+                                value: _progressValue,
+                                minHeight: 6,
+                                backgroundColor: AppTheme.getCardBorder(context),
+                                valueColor: AlwaysStoppedAnimation<Color>(
+                                  _currentStage == ProcessingStage.done
+                                      ? Colors.green
+                                      : AppTheme.accentColor,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              _currentStage == ProcessingStage.done
+                                  ? 'Complete!'
+                                  : 'Step ${_currentStepIndex.clamp(1, _steps.length)} of ${_steps.length}',
+                              style: Theme.of(context).textTheme.bodySmall,
+                            ),
+                          ],
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // Progress percentage
-                    Text(
-                      '${(_progressValue * 100).toInt()}%',
-                      style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                  ],
+                      const SizedBox(height: 24),
+                      // Staged step list
+                      ...List.generate(_steps.length, (index) {
+                        final step = _steps[index];
+                        final isPast = index < _currentStepIndex;
+                        final isCurrent = index == _currentStepIndex &&
+                            _currentStage != ProcessingStage.done;
+                        final isFuture = !isPast && !isCurrent;
+                        return _buildStepItem(
+                          step: step,
+                          isCurrent: isCurrent,
+                          isPast: isPast,
+                          isFuture: isFuture,
+                        );
+                      }),
+                    ],
+                  ),
                 ),
               ),
 
@@ -450,6 +510,99 @@ class _ProcessingScreenState extends State<ProcessingScreen>
         return 'Your notes are ready';
     }
   }
+
+  Widget _buildStepItem({
+    required ProcessingStep step,
+    required bool isCurrent,
+    required bool isPast,
+    required bool isFuture,
+  }) {
+    final accentColor = isPast ? Colors.green : AppTheme.accentColor;
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.getCardBackground(context),
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        border: Border.all(
+          color: isCurrent
+              ? AppTheme.accentColor
+              : isPast
+                  ? Colors.green
+                  : AppTheme.getCardBorder(context),
+          width: isCurrent ? 2 : 1,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 40,
+            height: 40,
+            decoration: BoxDecoration(
+              color: isFuture
+                  ? AppTheme.getCardBorder(context)
+                  : accentColor,
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Icon(
+              isPast ? Icons.check : step.icon,
+              color: isFuture
+                  ? AppTheme.getSecondaryText(context)
+                  : Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  step.title,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                    color: isFuture
+                        ? AppTheme.getSecondaryText(context)
+                        : AppTheme.getPrimaryText(context),
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  step.subtitle,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: isFuture
+                        ? AppTheme.getSecondaryText(context)
+                        : null,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          if (isCurrent)
+            SizedBox(
+              width: 20,
+              height: 20,
+              child: CircularProgressIndicator(
+                strokeWidth: 2,
+                color: AppTheme.accentColor,
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class ProcessingStep {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+
+  const ProcessingStep({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+  });
 }
 
 enum ProcessingStage {

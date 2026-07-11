@@ -1,10 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
 
-/// Action button row with modular actions that trigger independent credit-deducting API requests
-/// Updated per Windsurf prompt: MCQ, Revision Sheet, Important Questions, Answer Key, Flashcards, RAG
+/// Action panel wired via callbacks to NotesResultScreen / LectureService.
 class ExtraActionsPanel extends StatelessWidget {
-  const ExtraActionsPanel({super.key});
+  final Future<void> Function(String action)? onAction;
+  final bool isLoading;
+
+  const ExtraActionsPanel({
+    super.key,
+    this.onAction,
+    this.isLoading = false,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -14,7 +20,7 @@ class ExtraActionsPanel extends StatelessWidget {
         color: Colors.white,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.05),
+            color: Colors.black.withValues(alpha: 0.05),
             blurRadius: 10,
             offset: const Offset(0, -2),
           ),
@@ -32,7 +38,6 @@ class ExtraActionsPanel extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 16),
-          // First row: MCQ, Revision Sheet, Important Questions
           Row(
             children: [
               Expanded(
@@ -40,39 +45,38 @@ class ExtraActionsPanel extends StatelessWidget {
                   icon: Icons.quiz_outlined,
                   label: 'MCQ',
                   cost: CreditCosts.mcqGeneration,
-                  onTap: () => _handleAction(context, 'mcq'),
+                  onTap: isLoading ? null : () => onAction?.call('mcq'),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _ActionButton(
                   icon: Icons.assignment_outlined,
-                  label: 'Revision Sheet',
-                  cost: CreditCosts.mindMapGeneration,
-                  onTap: () => _handleAction(context, 'revision_sheet'),
+                  label: 'Revision',
+                  cost: CreditCosts.revisionGeneration,
+                  onTap: isLoading ? null : () => onAction?.call('revision_sheet'),
                 ),
               ),
               const SizedBox(width: 12),
               Expanded(
                 child: _ActionButton(
                   icon: Icons.help_outline,
-                  label: 'Important Questions',
-                  cost: CreditCosts.mindMapGeneration,
-                  onTap: () => _handleAction(context, 'important_questions'),
+                  label: 'Important Qs',
+                  cost: CreditCosts.importantQuestionsGeneration,
+                  onTap: isLoading ? null : () => onAction?.call('important_questions'),
                 ),
               ),
             ],
           ),
           const SizedBox(height: 12),
-          // Second row: Answer Key, Flashcards
           Row(
             children: [
               Expanded(
                 child: _ActionButton(
                   icon: Icons.check_circle_outline,
                   label: 'Answer Key',
-                  cost: CreditCosts.mindMapGeneration,
-                  onTap: () => _handleAction(context, 'answer_key'),
+                  cost: CreditCosts.answerKeyGeneration,
+                  onTap: isLoading ? null : () => onAction?.call('answer_key'),
                 ),
               ),
               const SizedBox(width: 12),
@@ -81,22 +85,21 @@ class ExtraActionsPanel extends StatelessWidget {
                   icon: Icons.style_outlined,
                   label: 'Flashcards',
                   cost: CreditCosts.flashcardGeneration,
-                  onTap: () => _handleAction(context, 'flashcard'),
+                  onTap: isLoading ? null : () => onAction?.call('flashcards'),
                 ),
               ),
               const SizedBox(width: 12),
-              const Expanded(child: SizedBox()), // Spacer for alignment
+              const Expanded(child: SizedBox()),
             ],
           ),
           const SizedBox(height: 12),
-          // Full width: Ask with RAG
           SizedBox(
             width: double.infinity,
             child: _ActionButton(
               icon: Icons.chat_bubble_outline,
-              label: 'Ask with RAG (CBSE/NEET/UPSC)',
+              label: 'Ask with RAG',
               cost: CreditCosts.ragQuery,
-              onTap: () => _handleAction(context, 'rag'),
+              onTap: isLoading ? null : () => onAction?.call('rag'),
               isFullWidth: true,
             ),
           ),
@@ -104,116 +107,13 @@ class ExtraActionsPanel extends StatelessWidget {
       ),
     );
   }
-
-  void _handleAction(BuildContext context, String action) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(_getActionTitle(action)),
-        content: Text('This will cost ${_getActionCost(action)} credits. Continue?'),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              _executeAction(context, action);
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.black87,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            child: const Text('Generate'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  void _executeAction(BuildContext context, String action) {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
-        content: const Row(
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(width: 16),
-            Text('Generating...'),
-          ],
-        ),
-      ),
-    );
-
-    Future.delayed(const Duration(seconds: 2), () {
-      Navigator.pop(context);
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('${_getActionTitle(action)} generated successfully!'),
-          backgroundColor: Colors.green,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-        ),
-      );
-    });
-  }
-
-  String _getActionTitle(String action) {
-    switch (action) {
-      case 'mcq':
-        return 'MCQ Questions';
-      case 'flashcard':
-        return 'Flashcards';
-      case 'revision_sheet':
-        return 'Revision Sheet';
-      case 'important_questions':
-        return 'Important Questions';
-      case 'answer_key':
-        return 'Answer Key';
-      case 'rag':
-        return 'RAG Query';
-      default:
-        return 'Action';
-    }
-  }
-
-  int _getActionCost(String action) {
-    switch (action) {
-      case 'mcq':
-        return CreditCosts.mcqGeneration;
-      case 'flashcard':
-        return CreditCosts.flashcardGeneration;
-      case 'revision_sheet':
-      case 'important_questions':
-      case 'answer_key':
-        return CreditCosts.mindMapGeneration;
-      case 'rag':
-        return CreditCosts.ragQuery;
-      default:
-        return 0;
-    }
-  }
 }
 
 class _ActionButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final int cost;
-  final VoidCallback onTap;
+  final VoidCallback? onTap;
   final bool isFullWidth;
 
   const _ActionButton({

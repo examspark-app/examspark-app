@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:examspark_frontend/core/constants/credit_usage_display.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
+import 'package:examspark_frontend/core/services/lecture_service.dart';
 
 /// Minimalist interface inspired by ChatGPT layout with historical sidebar
 class HomeScreen extends StatefulWidget {
@@ -29,9 +31,9 @@ class _HomeScreenState extends State<HomeScreen> {
           _creditsBalance = profile['credits_balance'] as int? ?? 0;
         });
       }
-      final transactions = await SupabaseClient.instance.getCreditTransactions(user.id);
+      final lectures = await LectureService.instance.getLecturesForUser();
       setState(() {
-        _lectureHistory = transactions;
+        _lectureHistory = lectures;
       });
     }
   }
@@ -74,9 +76,17 @@ class _HomeScreenState extends State<HomeScreen> {
                                     overflow: TextOverflow.ellipsis,
                                   ),
                                   Text(
-                                    '$_creditsBalance credits',
+                                    '$_creditsBalance Credits Remaining',
                                     style: TextStyle(
                                       fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                      color: Colors.grey[800],
+                                    ),
+                                  ),
+                                  Text(
+                                    CreditUsageDisplay.primaryBalanceLine(_creditsBalance),
+                                    style: TextStyle(
+                                      fontSize: 11,
                                       color: Colors.grey[600],
                                     ),
                                   ),
@@ -90,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Padding(
                         padding: const EdgeInsets.all(16),
                         child: ElevatedButton.icon(
-                          onPressed: () => Navigator.pushNamed(context, '/recorder'),
+                          onPressed: () => Navigator.pushNamed(context, '/recording_setup'),
                           icon: const Icon(Icons.add),
                           label: const Text('New Lecture'),
                           style: ElevatedButton.styleFrom(
@@ -107,7 +117,7 @@ class _HomeScreenState extends State<HomeScreen> {
                             return ListTile(
                               leading: const Icon(Icons.history),
                               title: Text(
-                                lecture['description'] ?? 'Lecture ${index + 1}',
+                                lecture['title'] ?? 'Lecture ${index + 1}',
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -117,7 +127,14 @@ class _HomeScreenState extends State<HomeScreen> {
                               ),
                               trailing: const Icon(Icons.chevron_right),
                               onTap: () {
-                                // Navigate to lecture details
+                                final id = lecture['id'] as String?;
+                                if (id != null) {
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/notes_result',
+                                    arguments: {'lectureId': id},
+                                  );
+                                }
                               },
                             );
                           },
@@ -169,6 +186,16 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       const Spacer(),
                       IconButton(
+                        icon: const Icon(Icons.school_outlined),
+                        tooltip: 'Teacher Dashboard',
+                        onPressed: () => Navigator.pushNamed(context, '/teacher'),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.people_outline),
+                        tooltip: 'Student Portal',
+                        onPressed: () => Navigator.pushNamed(context, '/student'),
+                      ),
+                      IconButton(
                         icon: const Icon(Icons.account_circle),
                         onPressed: () => Navigator.pushNamed(context, '/subscription'),
                       ),
@@ -204,7 +231,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 32),
                         ElevatedButton.icon(
-                          onPressed: () => Navigator.pushNamed(context, '/recorder'),
+                          onPressed: () => Navigator.pushNamed(context, '/recording_setup'),
                           icon: const Icon(Icons.mic),
                           label: const Text('Start Recording'),
                           style: ElevatedButton.styleFrom(

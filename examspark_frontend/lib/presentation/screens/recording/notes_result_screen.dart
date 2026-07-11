@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
-import 'package:examspark_frontend/core/constants/credit_costs.dart';
+import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/presentation/screens/results/widgets/extra_actions_panel.dart';
 
 /// Screen 4: Notes Result Screen
 /// View-only screen with modular sections and action chips
@@ -22,6 +23,7 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
   String _lectureTitle = 'Lecture Notes';
   bool _isLoading = true;
   bool _hasError = false;
+  bool _extrasLoading = false;
 
   // Data models
   Map<String, dynamic>? _notesData;
@@ -30,6 +32,15 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
 
   // Loading states for action chips
   final Map<String, bool> _actionLoadingStates = {};
+
+  int _selectedSectionIndex = 0;
+
+  final List<String> _sections = [
+    'Short Summary',
+    'Key Points',
+    'Clean Notes',
+    'Important Terms',
+  ];
 
   @override
   void initState() {
@@ -201,6 +212,51 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
     }
   }
 
+  Future<void> _handleExtraAction(String actionType) async {
+    if (actionType == 'rag') {
+      _openRAGChat();
+      return;
+    }
+
+    if (_cachedExtras[actionType] == true) {
+      _openActionView(actionType);
+      return;
+    }
+
+    final creditCheck = await _checkCredits(1);
+    if (!creditCheck) {
+      _showUpgradeAlert();
+      return;
+    }
+
+    setState(() => _extrasLoading = true);
+
+    try {
+      final result = await LectureService.instance.invokeExtra(
+        lectureId: widget.lectureId,
+        action: actionType,
+        content: _notesData?['clean_notes']?.toString() ?? '',
+      );
+
+      if (result['success'] == true) {
+        setState(() {
+          _cachedExtras[actionType] = true;
+          _extrasLoading = false;
+        });
+        _openActionView(actionType);
+      } else {
+        throw Exception('Generation failed');
+      }
+    } catch (error) {
+      if (mounted) {
+        setState(() => _extrasLoading = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Failed to generate content')),
+        );
+      }
+    }
+  }
+
   Future<void> _handleAction(String actionType) async {
     // Check if already cached
     if (_cachedExtras[actionType] == true) {
@@ -255,10 +311,13 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
   Future<bool> _checkCredits(int required) async {
     try {
       final supabase = SupabaseClient.instance.client;
+      final userId = supabase.auth.currentUser?.id;
+      if (userId == null) return false;
+
       final response = await supabase
           .from('users')
           .select('credits_balance')
-          .eq('id', supabase.auth.currentUser?.id)
+          .eq('id', userId)
           .single();
 
       return response['credits_balance'] >= required;
@@ -381,6 +440,30 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
                     ),
                   ),
                   actions: [
+                    Container(
+                      margin: const EdgeInsets.only(right: 8),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.security, size: 14, color: Colors.orange[700]),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Protected',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.orange[700],
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                     PopupMenuButton<String>(
                       icon: const Icon(Icons.more_vert),
                       onSelected: (value) {
@@ -403,6 +486,35 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
                     ),
                   ],
                 ),
+
+                // Section tabs
+                if (!_isLoading)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppTheme.screenPadding,
+                        vertical: 12,
+                      ),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(color: AppTheme.getCardBorder(context)),
+                        ),
+                      ),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: List.generate(_sections.length, (index) {
+                            return Padding(
+                              padding: EdgeInsets.only(
+                                right: index < _sections.length - 1 ? 24 : 0,
+                              ),
+                              child: _buildSectionTab(_sections[index], index),
+                            );
+                          }),
+                        ),
+                      ),
+                    ),
+                  ),
 
                 // Content
                 SliverToBoxAdapter(
@@ -439,7 +551,10 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
                   horizontal: AppTheme.screenPadding,
                   vertical: 12,
                 ),
-                child: _buildActionBar(),
+                child: ExtraActionsPanel(
+                  isLoading: _extrasLoading,
+                  onAction: _handleExtraAction,
+                ),
               ),
             ),
           ],
@@ -506,187 +621,190 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
     final cleanNotes = _notesData?['clean_notes'] ?? '';
     final importantTerms = _notesData?['important_terms'] as List?;
 
+    switch (_selectedSectionIndex) {
+      case 0:
+        return _buildShortSummary(summary);
+      case 1:
+        return _buildKeyPoints(keyPoints);
+      case 2:
+        return _buildCleanNotes(cleanNotes);
+      case 3:
+        return _buildImportantTerms(importantTerms);
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+
+  Widget _buildSectionTab(String label, int index) {
+    final isSelected = _selectedSectionIndex == index;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedSectionIndex = index),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 15,
+              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+              color: isSelected
+                  ? AppTheme.getPrimaryText(context)
+                  : AppTheme.getSecondaryText(context),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            height: 3,
+            width: label.length * 8.0,
+            decoration: BoxDecoration(
+              color: isSelected ? AppTheme.accentColor : Colors.transparent,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildShortSummary(dynamic content) {
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.summarize, color: AppTheme.accentColor, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Summary',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            content?.toString().isNotEmpty == true
+                ? content.toString()
+                : 'No summary available',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildKeyPoints(List? points) {
+    if (points == null || points.isEmpty) {
+      return SectionCard(
+        child: Text(
+          'No key points available',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      );
+    }
+
     return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Summary Section
-        _buildSectionHeader('SUMMARY'),
-        const SizedBox(height: 12),
-        SectionCard(
-          child: Text(
-            summary,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Key Points Section
-        _buildSectionHeader('KEY POINTS'),
-        const SizedBox(height: 12),
-        SectionCard(
-          child: keyPoints != null && keyPoints.isNotEmpty
-              ? Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: keyPoints.map((point) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text('• '),
-                        Expanded(
-                          child: Text(
-                            point.toString(),
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                        ),
-                      ],
-                    ),
-                  )).toList(),
-                )
-              : Text(
-                  'No key points available',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-        ),
-        const SizedBox(height: 24),
-
-        // Notes Section
-        _buildSectionHeader('NOTES'),
-        const SizedBox(height: 12),
-        SectionCard(
-          child: Text(
-            cleanNotes,
-            style: Theme.of(context).textTheme.bodyMedium,
-          ),
-        ),
-        const SizedBox(height: 24),
-
-        // Important Terms Section
-        _buildSectionHeader('IMPORTANT TERMS'),
-        const SizedBox(height: 12),
-        SizedBox(
-          height: 50,
-          child: importantTerms != null && importantTerms.isNotEmpty
-              ? ListView.builder(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: importantTerms.length,
-                  itemBuilder: (context, index) {
-                    final term = importantTerms[index];
-                    return Padding(
-                      padding: EdgeInsets.only(
-                        right: index < importantTerms.length - 1 ? 12 : 0,
-                      ),
-                      child: TermChip(
-                        term: term['term']?.toString() ?? '',
-                        definition: term['definition']?.toString() ?? '',
-                        onTap: () => _showTermDefinition(
-                          term['term']?.toString() ?? '',
-                          term['definition']?.toString() ?? '',
-                        ),
-                      ),
-                    );
-                  },
-                )
-              : Center(
+      children: List.generate(points.length, (index) {
+        return Container(
+          margin: EdgeInsets.only(bottom: index < points.length - 1 ? 12 : 0),
+          child: SectionCard(
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: AppTheme.accentColor,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
                   child: Text(
-                    'No terms available',
-                    style: Theme.of(context).textTheme.bodySmall,
+                    '${index + 1}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 14,
+                    ),
                   ),
                 ),
-        ),
-      ],
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    points[index].toString(),
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }),
     );
   }
 
-  Widget _buildSectionHeader(String title) {
-    return Text(
-      title,
-      style: TextStyle(
-        fontSize: 12,
-        fontWeight: FontWeight.bold,
-        color: AppTheme.getSecondaryText(context),
-        letterSpacing: 1,
-      ),
-    );
-  }
-
-  Widget _buildActionBar() {
-    final actions = [
-      ('MCQ', 'mcq', Icons.quiz_outlined),
-      ('Revision', 'revision', Icons.assignment_outlined),
-      ('Important Qs', 'important_questions', Icons.help_outline),
-      ('Answer Key', 'answer_key', Icons.check_circle_outline),
-      ('Flashcards', 'flashcards', Icons.style_outlined),
-      ('Ask (RAG)', 'rag', Icons.chat_bubble_outline),
-    ];
-
-    return SizedBox(
-      height: 40,
-      child: ListView.builder(
-        scrollDirection: Axis.horizontal,
-        itemCount: actions.length,
-        itemBuilder: (context, index) {
-          final (label, type, icon) = actions[index];
-          final isLoading = _actionLoadingStates[type] ?? false;
-          final isCached = _cachedExtras[type] ?? false;
-
-          return Padding(
-            padding: EdgeInsets.only(
-              right: index < actions.length - 1 ? 12 : 0,
-            ),
-            child: ActionChipButton(
-              label: label,
-              icon: icon,
-              isLoading: isLoading,
-              isCached: isCached,
-              onTap: () {
-                if (type == 'rag') {
-                  _openRAGChat();
-                } else {
-                  _handleAction(type);
-                }
-              },
-            ),
-          );
-        },
-      ),
-    );
-  }
-
-  void _showTermDefinition(String term, String definition) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              term,
-              style: Theme.of(context).textTheme.displayLarge,
-            ),
-            const SizedBox(height: 16),
-            Text(
-              definition,
-              style: Theme.of(context).textTheme.bodyMedium,
-            ),
-            const SizedBox(height: 24),
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Close'),
+  Widget _buildCleanNotes(dynamic content) {
+    return SectionCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.description, color: AppTheme.accentColor, size: 20),
+              const SizedBox(width: 8),
+              Text(
+                'Clean Notes',
+                style: Theme.of(context).textTheme.bodyLarge,
               ),
-            ),
-          ],
-        ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Text(
+            content?.toString().isNotEmpty == true
+                ? content.toString()
+                : 'No clean notes available',
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.7),
+          ),
+        ],
       ),
+    );
+  }
+
+  Widget _buildImportantTerms(List? terms) {
+    if (terms == null || terms.isEmpty) {
+      return SectionCard(
+        child: Text(
+          'No terms available',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      );
+    }
+
+    return Column(
+      children: List.generate(terms.length, (index) {
+        final term = terms[index] as Map?;
+        return Container(
+          margin: EdgeInsets.only(bottom: index < terms.length - 1 ? 12 : 0),
+          child: SectionCard(
+            child: ExpansionTile(
+              tilePadding: EdgeInsets.zero,
+              childrenPadding: const EdgeInsets.only(top: 8),
+              leading: Icon(Icons.bookmark, color: AppTheme.accentColor, size: 18),
+              title: Text(
+                term?['term']?.toString() ?? 'Term ${index + 1}',
+                style: Theme.of(context).textTheme.bodyLarge,
+              ),
+              children: [
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    term?['definition']?.toString() ?? 'No definition',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      }),
     );
   }
 }
@@ -970,9 +1088,9 @@ class _RAGChatModalState extends State<RAGChatModal> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
+                    style: const TextStyle(fontSize: 16),
                     decoration: InputDecoration(
                       hintText: 'Ask a question...',
-                      style: const TextStyle(fontSize: 16),
                       border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(24),
                       ),

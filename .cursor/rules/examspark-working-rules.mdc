@@ -1,0 +1,68 @@
+---
+description: ExamSpark working rules — save docs, phase-by-phase, non-dev founder, task summary
+alwaysApply: true
+---
+
+# ExamSpark Working Rules (MUST FOLLOW)
+
+Full spec: [`PROJECT_WORKING_RULES.md`](PROJECT_WORKING_RULES.md)
+
+## Phase Gate
+
+**Phase 1 LOCKED.** Ask founder before Phase 2 code. No Phase 1 doc edits without founder approval.
+
+`IA_SCREEN_HIERARCHY.md` = screen bible.
+
+### Phase 2 auth rule (MUST FOLLOW)
+
+- **Keep Supabase auth** — do not remove or rewrite unless founder asks
+- **Reuse** `SupabaseClient`, `AuthGate`, `LoginScreen` logic — UI restyle only
+- **Keep** `LectureService`, `RecordingService`, edge function wiring
+- **New tabs** may use placeholder data; **do not break** login or record pipeline
+
+1. Read working rules + core rules + UX architecture
+2. **Never guess** — ask founder if unclear
+3. Update `TODO.md` / `CHANGELOG.md` / relevant docs on save
+
+## Founder Context
+
+- **Non-developer** — step-by-step manual guides; wait for confirm
+- **Never auto-create** external services — never say "done" until founder did it
+- **Phase by phase** — finish one phase, audit, wait for founder OK before next
+- **Never assume** SQL, Supabase, FastAPI, Cloudflare, Flutter, Git knowledge
+- **Copy-paste commands** whenever possible; verify checkpoint after each step
+
+## Product Vision
+
+**AI Study Platform** — not notes app, not chatbot. Conversation + Study Workspace.
+
+## Required Root Docs
+
+`PROJECT_ROADMAP.md` · `FEATURES.md` · `ARCHITECTURE.md` · `TODO.md` · `CHANGELOG.md`
+
+## End of Every Task (MANDATORY)
+
+**Every code change ends with Manual Setup Checklist + .env Checklist.** No feature complete until both explained.
+
+```
+✅ What was coded
+📄 Files changed
+⚠ Manual setup required (step-by-step)
+⚠ .env variables required (where to get + where to paste)
+⚠ SQL / Supabase / Cloudflare changes
+🧪 How to test → Expected result → Rollback
+🗑 Files safe to remove (ask before delete)
+➡ Recommended next task
+```
+
+**Never hide manual work** — stop and say "Manual setup required before next step."
+
+Full spec: [`PROJECT_WORKING_RULES.md`](PROJECT_WORKING_RULES.md) §12–13
+
+## Large Tasks
+
+Stop and ask founder to switch to Claude Sonnet 5 before big multi-file changes.
+
+## Clean Project
+
+Mark dead code for removal; **never delete without founder confirmation.** Explain why first. Single source of truth — no duplicate logic/UI.

@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 
-/// Screen 6: Teacher Dashboard & Class Group Management
-/// Class folder management with student join functionality
+/// Teacher business dashboard — full spec: TEACHER_PLATFORM.md (founder saved Jul 2026).
+/// Current UI: class folders scaffold only. Pending: analytics, revenue, student list.
 class TeacherDashboardScreen extends StatefulWidget {
   const TeacherDashboardScreen({super.key});
 

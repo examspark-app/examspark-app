@@ -1,0 +1,66 @@
+---
+description: ExamSpark canonical tech stack — FastAPI, R2, pgvector, Redis, Docker
+alwaysApply: true
+---
+
+# ExamSpark Tech Stack Rule
+
+Full spec: [`TECH_STACK.md`](TECH_STACK.md) · [`PROJECT_CORE_RULES.md`](PROJECT_CORE_RULES.md)
+
+## Hard Rules
+
+- **Temp delete after processing:** Raw audio, temp AI/OCR, upload cache
+- **Postgres metadata only** — never large blobs
+- **RAG priority (mandatory):** Notes → Transcript (clean) → Teacher Shared → Web
+- **Vectors only:** Clean Transcript chunks + Notes + Teacher Shared Notes
+- **Backend target:** FastAPI (Python) on Railway with **Docker from day 1**
+- **Storage:** Cloudflare R2 (not Supabase Storage long-term)
+- **RAG:** pgvector on Supabase PostgreSQL
+- **Queue + Cache:** Redis
+- **Auth:** Supabase Auth (email, Google; Apple future)
+- **Flutter:** `examspark_frontend/lib/` only — Android + Web now; iOS structure ready, App Store later
+- **Transcript saved in User Library** — users re-read original explanation; **raw audio deleted** after processing (optional save-audio = future)
+- **R2 stores:** Transcript, Clean Transcript, Notes, Summary, Flashcards, Quiz, MCQ, MindMap, Revision, Formula, PDF, Images, Teacher Files, Exports — **not** raw audio
+- **R2 layout:** `Users/` · `Library/` · `Teachers/` · `Exports/` — see [`TECH_STACK.md`](TECH_STACK.md)
+- **Teacher platform:** business dashboard + student access logic — [`TEACHER_PLATFORM.md`](TEACHER_PLATFORM.md)
+
+## User Library UI
+
+```text
+📁 Subject (e.g. Physics) → Lecture 12 → Transcript | Notes | Summary
+```
+
+## RAG Pipeline Order
+
+1. **Notes** (pgvector) — primary
+2. **Clean Transcript** (pgvector) — fallback for detail
+3. **Web Search** (Tavily) — last resort
+
+Library read (Transcript/Notes/Summary) = free. Ask AI = credits.
+
+## AI Pipeline
+
+| Step | Model / Service |
+|------|-----------------|
+| Speech | Groq Whisper Large v3 Turbo → fallback Whisper Large v3 |
+| LLM | Qwen 3 Instruct |
+| Vision | Qwen3-VL |
+| Web search | Tavily API (future: own pipeline) |
+
+## Interim Code (do not extend without reason)
+
+- `examspark_backend/functions/process-lecture/index.ts` — migrate to FastAPI
+- Supabase `temp-audio` bucket — migrate to R2
+
+New features: align with FastAPI + R2 + Redis unless founder explicitly keeps edge function.
+
+## Hosting
+
+- MVP: Railway (Docker) + Cloudflare Pages (Flutter Web) + Cloudflare CDN/DNS
+- Scale: Hetzner/Contabo VPS, self-hosted Redis, own Qwen GPU server
+
+## Payments & Observability
+
+- India: Razorpay | International: Stripe (future)
+- FCM notifications | PostHog analytics | Sentry + Better Stack monitoring
+- Admin: Flutter Web (same design)

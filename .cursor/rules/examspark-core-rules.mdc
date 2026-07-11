@@ -1,0 +1,43 @@
+---
+description: ExamSpark project core rules — storage, sharing, RAG, PYQ, security (MUST FOLLOW)
+alwaysApply: true
+---
+
+# ExamSpark Core Rules (MUST FOLLOW)
+
+Full spec: [`PROJECT_CORE_RULES.md`](PROJECT_CORE_RULES.md)
+
+## Storage
+
+- **Temp (delete after processing):** Raw audio, temp AI/OCR files, upload cache
+- **R2 permanent:** Notes, Summary, Flashcards, Quiz, transcripts, PDF, images, teacher files
+- **Postgres:** Metadata only — never large blobs
+- **Vectors:** Clean Transcript chunks + AI Notes + Teacher Shared Notes only
+- Audio: delete after Whisper unless teacher `Save Original Audio` ON
+
+## Groups
+
+- Teacher owns group; students **cannot** upload, message, or edit
+- Teacher photo + name visible; description; pinned on top
+
+## Sharing (Strict)
+
+- **Only teacher** shares content (notes, PDF, quiz, etc.)
+- Students **cannot** share/export/forward/download protected content
+- Students **may only** share **Group Invite Link** (future: 100 credits configurable)
+- Watermark shared content: `Shared by: {Teacher} • {Group}` + `lecture_id` traceability
+
+## RAG Priority (never skip order)
+
+1. User Notes → 2. Transcript (clean chunks) → 3. Teacher Shared → 4. Web Search
+
+## PYQ
+
+- Mapping only — exam reference tags (NEET 2024, etc.)
+- **Never** show original Q/options/answer key/explanation
+
+## Cost & Security
+
+- No duplicate vectors/notes; reuse RAG; minimize storage
+- Students isolated; groups isolated; permission check every AI request
+- Modular adapters — models, storage, payments replaceable

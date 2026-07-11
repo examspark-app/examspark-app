@@ -8,19 +8,45 @@ const groqApiKey = Deno.env.get('GROQ_API_KEY')!
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// Credit costs per Master Setup Prompt
+// Credit Economy v2 — feature/session-based (never per-minute in UI)
 const CREDIT_COSTS = {
-  WHISPER_TURBO_HOUR: 37,
-  WHISPER_NON_TURBO_HOUR: 99,
-  QWEN3_TEXT: 1,
-  QWEN3_VL: 2,
-  MCQ_GENERATION: 1,
-  REVISION_GENERATION: 1,
-  IMPORTANT_QUESTIONS_GENERATION: 1,
-  ANSWER_KEY_GENERATION: 1,
-  FLASHCARD_GENERATION: 1,
-  RAG_QUERY: 1,
-  PDF_TEXT_INGEST: 1
+  RECORD_UP_TO_30_MIN: 40,
+  RECORD_30_TO_60_MIN: 80,
+  RECORD_60_TO_90_MIN: 120,
+  SUMMARY_WITH_RECORDING: 0,
+  ASK_AI_NORMAL: 5,
+  ASK_AI_DEEP: 12,
+  FLASHCARDS: 20,
+  QUIZ_20_MCQ: 25,
+  IMPORTANT_QUESTIONS: 20,
+  REVISION_NOTES: 20,
+  FORMULA_SHEET: 15,
+  MIND_MAP: 30,
+  DIAGRAM_IMAGE: 25,
+  PDF_ANALYSIS: 20,
+  OCR_IMAGE: 15,
+  TRANSLATE: 8,
+  VOICE_READ: 5,
+  // Legacy aliases
+  RECORD_LECTURE: 80,
+  WHISPER_TURBO_HOUR: 80,
+  WHISPER_NON_TURBO_HOUR: 80,
+  QWEN3_TEXT: 5,
+  QWEN3_VL: 25,
+  MCQ_GENERATION: 25,
+  REVISION_GENERATION: 20,
+  IMPORTANT_QUESTIONS_GENERATION: 20,
+  ANSWER_KEY_GENERATION: 25,
+  FLASHCARD_GENERATION: 20,
+  RAG_QUERY: 5,
+  PDF_TEXT_INGEST: 20,
+}
+
+function recordCreditsForDurationMinutes(minutes: number): number {
+  if (minutes <= 30) return CREDIT_COSTS.RECORD_UP_TO_30_MIN
+  if (minutes <= 60) return CREDIT_COSTS.RECORD_30_TO_60_MIN
+  if (minutes <= 90) return CREDIT_COSTS.RECORD_60_TO_90_MIN
+  return CREDIT_COSTS.RECORD_60_TO_90_MIN
 }
 
 // API Endpoints (4 Final Locked APIs)
@@ -59,6 +85,11 @@ serve(async (req: Request) => {
     // ==================== MAIN PROCESSING ROUTER ====================
     const payload = await req.json()
     console.log('Payload received:', JSON.stringify({ ...payload, audioData: '[REDACTED]', imageData: '[REDACTED]' }))
+
+    // On-demand extras via action field (Flutter client)
+    if (payload.action && !payload.input_type) {
+      return await handleExtrasFromPayload(payload)
+    }
 
     const { 
       input_type,
@@ -151,6 +182,84 @@ serve(async (req: Request) => {
   }
 })
 
+// ==================== ON-DEMAND EXTRAS (PAYLOAD) ====================
+async function handleExtrasFromPayload(payload: any) {
+  const { userId, content, query, action, lectureId } = payload
+  if (!userId) {
+    return new Response(JSON.stringify({ error: 'User ID required' }), {
+      status: 401,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+
+  const actionMap: Record<string, string> = {
+    mcq: 'mcq',
+    revision: 'revision',
+    revision_sheet: 'revision',
+    important_questions: 'important-questions',
+    answer_key: 'answer-key',
+    flashcards: 'flashcards',
+    flashcard: 'flashcards',
+    rag: 'ask-rag',
+  }
+
+  const mapped = actionMap[action] || action
+  const creditCheck = await checkAndDeductCredits(userId, 1, mapped)
+  if (!creditCheck.success) {
+    return creditCheck.response
+  }
+
+  let result
+  try {
+    switch (mapped) {
+      case 'mcq':
+        result = await generateMCQ(content, groqApiKey)
+        break
+      case 'revision':
+        result = await generateRevision(content, groqApiKey)
+        break
+      case 'important-questions':
+        result = await generateImportantQuestions(content, groqApiKey)
+        break
+      case 'answer-key':
+        result = await generateAnswerKey(content, groqApiKey)
+        break
+      case 'flashcards':
+        result = await generateFlashcards(content, groqApiKey)
+        break
+      case 'ask-rag':
+        result = await performRAGQuery(userId, query ?? content, groqApiKey, supabase)
+        break
+      default:
+        return new Response(JSON.stringify({ error: 'Unknown extras action' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' }
+        })
+    }
+
+    if (lectureId) {
+      await supabase.from('extras').upsert({
+        lecture_id: lectureId,
+        type: action,
+        content: result,
+      })
+    }
+
+    return new Response(JSON.stringify({
+      success: true,
+      action: mapped,
+      result,
+      creditsDeducted: 1,
+    }), { headers: { 'Content-Type': 'application/json' } })
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    return new Response(JSON.stringify({ error: errorMessage }), {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' }
+    })
+  }
+}
+
 // ==================== ON-DEMAND EXTRAS WEBHOOKS ====================
 async function handleExtrasWebhook(req: any, path: string) {
   console.log('=== EXTRAS WEBHOOK HANDLER ===')
@@ -234,9 +343,16 @@ async function handleExtrasWebhook(req: any, path: string) {
 async function executeAudioPipeline(payload: any, userId: string) {
   console.log('=== PATH A: AUDIO TRANSCRIPTION & PROCESSING PIPELINE ===')
   
-  const { audioData, high_accuracy = false } = payload
+  const { audioData, high_accuracy = false, lectureId } = payload
   const useTurbo = !high_accuracy
   const requiredCredits = useTurbo ? CREDIT_COSTS.WHISPER_TURBO_HOUR : CREDIT_COSTS.WHISPER_NON_TURBO_HOUR
+
+  const updateLectureStatus = async (status: string) => {
+    if (!lectureId) return
+    await supabase.from('lectures').update({ status, updated_at: new Date().toISOString() }).eq('id', lectureId)
+  }
+
+  await updateLectureStatus('splitting')
 
   console.log(`Credit requirement: ${requiredCredits} (${useTurbo ? 'Turbo' : 'Non-Turbo'})`)
 
@@ -251,10 +367,16 @@ async function executeAudioPipeline(payload: any, userId: string) {
   // Upload audio to temporary storage
   console.log('→ Uploading audio to temporary storage')
   const fileName = `temp_${userId}_${Date.now()}.webm`
+
+  let uploadBody: Uint8Array | string = audioData
+  if (typeof audioData === 'string') {
+    uploadBody = Uint8Array.from(atob(audioData), (c) => c.charCodeAt(0))
+  }
+
   const { error: uploadError } = await supabase
     .storage
     .from('temp-audio')
-    .upload(fileName, audioData, {
+    .upload(fileName, uploadBody, {
       contentType: 'audio/webm',
       upsert: true
     })
@@ -280,6 +402,7 @@ async function executeAudioPipeline(payload: any, userId: string) {
   // For now, simple transcription (chunking logic can be added for large files)
   // TODO: Implement audio duration check and chunking for files > 10 minutes
   console.log('→ Transcribing audio (single chunk for now)')
+  await updateLectureStatus('transcribing')
   
   const whisperModel = useTurbo ? MODELS.WHISPER_TURBO : MODELS.WHISPER_STANDARD
   console.log(`Using Whisper model: ${whisperModel}`)
@@ -319,11 +442,29 @@ async function executeAudioPipeline(payload: any, userId: string) {
 
   // Downstream LLM Invocation: Qwen3 Text Processing
   console.log('→ Sending transcript to Qwen3 for note generation')
+  await updateLectureStatus('generating')
   const processedContent = await callQwen3(transcript, groqApiKey)
   console.log('✓ Qwen3 processing complete')
 
+  // Persist notes + transcript when lectureId provided
+  if (lectureId) {
+    await supabase.from('transcripts').upsert({
+      lecture_id: lectureId,
+      content: transcript,
+    })
+    await supabase.from('notes').upsert({
+      lecture_id: lectureId,
+      short_summary: processedContent?.shortSummary ?? '',
+      key_points: processedContent?.keyPoints ?? [],
+      clean_notes: processedContent?.cleanNotes ?? '',
+      important_terms: processedContent?.importantTerms ?? [],
+    })
+    await updateLectureStatus('done')
+  }
+
   // Asynchronous RAG Indexing
   console.log('→ Queueing RAG indexing (background task)')
+  await updateLectureStatus('indexing')
   saveToRAG(transcript, userId, supabase).catch(err => {
     console.error('RAG indexing failed (non-blocking):', err.message)
   })
@@ -331,7 +472,8 @@ async function executeAudioPipeline(payload: any, userId: string) {
   return {
     transcript,
     processedContent,
-    creditsDeducted: requiredCredits
+    creditsDeducted: requiredCredits,
+    lectureId,
   }
 }
 
