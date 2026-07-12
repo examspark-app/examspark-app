@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:cross_file/cross_file.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
@@ -40,9 +41,13 @@ class RecordingService {
       throw StateError('Microphone permission denied');
     }
 
+    // Web: dart:io file paths don't exist in the browser, and Chrome/Firefox's
+    // MediaRecorder doesn't reliably support aacLc — leave `path` empty so the
+    // plugin keeps the recording as an in-memory blob (retrieved from stop()
+    // as a blob: URL) and use opus, which browsers do support.
     await _recorder.start(
-      const RecordConfig(encoder: AudioEncoder.aacLc),
-      path: await _tempPath(),
+      RecordConfig(encoder: kIsWeb ? AudioEncoder.opus : AudioEncoder.aacLc),
+      path: kIsWeb ? '' : await _tempPath(),
     );
 
     _elapsedSeconds = 0;
@@ -58,16 +63,37 @@ class RecordingService {
     return _recorder.stop();
   }
 
+  /// Works for a real file path (mobile/desktop) and a browser `blob:` URL
+  /// (web) alike — [XFile] handles the platform difference internally.
   Future<Uint8List?> readRecordingBytes(String? path) async {
-    if (path == null || kIsWeb) return null;
-    final file = File(path);
-    if (!await file.exists()) return null;
-    return file.readAsBytes();
+    if (path == null || path.isEmpty) return null;
+    try {
+      return await XFile(path).readAsBytes();
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<Uint8List?> pickAudioFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.audio,
+      withData: true,
+    );
+    if (result == null || result.files.isEmpty) return null;
+    final file = result.files.first;
+    if (file.bytes != null) return file.bytes;
+    if (file.path != null && !kIsWeb) {
+      return File(file.path!).readAsBytes();
+    }
+    return null;
+  }
+
+  /// For the recorder's "Upload Document/Photo" tab — PDFs and images only,
+  /// never audio (previously this mistakenly reused [pickAudioFile]).
+  Future<Uint8List?> pickDocumentOrImageFile() async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
       withData: true,
     );
     if (result == null || result.files.isEmpty) return null;

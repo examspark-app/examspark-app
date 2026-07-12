@@ -854,7 +854,23 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
   }
 
   Future<void> _handleDocumentUpload() async {
-    await _handleAudioUpload();
+    if (_isProcessing) return;
+    setState(() => _isProcessing = true);
+    try {
+      final bytes = await _recordingService.pickDocumentOrImageFile();
+      if (bytes == null) {
+        setState(() => _isProcessing = false);
+        return;
+      }
+      await _startProcessingWithAudio(bytes);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Upload failed: $e')),
+        );
+        setState(() => _isProcessing = false);
+      }
+    }
   }
 
   void _showInfoDialog() {
