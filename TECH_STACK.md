@@ -107,23 +107,38 @@ PYQ = topic mapping tags only — never direct answers. See [`PROJECT_CORE_RULES
 
 ## AI Models
 
-### Speech
+### Speech (founder-locked Jul 12, 2026 — full decision tree)
 
-- Groq Whisper Large v3 Turbo
-- Auto fallback: Whisper Large v3
+1. **Default:** Groq Whisper Large v3 **Turbo** ($0.04/hr transcribed) for every recording
+2. **Noise handling:** if the input audio is noisy, run a noise-cancellation preprocessing pass first, then transcribe with Turbo as normal
+3. **Auto fallback to non-turbo:** if Turbo still returns low confidence after noise-cancellation (via `verbose_json` segment `avg_logprob` / `no_speech_prob`) or the Turbo call errors/times out, automatically re-transcribe with Whisper Large v3 **non-turbo** ($0.111/hr — ~2.8x costlier, same model family so quality gain is real, not marginal). Expected to trigger on a minority of noisy lectures, not routinely.
+4. **Cross-talk / random-voice detection:** flag segments where an unexpected extra voice (background chatter, another student talking, overlapping speech) is detected, so Notes generation excludes that content instead of transcribing it as if the teacher/main speaker said it. Phase 5 diarization step — locked as a design requirement, not built yet (no diarization model wired).
 
 ### LLM
 
-- Qwen 3 Instruct
+- Qwen3 32B ($0.29/M input tokens, $0.59/M output tokens) — default for all text generation (Notes, Summary, Quiz, Flashcards, Ask AI)
 
-### Vision
+### Vision (founder-locked Jul 12, 2026 — cost-safe escalation)
 
-- Qwen3-VL
+- **Default:** Qwen3-VL-**Flash** ($0.05/M input, $0.40/M output) for every Diagram/Image/Math action
+- **Escalate to Qwen3-VL-Plus** ($0.20/M input, $1.60/M output) only when Flash's output is low-confidence or unparseable — e.g. a complex multi-step math derivation or an unclear/dense diagram. Escalation should be the rare exception, never the default path, so the cheap model carries the bulk of vision traffic.
 
 ### Web Search
 
 - Tavily API
 - Ya future own search pipeline
+
+### Real Cost Reference (Jul 2026 pricing — recheck periodically, provider rates change)
+
+| Model | Rate |
+|-------|------|
+| Whisper Large v3 Turbo | $0.04 / hour transcribed |
+| Whisper Large v3 (non-turbo) | $0.111 / hour transcribed |
+| Qwen3 32B | $0.29/M input · $0.59/M output tokens |
+| Qwen3-VL-Flash | $0.05/M input · $0.40/M output tokens (~256 tokens per 1024×1024 image) |
+| Qwen3-VL-Plus | $0.20/M input · $1.60/M output tokens |
+
+Computed real cost per feature (at ~₹87/$1, recheck as INR/USD moves): Ask AI Normal ~₹0.03, Ask AI Deep ~₹0.08, Quiz ~₹0.10, Diagram (Flash) ~₹0.02, Diagram (Plus) ~₹0.07, Record 30–60 min (Turbo STT + notes) ~₹3.1 — see [`CREDIT_ECONOMY.md`](CREDIT_ECONOMY.md) Margin Validation for the full table against charged credits.
 
 ---
 
@@ -353,4 +368,5 @@ Move gradually:
 | Jul 2026 | User Library: save transcript for users; RAG priority Notes → Clean Transcript → Web Search | Founder `save` |
 | Jul 2026 | PRD + UX Architecture (Home, Library, Groups, Study Workspace, 5-tab nav) | Founder `save all` |
 | Jul 2026 | Project Core Rules — storage, sharing, RAG, PYQ, watermark, security | Founder `save all` |
-| Jul 2026 | R2 full asset list + folder architecture; Teacher Platform spec | Founder `save` |
+| Jul 2026 | R2 full asset list + folder architecture; Teacher Platform spec |
+| Jul 12, 2026 | AI Models: full Speech decision tree (noise-cancellation → confidence-based non-turbo fallback → cross-talk detection) + Vision escalation rule (Flash default, Plus only on low-confidence) + real Jul 2026 pricing reference | Founder `save` |

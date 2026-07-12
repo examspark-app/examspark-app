@@ -191,6 +191,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         onPressed: () => Navigator.pushNamed(context, '/teacher'),
                       ),
                       IconButton(
+                        icon: const Icon(Icons.groups_outlined),
+                        tooltip: 'Groups (Study Community)',
+                        onPressed: () => Navigator.pushNamed(context, '/groups'),
+                      ),
+                      IconButton(
                         icon: const Icon(Icons.people_outline),
                         tooltip: 'Student Portal',
                         onPressed: () => Navigator.pushNamed(context, '/student'),

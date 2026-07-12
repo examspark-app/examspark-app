@@ -4,6 +4,7 @@ import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/presentation/screens/results/widgets/extra_actions_panel.dart';
+import 'package:examspark_frontend/presentation/widgets/ask_ai_selectable_text.dart';
 
 /// Screen 4: Notes Result Screen
 /// View-only screen with modular sections and action chips
@@ -373,13 +374,23 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
     );
   }
 
-  void _openRAGChat() {
+  void _openRAGChat({String? initialQuery}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => RAGChatModal(lectureId: widget.lectureId),
+      builder: (context) => RAGChatModal(
+        lectureId: widget.lectureId,
+        initialQuery: initialQuery,
+      ),
     );
+  }
+
+  /// Entry point for the "select text → Ask AI" feature
+  /// (`AskAiSelectableText`) — opens the same Ask AI chat used by the
+  /// "Ask AI" action chip, pre-filled with the selected snippet.
+  void _askAiAbout(String selectedText) {
+    _openRAGChat(initialQuery: 'Explain: "$selectedText"');
   }
 
   @override
@@ -682,11 +693,12 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            content?.toString().isNotEmpty == true
+          AskAiSelectableText(
+            text: content?.toString().isNotEmpty == true
                 ? content.toString()
                 : 'No summary available',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
+            onAskAi: _askAiAbout,
           ),
         ],
       ),
@@ -728,9 +740,10 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
                 ),
                 const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    points[index].toString(),
+                  child: AskAiSelectableText(
+                    text: points[index].toString(),
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
+                    onAskAi: _askAiAbout,
                   ),
                 ),
               ],
@@ -757,11 +770,12 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
             ],
           ),
           const SizedBox(height: 12),
-          Text(
-            content?.toString().isNotEmpty == true
+          AskAiSelectableText(
+            text: content?.toString().isNotEmpty == true
                 ? content.toString()
                 : 'No clean notes available',
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.7),
+            onAskAi: _askAiAbout,
           ),
         ],
       ),
@@ -795,9 +809,10 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
               children: [
                 Align(
                   alignment: Alignment.centerLeft,
-                  child: Text(
-                    term?['definition']?.toString() ?? 'No definition',
+                  child: AskAiSelectableText(
+                    text: term?['definition']?.toString() ?? 'No definition',
                     style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
+                    onAskAi: _askAiAbout,
                   ),
                 ),
               ],
@@ -958,9 +973,15 @@ class ActionChipButton extends StatelessWidget {
 class RAGChatModal extends StatefulWidget {
   final String lectureId;
 
+  /// Pre-fills the input (does NOT auto-send) — used by the "select text →
+  /// Ask AI" feature so the user can still edit their question before it
+  /// costs credits.
+  final String? initialQuery;
+
   const RAGChatModal({
     super.key,
     required this.lectureId,
+    this.initialQuery,
   });
 
   @override
@@ -968,7 +989,8 @@ class RAGChatModal extends StatefulWidget {
 }
 
 class _RAGChatModalState extends State<RAGChatModal> {
-  final TextEditingController _messageController = TextEditingController();
+  late final TextEditingController _messageController =
+      TextEditingController(text: widget.initialQuery ?? '');
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
 

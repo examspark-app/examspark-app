@@ -34,14 +34,15 @@
 | **Quiz / MCQ** | Practice multiple-choice | Partial | Notes Result / Student Portal (demo) | Edge function, credits |
 | **Revision notes** | Exam-focused recap | Partial | Notes Result | Edge function, credits |
 | **Important questions** | Long-answer prep list | Docs Only | Study Workspace `+` menu | AI pipeline |
-| **Progress tab** | Study stats, streaks, quiz scores | Docs Only | Progress (tab not built) | Analytics tables |
-| **Library browse** | Find saved lectures by folder | Docs Only | Library (tab not built) | Library UI + metadata |
-| **Search library** | Search titles, subjects | Docs Only | Library | Search index |
-| **Recent lectures** | Quickly reopen last items | Partial | Home sidebar | Library tab migration |
+| **YouTube Link → Notes** | Paste public video link (≤1 hr) → Notes/Summary/Flashcards/Quiz | UI Only (icon + paste-link dialog; "coming soon" on submit) | Home bottom bar (icon next to Record) | `youtube-transcript-api` fetch + Qwen 3 Instruct pipeline (Phase 5) |
+| **Progress tab** | Study stats, streaks, quiz scores | UI Only | Progress tab | Analytics tables |
+| **Library browse** | Find saved lectures by folder | UI Only (real lecture list) | Library tab | Real folder metadata |
+| **Search library** | Search titles, subjects | UI Only | Library tab | Server-side search index |
+| **Recent lectures** | Quickly reopen last items | Done (real data) | Library tab / Home | — |
 | **Favorites** | Pin important lectures | Docs Only | Library | `favorites` metadata |
-| **Join group** | Enter code/link to join teacher batch | UI Only | Student Portal (old) | Groups tab, memberships DB |
+| **Join group** | Enter code/link to join teacher batch — gated by plan's Group Join Limit (₹199=1, ₹499=3, ₹999=6; Free=0) with a "Buy Plan" prompt if over | UI Only (real limit check, client-side) | Student Portal (old), Groups tab, Group Info | Groups tab, memberships DB; real server-side enforcement Phase 5 |
 | **Read group feed** | See teacher shared lectures | UI Only | Student Portal | Real group feed, permissions |
-| **Take group quiz** | Quiz from teacher share | Docs Only | Groups → Study Workspace | Group content access rules |
+| **Take group quiz** | Interactive MCQ (A/B/C/D) quiz opened from the group feed | UI Only (sample questions; real quiz content from R2 is Phase 5) | Group Info Screen → `MCQQuizView` | Group content access rules, real R2 fetch |
 | **Download content** | Save file offline | Docs Only | Group settings | Teacher `Allow downloads` toggle |
 | **Share invite link only** | Student shares group join link — never notes/PDF | Docs Only | Groups | Optional 100 credits (future) |
 | **Progress / weak topics** | See what to revise | Future | Progress | Analytics |
@@ -52,14 +53,15 @@
 
 | Feature | Description | Status | Screen | Future dependencies |
 |---------|-------------|--------|--------|---------------------|
-| **Record lecture** | Mic capture → AI pipeline | Partial | Recorder | Mobile mic; edge function; not on Web record |
+| **Record lecture** | Mic capture → AI pipeline. Planned-duration picker (≤30/30–60/60–90 min) with sound+banner warning at threshold (never auto-stops); sound+banner warning on start/stop failure and network/processing errors; auto-save (stop+persist) if a call/app-switch interrupts, with a resume-or-discard prompt on return. Shared by Home tab and Teacher Dashboard. | Partial (real warnings/auto-save; mic capture/edge function still Phase 4/5) | Recorder | Mobile mic; edge function; not on Web record |
 | **Upload audio file** | Upload existing recording | Partial | Recorder | File picker, edge function |
 | **Upload PDF** | Send PDF into AI pipeline | UI Only | Recorder (document button) | PDF ingest pipeline, plan gating |
 | **Upload image** | Photo/diagram analysis | UI Only | Recorder | Qwen3-VL routing, plan gating |
 | **Transcription quality** | Turbo vs high-accuracy Whisper | Partial | Recorder setup | Auto-fallback in pipeline |
+| **Recording source restriction** | Only real mic recordings (`source_type = 'recorded'`) are eligible to Share to Group — uploaded audio/PDF/photo stay personal-only (fake-teacher prevention) | UI Only (real `lectures.source_type` tracking + gating) | Recorder, Study Workspace | — |
 | **Create group** | New class/batch | UI Only | Teacher Dashboard | `class_folders` DB write |
 | **Rename / delete group** | Manage batches | Docs Only | Groups management | Backend CRUD |
-| **Share to group** | Broadcast notes/quiz/homework | Docs Only | Share sheet | Groups feed + permissions |
+| **Share to group** | Teacher shares one of their own real-recorded lectures (as Lecture/Notes/Quiz) into a group's feed | UI Only (real `group_shared_items` insert; picks group + content type) | Study Workspace → "Share to Group" | Groups feed + permissions |
 | **Pin post** | Keep important item on top | Docs Only | Group feed | Feed metadata |
 | **Share announcement** | Text announcement to class | Docs Only | Group feed | Broadcast model |
 | **Teacher name + photo visible** | Trust on group feed | Docs Only | Group feed | Profile metadata |
@@ -68,6 +70,8 @@
 | **Watermark shared content** | `Shared by Teacher • Group` on views | Docs Only | Study Workspace / export | Render layer + `lecture_id` |
 | **Save Original Audio** | Opt-in keep raw audio | Docs Only | Settings (teacher) | R2 audio path, default OFF |
 | **Teacher Dashboard** | Business cards: students, revenue… | UI Only | Teacher Dashboard | Analytics APIs, payment data |
+| **Teacher public profile** | Photo, name, subject, bio, qualification, experience, certificates, verification, stats — editable | UI Only (placeholder data) | Teacher Dashboard (top card + edit sheet) | Supabase `teacher_profiles` table, R2 photo/certificate storage |
+| **Certificate upload & verification** | Teacher uploads a certificate image → saved with "Pending Review" status; rejected certs show "Contact Support" | UI Only (real image pick + Postgres save of title/status; real/fake AI check is Phase 5) | Teacher Dashboard → Edit Profile sheet | AI real/fake document check, R2 image storage |
 | **Student list** | See who joined batch | Docs Only | Dashboard → Students | Memberships query |
 | **Today's lectures** | Quick link to recent content | Docs Only | Dashboard | Lecture metadata |
 | **Subscribers / revenue** | Coaching business metrics | Docs Only | Dashboard | Payment tables (live) |
@@ -107,7 +111,10 @@
 
 | Feature | Description | Status | Screen | Future dependencies |
 |---------|-------------|--------|--------|---------------------|
-| **Group list** | WhatsApp-style batch list | UI Only | Student Portal / planned Groups tab | Real DB groups |
+| **Group list** | Study Community batch list — teacher photo, name, subject, verified badge, qualification, students count, join button | UI Only (placeholder data) | Groups List Screen | Real DB groups |
+| **Group Information screen** | Teacher profile header + group info + achievements + recent content + suggested teachers (WhatsApp-inspired, own design) | UI Only (placeholder data) | Group Info Screen | `GroupModel`/`TeacherProfileModel` → Supabase |
+| **Join / Leave group** | Toggle membership, no chat/messaging | UI Only (local mock state) | Group Info Screen, Group card | `group_memberships` table |
+| **Suggested teachers** | Horizontal discovery cards below Group Info | UI Only (placeholder data) | Group Info Screen | `SuggestedTeacherModel` → Supabase |
 | **Group feed** | Broadcast cards, no chat | UI Only | Student Portal | Feed API |
 | **Pinned items** | Top of feed | Docs Only | Group feed | Pin metadata |
 | **No student messages** | Read-only for students | Docs Only | Group feed | No input UI + server block |
@@ -117,6 +124,8 @@
 | **Expired subscription** | Read-only or locked | Docs Only | Backend | Subscription status |
 | **Invite link (student)** | Share join link only | Docs Only | Groups | Optional credit cost |
 | **Strict no content share** | Students cannot forward notes/PDF | Docs Only | Entire app | OS copy block where possible |
+| **Group join limits** | Plan-based cap on how many Groups a student may join (₹199=1, ₹499=3, ₹999=6, Free=0); "Buy Plan" sheet shown when over the limit | UI Only (real client-side check via `fn_user_plan_tier` + `class_memberships` count) | Groups tab/list, Group Info, Join-by-code dialog | Real server-side enforcement (Phase 5) |
+| **Invite link only (Teacher Dashboard)** | "Copy Code" removed — "Share Invite Link" (`examspark.app/join/{joinCode}`) is the only invite path, matching Group Info's Share Group button | Done | Teacher Dashboard | — |
 
 ---
 
@@ -126,13 +135,13 @@
 |---------|-------------|--------|--------|---------------------|
 | **Auto-save every lecture** | No manual Save button | Partial | Pipeline → DB | Lecture + notes insert |
 | **One entry per lecture** | Transcript, notes, quiz in one place | Partial | Notes Result | Library metadata model |
-| **Subject folders** | Physics, Chemistry… | Docs Only | Library tab | Folder CRUD |
-| **Folder drill-down** | Lectures inside subject | Docs Only | Library | Navigation |
-| **Global search** | Find any lecture | Docs Only | Library / Home search | Search index |
-| **Recent** | Last opened | Docs Only | Library | `last_opened_at` |
-| **Favorites** | Starred lectures | Docs Only | Library | Favorites flag |
-| **Open → Study Workspace** | One lecture, all tabs | Docs Only | Study Workspace | Shared widget |
-| **Library size in Profile** | How many lectures / GB | Docs Only | Profile | Storage aggregation |
+| **Subject folders** | Physics, Chemistry… | UI Only | Library tab | Real folder CRUD (grouped by `subject` field for now) |
+| **Folder drill-down** | Lectures inside subject | Docs Only | Library | Navigation into folder detail |
+| **Global search** | Find any lecture | UI Only (client-side filter) | Library tab | Server-side search index |
+| **Recent** | Last opened | Done (real data) | Library tab | — |
+| **Favorites** | Starred lectures | Docs Only | Library | Favorites flag (no DB column yet) |
+| **Open → Study Workspace** | One lecture, all tabs | UI Only | StudyWorkspace | Real content wiring |
+| **Library size in Profile** | How many lectures / GB | UI Only (placeholder number) | Profile tab | Storage aggregation |
 | **Private library** | Other users cannot search yours | Docs Only | Backend | RLS / auth |
 
 ---
@@ -142,7 +151,7 @@
 | Feature | Description | Status | Screen | Future dependencies |
 |---------|-------------|--------|--------|---------------------|
 | **Credits balance display** | Show remaining credits | Partial | Home sidebar, Subscription (fake nums) | `users.credits_balance` |
-| **Credits pill (top bar)** | Quick glance on Home | Docs Only | Home top bar | Profile sync |
+| **Credits pill (top bar)** | Quick glance on Home | Done (real data) | Home top bar (`CreditsPill`) | — |
 | **Session-based costs** | Per feature, not per minute | Docs Only | AI action buttons | `credit_costs.dart` enforced server-side |
 | **Recording buckets** | ≤30m / 30–60m / 60–90m costs | Docs Only | Recorder / inline card | Duration detection |
 | **Insufficient credits modal** | Upgrade or buy pack | Docs Only | Modal | Balance check API |
@@ -168,7 +177,7 @@
 | **Upgrade flow** | Buy higher plan | UI Only | Subscription | Payment gateways (all TODO) |
 | **Credit packs** | One-time top-up | Docs Only | Subscription | `credit_packs` table |
 | **Renewal date** | When plan renews | UI Only | Subscription (hardcoded date) | Subscription DB |
-| **Profile → Subscription row** | Manage plan | Docs Only | Profile | Profile screen |
+| **Profile → Subscription row** | Manage plan | Done | Profile tab | — |
 
 ---
 
@@ -195,11 +204,11 @@
 
 | Feature | Description | Status | Screen | Future dependencies |
 |---------|-------------|--------|--------|---------------------|
-| **5-tab bottom nav** | Home · Library · Groups · Progress · Profile | Docs Only | AppShell | Phase 2 Flutter |
-| **ChatGPT-style Home** | Center chat + bottom input | Docs Only | Home | Phase 2 redesign |
-| **Study Workspace widget** | Shared lecture tabs | Docs Only | Workspace | Phase 2 component |
-| **Desktop split pane** | Chat left, study right | Docs Only | Home + Workspace | Responsive layout |
-| **Mobile bottom sheet** | Study tabs slide up | Docs Only | Workspace | Phase 2 |
+| **5-tab bottom nav** | Home · Library · Groups · Progress · Profile | UI Only | AppShell | Real per-tab backend data (Phase 4/5) |
+| **ChatGPT-style Home** | Center chat + bottom input | UI Only | Home tab | Ask AI backend (Phase 4/5) |
+| **Study Workspace widget** | Shared lecture tabs | UI Only | StudyWorkspace | Real Notes/Summary/Transcript/Flashcards/Quiz/Revision/Ask AI content (Phase 4/5) |
+| **Desktop split pane** | Chat left, study right | UI Only | AppShell + StudyWorkspaceSidePanel | Wired — placeholder content only |
+| **Mobile bottom sheet** | Study tabs slide up | UI Only | StudyWorkspace | Wired — placeholder content only |
 | **Dark mode** | System light/dark | Partial | Entire app | Theme exists; polish Phase 3 |
 | **Supabase Auth** | Login system | Partial | Login | `.env` configured |
 | **FastAPI backend** | Target API server | UI Only | — | Phase 5; all routes TODO |
@@ -226,3 +235,5 @@
 | Date | Change |
 |------|--------|
 | Jul 2026 | FEATURES_MASTER.md created — pre-Phase 2 |
+| Jul 12, 2026 | Added YouTube Link → Notes (founder-locked pricing/limits; Flutter icon + dialog built, backend pending Phase 5) |
+| Jul 12, 2026 | Teacher/Groups refinement: recording source-type restriction (only real mic recordings shareable), real certificate upload UI (Pending Review), Group Join Limits + Buy Plan sheet, removed Copy Code, interactive quiz in group feed, recorder duration warnings + call-interruption auto-save |

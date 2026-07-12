@@ -1,11 +1,17 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemSound, SystemSoundType;
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/services/recording_service.dart';
 
 /// Recording flow: quality choice → record / upload
+///
+/// Shared by both the Home tab's "Record" action and the Teacher
+/// Dashboard's recording flow — warnings (duration reached, start/stop
+/// errors, network problems) and call-interruption auto-save below apply
+/// to both automatically since they're the same screen.
 class RecorderScreen extends StatefulWidget {
   final String? subject;
   final String? topic;
@@ -16,7 +22,7 @@ class RecorderScreen extends StatefulWidget {
   State<RecorderScreen> createState() => _RecorderScreenState();
 }
 
-class _RecorderScreenState extends State<RecorderScreen> {
+class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObserver {
   bool _useHighAccuracy = false;
   InputMethod _selectedInputMethod = InputMethod.record;
   bool _isRecording = false;
@@ -25,13 +31,148 @@ class _RecorderScreenState extends State<RecorderScreen> {
   int _currentScreen = 1;
   String? _recordingPath;
 
+  /// Planned duration bucket in minutes, chosen on the Setup screen —
+  /// founder rule: warn (sound + banner) once this is reached, never
+  /// auto-stop the recording.
+  int _plannedDurationMinutes = 30;
+  bool _durationWarningShown = false;
+
+  /// Set when a call/app-switch interrupts an active recording — the
+  /// recording is stopped + saved immediately (before the interruption
+  /// takes over), then a recovery prompt offers to process it once the app
+  /// resumes.
+  bool _autoSavedFromInterruption = false;
+
   final _recordingService = RecordingService.instance;
   final _lectureService = LectureService.instance;
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _recordingService.dispose();
     super.dispose();
+  }
+
+  /// Auto-save on call interruption — founder rule: stop + save the
+  /// recording BEFORE the interruption takes over (not after), for both
+  /// Home and Teacher Dashboard recording flows.
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if ((state == AppLifecycleState.paused || state == AppLifecycleState.inactive) &&
+        _isRecording &&
+        !_autoSavedFromInterruption) {
+      _autoSaveOnInterruption();
+    } else if (state == AppLifecycleState.resumed && _autoSavedFromInterruption) {
+      Future.microtask(_showAutoSaveRecoveryDialog);
+    }
+  }
+
+  Future<void> _autoSaveOnInterruption() async {
+    _autoSavedFromInterruption = true;
+    try {
+      final path = await _recordingService.stop();
+      _recordingPath = path;
+    } catch (_) {
+      // Best-effort — nothing more we can do if stop() itself fails
+      // mid-interruption; the recovery dialog will surface that on resume.
+    }
+    if (mounted) setState(() => _isRecording = false);
+  }
+
+  void _showAutoSaveRecoveryDialog() {
+    if (!mounted || !_autoSavedFromInterruption) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        title: const Text('Recording auto-saved'),
+        content: const Text(
+          'Looks like something interrupted your recording (a call, or switching apps). '
+          'We saved what was recorded so far — process it now, or discard it and start over?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _discardAutoSaved();
+            },
+            child: const Text('Discard'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(context);
+              _finishFromAutoSave();
+            },
+            child: const Text('Process Now'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _discardAutoSaved() {
+    setState(() {
+      _autoSavedFromInterruption = false;
+      _recordingPath = null;
+      _recordingDuration = '00:00';
+      _durationWarningShown = false;
+    });
+  }
+
+  Future<void> _finishFromAutoSave() async {
+    setState(() {
+      _autoSavedFromInterruption = false;
+      _isProcessing = true;
+    });
+    try {
+      final bytes = await _recordingService.readRecordingBytes(_recordingPath);
+      if (bytes == null || bytes.isEmpty) {
+        throw StateError('No audio was captured before the interruption');
+      }
+      await _startProcessingWithAudio(bytes);
+    } catch (e) {
+      if (mounted) {
+        _playWarningSound();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not process the auto-saved recording: $e')),
+        );
+        setState(() => _isProcessing = false);
+      }
+    }
+  }
+
+  void _playWarningSound() {
+    SystemSound.play(SystemSoundType.alert);
+  }
+
+  void _showDurationWarningBanner() {
+    if (!mounted) return;
+    _playWarningSound();
+    ScaffoldMessenger.of(context).clearMaterialBanners();
+    ScaffoldMessenger.of(context).showMaterialBanner(
+      MaterialBanner(
+        backgroundColor: Colors.amber[50],
+        leading: Icon(Icons.warning_amber_rounded, color: Colors.amber[800]),
+        content: Text(
+          'You\'ve reached your planned duration ($_plannedDurationMinutes min). '
+          'You can keep recording, or tap stop to finish now.',
+          style: TextStyle(color: Colors.amber[900]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => ScaffoldMessenger.of(context).clearMaterialBanners(),
+            child: const Text('Dismiss'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -95,6 +236,27 @@ class _RecorderScreenState extends State<RecorderScreen> {
             isSelected: _useHighAccuracy,
             onTap: () => setState(() => _useHighAccuracy = true),
             icon: Icons.high_quality,
+          ),
+          const SizedBox(height: 24),
+
+          const Text(
+            'Planned Duration',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'We\'ll warn you when you reach this — recording never auto-stops.',
+            style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _buildDurationChip(30, '≤30 min'),
+              const SizedBox(width: 10),
+              _buildDurationChip(60, '30–60 min'),
+              const SizedBox(width: 10),
+              _buildDurationChip(90, '60–90 min'),
+            ],
           ),
           const SizedBox(height: 16),
           Container(
@@ -244,6 +406,32 @@ class _RecorderScreenState extends State<RecorderScreen> {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDurationChip(int minutes, String label) {
+    final isSelected = _plannedDurationMinutes == minutes;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _plannedDurationMinutes = minutes),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          decoration: BoxDecoration(
+            color: isSelected ? Colors.black87 : Colors.white,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: isSelected ? Colors.black87 : Colors.grey[300]!),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: isSelected ? Colors.white : Colors.grey[700],
+            ),
+          ),
         ),
       ),
     );
@@ -546,12 +734,16 @@ class _RecorderScreenState extends State<RecorderScreen> {
         await _recordingService.start();
         setState(() {
           _isRecording = true;
+          _durationWarningShown = false;
         });
         _tickDuration();
       } catch (e) {
+        // "Recording na ho tab bhi warning aye" — sound + visible error,
+        // not just a quiet snackbar.
         if (mounted) {
+          _playWarningSound();
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not start recording: $e')),
+            SnackBar(content: Text('Could not start recording: $e'), backgroundColor: Colors.red[700]),
           );
         }
       }
@@ -572,8 +764,9 @@ class _RecorderScreenState extends State<RecorderScreen> {
       await _startProcessingWithAudio(bytes);
     } catch (e) {
       if (mounted) {
+        _playWarningSound();
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Recording failed: $e')),
+          SnackBar(content: Text('Recording failed: $e'), backgroundColor: Colors.red[700]),
         );
         setState(() => _isProcessing = false);
       }
@@ -587,6 +780,11 @@ class _RecorderScreenState extends State<RecorderScreen> {
       setState(() {
         _recordingDuration = _recordingService.formattedDuration;
       });
+      // Warn once the planned duration is reached — never auto-stops.
+      if (!_durationWarningShown && _recordingService.elapsedSeconds >= _plannedDurationMinutes * 60) {
+        _durationWarningShown = true;
+        _showDurationWarningBanner();
+      }
       _tickDuration();
     });
   }
@@ -596,11 +794,20 @@ class _RecorderScreenState extends State<RecorderScreen> {
         ? widget.topic!
         : widget.subject ?? 'New Lecture';
 
+    // Only a real mic recording is eligible for "Share to Group" later —
+    // uploaded audio/documents stay personal-only (fake-teacher prevention).
+    final sourceType = switch (_selectedInputMethod) {
+      InputMethod.record => 'recorded',
+      InputMethod.uploadAudio => 'uploaded_audio',
+      InputMethod.uploadDocument => 'uploaded_document',
+    };
+
     final lectureId = await _lectureService.createLecture(
       title: title,
       subject: widget.subject,
       topic: widget.topic,
       highAccuracy: _useHighAccuracy,
+      sourceType: sourceType,
     );
 
     if (!mounted) return;
@@ -611,11 +818,19 @@ class _RecorderScreenState extends State<RecorderScreen> {
       arguments: {'lectureId': lectureId},
     );
 
-    await _lectureService.invokeProcessing(
-      lectureId: lectureId,
-      audioBytes: Uint8List.fromList(audioBytes),
-      highAccuracy: _useHighAccuracy,
-    );
+    try {
+      await _lectureService.invokeProcessing(
+        lectureId: lectureId,
+        audioBytes: Uint8List.fromList(audioBytes),
+        highAccuracy: _useHighAccuracy,
+      );
+    } catch (_) {
+      // Network problem (or edge function failure) after we've already
+      // navigated to /processing — mark the lecture 'error' so its
+      // realtime listener (ProcessingScreen) shows the retry UI instead of
+      // spinning forever.
+      await _lectureService.updateStatus(lectureId, 'error');
+    }
   }
 
   Future<void> _handleAudioUpload() async {

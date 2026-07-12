@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show SystemSound, SystemSoundType;
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 
@@ -115,9 +116,10 @@ class _ProcessingScreenState extends State<ProcessingScreen>
       }
     }, onError: (error) {
       if (mounted) {
+        SystemSound.play(SystemSoundType.alert);
         setState(() {
           _hasError = true;
-          _errorMessage = 'Failed to connect to server';
+          _errorMessage = 'Network problem — failed to connect to the server. Check your connection and retry.';
         });
       }
     });
@@ -166,9 +168,10 @@ class _ProcessingScreenState extends State<ProcessingScreen>
         _navigateToNotesResult();
         break;
       case 'error':
+        SystemSound.play(SystemSoundType.alert);
         setState(() {
           _hasError = true;
-          _errorMessage = 'Processing failed on server';
+          _errorMessage = 'Processing failed — this can happen from a network problem or server error. Please retry.';
         });
         break;
     }

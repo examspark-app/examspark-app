@@ -43,6 +43,8 @@ Top Performing Batch
 
 > Ye coaching teachers ke liye valuable — content share ke saath **batch engagement + subscription health** dikhe. Simple notes app se **teacher business platform** banata hai.
 
+**"Estimated Commission" card (founder-locked Jul 12, 2026):** 30% of the price of every active paid-plan (₹199/₹499/₹999) subscription belonging to a student whose **primary teacher** (most recently joined Group) is this teacher — recurring every month, not one-time. Full formula + margin math: [`CREDIT_ECONOMY.md`](CREDIT_ECONOMY.md) §Teacher Commission. **Display-only today** — computed by `fn_teacher_estimated_commission()`; no real payout/Razorpay wiring until Phase 5 (per "Do Not Build Yet Without Founder OK" below).
+
 ---
 
 ### Student Analytics (per group)
@@ -285,3 +287,4 @@ Apply on: student view render · PDF export · shared file delivery.
 | Jul 2026 | R2 storage corrections + folder architecture saved |
 | Jul 2026 | Groups broadcast UX + minimal dashboard cards aligned with UX_ARCHITECTURE |
 | Jul 2026 | Strict sharing policy + watermark/traceability saved |
+| Jul 12, 2026 | "Estimated Commission" formula locked — 30% recurring, primary-teacher attribution, display-only (Phase 4) |

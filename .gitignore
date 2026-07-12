@@ -10,8 +10,6 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
 parts/
 sdist/
 var/
@@ -58,6 +56,10 @@ Thumbs.db
 
 # Git
 .git/
+
+# Deprecated root lib/ mirror — canonical Flutter code is examspark_frontend/lib/ only
+# (see lib/DEPRECATED.md — safe to delete entirely once founder approves cleanup)
+/lib/
 
 # Existing projects in Documents folder
 ExamSpark-IDE/

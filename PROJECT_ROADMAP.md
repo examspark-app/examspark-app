@@ -15,11 +15,11 @@
 | Phase | Name | Model | Status |
 |-------|------|-------|--------|
 | **1A** | Product Foundation (docs only) | Sonnet 5 High | 🔒 **LOCKED** — Jul 11, 2026 |
-| **1B** | Low Fidelity Wireframes (mobile + desktop) | Sonnet 5 High | 🔵 **NEXT** |
-| **2** | Flutter UI (placeholder data) | Sonnet 5 High | ⏳ Blocked until 1B approved |
-| **3** | UI Polish | GPT-5.5 Medium | ⏳ Pending |
-| **4** | Architecture (Supabase, RAG, R2 — no FastAPI yet) | Sonnet 5 High | ⏳ Pending |
-| **5** | Backend (FastAPI, payments, AI pipeline) | Sonnet 5 High | ⏳ Pending |
+| **1B** | Low Fidelity Wireframes (mobile + desktop) | Sonnet 5 High | ✅ **Complete** — Jul 11, 2026 |
+| **2** | Flutter UI (placeholder data) | Sonnet 5 High | ✅ **Complete** — Jul 11, 2026 |
+| **3** | UI Polish | GPT-5.5 Medium | ✅ **Complete** — Jul 11, 2026 |
+| **4** | Architecture (Supabase, RAG, R2 — no FastAPI yet) | Sonnet 5 High | ✅ **Complete** — Jul 11, 2026 |
+| **5** | Backend (FastAPI, payments, AI pipeline) | Sonnet 5 High | ⏳ **Next — founder approval required** |
 | **6** | Final Polish | GPT-5.5 Medium | ⏳ Pending |
 
 ### Sonnet budget (founder strategy)
@@ -57,9 +57,14 @@ Old technical scaffold (recorder, edge function, payment stubs) — see [`examsp
 
 ---
 
-## Phase 1B — Low Fidelity Wireframes (NEXT)
+## Phase 1B — Low Fidelity Wireframes (founder approved Jul 11, 2026) ✅
 
-**Ask founder:** "Phase 1B wireframes shuru karun?"
+**Deliverables:**
+
+- [`WIREFRAMES.md`](WIREFRAMES.md) — expanded detailed draft, 28 screens/states/popups, Mobile + Desktop, ASCII wireframes only, no Flutter code.
+- [`PHASE_1B_CORE_WIREFRAMES.md`](PHASE_1B_CORE_WIREFRAMES.md) — founder-requested core pass, 22 requested screens + 9 requested popups, grouped into 8 core UX areas.
+
+**Ask founder:** "Phase 1B wireframes approve karein? Phir Phase 2 (AppShell) shuru karenge."
 
 **Model:** Sonnet 5 High
 
@@ -83,9 +88,9 @@ Old technical scaffold (recorder, edge function, payment stubs) — see [`examsp
 
 ---
 
-## Phase 2 — Flutter UI
+## Phase 2 — Flutter UI ✅ COMPLETE (founder approved Jul 11, 2026)
 
-**Gates:** Phase 1B approved + founder says **"Phase 2 shuru karo"**
+**Gates:** Phase 1B approved + founder says **"Phase 2 shuru karo"** ✅ cleared
 
 **Model:** Sonnet 5 High
 
@@ -99,38 +104,40 @@ Old technical scaffold (recorder, edge function, payment stubs) — see [`examsp
 
 ### Build list
 
-- [ ] `AppShell` — 5 bottom tabs
-- [ ] Home chat + `TopBar` + `BottomInputBar`
-- [ ] `StudyWorkspace` (split desktop · sheet mobile)
-- [ ] Library · Groups · Progress · Profile
-- [ ] Teacher Dashboard cards
-- [ ] Theme + dark mode + responsive
-- [ ] Inline `LectureResultCard` — no `/notes_result` jump
+- [x] `AppShell` — 5 bottom tabs (bottom `NavigationBar` mobile/tablet, `NavigationRail` desktop)
+- [x] Home chat + `AppTopBar` + `BottomInputBar`
+- [x] `StudyWorkspace` (split desktop · sheet mobile) — placeholder tab content
+- [x] Library · Groups · Progress · Profile (Library/Groups use real data; Progress/Profile mostly placeholder)
+- [x] Teacher Dashboard cards — business metric grid (placeholder data) + class folders
+- [x] Theme + dark mode + responsive (existing `AppTheme` reused, `Responsive` breakpoints added)
+- [x] Inline `StudyWorkspace` overlay — Library/Home cards open the workspace directly, no forced `/notes_result` page jump (old route kept working for backward compatibility)
 
 ---
 
-## Phase 3 — UI Polish
+## Phase 3 — UI Polish ✅ COMPLETE (Jul 11, 2026)
 
 **Model:** GPT-5.5 Medium
 
-- [ ] Padding · icons · typography · colors
-- [ ] Responsive fixes · small widgets · accessibility
-- [ ] Empty states · loading skeletons · modals
+- [x] Padding · icons · typography · colors
+- [x] Responsive fixes · small widgets · accessibility
+- [x] Focused bug/lint pass on recent Phase 2 files
 - **Never** redesign architecture
 
 ---
 
-## Phase 4 — Architecture (Data Layer)
+## Phase 4 — Architecture (Data Layer) ✅ COMPLETE (Jul 11, 2026)
 
 **Model:** Sonnet 5 High · Founder manual steps required
 
-- [ ] Supabase · SQL · RLS
-- [ ] Credits server rules · plan gating
-- [ ] Cloudflare R2 buckets
-- [ ] pgvector · RAG chunk schema
-- [ ] Group permissions · teacher dashboard data
+- [x] Supabase · SQL · RLS
+- [x] Credits server rules · plan gating (`fn_deduct_credits`, `fn_user_plan_tier`)
+- [x] Cloudflare R2 path columns (bucket creation deferred to Phase 5)
+- [x] pgvector · RAG chunk schema (`rag_documents` with `source_type`, `chunk_hash`)
+- [x] Group permissions · teacher dashboard data (`class_folders`, `group_shared_items`, `fn_group_item_access`)
+- [x] Flutter wiring — `GroupsRepository`, `ClassService`, Teacher Dashboard, `SupabaseClient.deductCredits()`
+- [x] Founder guide — [`PHASE_4_SUPABASE_SETUP.md`](PHASE_4_SUPABASE_SETUP.md)
 
-**Backend APIs still not live** — data layer only.
+**Backend APIs still not live** — data layer only. Founder must run SQL in Supabase (guided one step at a time).
 
 ---
 
@@ -159,7 +166,7 @@ Old technical scaffold (recorder, edge function, payment stubs) — see [`examsp
 
 ```
 1A Product Foundation    🔒 LOCKED
-1B Wireframes            🔵 NEXT
+1B Wireframes            🟡 Draft created, awaiting approval
 2  Flutter UI            (after 1B OK)
 3  UI Polish
 4  Architecture / Data

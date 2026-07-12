@@ -87,7 +87,7 @@ This workflow is **permanent**. Treat it as the official ExamSpark development p
 
 **Gate:** Founder approval required **before** Flutter starts.
 
-**Status:** 🔵 **NEXT** — not started.
+**Status:** 🟡 **Draft created** — see [`WIREFRAMES.md`](WIREFRAMES.md) (22 screens/states, Mobile + Desktop) — awaiting founder approval. Phase 2 (`AppShell`) explicitly held back until approved (founder instruction Jul 11, 2026).
 
 ---
 
@@ -242,9 +242,11 @@ Full detail: [`PROJECT_WORKING_RULES.md`](PROJECT_WORKING_RULES.md) §12–13
 
 ## .env Rule
 
-Whenever a new service is added, tell the founder which variables to add.
+**Canonical reference:** [`API_SETUP.md`](API_SETUP.md) — every variable, phase, dashboard link, and paste location.
 
-**Example template:**
+Whenever a new service is added, tell the founder which variables to add (use names from `API_SETUP.md` only).
+
+**Quick template (Phase 4 core):**
 
 ```env
 SUPABASE_URL=
@@ -252,15 +254,14 @@ SUPABASE_ANON_KEY=
 GROQ_API_KEY=
 OPENROUTER_API_KEY=
 TAVILY_API_KEY=
-R2_ACCOUNT_ID=
-R2_ACCESS_KEY=
-R2_SECRET_KEY=
-R2_BUCKET=
+R2_BUCKET_NAME=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
 ```
 
 For each key explain:
 
-- Where to get it
+- Where to get it (see `API_SETUP.md` dashboard links)
 - Where to paste it (`examspark_frontend/.env` or `examspark_backend/.env`)
 - Whether restart is required
 

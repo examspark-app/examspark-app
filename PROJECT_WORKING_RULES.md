@@ -27,6 +27,8 @@ Whenever you make an important decision (architecture, UI, product flow, busines
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | System architecture index + summary |
 | [`TODO.md`](TODO.md) | Pending tasks |
 | [`CHANGELOG.md`](CHANGELOG.md) | What changed and when |
+| [`API_SETUP.md`](API_SETUP.md) | Every API key / `.env` variable — phase, dashboard, paste location |
+| [`ENV_PASTE_TIMELINE.md`](ENV_PASTE_TIMELINE.md) | **When** to paste keys — abhi vs Phase 4 vs Phase 5 (founder guide) |
 
 ### Deep-dive docs (also keep updated on save)
 

@@ -16,9 +16,12 @@
 | [**FEATURES_MASTER.md**](FEATURES_MASTER.md) | **Every feature** — status, screen, dependencies |
 | [**DATA_STORAGE_POLICY.md**](DATA_STORAGE_POLICY.md) | **Where data lives** — temp, R2, Postgres, vectors |
 | [**APP_FLOW.md**](APP_FLOW.md) | **Full user journey** — Guest → Ask AI |
+| [**API_SETUP.md**](API_SETUP.md) | **Every API key** — what it is, dashboard link |
+| [**ENV_PASTE_TIMELINE.md**](ENV_PASTE_TIMELINE.md) | **When to paste keys** — abhi vs Phase 4 vs Phase 5 |
+| [**FOUNDER_MANUAL_SETUP_GUIDE.md**](FOUNDER_MANUAL_SETUP_GUIDE.md) | **Step-by-step** — account banao, kya copy, kis file mein paste |
 | [**DEVELOPMENT_WORKFLOW.md**](DEVELOPMENT_WORKFLOW.md) | **Official workflow** — phases 1A–6, models, founder rules |
 | [**PROJECT_WORKING_RULES.md**](PROJECT_WORKING_RULES.md) | **Read first** — how we work |
-| [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) | Phase status — **1B wireframes NEXT** |
+| [PROJECT_ROADMAP.md](PROJECT_ROADMAP.md) | Phase status — **Phases 1–3 complete · Phase 4 next** |
 | [TODO.md](TODO.md) | Pending tasks |
 | [CHANGELOG.md](CHANGELOG.md) | What changed |
 | [FEATURES.md](FEATURES.md) | Feature checklist (lighter) |

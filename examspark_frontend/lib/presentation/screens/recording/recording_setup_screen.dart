@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:examspark_frontend/core/constants/subjects.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/recording/widgets/audio_level_indicator.dart';
 import 'package:examspark_frontend/presentation/screens/recording/widgets/camera_preview_placeholder.dart';
@@ -11,17 +12,7 @@ class RecordingSetupScreen extends StatefulWidget {
 }
 
 class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
-  static const _subjects = [
-    'Mathematics',
-    'Physics',
-    'Chemistry',
-    'Biology',
-    'Computer Science',
-    'History',
-    'English',
-    'Economics',
-    'Other',
-  ];
+  static const _subjects = kSubjectOptions;
 
   final _topicController = TextEditingController();
   final _formKey = GlobalKey<FormState>();

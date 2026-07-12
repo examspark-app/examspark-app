@@ -11,6 +11,14 @@ class CreditCosts {
   static const int record60To90Min = 120;
   static const int summaryWithRecording = 0;
 
+  // YouTube Link → Notes (founder-locked Jul 12, 2026: ~₹15/hour basis,
+  // cheaper than Record since there's no Whisper/STT cost — captions come
+  // straight from the video). Public videos only, capped at 1 hour.
+  static const int youtubeUpTo20Min = 35;
+  static const int youtube20To40Min = 65;
+  static const int youtube40To60Min = 100;
+  static const int youtubeMaxMinutes = 60;
+
   // Ask AI
   static const int askAiNormal = 5;
   static const int askAiDeep = 12;
@@ -56,12 +64,23 @@ class CreditCosts {
     return record60To90Min;
   }
 
+  /// Duration bucket for YouTube Link → Notes. Videos longer than
+  /// [youtubeMaxMinutes] are rejected before this is ever called.
+  static int youtubeCreditsForDurationMinutes(int minutes) {
+    if (minutes <= 20) return youtubeUpTo20Min;
+    if (minutes <= 40) return youtube20To40Min;
+    return youtube40To60Min;
+  }
+
   static int getCostForAction(String action, {bool useTurbo = true, bool deep = false}) {
     switch (action.toLowerCase()) {
       case 'transcribe':
       case 'record':
       case 'record_lecture':
         return record30To60Min;
+      case 'youtube':
+      case 'youtube_link':
+        return youtube20To40Min;
       case 'pdf':
       case 'pdf_ingest':
       case 'pdf_analysis':
