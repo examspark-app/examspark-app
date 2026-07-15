@@ -82,9 +82,13 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
         await _runJson(query);
       } catch (e) {
         if (!mounted) return;
+        var msg = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+        if (msg.startsWith('Ask AI failed:')) {
+          msg = msg.replaceFirst('Ask AI failed:', '').trim();
+        }
         setState(() {
           _messages.add(_AskMsg(
-            'Ask AI failed: $e',
+            msg,
             isUser: false,
             animateReveal: false,
           ));

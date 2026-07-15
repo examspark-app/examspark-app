@@ -27,6 +27,12 @@ OCR_IMAGE = 15
 TRANSLATE = 8
 VOICE_READ = 5
 
+# YouTube Link → Notes (founder-locked Jul 12, 2026) — captions only, no Whisper.
+YOUTUBE_UP_TO_20_MIN = 35
+YOUTUBE_20_TO_40_MIN = 65
+YOUTUBE_40_TO_60_MIN = 100
+YOUTUBE_MAX_MINUTES = 60
+
 
 def record_credits_for_duration_minutes(minutes: int) -> int:
     if minutes <= 30:
@@ -36,3 +42,12 @@ def record_credits_for_duration_minutes(minutes: int) -> int:
     if minutes <= 90:
         return RECORD_60_TO_90_MIN
     return RECORD_60_TO_90_MIN
+
+
+def youtube_credits_for_duration_minutes(minutes: int) -> int:
+    """Band cost. Caller must reject videos longer than YOUTUBE_MAX_MINUTES first."""
+    if minutes <= 20:
+        return YOUTUBE_UP_TO_20_MIN
+    if minutes <= 40:
+        return YOUTUBE_20_TO_40_MIN
+    return YOUTUBE_40_TO_60_MIN

@@ -1,8 +1,10 @@
-/// Plan-tier feature gating — v2 credit economy.
+/// Plan-tier feature gating — Free = credits; audio record/upload needs ₹499+.
+/// Founder Jul 15, 2026 (audio lock corrected to ₹499) — see CREDIT_ECONOMY.md
 enum GatedFeature {
   askAi,
   pdfAnalysis,
   diagramAnalysis,
+  youtubeLink,
   recordLecture,
   flashcards,
   quiz,
@@ -13,11 +15,12 @@ class PlanTierGating {
 
   static const Map<GatedFeature, String> minimumPlanId = {
     GatedFeature.askAi: 'free',
-    // CREDIT_ECONOMY.md Jul 12: PDF Analysis (text-only) moved into Free.
     GatedFeature.pdfAnalysis: 'free',
-    GatedFeature.diagramAnalysis: 'plan_199',
-    GatedFeature.flashcards: 'plan_199',
-    GatedFeature.quiz: 'plan_199',
+    GatedFeature.diagramAnalysis: 'free',
+    GatedFeature.youtubeLink: 'free',
+    GatedFeature.flashcards: 'free',
+    GatedFeature.quiz: 'free',
+    // Only plan lock: audio record + audio upload (₹499+).
     GatedFeature.recordLecture: 'plan_499',
   };
 
@@ -46,17 +49,16 @@ class PlanTierGating {
   static String lockMessage(GatedFeature feature) {
     switch (feature) {
       case GatedFeature.recordLecture:
-        return '🔒 This feature needs the ₹499+ Plan\n'
-            'Recording is available starting from the ₹499 Plan.';
+        // Hardcoded ₹499 — do not derive from plan id label (avoids stale ₹199 UI).
+        return 'This feature needs the ₹499+ Plan.\n'
+            'Audio recording and audio upload unlock from the ₹499 Plan.';
       case GatedFeature.pdfAnalysis:
-        return 'PDF Analysis is available on Free and all paid plans.';
       case GatedFeature.diagramAnalysis:
+      case GatedFeature.youtubeLink:
       case GatedFeature.flashcards:
       case GatedFeature.quiz:
-        return '🔒 This feature needs the ₹199+ Plan\n'
-            'Upgrade to unlock photo/diagram and study features.';
       case GatedFeature.askAi:
-        return 'Ask AI is available on all plans.';
+        return 'Available on Free and all paid plans (uses credits).';
     }
   }
 
@@ -75,9 +77,13 @@ class PlanTierGating {
       case 'qwen3_vl':
       case 'ocr':
         return GatedFeature.diagramAnalysis;
+      case 'youtube':
+      case 'youtube_link':
+        return GatedFeature.youtubeLink;
       case 'record':
       case 'transcribe':
       case 'record_lecture':
+      case 'audio_upload':
         return GatedFeature.recordLecture;
       case 'flashcard':
       case 'flashcards':

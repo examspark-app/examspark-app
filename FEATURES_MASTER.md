@@ -34,7 +34,7 @@
 | **Quiz / MCQ** | Practice multiple-choice | Partial | Notes Result / Student Portal (demo) | Edge function, credits |
 | **Revision notes** | Exam-focused recap | Partial | Notes Result | Edge function, credits |
 | **Important questions** | Long-answer prep list | Docs Only | Study Workspace `+` menu | AI pipeline |
-| **YouTube Link → Notes** | Paste public video link (≤1 hr) → Notes/Summary/Flashcards/Quiz | UI Only (icon + paste-link dialog; "coming soon" on submit) | Home bottom bar (icon next to Record) | `youtube-transcript-api` fetch + Qwen 3 Instruct pipeline (Phase 5) |
+| **YouTube Link → Notes** | Paste public video (≤1 hr) → Notes + Summary (captions); Quiz/Flashcards separate credits | Built (Jul 16, 2026) | Home bottom bar (icon next to Record) | `youtube-transcript-api` + Qwen3; credits 35/65/100 |
 | **Progress tab** | Study stats, streaks, quiz scores | UI Only | Progress tab | Analytics tables |
 | **Library browse** | Find saved lectures by folder | UI Only (real lecture list) | Library tab | Real folder metadata |
 | **Search library** | Search titles, subjects | UI Only | Library tab | Server-side search index |
@@ -236,4 +236,5 @@
 |------|--------|
 | Jul 2026 | FEATURES_MASTER.md created — pre-Phase 2 |
 | Jul 12, 2026 | Added YouTube Link → Notes (founder-locked pricing/limits; Flutter icon + dialog built, backend pending Phase 5) |
+| Jul 16, 2026 | YouTube Link → Notes backend + Flutter wire (Notes/Summary; credits 35/65/100) |
 | Jul 12, 2026 | Teacher/Groups refinement: recording source-type restriction (only real mic recordings shareable), real certificate upload UI (Pending Review), Group Join Limits + Buy Plan sheet, removed Copy Code, interactive quiz in group feed, recorder duration warnings + call-interruption auto-save |

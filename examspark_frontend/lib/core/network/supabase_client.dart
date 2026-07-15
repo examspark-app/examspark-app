@@ -187,8 +187,9 @@ class SupabaseClient {
   }
 
   /// Reads the caller's current active plan tier via `fn_user_plan_tier`
-  /// (defaults to `'free'`) — used for client-side gating
-  /// (`plan_tier_gating.dart`) ahead of Phase 5 server-side enforcement.
+  /// (defaults to `'free'`) — used for client soft-gating
+  /// (`plan_tier_gating.dart`). FastAPI enforces the same Rule 6 server-side
+  /// (Session 5 — 403 FEATURE_LOCKED).
   Future<String> getPlanTier(String userId) async {
     final response = await client.rpc('fn_user_plan_tier', params: {
       'p_user_id': userId,

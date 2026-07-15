@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
+import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/presentation/screens/auth/update_password_screen.dart';
 import 'package:examspark_frontend/presentation/screens/home/guest_home_screen.dart';
 import 'package:examspark_frontend/presentation/screens/onboarding/role_selection_screen.dart';
@@ -70,6 +71,7 @@ class _AuthGateState extends State<AuthGate> {
           _cachedUserId = null;
           _onboardingHandledLocally = false;
           _roleChosenAsStudent = false;
+          SessionLiveSync.instance.stop();
           return const GuestHomeScreen();
         }
 

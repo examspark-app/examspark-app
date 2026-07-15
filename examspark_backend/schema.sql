@@ -18,7 +18,7 @@ CREATE TABLE users (
     username TEXT UNIQUE,
     avatar_color TEXT,
     role TEXT NOT NULL DEFAULT 'teacher' CHECK (role IN ('teacher', 'student')),
-    credits_balance INTEGER NOT NULL DEFAULT 100,
+    credits_balance INTEGER NOT NULL DEFAULT 50,
     -- Student onboarding screen (username/age/education/subjects) gate.
     -- Teachers are marked onboarded immediately — they set up their profile
     -- from the Teacher Dashboard instead (see teacher_profiles below).
@@ -106,7 +106,12 @@ CREATE TABLE lectures (
     -- lectures may be shared into a Group — prevents a teacher account from
     -- uploading arbitrary PDFs/audio and passing it off as live teaching.
     source_type TEXT NOT NULL DEFAULT 'recorded'
-        CHECK (source_type IN ('recorded', 'uploaded_audio', 'uploaded_document')),
+        CHECK (source_type IN (
+            'recorded',
+            'uploaded_audio',
+            'uploaded_document',
+            'youtube_link'
+        )),
     -- R2 permanent storage pointer (DATA_STORAGE_POLICY.md) — Postgres holds the
     -- path only, e.g. "Users/{user_id}/Library/{lecture_id}/". Populated by
     -- Phase 5 FastAPI once R2 upload is wired.
@@ -346,9 +351,9 @@ CREATE TABLE subscription_plans (
 -- fee-corrected margin calc still lands ~50% EBITDA — see CREDIT_ECONOMY.md);
 -- teacher 20000->16000 (60hr/month max-usage validation, risk-ceiling tighten,
 -- not a margin change — real teacher AI cost is tiny either way); free
--- 50->75 syncs code to the Jul 12, 2026 doc-locked value (was out of sync).
+-- 50 credits/month Free (founder Jul 15, 2026 — was 75).
 INSERT INTO subscription_plans (id, name, tier, monthly_credits, price_inr_paise, platform, max_groups) VALUES
-    ('free', 'Free', 'free', 75, 0, 'both', 0),
+    ('free', 'Free', 'free', 50, 0, 'both', 0),
     ('plan_199', '₹199', 'entry', 1500, 19900, 'both', 1),
     ('plan_499', '₹499', 'mid', 3500, 49900, 'both', 3),
     ('plan_999', '₹999', 'premium', 8000, 99900, 'both', 6),
@@ -497,8 +502,9 @@ CREATE INDEX idx_payment_logs_payment_id ON payment_logs(payment_id);
 -- (CREDIT_ECONOMY.md: "Deduct credits server-side only")
 -- ============================================================================
 
--- Guard so credits_balance can only change through fn_deduct_credits() below
--- (or a service-role client), never a direct client-side UPDATE.
+-- Guard so credits_balance can only change through fn_deduct_credits() /
+-- fn_grant_credits() (sets app.allow_credit_change), never a direct
+-- client-side UPDATE.
 CREATE OR REPLACE FUNCTION fn_protect_credits_balance()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -506,7 +512,7 @@ AS $$
 BEGIN
     IF NEW.credits_balance IS DISTINCT FROM OLD.credits_balance
        AND current_setting('app.allow_credit_change', true) IS DISTINCT FROM 'true' THEN
-        RAISE EXCEPTION 'credits_balance can only change via fn_deduct_credits()';
+        RAISE EXCEPTION 'credits_balance can only change via fn_deduct_credits()/fn_grant_credits()';
     END IF;
     RETURN NEW;
 END;
@@ -554,6 +560,42 @@ BEGIN
 END;
 $$;
 
+-- Session 6 — add credits after verified Razorpay payment (service_role / FastAPI only).
+CREATE OR REPLACE FUNCTION fn_grant_credits(
+    p_user_id UUID,
+    p_amount INTEGER,
+    p_description TEXT,
+    p_action TEXT DEFAULT 'payment_grant'
+)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_balance INTEGER;
+BEGIN
+    IF p_amount IS NULL OR p_amount <= 0 THEN
+        RAISE EXCEPTION 'Grant amount must be positive';
+    END IF;
+
+    SELECT credits_balance INTO v_balance FROM users WHERE id = p_user_id FOR UPDATE;
+
+    IF v_balance IS NULL THEN
+        RAISE EXCEPTION 'User % not found', p_user_id;
+    END IF;
+
+    PERFORM set_config('app.allow_credit_change', 'true', true);
+    UPDATE users SET credits_balance = credits_balance + p_amount WHERE id = p_user_id;
+    PERFORM set_config('app.allow_credit_change', 'false', true);
+
+    INSERT INTO credit_transactions (user_id, amount, action, description, lecture_id)
+    VALUES (p_user_id, p_amount, p_action, p_description, NULL);
+
+    RETURN v_balance + p_amount;
+END;
+$$;
+
 -- Returns the caller's current active plan (defaults to 'free'). Used for
 -- client-side gating today (plan_tier_gating.dart) and by FastAPI in Phase 5.
 CREATE OR REPLACE FUNCTION fn_user_plan_tier(p_user_id UUID)
@@ -576,6 +618,111 @@ BEGIN
     RETURN COALESCE(v_plan_id, 'free');
 END;
 $$;
+
+-- Group join cap: block INSERT when student is already at plan max_groups.
+-- max_groups < 0 means unlimited (teacher).
+CREATE OR REPLACE FUNCTION fn_enforce_group_join_limit()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_plan_id TEXT;
+    v_max INTEGER;
+    v_count INTEGER;
+BEGIN
+    v_plan_id := fn_user_plan_tier(NEW.student_id);
+    SELECT max_groups INTO v_max
+    FROM subscription_plans
+    WHERE id = v_plan_id;
+
+    v_max := COALESCE(v_max, 0);
+
+    IF v_max < 0 THEN
+        RETURN NEW;
+    END IF;
+
+    SELECT COUNT(*)::INTEGER INTO v_count
+    FROM class_memberships
+    WHERE student_id = NEW.student_id;
+
+    IF v_count >= v_max THEN
+        RAISE EXCEPTION
+            'Group join limit reached (plan %, max %)', v_plan_id, v_max;
+    END IF;
+
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_enforce_group_join_limit ON class_memberships;
+CREATE TRIGGER trg_enforce_group_join_limit
+    BEFORE INSERT ON class_memberships
+    FOR EACH ROW EXECUTE FUNCTION fn_enforce_group_join_limit();
+
+-- After refund / plan drop: leave groups beyond new max.
+-- max_groups = 0 → leave all; max_groups < 0 → no-op; else keep newest N.
+CREATE OR REPLACE FUNCTION fn_trim_group_memberships(p_user_id UUID)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_plan_id TEXT;
+    v_max INTEGER;
+    v_deleted INTEGER := 0;
+BEGIN
+    v_plan_id := fn_user_plan_tier(p_user_id);
+    SELECT max_groups INTO v_max
+    FROM subscription_plans
+    WHERE id = v_plan_id;
+
+    v_max := COALESCE(v_max, 0);
+
+    IF v_max < 0 THEN
+        RETURN 0;
+    END IF;
+
+    IF v_max = 0 THEN
+        DELETE FROM class_memberships WHERE student_id = p_user_id;
+        GET DIAGNOSTICS v_deleted = ROW_COUNT;
+        RETURN v_deleted;
+    END IF;
+
+    DELETE FROM class_memberships
+    WHERE id IN (
+        SELECT id
+        FROM class_memberships
+        WHERE student_id = p_user_id
+        ORDER BY joined_at DESC
+        OFFSET v_max
+    );
+    GET DIAGNOSTICS v_deleted = ROW_COUNT;
+    RETURN v_deleted;
+END;
+$$;
+
+-- Monthly expiry / cancel / plan swap → same trim as refund path.
+CREATE OR REPLACE FUNCTION fn_trim_groups_on_subscription_change()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+BEGIN
+  PERFORM fn_trim_group_memberships(NEW.user_id);
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_trim_groups_on_subscription_change ON user_subscriptions;
+CREATE TRIGGER trg_trim_groups_on_subscription_change
+  AFTER INSERT OR UPDATE OF status, plan_id, current_period_end
+  ON user_subscriptions
+  FOR EACH ROW
+  EXECUTE FUNCTION fn_trim_groups_on_subscription_change();
 
 -- Group access rule (TEACHER_PLATFORM.md §2):
 --   * Joined BEFORE share  -> immediate access, subject to subscription state
@@ -707,7 +854,9 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION fn_deduct_credits(UUID, INTEGER, TEXT, UUID, TEXT) TO authenticated;
+GRANT EXECUTE ON FUNCTION fn_grant_credits(UUID, INTEGER, TEXT, TEXT) TO service_role;
 GRANT EXECUTE ON FUNCTION fn_user_plan_tier(UUID) TO authenticated;
+GRANT EXECUTE ON FUNCTION fn_trim_group_memberships(UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION fn_group_item_access(UUID, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION fn_teacher_estimated_commission(UUID) TO authenticated;
 
@@ -811,12 +960,43 @@ CREATE POLICY "credit_transactions_select_own" ON credit_transactions FOR SELECT
 CREATE POLICY "rag_documents_select_own" ON rag_documents FOR SELECT
     USING (user_id = auth.uid());
 
+-- RLS helpers — SECURITY DEFINER so folder/membership EXISTS checks do not
+-- re-enter each other's policies (42P17 infinite recursion).
+CREATE OR REPLACE FUNCTION fn_is_class_member(p_class_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM class_memberships
+    WHERE class_id = p_class_id AND student_id = auth.uid()
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION fn_is_class_teacher(p_class_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+SECURITY DEFINER
+SET search_path = public
+STABLE
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM class_folders
+    WHERE id = p_class_id AND teacher_id = auth.uid()
+  );
+$$;
+
+GRANT EXECUTE ON FUNCTION fn_is_class_member(UUID) TO authenticated, anon;
+GRANT EXECUTE ON FUNCTION fn_is_class_teacher(UUID) TO authenticated, anon;
+
 -- ---- class_folders (Groups) ----
 CREATE POLICY "class_folders_select" ON class_folders FOR SELECT
     USING (
         is_public = true
         OR teacher_id = auth.uid()
-        OR EXISTS (SELECT 1 FROM class_memberships cm WHERE cm.class_id = class_folders.id AND cm.student_id = auth.uid())
+        OR fn_is_class_member(id)
     );
 CREATE POLICY "class_folders_insert_own" ON class_folders FOR INSERT
     WITH CHECK (teacher_id = auth.uid());
@@ -829,7 +1009,7 @@ CREATE POLICY "class_folders_delete_own" ON class_folders FOR DELETE
 CREATE POLICY "class_memberships_select" ON class_memberships FOR SELECT
     USING (
         student_id = auth.uid()
-        OR EXISTS (SELECT 1 FROM class_folders cf WHERE cf.id = class_memberships.class_id AND cf.teacher_id = auth.uid())
+        OR fn_is_class_teacher(class_id)
     );
 CREATE POLICY "class_memberships_join" ON class_memberships FOR INSERT
     WITH CHECK (student_id = auth.uid());

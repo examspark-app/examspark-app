@@ -1,7 +1,8 @@
-"""Lecture pipeline routes — audio + vision/PDF (Phase 5 Vision Session).
+"""Lecture pipeline routes — audio + vision/PDF + YouTube (Phase 5).
 
-`POST /process` accepts multipart file + metadata. Dispatches by source_type:
-recording/audio_upload → Whisper+Qwen3; image_upload → Qwen3-VL; pdf_upload → text PDF or 400 for scans.
+`POST /process` accepts multipart file + metadata (or youtube_url for captions).
+Dispatches by source_type: recording/audio_upload → Whisper+Qwen3;
+image_upload → Qwen3-VL; pdf_upload → text PDF; youtube_link → captions + Qwen3.
 """
 import uuid
 
@@ -29,6 +30,7 @@ async def process_lecture(
     topic: str | None = Form(default=None),
     duration_minutes: int | None = Form(default=None),
     lecture_id: str | None = Form(default=None),
+    youtube_url: str | None = Form(default=None),
     file: UploadFile | None = File(default=None),
     user: AuthenticatedUser = Depends(get_current_user),
 ):
@@ -47,9 +49,13 @@ async def process_lecture(
             filename=file.filename if file else None,
             file_bytes=file_bytes,
             lecture_id=lecture_id,
+            youtube_url=youtube_url,
         )
     except LecturePipelineError as e:
-        raise HTTPException(status_code=e.status_code, detail=str(e)) from e
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail if e.detail is not None else str(e),
+        ) from e
 
 
 @router.get("/{lecture_id}/notes", response_model=ProcessedNotes)
@@ -60,7 +66,10 @@ async def get_lecture_notes(
     try:
         return _service.get_lecture_notes(user.user_id, str(lecture_id))
     except LecturePipelineError as e:
-        raise HTTPException(status_code=e.status_code, detail=str(e)) from e
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail if e.detail is not None else str(e),
+        ) from e
 
 
 @router.post("/{lecture_id}/index")

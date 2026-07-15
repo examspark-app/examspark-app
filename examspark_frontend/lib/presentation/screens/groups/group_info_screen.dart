@@ -73,15 +73,30 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       }
     }
 
-    final updated = await GroupsRepository.instance.toggleMembership(group);
-    if (!mounted) return;
-    setState(() {
-      _group = updated;
-      _isJoinUpdating = false;
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(updated.isJoined ? 'Joined "${updated.name}"' : 'Left "${updated.name}"')),
-    );
+    final wasJoined = group.isJoined;
+    try {
+      final updated = await GroupsRepository.instance.toggleMembership(group);
+      if (!mounted) return;
+      setState(() {
+        _group = updated;
+        _isJoinUpdating = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(updated.isJoined ? 'Joined "${updated.name}"' : 'Left "${updated.name}"')),
+      );
+    } on GroupMembershipException catch (e) {
+      if (!mounted) return;
+      setState(() => _isJoinUpdating = false);
+      if (!wasJoined) {
+        final eligibility = await GroupsRepository.instance.canJoinAnotherGroup();
+        if (!mounted) return;
+        if (!eligibility.allowed || e.isJoinLimit) {
+          showBuyPlanSheet(context, eligibility);
+          return;
+        }
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    }
   }
 
   Future<void> _toggleSuggested(SuggestedTeacherModel teacher) async {

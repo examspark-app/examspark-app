@@ -17,6 +17,8 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   final VoidCallback? onCreditsTap;
   final VoidCallback? onProfileTap;
   final List<Widget>? trailing;
+  /// Optional back / close control (e.g. Library folder drill-in).
+  final Widget? leading;
 
   const AppTopBar({
     super.key,
@@ -30,6 +32,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
     this.onCreditsTap,
     this.onProfileTap,
     this.trailing,
+    this.leading,
   });
 
   @override
@@ -49,6 +52,10 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
           height: 60,
           child: Row(
             children: [
+              if (leading != null) ...[
+                leading!,
+                const SizedBox(width: 4),
+              ],
               if (showLogo) ...[
                 Container(
                   width: 30,
@@ -86,7 +93,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              const Spacer(),
+              if (showLogo || title == null) const Spacer(),
               if (onSearchTap != null)
                 IconButton(
                   icon: const Icon(Icons.search),

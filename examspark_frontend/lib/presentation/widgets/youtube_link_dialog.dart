@@ -1,13 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:examspark_frontend/core/constants/credit_costs.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 
-/// "Paste a YouTube link" — the Flutter side of the planned YouTube Link →
-/// Notes feature (founder-locked Jul 12, 2026): no video download, just
-/// the transcript (captions) piped into the same Notes/Summary/Flashcards/
-/// Quiz pipeline as a recorded lecture. Public videos only, up to 1 hour.
-/// [onSubmit] receives the pasted URL once it passes basic format
-/// validation — the caller decides what happens next (real backend once
-/// Phase 5 is wired; a "coming soon" message for now).
+/// "Paste a YouTube link" — captions → Notes + Summary (PDF-parity).
+/// Quiz / Flashcards are separate credit actions later. Public videos only, ≤1 hour.
 Future<void> showYoutubeLinkDialog(
   BuildContext context, {
   required ValueChanged<String> onSubmit,
@@ -27,8 +23,8 @@ Future<void> showYoutubeLinkDialog(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Paste a public YouTube video link (up to 1 hour) — we\'ll turn it into '
-              'Notes, Summary, Flashcards & Quiz. No download needed.',
+              'Paste a public YouTube video link (up to 1 hour). We will turn captions into '
+              'Notes and Summary — same as a PDF/lecture. Quiz and Flashcards cost extra credits later.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 16),
@@ -53,8 +49,9 @@ Future<void> showYoutubeLinkDialog(
             ),
             const SizedBox(height: 12),
             Text(
-              'Cost: 35–100 credits depending on video length. Public videos only — '
-              'private, unlisted, age-restricted or region-locked videos aren\'t supported.',
+              'Cost: ${CreditCosts.youtubeUpTo20Min}–${CreditCosts.youtube40To60Min} credits '
+              'by length (≤20 / 20–40 / 40–60 min). Public videos with captions only — '
+              'private, unlisted, age-restricted or region-locked are not supported.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.getSecondaryText(context)),
             ),
           ],

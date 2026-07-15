@@ -45,6 +45,7 @@ from app.services.performance_timer import PerformanceTimer
 from app.services.plan_tier_service import (
     FeatureLockedError,
     GatedFeature,
+    feature_locked_payload,
     require_feature_unlocked,
 )
 from app.services.question_router import route_ask_question
@@ -71,9 +72,11 @@ class AskAiError(Exception):
         status_code: int = 500,
         *,
         result_status: str | None = None,
+        detail: dict | None = None,
     ):
         self.status_code = status_code
         self.result_status = result_status or http_status_to_ai_status(status_code)
+        self.detail = detail
         super().__init__(message)
 
 
@@ -524,7 +527,12 @@ async def ask_ai(
     try:
         require_feature_unlocked(user_id, GatedFeature.ASK_AI)
     except FeatureLockedError as e:
-        raise AskAiError(str(e), status_code=403) from e
+        raise AskAiError(
+            str(e),
+            status_code=403,
+            result_status="FEATURE_LOCKED",
+            detail=feature_locked_payload(e),
+        ) from e
 
     route = route_ask_question(query)
     timer.set(route=route)
@@ -689,7 +697,16 @@ async def ask_ai_stream(
     try:
         require_feature_unlocked(user_id, GatedFeature.ASK_AI)
     except FeatureLockedError as e:
-        yield {"type": "error", "status": "VALIDATION_ERROR", "message": str(e)}
+        payload = feature_locked_payload(e)
+        yield {
+            "type": "error",
+            "status": "FEATURE_LOCKED",
+            "code": "FEATURE_LOCKED",
+            "message": payload["message"],
+            "feature": payload["feature"],
+            "current_plan": payload["current_plan"],
+            "required_plan": payload["required_plan"],
+        }
         return
 
     route = route_ask_question(query)

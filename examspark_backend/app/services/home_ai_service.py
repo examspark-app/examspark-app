@@ -43,6 +43,7 @@ from app.services.performance_timer import PerformanceTimer
 from app.services.plan_tier_service import (
     FeatureLockedError,
     GatedFeature,
+    feature_locked_payload,
     require_feature_unlocked,
 )
 from app.services.question_router import route_home_question, should_run_rag
@@ -65,9 +66,11 @@ class HomeAiError(Exception):
         status_code: int = 500,
         *,
         result_status: str | None = None,
+        detail: dict | None = None,
     ):
         self.status_code = status_code
         self.result_status = result_status or http_status_to_ai_status(status_code)
+        self.detail = detail
         super().__init__(message)
 
 
@@ -579,7 +582,12 @@ async def home_ai(
     try:
         require_feature_unlocked(user_id, GatedFeature.ASK_AI)
     except FeatureLockedError as e:
-        raise HomeAiError(str(e), status_code=403) from e
+        raise HomeAiError(
+            str(e),
+            status_code=403,
+            result_status="FEATURE_LOCKED",
+            detail=feature_locked_payload(e),
+        ) from e
 
     lid = (lecture_id or "").strip() or None
     route = route_home_question(query, lid)
@@ -712,7 +720,16 @@ async def home_ai_stream(
     try:
         require_feature_unlocked(user_id, GatedFeature.ASK_AI)
     except FeatureLockedError as e:
-        yield {"type": "error", "status": "VALIDATION_ERROR", "message": str(e)}
+        payload = feature_locked_payload(e)
+        yield {
+            "type": "error",
+            "status": "FEATURE_LOCKED",
+            "code": "FEATURE_LOCKED",
+            "message": payload["message"],
+            "feature": payload["feature"],
+            "current_plan": payload["current_plan"],
+            "required_plan": payload["required_plan"],
+        }
         return
 
     lid = (lecture_id or "").strip() or None

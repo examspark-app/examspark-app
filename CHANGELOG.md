@@ -7,6 +7,88 @@
 
 ## Jul 2026
 
+### Next-session backlog card (Jul 16, 2026)
+
+Single memory doc [`FOUNDER_NEXT_SESSION.md`](examspark_backend/FOUNDER_NEXT_SESSION.md): no re-nag of passed smoke; open = Realtime+trim → Razorpay when keys → Flashcards coding when founder says start. `FOUNDER_IMPORTANT_PENDING.md` / `TODO.md` aligned. YouTube smoke marked pass.
+
+### YouTube Link → Notes (PDF-parity + credits) (Jul 16, 2026)
+
+Captions-only pipeline (`youtube-transcript-api`) → Qwen3 Notes/Summary; charge **35 / 65 / 100** by duration after SUCCESS. Free+ credits. Flutter Home dialog wired to FastAPI `youtube_link`. Quiz/Flashcards not bundled. SQL: `youtube_link_source_type_migration.sql`. Smoke: [`FOUNDER_YOUTUBE_LINK_SMOKE.md`](examspark_backend/FOUNDER_YOUTUBE_LINK_SMOKE.md).
+
+### Library folders open + Profile Library Size (Jul 16, 2026)
+
+Library subject folders were display-only (tap did nothing). Folders now open to that subject’s lectures (back → Library). Profile **Library Size** shows real lecture count. **Storage** no longer shows fake “128 MB” — honest “Soon” until R2 usage metering.
+
+### Founder next path after Groups mock (Jul 16, 2026)
+
+Groups mock pass → coding pause. One guide: [`FOUNDER_NEXT_AFTER_GROUPS.md`](examspark_backend/FOUNDER_NEXT_AFTER_GROUPS.md) (Realtime + trim SQL, then Session 6 Razorpay test smoke). `FOUNDER_IMPORTANT_PENDING.md` / `TODO.md` point here. No new product feature until smoke pass.
+
+### Auto-leave groups on subscription change (Jul 16, 2026)
+
+Trigger `trg_trim_groups_on_subscription_change` calls `fn_trim_group_memberships` when subs expire/cancel/plan change (not only refund). Migration: `subscription_change_trim_groups_migration.sql`. Free / downgrade now auto-trims memberships.
+
+### Buy Plan sheet overflow fix (Jul 16, 2026)
+
+`buy_plan_sheet.dart`: scroll + max-height (fixes BOTTOM OVERFLOWED), drag handle, cleaner plan compare card. Free smoke SQL: `SMOKE_ALL_ACCOUNTS_TO_FREE.sql`.
+
+### Groups: no mock when logged in + demo seed (Jul 16, 2026)
+
+Logged-in fetch no longer falls back to fake `group_1` cards (caused Join INSERT UUID fail). Seed: `SEED_DEMO_GROUPS.sql`. Flow unchanged: Free=lock sheet; ₹199/499/999 = 1/3/6.
+
+### Fix Groups RLS recursion (Jul 16, 2026)
+
+Root cause of Join showing plan **Unknown** / fake pre-joined mock group while Profile shows ₹499: Postgres `42P17` infinite recursion between `class_folders` and `class_memberships` RLS. Migration: `fix_class_folders_rls_recursion_migration.sql` (`fn_is_class_member` / `fn_is_class_teacher`). Mock Organic Chemistry no longer `isJoined: true`.
+
+### Session live sync — credits / plan / groups (Jul 15, 2026)
+
+`SessionLiveSync`: Supabase Realtime on `users` + `user_subscriptions` + `class_memberships`, plus tab-focus and app-resume refetch. Home/Groups/Profile update without logout. Founder: enable Realtime publication — [`FOUNDER_SESSION_LIVE_SYNC.md`](examspark_backend/FOUNDER_SESSION_LIVE_SYNC.md).
+
+### Fix Free join UI bypass (Jul 15, 2026)
+
+`toggleMembership` no longer mocks success after INSERT fail (was opening group page for Free). `maxGroups<=0` hard-blocks; join errors show Buy Plan sheet. Retest: [`FOUNDER_GROUP_JOIN_LIMITS_MOCK_TEST.md`](examspark_backend/FOUNDER_GROUP_JOIN_LIMITS_MOCK_TEST.md).
+
+### Group join limits — founder mock test guide (Jul 15, 2026)
+
+Step-by-step mock test (SQL → Free Join → lock sheet): [`FOUNDER_GROUP_JOIN_LIMITS_MOCK_TEST.md`](examspark_backend/FOUNDER_GROUP_JOIN_LIMITS_MOCK_TEST.md). Linked from `FOUNDER_IMPORTANT_PENDING.md`.
+
+### Group join limits — server enforce + trim on refund (Jul 15, 2026)
+
+Fail-closed Flutter `canJoinAnotherGroup`. SQL: `fn_enforce_group_join_limit` trigger + `fn_trim_group_memberships` (`group_join_limits_enforce_migration.sql`). Plan refunds call trim from `refund_service` (Free → leave all; downgrade keep newest). Docs: `CREDIT_ECONOMY.md`, `REFUND_POLICY_AND_PROCESS.md`.
+
+### Refund policy + keys checklist (Jul 15, 2026)
+
+Founder: [`FOUNDER_PAYMENT_KEYS_WHEN_READY.md`](examspark_backend/FOUNDER_PAYMENT_KEYS_WHEN_READY.md) (Razorpay + Play `.env` paste). Policy/process: [`REFUND_POLICY_AND_PROCESS.md`](REFUND_POLICY_AND_PROCESS.md). Play guide expanded with license-tester + Console refund steps. Server: `refund_service.py` + Razorpay `refund.processed` / Play voided RTDN → mark refunded, cancel sub, clawback credits (idempotent).
+
+### Google Play Billing — Android code ready (Jul 15, 2026)
+
+Play product catalog (`examspark_plan_*` / `examspark_pack_*`), FastAPI `google_play_gateway` + Developer API verify (`play_billing_verify.py`), Flutter `in_app_purchase` + Android purchase → `/verify` → same activate/credits path. Live Store listing not required — Internal testing + service account. Guide: [`FOUNDER_GOOGLE_PLAY_BILLING.md`](examspark_backend/FOUNDER_GOOGLE_PLAY_BILLING.md). PhonePe still stub. Razorpay Web unchanged (keys pending).
+
+### Subscriptions / Credits UX polish (Jul 15, 2026)
+
+Plans screen: remaining + used (est.) + plan allotment, `CreditUsageDisplay` line, Current Plan by **plan id**, pull-to-refresh. Credit history list with timestamps (`getCreditTransactions`). Student plans vs separate Teacher section. INR credit packs (removed USD top-ups + Extra Hours). Pay buttons still call Session 6 flow — no fake success without keys.
+
+### Session 6 — Razorpay Web test-mode (Jul 15, 2026)
+
+FastAPI: real Razorpay order create, checkout signature verify, webhook HMAC + replay-safe fulfill, activate `user_subscriptions` / credit packs, `fn_grant_credits` + `credit_history` (plan/pack credits only — no Free 50 stacked). Flutter Web: `PaymentRepository` → Checkout.js → verify; Plans screen refreshes plan + credits; Android stays Google Play stub. Tests: signature fail, duplicate webhook, catalog amounts. Guide: [`FOUNDER_RAZORPAY_SESSION6.md`](examspark_backend/FOUNDER_RAZORPAY_SESSION6.md). `PAYMENT_ARCHITECTURE.md` → test-mode ready.
+
+### Audio lock UI — ₹499 panel on Recorder (Jul 15, 2026)
+
+Record + Upload Audio show a full **Audio locked** panel (₹499+, View Plans) instead of mic/Select File. Setup screen blocks audio flow before opening recorder. Lock copy hardcoded to ₹499. PDF/Photo tab stays open.
+
+Anonymous 1-prompt trial now saved via `shared_preferences` ([`guest_trial_store.dart`](examspark_frontend/lib/core/services/guest_trial_store.dart)) so refresh/reopen does not reset. Clearing browser/app data can still reset — server IP rate-limit planned when guest Ask AI is real.
+
+### Founder cheat sheet — Credit rules as shipped (Jul 15, 2026)
+
+Simple Hindi explanation of plan unlock + credits (Session 5 as implemented): [`FOUNDER_CREDIT_RULES_AS_SHIPPED.md`](FOUNDER_CREDIT_RULES_AS_SHIPPED.md). Docs only — no code change.
+
+### Session 5 Free-tier smoke guide expanded (Jul 15, 2026)
+
+Founder guide in [`FOUNDER_IMPORTANT_PENDING.md`](FOUNDER_IMPORTANT_PENDING.md): UUID copy → `fn_user_plan_tier` SELECT → expire paid `user_subscriptions` (not credits zero) → F1–F5 → rollback. Docs only — no code / no new migration.
+
+### Session 5 — Server-side plan-tier gating (Jul 15, 2026)
+
+Rule 6 enforced on FastAPI: **plan unlock → credits → AI → deduct on SUCCESS**. Structured **403 FEATURE_LOCKED** payload (`code`, `message`, `feature`, `current_plan`, `required_plan`) on lecture process (record / diagram / PDF) and Ask/Home AI (JSON + SSE). Flutter: Recorder soft-gates with `PlanTierGating` + snackbar; ProcessingScreen / LectureService surface lock message (not generic network error). Unit tests: Free blocks Record/Diagram; Free allows Ask AI + PDF. Aligns with CREDIT_ECONOMY v2.1 (`free` / `plan_199` / `plan_499` / …). **No new SQL** if `fn_user_plan_tier` already applied. Smoke: [`FOUNDER_IMPORTANT_PENDING.md`](FOUNDER_IMPORTANT_PENDING.md) Session 5 Free-tier lock steps. Non-goals (still Session 6+): Razorpay, Flashcards/MCQ FastAPI, Tavily/PYQ.
+
 ### Study Workspace Ask AI + Groups open UX (Jul 15, 2026)
 
 Library Study Workspace **Ask AI** tab now uses live FastAPI `askAiStream` (+ JSON fallback) via [`workspace_ask_ai_pane.dart`](examspark_frontend/lib/presentation/widgets/workspace_ask_ai_pane.dart). Groups: after Join → auto-open group info; joined cards show **Open group** + Leave. Important pending list: [`FOUNDER_IMPORTANT_PENDING.md`](FOUNDER_IMPORTANT_PENDING.md).

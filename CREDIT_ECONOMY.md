@@ -17,7 +17,7 @@ Internal (**backend only**): **1 Credit ≈ ₹0.15 charged-value**
 
 | Plan | Price | Credits | Effective ₹/Credit |
 |------|-------|---------|-------------------|
-| Free | ₹0 | 75 / **month** | — |
+| Free | ₹0 | 50 / **month** | — |
 | ₹199 | ₹199 | 1,500 | ₹0.133 |
 | ₹499 | ₹499 | 3,500 | ₹0.143 |
 | ₹999 | ₹999 | 8,000 | ₹0.124 |
@@ -29,7 +29,15 @@ Plan IDs: `free` (gating only) · `plan_199` · `plan_499` · `plan_999` · `tea
 
 Bigger plans = lower effective per-credit rate (buy more, save more).
 
-**Free credits — founder-locked Jul 12, 2026: 50 → 75/month, monthly reset (not daily).** Real-cost check: even a free user who spends all 75 credits every month (mix of Ask AI + PDF Analysis) costs only **~₹0.35–0.45/user/month** in real AI cost — negligible at any scale. A **daily** reset was considered and rejected: 75 credits/day would allow up to ~2,250/month worth of usage per highly-active free user (~30x higher worst-case cost, ~₹10–13/user/month) with zero revenue — a monthly allowance keeps free-tier cost predictable at scale and preserves upgrade pressure for users who want daily/unlimited usage.
+**Free credits — founder Jul 15, 2026: 75 → 50/month on Free plan only (monthly reset, not daily).**
+
+| Who | Credits |
+|-----|---------|
+| **Guest** (no signup) | **1 free Ask prompt per device** (stored locally so refresh does not reset). Clearing site/app data can reset — server IP limit when guest AI is live. No credit balance, no Record/Attach |
+| **Free** (signed up) | **50 credits** at signup (+ Free monthly allotment when reset ships) — Ask/PDF/Photo cut credits. Audio locked until ₹499+ |
+| **Paid** (`plan_199` / `499` / `999` / `teacher`) | Their **plan package only** (1,500 / 3,500 / 8,000 / 16,000). **Do not** also grant Free’s 50 |
+
+Audio (record + audio upload) plan-locked until **₹499+**.
 
 **Teacher credits ceiling resized Jul 13, 2026 — 20,000 → 16,000/month.** Re-validated against a **60 hours/month maximum-usage** assumption (not the typical ~20hr/month case): 60hrs of recording (mostly 60–90min sessions, ≈48 sessions × 120 credits = 5,760 credits) + **every single lecture** also getting Flashcards+Quiz+Revision+Formula+MindMap (~135 credits × 48 = 6,480 credits) + heavy Ask AI (200 Normal + 50 Deep ≈ 1,600 credits) tops out at **~13,840 credits even in this extreme case**. Adding a 15–20% safety buffer on top gives **~16,000** — still comfortably covers the extreme case with room to spare, while tightening the platform's worst-case exposure per teacher by ~4,000 credits (~₹600 charged-value). This is a **risk/abuse-ceiling** adjustment, not a margin lever — real teacher AI cost even at the 60hr extreme is only ~₹250–300/month against ₹1,999 charged, tiny either way.
 
@@ -103,7 +111,7 @@ If an action doesn't call Whisper/Qwen/Tavily, it doesn't cost credits — full 
 - **Hard limit:** 1 hour max per video. Longer videos are rejected before any credits are charged.
 - **Restriction:** Public videos only. Private, unlisted, age-restricted, region-locked, or live-stream videos are rejected with a clear error (no partial charge).
 - **UI placement:** Dedicated icon next to Record in the bottom input bar (not inside the "+" Attach sheet) — founder-requested for visibility.
-- **Status:** Flutter UI (icon + paste-link dialog) built; backend fetch/transcribe pipeline is Phase 5 work (not started).
+- **Status:** Built Jul 16, 2026 — captions → Notes + Summary (PDF-parity); Quiz/Flashcards stay separate credits. Smoke: [`examspark_backend/FOUNDER_YOUTUBE_LINK_SMOKE.md`](examspark_backend/FOUNDER_YOUTUBE_LINK_SMOKE.md).
 
 ---
 
@@ -169,16 +177,16 @@ Adds the missing **payment gateway fee** line — assumes **worst case: every pa
 
 | Plan | Features Unlocked |
 |------|-------------------|
-| **Free** | Ask AI + PDF Analysis (text-only). No Photo/Diagram (vision), no audio (recording or upload). Cannot join Groups. |
-| **₹199** (`plan_199`) | Above + Photo/Diagram (vision). Audio still locked. Join up to 1 Group. |
+| **Free** | Ask AI + PDF + Photo/Diagram + study extras (when live) — **credits only**. **Audio recording/upload locked.** Cannot join Groups. **50 credits/month.** |
+| **₹199** (`plan_199`) | More credits. Join up to 1 Group. **Audio still locked.** |
 | **₹299** (optional re-entry) | Same as ₹199 if reintroduced |
-| **₹499** | Above + Audio Recording/Upload. Join up to 3 Groups. |
+| **₹499** | **Audio recording/upload unlocked.** Join up to 3 Groups. |
 | **₹999** | Full access — no locks. Join up to 6 Groups. |
 | **Teacher ₹1,999** | Bulk record + PDF export + share links + class dashboard. Unlimited Groups (owns groups, doesn't "join" as a student). |
 
-**Founder-locked Jul 12, 2026:** PDF Analysis moved from ₹199 into Free — real cost is only ~₹0.10–0.20/use (text-only, no vision model), cheap enough to give away as a hook. Photo/Diagram (needs Qwen3-VL) and all audio remain paid-only — those are the real differentiators and cost drivers.
+**Founder Jul 15, 2026:** Free monthly credits **75 → 50**. Ask/PDF/Photo = Free + credits. **Audio unlock = ₹499+** (Free and ₹199 locked). Home mic / Attach → Audio File show lock **before** starting the flow.
 
-Check order: (1) plan unlock → (2) credit balance. Server-side only.
+Check order: (1) plan unlock (audio only) → (2) credit balance. Server-side only.
 
 ---
 
@@ -192,8 +200,9 @@ Check order: (1) plan unlock → (2) credit balance. Server-side only.
 | ₹999 | 6 |
 | Teacher | Unlimited (owns groups) |
 
-- Enforced client-side today via `GroupsRepository.canJoinAnotherGroup()` reading `fn_user_plan_tier()` + a `class_memberships` count against `subscription_plans.max_groups`. Real server-side enforcement (RLS/trigger blocking the `INSERT`) is Phase 5.
-- Hitting the limit (or being on Free) shows the "Buy Plan" sheet (`buy_plan_sheet.dart`) instead of letting the join go through — wired into all 3 join entry points: Groups tab/list card, Group Info screen, and the "Join a Class" code dialog.
+- **Client:** `GroupsRepository.canJoinAnotherGroup()` (fail-closed on RPC/network error) + "Buy Plan" sheet (`buy_plan_sheet.dart`) on Groups tab/list, Group Info, and "Join a Class" dialog.
+- **Server (source of truth):** trigger `trg_enforce_group_join_limit` / `fn_enforce_group_join_limit` blocks `INSERT` into `class_memberships` when at/above plan `max_groups`. Migration: `group_join_limits_enforce_migration.sql`.
+- **Refund / plan drop / month expiry:** `fn_trim_group_memberships` — Free leaves all; downgrade keeps newest `joined_at` up to new max. Called from `refund_service` **and** DB trigger `trg_trim_groups_on_subscription_change` on `user_subscriptions` status/plan/period change (`subscription_change_trim_groups_migration.sql`).
 - "Copy Code" was removed from the Teacher Dashboard's group card (Jul 12, 2026) — "Share Invite Link" (`examspark.app/join/{joinCode}`) is now the only invite path, matching the format used on the Group Info screen's "Share Group" button.
 
 ---
@@ -282,3 +291,5 @@ Students never spend credits to share notes/PDF — content share blocked entire
 | Jul 12, 2026 | Added Teacher Commission (30% recurring, primary-teacher attribution, display-only Phase 4) + margin-after-commission table |
 | Jul 12, 2026 | Free tier: added PDF Analysis (text-only), 50→75 credits/month; recomputed Margin Validation with real Groq/Qwen pricing; added Non-API Actions (Always Free) list; teacher-credit validation note (20,000 kept unchanged) |
 | Jul 13, 2026 | Added Buy Extra Credits (5 a-la-carte packs, no teacher commission); Fee-Corrected Margin Validation adds worst-case 15% Google Play fee line (was missing); plan_199 1,300→1,500 credits (room found once real no-audio AI cost used, stays ~50% EBITDA); teacher 20,000→16,000 (60hr/month max-usage risk-ceiling validation); free 50→75 code/DB sync fix (doc already said 75 since Jul 12); flagged plan_499/plan_999 at ~44–48% EBITDA worst-case as a watch-item (commission left at 30%, not acted on this round) |
+| Jul 15, 2026 | **v2.2** Free credits 75→**50**/month; only plan lock = **audio record/upload @ ₹199+**; Ask/PDF/Photo/Diagram = Free + credits; audio unlock moved from ₹499→₹199; migration `credit_economy_free50_audio199_migration.sql` |
+| Jul 15, 2026 | Group join: server trigger + trim on refund; Flutter gate fail-closed (`group_join_limits_enforce_migration.sql`) |

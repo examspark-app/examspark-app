@@ -1,8 +1,9 @@
-"""Lecture processing pipeline — audio (Session 2) + vision/PDF (Vision Session).
+"""Lecture processing pipeline — audio (Session 2) + vision/PDF + YouTube.
 
 Audio: Whisper → Qwen3 text → credits → R2
 Image: plan-tier check → Qwen3-VL Flash (+ Plus escalate) → 25 credits → R2
 PDF text: plan-tier (Free OK) → extract text → Qwen3 text → 20 credits → R2
+YouTube: captions fetch → duration band (35/65/100) → Qwen3 text → R2
 Scanned PDF (little text): clear 400 — upload JPG/PNG instead (no silent VL misroute).
 
 Credits deducted only after AI succeeds (Rule 1). Tier check before credits (Rule 6).
@@ -16,7 +17,9 @@ from datetime import datetime, timezone
 from app.constants.credit_costs import (
     DIAGRAM_IMAGE,
     PDF_ANALYSIS,
+    YOUTUBE_MAX_MINUTES,
     record_credits_for_duration_minutes,
+    youtube_credits_for_duration_minutes,
 )
 from app.models.lecture import (
     LectureJobStatus,
@@ -30,6 +33,7 @@ from app.services.credits_service import InsufficientCreditsError, deduct_credit
 from app.services.plan_tier_service import (
     FeatureLockedError,
     GatedFeature,
+    feature_locked_payload,
     require_feature_unlocked,
 )
 from app.services.qwen_service import QwenGenerationError, generate_notes
@@ -37,6 +41,10 @@ from app.services.qwen_vision_service import QwenVisionError, analyze_image
 from app.services.r2_storage_service import R2StorageError, R2StorageService
 from app.services.supabase_admin import get_supabase_admin
 from app.services.whisper_service import WhisperTranscriptionError, transcribe_audio
+from app.services.youtube_transcript_service import (
+    YoutubeTranscriptError,
+    fetch_youtube_captions,
+)
 
 _PDF_MIN_TEXT_CHARS = 200
 
@@ -44,9 +52,24 @@ _PDF_MIN_TEXT_CHARS = 200
 class LecturePipelineError(Exception):
     """Wraps any pipeline failure with an HTTP-status-appropriate hint."""
 
-    def __init__(self, message: str, status_code: int = 500):
+    def __init__(
+        self,
+        message: str,
+        status_code: int = 500,
+        *,
+        detail: dict | None = None,
+    ):
         super().__init__(message)
         self.status_code = status_code
+        self.detail = detail
+
+
+def _locked(err: FeatureLockedError) -> LecturePipelineError:
+    return LecturePipelineError(
+        str(err),
+        status_code=403,
+        detail=feature_locked_payload(err),
+    )
 
 
 def _extract_pdf_text(file_bytes: bytes) -> str:
@@ -97,6 +120,7 @@ class LectureService:
         filename: str | None,
         file_bytes: bytes | None,
         lecture_id: str | None,
+        youtube_url: str | None = None,
     ) -> ProcessLectureResponse:
         job_id = uuid.uuid4()
         self._jobs[str(job_id)] = {
@@ -107,10 +131,15 @@ class LectureService:
             "error": None,
         }
 
+        source = request.source_type
+        if source == LectureSourceType.YOUTUBE_LINK:
+            return await self._run_youtube_pipeline(
+                job_id, user_id, youtube_url or "", lecture_id
+            )
+
         if not file_bytes:
             raise LecturePipelineError("No file received.", status_code=400)
 
-        source = request.source_type
         if source in (LectureSourceType.RECORDING, LectureSourceType.AUDIO_UPLOAD):
             return await self._run_audio_pipeline(
                 job_id, user_id, request, filename, file_bytes, lecture_id
@@ -170,7 +199,7 @@ class LectureService:
             require_feature_unlocked(user_id, GatedFeature.RECORD_LECTURE)
         except FeatureLockedError as e:
             self._fail_job(job_id, str(e))
-            raise LecturePipelineError(str(e), status_code=403) from e
+            raise _locked(e) from e
 
         try:
             self._jobs[str(job_id)]["status"] = LectureJobStatus.TRANSCRIBING
@@ -220,7 +249,7 @@ class LectureService:
         except FeatureLockedError as e:
             self._fail_job(job_id, str(e))
             self._db_set_status(lecture_id, "error", error_message=str(e))
-            raise LecturePipelineError(str(e), status_code=403) from e
+            raise _locked(e) from e
         except InsufficientCreditsError as e:
             self._fail_job(job_id, str(e))
             self._db_set_status(lecture_id, "error", error_message=str(e))
@@ -250,7 +279,7 @@ class LectureService:
             require_feature_unlocked(user_id, GatedFeature.DIAGRAM_ANALYSIS)
         except FeatureLockedError as e:
             self._fail_job(job_id, str(e))
-            raise LecturePipelineError(str(e), status_code=403) from e
+            raise _locked(e) from e
 
         try:
             self._jobs[str(job_id)]["status"] = LectureJobStatus.GENERATING_NOTES
@@ -299,7 +328,7 @@ class LectureService:
         except FeatureLockedError as e:
             self._fail_job(job_id, str(e))
             self._db_set_status(lecture_id, "error", error_message=str(e))
-            raise LecturePipelineError(str(e), status_code=403) from e
+            raise _locked(e) from e
         except InsufficientCreditsError as e:
             self._fail_job(job_id, str(e))
             self._db_set_status(lecture_id, "error", error_message=str(e))
@@ -335,7 +364,7 @@ class LectureService:
             require_feature_unlocked(user_id, GatedFeature.PDF_ANALYSIS)
         except FeatureLockedError as e:
             self._fail_job(job_id, str(e))
-            raise LecturePipelineError(str(e), status_code=403) from e
+            raise _locked(e) from e
 
         try:
             self._jobs[str(job_id)]["status"] = LectureJobStatus.GENERATING_NOTES
@@ -390,7 +419,7 @@ class LectureService:
         except FeatureLockedError as e:
             self._fail_job(job_id, str(e))
             self._db_set_status(lecture_id, "error", error_message=str(e))
-            raise LecturePipelineError(str(e), status_code=403) from e
+            raise _locked(e) from e
         except InsufficientCreditsError as e:
             self._fail_job(job_id, str(e))
             self._db_set_status(lecture_id, "error", error_message=str(e))
@@ -407,6 +436,105 @@ class LectureService:
             self._fail_job(job_id, str(e))
             self._db_set_status(lecture_id, "error", error_message=str(e))
             raise LecturePipelineError(f"Unexpected PDF pipeline error: {e}", status_code=500) from e
+
+    async def _run_youtube_pipeline(
+        self,
+        job_id: uuid.UUID,
+        user_id: str,
+        youtube_url: str,
+        lecture_id: str | None,
+    ) -> ProcessLectureResponse:
+        try:
+            require_feature_unlocked(user_id, GatedFeature.YOUTUBE_LINK)
+        except FeatureLockedError as e:
+            self._fail_job(job_id, str(e))
+            raise _locked(e) from e
+
+        try:
+            if not (youtube_url or "").strip():
+                raise LecturePipelineError("youtube_url is required.", status_code=400)
+
+            self._jobs[str(job_id)]["status"] = LectureJobStatus.TRANSCRIBING
+            self._db_set_status(lecture_id, "transcribing")
+
+            captions = fetch_youtube_captions(youtube_url.strip())
+            if captions.duration_minutes > YOUTUBE_MAX_MINUTES:
+                raise LecturePipelineError(
+                    f"Video is about {captions.duration_minutes} minutes — "
+                    f"YouTube Notes supports up to {YOUTUBE_MAX_MINUTES} minutes. "
+                    "No credits were charged.",
+                    status_code=400,
+                )
+
+            required_credits = youtube_credits_for_duration_minutes(
+                captions.duration_minutes
+            )
+            self._precheck_balance(user_id, required_credits)
+
+            self._db_set_status(lecture_id, "generating")
+            self._jobs[str(job_id)]["status"] = LectureJobStatus.GENERATING_NOTES
+            notes = await generate_notes(captions.text)
+
+            new_balance = deduct_credits(
+                user_id=user_id,
+                amount=required_credits,
+                description=(
+                    f"YouTube Link → Notes ({captions.duration_minutes} min) — Qwen3 text"
+                ),
+                lecture_id=lecture_id,
+                action="youtube_link",
+            )
+
+            r2_paths = self._persist_to_r2_and_db(
+                user_id=user_id,
+                lecture_id=lecture_id,
+                transcript_text=captions.text,
+                notes=notes,
+            )
+
+            self._db_set_status(lecture_id, "done")
+            self._jobs[str(job_id)]["status"] = LectureJobStatus.COMPLETE
+
+            return ProcessLectureResponse(
+                job_id=job_id,
+                lecture_id=lecture_id,
+                status=LectureJobStatus.COMPLETE,
+                credits_charged=required_credits,
+                message=(
+                    f"YouTube processed ({captions.duration_minutes} min, "
+                    f"{required_credits} credits). New balance: {new_balance}. R2: {r2_paths}"
+                ),
+                transcript=captions.text,
+                processedContent=ProcessedNotes(**notes),
+                usedTurbo=None,
+                usedVisionPlus=None,
+            )
+        except FeatureLockedError as e:
+            self._fail_job(job_id, str(e))
+            self._db_set_status(lecture_id, "error", error_message=str(e))
+            raise _locked(e) from e
+        except YoutubeTranscriptError as e:
+            self._fail_job(job_id, str(e))
+            self._db_set_status(lecture_id, "error", error_message=str(e))
+            raise LecturePipelineError(str(e), status_code=400) from e
+        except InsufficientCreditsError as e:
+            self._fail_job(job_id, str(e))
+            self._db_set_status(lecture_id, "error", error_message=str(e))
+            raise LecturePipelineError(str(e), status_code=402) from e
+        except (QwenGenerationError, R2StorageError) as e:
+            self._fail_job(job_id, str(e))
+            self._db_set_status(lecture_id, "error", error_message=str(e))
+            raise LecturePipelineError(str(e), status_code=502) from e
+        except LecturePipelineError as e:
+            self._fail_job(job_id, "pipeline error")
+            self._db_set_status(lecture_id, "error", error_message=str(e))
+            raise
+        except Exception as e:  # noqa: BLE001
+            self._fail_job(job_id, str(e))
+            self._db_set_status(lecture_id, "error", error_message=str(e))
+            raise LecturePipelineError(
+                f"Unexpected YouTube pipeline error: {e}", status_code=500
+            ) from e
 
     def _fail_job(self, job_id: uuid.UUID, error: str) -> None:
         job = self._jobs.get(str(job_id))

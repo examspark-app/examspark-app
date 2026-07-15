@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:examspark_frontend/core/constants/plan_tier_gating.dart';
 import 'package:examspark_frontend/core/constants/subjects.dart';
+import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/router/app_navigation.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/recording/widgets/audio_level_indicator.dart';
@@ -23,6 +25,7 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
   final _topicController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   String? _selectedSubject;
+  bool? _audioUnlocked;
 
   /// This screen used to always look like "starting a recording" (camera +
   /// mic preview, "Start Recording" button) even for a plain PDF/photo/audio
@@ -33,6 +36,39 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
       widget.initialInputMethod == 'uploadAudio' ||
       widget.initialInputMethod == 'uploadDocument';
 
+  bool get _needsAudioUnlock =>
+      widget.initialInputMethod == null ||
+      widget.initialInputMethod == 'record' ||
+      widget.initialInputMethod == 'uploadAudio';
+
+  @override
+  void initState() {
+    super.initState();
+    if (_needsAudioUnlock) {
+      _loadAudioUnlock();
+    } else {
+      _audioUnlocked = true;
+    }
+  }
+
+  Future<void> _loadAudioUnlock() async {
+    final userId = SupabaseClient.instance.currentUser?.id;
+    if (userId == null) {
+      if (mounted) setState(() => _audioUnlocked = false);
+      return;
+    }
+    try {
+      final plan = await SupabaseClient.instance.getPlanTier(userId);
+      final ok = PlanTierGating.isFeatureUnlocked(
+        currentPlanId: plan,
+        feature: GatedFeature.recordLecture,
+      );
+      if (mounted) setState(() => _audioUnlocked = ok);
+    } catch (_) {
+      if (mounted) setState(() => _audioUnlocked = false);
+    }
+  }
+
   @override
   void dispose() {
     _topicController.dispose();
@@ -41,6 +77,59 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_needsAudioUnlock && _audioUnlocked == false) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Audio locked')),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(28),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.lock_outline, size: 56),
+                const SizedBox(height: 16),
+                Text(
+                  'Audio locked',
+                  style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  PlanTierGating.lockMessage(GatedFeature.recordLecture),
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodyLarge,
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'PDF and Photo upload stay available on Free / ₹199.',
+                  textAlign: TextAlign.center,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  height: 52,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pushNamed(context, '/subscription'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppTheme.accentColor,
+                      foregroundColor: Colors.white,
+                    ),
+                    child: const Text('View Plans — unlock at ₹499'),
+                  ),
+                ),
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Go back'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: Text(_isUploadFlow ? 'Upload Details' : 'Recording Setup')),
       body: SafeArea(
@@ -88,10 +177,15 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
                       const SizedBox(height: 8),
                       TextFormField(
                         controller: _topicController,
-                        decoration: _inputDecoration(context, hint: 'e.g. Introduction to Calculus'),
+                        decoration: _inputDecoration(
+                          context,
+                          hint: 'e.g. Introduction to Calculus',
+                        ),
                         textCapitalization: TextCapitalization.sentences,
                         validator: (v) =>
-                            v == null || v.trim().isEmpty ? 'Please enter a lecture topic' : null,
+                            v == null || v.trim().isEmpty
+                                ? 'Please enter a lecture topic'
+                                : null,
                       ),
                     ],
                   ),
@@ -104,7 +198,9 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton.icon(
-                  onPressed: _handleStartRecording,
+                  onPressed: (_needsAudioUnlock && _audioUnlocked == null)
+                      ? null
+                      : _handleStartRecording,
                   icon: Icon(
                     _isUploadFlow ? Icons.arrow_forward : Icons.fiber_manual_record,
                     size: 20,
@@ -153,12 +249,17 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
   }
 
   void _handleStartRecording() {
+    if (_needsAudioUnlock && _audioUnlocked == false) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(PlanTierGating.lockMessage(GatedFeature.recordLecture))),
+      );
+      return;
+    }
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
     try {
-      // Prefer root navigator — AppShell context can confuse named routes.
       final nav = AppNavigation.key.currentState ?? Navigator.of(context, rootNavigator: true);
       nav.pushNamed(
         '/recorder',
@@ -171,7 +272,10 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not open recorder: $e'), backgroundColor: Colors.red[700]),
+          SnackBar(
+            content: Text('Could not open recorder: $e'),
+            backgroundColor: Colors.red[700],
+          ),
         );
       }
     }

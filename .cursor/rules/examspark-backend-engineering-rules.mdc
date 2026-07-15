@@ -97,8 +97,10 @@ keep the locked version.)*
 
 - Order matters: check plan-tier unlock **first**, credit balance **second**.
   Locked-feature response short-circuits before ever touching credits.
-- Teacher-group joins are capped per plan tier (1/3/6 — `max_groups`) and
-  tracked as a separate counter from AI credits.
+- Teacher-group joins are capped per plan tier (0/1/3/6 — `max_groups`) and
+  tracked as a separate counter from AI credits. Server: trigger
+  `fn_enforce_group_join_limit`; refund/plan drop → `fn_trim_group_memberships`
+  from `refund_service` (Free leaves all).
 - **Known gap (Jul 13, 2026):** tier-check is currently Dart-side only
   (`plan_tier_gating.dart`); server-side enforcement in FastAPI is explicitly
   Phase 5 Session 5's scope, not yet built.

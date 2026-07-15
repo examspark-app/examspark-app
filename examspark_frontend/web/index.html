@@ -41,6 +41,25 @@
     For more details:
     * https://docs.flutter.dev/platform-integration/web/initialization
   -->
+  <!-- Razorpay Checkout (Web) — Session 6 -->
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script>
+    window.openExamSparkRazorpay = function (optionsJson) {
+      return new Promise(function (resolve, reject) {
+        var options = JSON.parse(optionsJson);
+        options.handler = function (response) {
+          resolve(JSON.stringify(response));
+        };
+        options.modal = {
+          ondismiss: function () {
+            reject(new Error('Payment cancelled'));
+          }
+        };
+        var rzp = new Razorpay(options);
+        rzp.open();
+      });
+    };
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
+import 'package:examspark_frontend/core/payments/subscription_plans.dart';
+import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/widgets/app_top_bar.dart';
 import 'package:examspark_frontend/presentation/widgets/initials_avatar.dart';
@@ -12,8 +15,13 @@ import 'package:examspark_frontend/presentation/widgets/auth_gate.dart';
 /// Profile — never separate bottom tabs.
 class ProfileTab extends StatefulWidget {
   final ValueChanged<int> onGoToTab;
+  final bool isActive;
 
-  const ProfileTab({super.key, required this.onGoToTab});
+  const ProfileTab({
+    super.key,
+    required this.onGoToTab,
+    this.isActive = true,
+  });
 
   @override
   State<ProfileTab> createState() => _ProfileTabState();
@@ -21,17 +29,54 @@ class ProfileTab extends StatefulWidget {
 
 class _ProfileTabState extends State<ProfileTab> {
   int _creditsBalance = 0;
+  String _planId = 'free';
   String _userName = 'User';
   String _userEmail = '';
+  int _libraryLectureCount = 0;
   // Defaults to showing the row until we know for sure — avoids hiding
   // Teacher Dashboard from an actual teacher just because the profile
   // fetch is still in flight or failed.
   bool _isTeacher = true;
 
+  String get _planLabel {
+    final def = SubscriptionPlans.byId(_planId);
+    return def != null ? '${def.name} Plan' : 'Free Plan';
+  }
+
   @override
   void initState() {
     super.initState();
+    SessionLiveSync.instance.addListener(_onSessionLive);
     _load();
+    _applySessionLive();
+  }
+
+  @override
+  void dispose() {
+    SessionLiveSync.instance.removeListener(_onSessionLive);
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant ProfileTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _load();
+      SessionLiveSync.instance.refreshAll();
+    }
+  }
+
+  void _onSessionLive() {
+    if (!mounted) return;
+    _applySessionLive();
+  }
+
+  void _applySessionLive() {
+    final sync = SessionLiveSync.instance;
+    setState(() {
+      _creditsBalance = sync.creditsBalance;
+      _planId = sync.planId;
+    });
   }
 
   Future<void> _load() async {
@@ -39,12 +84,23 @@ class _ProfileTabState extends State<ProfileTab> {
     if (user == null) return;
     try {
       final profile = await SupabaseClient.instance.getUserProfile(user.id);
+      var plan = 'free';
+      try {
+        plan = await SupabaseClient.instance.getPlanTier(user.id);
+      } catch (_) {}
+      var lectureCount = 0;
+      try {
+        final lectures = await LectureService.instance.getLecturesForUser();
+        lectureCount = lectures.length;
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _creditsBalance = profile?['credits_balance'] as int? ?? 0;
+        _planId = plan;
         _userName = (profile?['full_name'] as String?) ?? (user.email?.split('@').first ?? 'User');
         _userEmail = user.email ?? '';
         _isTeacher = (profile?['role'] as String?) == 'teacher';
+        _libraryLectureCount = lectureCount;
       });
     } catch (_) {
       // Non-fatal.
@@ -70,6 +126,7 @@ class _ProfileTabState extends State<ProfileTab> {
     );
 
     if (confirmed == true) {
+      await SessionLiveSync.instance.stop();
       await SupabaseClient.instance.signOut();
       if (!mounted) return;
       Navigator.of(context).pushAndRemoveUntil(
@@ -134,7 +191,7 @@ class _ProfileTabState extends State<ProfileTab> {
             ProfileRow(
               icon: Icons.workspace_premium_outlined,
               label: 'Subscription',
-              trailingText: 'Free Plan',
+              trailingText: _planLabel,
               onTap: () => Navigator.pushNamed(context, '/subscription'),
             ),
             _divider(context),
@@ -148,16 +205,19 @@ class _ProfileTabState extends State<ProfileTab> {
             ProfileRow(
               icon: Icons.cloud_outlined,
               label: 'Storage',
-              trailingText: '128 MB',
+              trailingText: 'Soon',
               onTap: () => _showPlaceholderSheet(
                 'Storage',
-                'You are using a placeholder storage estimate. Real usage syncs once Cloudflare R2 storage is wired (Phase 4/5).',
+                'Your lectures are already saved in Library. '
+                'A real MB usage meter will appear after Cloudflare R2 storage metering is finished — '
+                'not wired yet. This is not a save error.',
               ),
             ),
             _divider(context),
             ProfileRow(
               icon: Icons.folder_outlined,
               label: 'Library Size',
+              trailingText: '$_libraryLectureCount',
               onTap: () => widget.onGoToTab(1),
             ),
           ]),

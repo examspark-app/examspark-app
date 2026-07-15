@@ -1,7 +1,8 @@
-"""Google Play Billing — Android subscriptions only. TODO: live integration."""
+"""Google Play Billing — Android subscriptions + one-time packs."""
 from typing import Any
 
 from app.config import PaymentConfig
+from app.constants.payment_catalog import play_product_id_for
 from app.models.payment import (
     CreateOrderResponse,
     PaymentGateway,
@@ -9,6 +10,7 @@ from app.models.payment import (
     PaymentStatus,
 )
 from app.services.gateways.base import PaymentGatewayBase
+from app.services.play_billing_verify import verify_play_purchase
 
 
 class GooglePlayGateway(PaymentGatewayBase):
@@ -24,16 +26,41 @@ class GooglePlayGateway(PaymentGatewayBase):
         platform: PaymentPlatform,
         metadata: dict[str, Any],
     ) -> CreateOrderResponse:
-        # TODO: Google Play Billing
-        # Android: no server order — client launches BillingClient purchase flow
-        # Server records pending subscription by product_id + user_id
+        # Client launches BillingClient; server records pending + product_id.
+        credit_pack_id = metadata.get("credit_pack_id")
+        try:
+            product_id = play_product_id_for(
+                plan_id=plan_id or None,
+                credit_pack_id=credit_pack_id,
+            )
+        except ValueError as e:
+            return CreateOrderResponse(
+                order_id=order_id,
+                status=PaymentStatus.FAILED,
+                amount_paise=amount_paise,
+                currency=currency,
+                gateway=self.gateway,
+                message=str(e),
+            )
+
+        package = PaymentConfig.GOOGLE_PLAY_PACKAGE_NAME or ""
+        msg = (
+            "Play purchase intent recorded — complete Billing on Android"
+            if package
+            else (
+                "Play purchase intent recorded — set GOOGLE_PLAY_PACKAGE_NAME "
+                "and service account before verify will succeed"
+            )
+        )
         return CreateOrderResponse(
             order_id=order_id,
             status=PaymentStatus.PENDING,
             amount_paise=amount_paise,
             currency=currency,
             gateway=self.gateway,
-            message="TODO: Google Play — use BillingClient on Android; verify token server-side",
+            gateway_order_id=product_id,
+            google_play_product_id=product_id,
+            message=msg,
         )
 
     async def verify_payment(
@@ -43,11 +70,21 @@ class GooglePlayGateway(PaymentGatewayBase):
         signature: str | None,
         payload: dict[str, Any],
     ) -> bool:
-        # TODO: Google Play Billing — purchases.subscriptions.get via Play Developer API
-        purchase_token = payload.get("purchase_token")
-        product_id = payload.get("product_id")
+        purchase_token = (
+            payload.get("purchase_token")
+            or gateway_payment_id
+            or payload.get("purchaseToken")
+        )
+        product_id = (
+            payload.get("product_id")
+            or payload.get("productId")
+            or payload.get("gateway_order_id")
+        )
         if not purchase_token or not product_id:
             return False
         if not PaymentConfig.google_play_configured():
             return False
-        return False
+        return verify_play_purchase(
+            product_id=str(product_id),
+            purchase_token=str(purchase_token),
+        )

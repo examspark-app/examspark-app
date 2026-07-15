@@ -65,13 +65,13 @@ class SubscriptionPlans {
     id: 'free',
     name: 'Free',
     tier: 'free',
-    monthlyCredits: 75,
+    monthlyCredits: 50,
     priceInrPaise: 0,
     maxGroups: 0,
     features: [
-      '75 credits/month',
-      'Ask AI + PDF Analysis',
-      'No audio or photo/diagram upload',
+      '50 credits/month',
+      'Ask AI, PDF, Photo/Diagram (uses credits)',
+      'Audio recording/upload locked — upgrade ₹499+',
       'Cannot join Groups',
     ],
   );
@@ -85,8 +85,8 @@ class SubscriptionPlans {
     maxGroups: 1,
     features: [
       '1,500 credits/month',
-      'Ask AI + PDF + Photo/Diagram',
-      'Audio recording locked',
+      'Ask AI, PDF, Photo/Diagram (credits)',
+      'Audio still locked — unlock at ₹499+',
       'Join up to 1 Group',
     ],
   );
@@ -100,8 +100,8 @@ class SubscriptionPlans {
     maxGroups: 3,
     features: [
       '3,500 credits/month',
-      'Audio recording unlocked',
-      'PDF + Diagram + Ask AI',
+      'Ask AI, PDF, Photo/Diagram (credits)',
+      'Audio recording + upload unlocked',
       'Join up to 3 Groups',
     ],
     isPopular: true,
@@ -116,6 +116,8 @@ class SubscriptionPlans {
     maxGroups: 6,
     features: [
       '8,000 credits/month',
+      'Ask AI, PDF, Photo/Diagram (credits)',
+      'Audio recording + upload unlocked',
       'Full access — no feature locks',
       'Join up to 6 Groups',
     ],
@@ -131,8 +133,10 @@ class SubscriptionPlans {
     features: [
       '16,000 credits/month',
       'Bulk Record Lecture',
+      'Audio unlocked + full student features',
       'PDF export + shareable links',
-      'Class dashboard',
+      'Class / Teacher dashboard',
+      'Unlimited Groups',
     ],
   );
 

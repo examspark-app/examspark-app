@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:examspark_frontend/core/services/guest_trial_store.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/auth/login_screen.dart';
 import 'package:examspark_frontend/presentation/widgets/app_top_bar.dart';
@@ -11,12 +12,8 @@ class _ChatBubble {
   const _ChatBubble(this.text, this.isUser);
 }
 
-/// What an anonymous visitor sees before signing in — PRODUCT_VISION.md
-/// Core User Flow #1: "Anonymous try → One Ask AI → Sign up → @username +
-/// Library". Mirrors `HomeTab`'s chat layout (Home = Chat Screen UX rule)
-/// but allows exactly ONE free question; every action after that opens
-/// [showSignupPromptSheet] instead of `LoginScreen` directly, so people
-/// get a taste of the product before being asked to commit.
+/// Anonymous visitor: exactly ONE free question, persisted on device so
+/// refresh / reopen does not reset the trial (clearing site/app data can).
 class GuestHomeScreen extends StatefulWidget {
   const GuestHomeScreen({super.key});
 
@@ -27,8 +24,31 @@ class GuestHomeScreen extends StatefulWidget {
 class _GuestHomeScreenState extends State<GuestHomeScreen> {
   final List<_ChatBubble> _messages = [];
   bool _freeTrialUsed = false;
+  bool _ready = false;
 
-  void _handleSend(String text) {
+  @override
+  void initState() {
+    super.initState();
+    _loadTrialFlag();
+  }
+
+  Future<void> _loadTrialFlag() async {
+    final used = await GuestTrialStore.isFreePromptUsed();
+    if (!mounted) return;
+    setState(() {
+      _freeTrialUsed = used;
+      _ready = true;
+      if (used && _messages.isEmpty) {
+        _messages.add(const _ChatBubble(
+          'You already used your free guest question on this device. '
+          'Sign up to get 50 Free credits and keep chatting.',
+          false,
+        ));
+      }
+    });
+  }
+
+  Future<void> _handleSend(String text) async {
     if (_freeTrialUsed) {
       _promptSignUp();
       return;
@@ -36,18 +56,16 @@ class _GuestHomeScreenState extends State<GuestHomeScreen> {
     setState(() {
       _messages.add(_ChatBubble(text, true));
       _messages.add(const _ChatBubble(
-        'This is a placeholder AI reply — real Ask AI answers connect once the RAG '
-        'pipeline is wired (Phase 4/5). Sign up to keep chatting and unlock recording, '
-        'notes, flashcards and quizzes.',
+        'This is a placeholder AI reply — real Ask AI answers connect once you '
+        'sign up. Free signup includes 50 credits. Audio unlock starts at ₹499.',
         false,
       ));
       _freeTrialUsed = true;
     });
+    await GuestTrialStore.markFreePromptUsed();
   }
 
   void _handleRestrictedAction() {
-    // Recording / attachments are not part of the one free question —
-    // they go straight to the signup prompt.
     _promptSignUp();
   }
 
@@ -67,6 +85,12 @@ class _GuestHomeScreenState extends State<GuestHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_ready) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
       appBar: AppTopBar(
         showLogo: true,
@@ -80,7 +104,9 @@ class _GuestHomeScreenState extends State<GuestHomeScreen> {
       body: Column(
         children: [
           Expanded(
-            child: _messages.isEmpty ? _buildWelcome(context) : _buildConversation(context),
+            child: _messages.isEmpty && !_freeTrialUsed
+                ? _buildWelcome(context)
+                : _buildConversation(context),
           ),
           if (_freeTrialUsed) _buildSignUpBanner(context),
           BottomInputBar(
@@ -104,13 +130,17 @@ class _GuestHomeScreenState extends State<GuestHomeScreen> {
           const SizedBox(height: 16),
           Text(
             'Ask ExamSpark anything',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 18, fontWeight: FontWeight.w600),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
           Text(
-            'Try one free question — no account needed. Sign up to record lectures, '
-            'get notes, flashcards, quizzes and join teacher groups.',
+            'One free question on this device (no account). Sign up for 50 Free '
+            'credits. Clearing browser data may reset the trial — real guest AI '
+            'will also be limited on the server later.',
             style: Theme.of(context).textTheme.bodySmall,
             textAlign: TextAlign.center,
           ),
@@ -130,17 +160,25 @@ class _GuestHomeScreenState extends State<GuestHomeScreen> {
           child: Align(
             alignment: bubble.isUser ? Alignment.centerRight : Alignment.centerLeft,
             child: Container(
-              constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * 0.78),
+              constraints: BoxConstraints(
+                maxWidth: MediaQuery.sizeOf(context).width * 0.78,
+              ),
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
               decoration: BoxDecoration(
-                color: bubble.isUser ? AppTheme.accentColor : AppTheme.getCardBackground(context),
+                color: bubble.isUser
+                    ? AppTheme.accentColor
+                    : AppTheme.getCardBackground(context),
                 borderRadius: BorderRadius.circular(16),
-                border: bubble.isUser ? null : Border.all(color: AppTheme.getCardBorder(context)),
+                border: bubble.isUser
+                    ? null
+                    : Border.all(color: AppTheme.getCardBorder(context)),
               ),
               child: Text(
                 bubble.text,
                 style: TextStyle(
-                  color: bubble.isUser ? Colors.white : AppTheme.getPrimaryText(context),
+                  color: bubble.isUser
+                      ? Colors.white
+                      : AppTheme.getPrimaryText(context),
                   height: 1.4,
                 ),
               ),
@@ -164,8 +202,10 @@ class _GuestHomeScreenState extends State<GuestHomeScreen> {
             const SizedBox(width: 8),
             Expanded(
               child: Text(
-                'Free question used — sign up to keep chatting',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.accentColor),
+                'Free guest question used on this device — sign up to continue',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.accentColor,
+                    ),
               ),
             ),
             Text(

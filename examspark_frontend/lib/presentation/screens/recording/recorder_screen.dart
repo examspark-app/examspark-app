@@ -3,6 +3,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemSound, SystemSoundType;
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
+import 'package:examspark_frontend/core/constants/plan_tier_gating.dart';
+import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/services/recording_service.dart';
 
@@ -36,6 +38,8 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
   String _recordingDuration = '00:00';
   int _currentScreen = 1;
   String? _recordingPath;
+  /// null = still loading plan; false = Record + Upload Audio locked.
+  bool? _audioUnlocked;
 
   /// Planned duration bucket in minutes, chosen on the Setup screen —
   /// founder rule: warn (sound + banner) once this is reached, never
@@ -52,6 +56,11 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
   final _recordingService = RecordingService.instance;
   final _lectureService = LectureService.instance;
 
+  bool get _audioTabLocked =>
+      _audioUnlocked == false &&
+      (_selectedInputMethod == InputMethod.record ||
+          _selectedInputMethod == InputMethod.uploadAudio);
+
   @override
   void initState() {
     super.initState();
@@ -61,6 +70,26 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
         (m) => m.name == widget.initialInputMethod,
         orElse: () => InputMethod.record,
       );
+    }
+    _loadAudioUnlock();
+  }
+
+  Future<void> _loadAudioUnlock() async {
+    final userId = SupabaseClient.instance.currentUser?.id;
+    if (userId == null) {
+      if (mounted) setState(() => _audioUnlocked = false);
+      return;
+    }
+    try {
+      final plan = await SupabaseClient.instance.getPlanTier(userId);
+      final ok = PlanTierGating.isFeatureUnlocked(
+        currentPlanId: plan,
+        feature: GatedFeature.recordLecture,
+      );
+      if (mounted) setState(() => _audioUnlocked = ok);
+    } catch (_) {
+      // Fail closed — hide Record/Upload Audio until we know the plan.
+      if (mounted) setState(() => _audioUnlocked = false);
     }
   }
 
@@ -497,6 +526,8 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
     required String label,
   }) {
     final isSelected = _selectedInputMethod == method;
+    final locked = _audioUnlocked == false &&
+        (method == InputMethod.record || method == InputMethod.uploadAudio);
     return Expanded(
       child: GestureDetector(
         onTap: () => setState(() => _selectedInputMethod = method),
@@ -510,17 +541,20 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(
-                icon,
+                locked ? Icons.lock_outline : icon,
                 size: 18,
                 color: isSelected ? Colors.white : Colors.grey[600],
               ),
               const SizedBox(width: 6),
-              Text(
-                label,
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: isSelected ? Colors.white : Colors.grey[600],
+              Flexible(
+                child: Text(
+                  label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    fontSize: 13,
+                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                    color: isSelected ? Colors.white : Colors.grey[600],
+                  ),
                 ),
               ),
             ],
@@ -531,6 +565,14 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
   }
 
   Widget _buildInputMethodContent() {
+    if (_audioUnlocked == null &&
+        (_selectedInputMethod == InputMethod.record ||
+            _selectedInputMethod == InputMethod.uploadAudio)) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_audioTabLocked) {
+      return _buildAudioLockedPanel();
+    }
     switch (_selectedInputMethod) {
       case InputMethod.record:
         return _buildRecordingContent();
@@ -539,6 +581,69 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
       case InputMethod.uploadDocument:
         return _buildUploadDocumentContent();
     }
+  }
+
+  Widget _buildAudioLockedPanel() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              width: 72,
+              height: 72,
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.lock_outline, size: 36, color: Colors.black87),
+            ),
+            const SizedBox(height: 20),
+            const Text(
+              'Audio locked',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.bold,
+                color: Colors.black87,
+              ),
+            ),
+            const SizedBox(height: 10),
+            Text(
+              PlanTierGating.lockMessage(GatedFeature.recordLecture),
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 15, height: 1.4, color: Colors.grey[700]),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Record + Upload Audio need ₹499+. PDF / Photo stay available.',
+              textAlign: TextAlign.center,
+              style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: () => Navigator.pushNamed(context, '/subscription'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.black87,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                child: const Text('View Plans — unlock at ₹499'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: () => setState(
+                () => _selectedInputMethod = InputMethod.uploadDocument,
+              ),
+              child: const Text('Upload PDF / Photo instead'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildRecordingContent() {
@@ -828,6 +933,12 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
           InputMethod.uploadDocument => 'pdf_upload',
         };
 
+    // Client soft-gate (matches server Rule 6). Server still enforces.
+    if (!await _ensureFeatureUnlockedForSource(apiSourceType)) {
+      if (mounted) setState(() => _isProcessing = false);
+      return;
+    }
+
     final resolvedFilename = filename ??
         switch (apiSourceType) {
           'image_upload' => 'image.jpg',
@@ -874,12 +985,60 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
         filename: resolvedFilename,
       );
     } catch (e) {
-      // Network problem (or backend failure) after we've already navigated
-      // to /processing — mark the lecture 'error' with the real reason so
-      // its realtime listener (ProcessingScreen) shows the retry UI with a
-      // useful message instead of a generic one or spinning forever.
-      await _lectureService.updateStatus(lectureId, 'error', errorMessage: e.toString());
+      // Network problem (or backend FEATURE_LOCKED / credits) after we've
+      // already navigated to /processing — mark the lecture 'error' so
+      // ProcessingScreen shows the real lock/credit message.
+      final msg = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+      await _lectureService.updateStatus(
+        lectureId,
+        'error',
+        errorMessage: msg,
+      );
     }
+  }
+
+  /// Soft client check before upload — server returns 403 FEATURE_LOCKED too.
+  Future<bool> _ensureFeatureUnlockedForSource(String apiSourceType) async {
+    final feature = switch (apiSourceType) {
+      'recording' || 'audio_upload' => GatedFeature.recordLecture,
+      'image_upload' => GatedFeature.diagramAnalysis,
+      'pdf_upload' => GatedFeature.pdfAnalysis,
+      _ => null,
+    };
+    if (feature == null) return true;
+
+    final userId = SupabaseClient.instance.currentUser?.id;
+    if (userId == null) return false;
+
+    try {
+      final plan = await SupabaseClient.instance.getPlanTier(userId);
+      if (PlanTierGating.isFeatureUnlocked(
+        currentPlanId: plan,
+        feature: feature,
+      )) {
+        return true;
+      }
+    } catch (_) {
+      // Fail closed for audio; for other features prefer server check.
+      if (feature == GatedFeature.recordLecture) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(PlanTierGating.lockMessage(GatedFeature.recordLecture)),
+            ),
+          );
+        }
+        return false;
+      }
+      return true;
+    }
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(PlanTierGating.lockMessage(feature))),
+      );
+    }
+    return false;
   }
 
   Future<void> _handleAudioUpload() async {

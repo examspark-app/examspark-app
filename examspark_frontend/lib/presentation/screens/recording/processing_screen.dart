@@ -20,6 +20,8 @@ class ProcessingScreen extends StatefulWidget {
   final String? retrySourceType;
   final bool retryHighAccuracy;
   final int? retryDurationMinutes;
+  /// YouTube Link → Notes retry (no file bytes).
+  final String? retryYoutubeUrl;
 
   const ProcessingScreen({
     super.key,
@@ -29,6 +31,7 @@ class ProcessingScreen extends StatefulWidget {
     this.retrySourceType,
     this.retryHighAccuracy = false,
     this.retryDurationMinutes,
+    this.retryYoutubeUrl,
   });
 
   @override
@@ -256,7 +259,9 @@ class _ProcessingScreenState extends State<ProcessingScreen>
   /// ProcessingScreen was opened without the original bytes (e.g. a
   /// deep-link/refresh with no in-memory file to resend).
   Future<void> _retryProcessing() async {
-    if (widget.retryFileBytes == null) {
+    final youtubeUrl = widget.retryYoutubeUrl?.trim();
+    final hasYoutube = youtubeUrl != null && youtubeUrl.isNotEmpty;
+    if (!hasYoutube && widget.retryFileBytes == null) {
       if (mounted) Navigator.pop(context);
       return;
     }
@@ -270,21 +275,29 @@ class _ProcessingScreenState extends State<ProcessingScreen>
     });
 
     try {
-      await LectureService.instance.invokeProcessing(
-        lectureId: widget.lectureId,
-        fileBytes: widget.retryFileBytes!,
-        highAccuracy: widget.retryHighAccuracy,
-        sourceType: widget.retrySourceType ?? 'recording',
-        durationMinutes: widget.retryDurationMinutes,
-        filename: widget.retryFilename ?? 'audio.webm',
-      );
+      if (hasYoutube) {
+        await LectureService.instance.invokeYoutubeProcessing(
+          lectureId: widget.lectureId,
+          youtubeUrl: youtubeUrl,
+        );
+      } else {
+        await LectureService.instance.invokeProcessing(
+          lectureId: widget.lectureId,
+          fileBytes: widget.retryFileBytes!,
+          highAccuracy: widget.retryHighAccuracy,
+          sourceType: widget.retrySourceType ?? 'recording',
+          durationMinutes: widget.retryDurationMinutes,
+          filename: widget.retryFilename ?? 'audio.webm',
+        );
+      }
       // Success path: the realtime listener above picks up 'transcribing' →
       // ... → 'done' and auto-navigates; nothing else to do here.
     } catch (e) {
+      final msg = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
       await LectureService.instance.updateStatus(
         widget.lectureId,
         'error',
-        errorMessage: e.toString(),
+        errorMessage: msg,
       );
       // The realtime listener's 'error' case will set _hasError/_errorMessage
       // from this same message — no need to duplicate that here.

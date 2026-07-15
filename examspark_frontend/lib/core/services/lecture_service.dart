@@ -170,6 +170,39 @@ class LectureService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  /// YouTube Link → Notes — captions path (no file upload). Credits 35/65/100 by duration.
+  Future<Map<String, dynamic>> invokeYoutubeProcessing({
+    required String lectureId,
+    required String youtubeUrl,
+  }) async {
+    final userId = SupabaseClient.instance.currentUser?.id;
+    if (userId == null) {
+      throw StateError('User must be logged in');
+    }
+    if (!AppConfig.isApiConfigured) {
+      throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
+    }
+
+    final accessToken = await _requireAccessToken();
+    await updateStatus(lectureId, 'transcribing');
+
+    final uri = Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/lectures/process');
+    final request = http.MultipartRequest('POST', uri)
+      ..headers['Authorization'] = 'Bearer $accessToken'
+      ..fields['source_type'] = 'youtube_link'
+      ..fields['lecture_id'] = lectureId
+      ..fields['youtube_url'] = youtubeUrl;
+
+    final streamed = await request.send();
+    final response = await http.Response.fromStream(streamed);
+
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   /// Loads processed notes from R2 via FastAPI (Postgres stores paths only).
   /// Returns snake_case keys matching what [NotesResultScreen] already renders.
   Future<Map<String, dynamic>> fetchLectureNotes(String lectureId) async {
@@ -379,7 +412,14 @@ class LectureService {
             } else if (type == 'done') {
               donePayload = event;
             } else if (type == 'error') {
-              errorMessage = event['message']?.toString() ?? 'Stream error';
+              final msg = event['message']?.toString() ?? 'Stream error';
+              final code =
+                  event['code']?.toString() ?? event['status']?.toString();
+              if (code == 'FEATURE_LOCKED') {
+                errorMessage = msg.startsWith('🔒') ? msg : '🔒 $msg';
+              } else {
+                errorMessage = msg;
+              }
             }
           }
           sep = raw.indexOf('\n\n');
@@ -426,8 +466,18 @@ class LectureService {
       final decoded = jsonDecode(body);
       if (decoded is Map && decoded['detail'] != null) {
         final detail = decoded['detail'];
-        if (detail is Map && detail['message'] != null) {
-          return detail['message'].toString();
+        if (detail is Map) {
+          final message = detail['message']?.toString();
+          final code = detail['code']?.toString() ?? detail['status']?.toString();
+          if (message != null && message.isNotEmpty) {
+            if (code == 'FEATURE_LOCKED') {
+              return message.startsWith('🔒') ? message : '🔒 $message';
+            }
+            return message;
+          }
+        }
+        if (detail is String && detail.isNotEmpty) {
+          return detail;
         }
         return detail.toString();
       }
@@ -438,9 +488,8 @@ class LectureService {
         : 'Processing failed ($statusCode).';
   }
 
-  /// FastAPI's HTTPException returns `{"detail": "<message>"}` — surface just
-  /// that message so ProcessingScreen can show the real reason (e.g. "This
-  /// PDF has little extractable text...") instead of raw JSON/status codes.
+  /// FastAPI HTTPException detail — including Session 5 FEATURE_LOCKED payload
+  /// (`detail.message` + `detail.code`). Surface the message for ProcessingScreen.
   String _extractErrorDetail(http.Response response) {
     return _extractErrorDetailFromBody(response.body, response.statusCode);
   }

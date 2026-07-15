@@ -8,6 +8,9 @@ class BottomInputBar extends StatefulWidget {
   final VoidCallback onAttach;
   final VoidCallback onRecord;
 
+  /// When true, mic shows a lock affordance (still tappable → parent shows upgrade).
+  final bool recordLocked;
+
   /// "YouTube Link → Notes" — founder-requested placement: its own icon
   /// right next to Record, not buried inside the Attach (+) sheet. Null
   /// hides the icon entirely.
@@ -19,6 +22,7 @@ class BottomInputBar extends StatefulWidget {
     required this.onAttach,
     required this.onRecord,
     this.onYoutube,
+    this.recordLocked = false,
   });
 
   @override
@@ -114,9 +118,18 @@ class _BottomInputBarState extends State<BottomInputBar> {
                     )
                   : IconButton(
                       key: const ValueKey('mic'),
-                      icon: const Icon(Icons.mic_none_rounded),
+                      icon: Icon(
+                        widget.recordLocked
+                            ? Icons.lock_outline
+                            : Icons.mic_none_rounded,
+                      ),
+                      tooltip: widget.recordLocked
+                          ? 'Audio needs ₹499+ Plan'
+                          : 'Record',
                       style: IconButton.styleFrom(
-                        backgroundColor: AppTheme.accentColor,
+                        backgroundColor: widget.recordLocked
+                            ? Colors.grey.shade500
+                            : AppTheme.accentColor,
                         foregroundColor: Colors.white,
                       ),
                       onPressed: widget.onRecord,

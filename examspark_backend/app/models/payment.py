@@ -47,8 +47,10 @@ class PlanTier(str, Enum):
 
 
 class CreateOrderRequest(BaseModel):
-    user_id: UUID
-    plan_id: str
+    """user_id may be omitted — FastAPI fills from Bearer token."""
+
+    user_id: Optional[UUID] = None
+    plan_id: Optional[str] = None
     platform: PaymentPlatform
     gateway: PaymentGateway
     idempotency_key: str = Field(..., min_length=8, max_length=128)
@@ -62,12 +64,14 @@ class CreateOrderResponse(BaseModel):
     currency: str = "INR"
     gateway: PaymentGateway
     gateway_order_id: Optional[str] = None
-    message: str = "Order created — payment gateway integration pending"
+    razorpay_key_id: Optional[str] = None
+    google_play_product_id: Optional[str] = None
+    message: str = "Order created — complete checkout"
 
 
 class VerifyPaymentRequest(BaseModel):
     order_id: str
-    user_id: UUID
+    user_id: Optional[UUID] = None
     gateway: PaymentGateway
     gateway_payment_id: Optional[str] = None
     gateway_signature: Optional[str] = None

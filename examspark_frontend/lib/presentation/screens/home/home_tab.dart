@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:examspark_frontend/core/config/app_config.dart';
 import 'package:examspark_frontend/core/constants/ai_answer_meta.dart';
+import 'package:examspark_frontend/core/constants/credit_costs.dart';
+import 'package:examspark_frontend/core/constants/plan_tier_gating.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/widgets/ai/ai_assistant_message.dart';
 import 'package:examspark_frontend/presentation/widgets/ai/ai_thinking_bubble.dart';
@@ -56,6 +60,7 @@ class _ChatBubble {
 class _HomeTabState extends State<HomeTab> {
   int _creditsBalance = 0;
   String _userName = 'User';
+  String _planTier = 'free';
   List<Map<String, dynamic>> _recentLectures = [];
   final List<_ChatBubble> _messages = [];
   final ScrollController _scrollController = ScrollController();
@@ -66,14 +71,22 @@ class _HomeTabState extends State<HomeTab> {
   /// Live SSE tokens while waiting (null = still thinking).
   String? _liveStreamText;
 
+  bool get _audioUnlocked => PlanTierGating.isFeatureUnlocked(
+        currentPlanId: _planTier,
+        feature: GatedFeature.recordLecture,
+      );
+
   @override
   void initState() {
     super.initState();
+    SessionLiveSync.instance.addListener(_onSessionLive);
     _loadUserData();
+    _applySessionLive();
   }
 
   @override
   void dispose() {
+    SessionLiveSync.instance.removeListener(_onSessionLive);
     _scrollController.dispose();
     super.dispose();
   }
@@ -83,7 +96,23 @@ class _HomeTabState extends State<HomeTab> {
     super.didUpdateWidget(oldWidget);
     if (widget.isActive && !oldWidget.isActive) {
       _loadUserData();
+      SessionLiveSync.instance.refreshAll();
     }
+  }
+
+  void _onSessionLive() {
+    if (!mounted) return;
+    _applySessionLive();
+  }
+
+  void _applySessionLive() {
+    final sync = SessionLiveSync.instance;
+    setState(() {
+      _creditsBalance = sync.creditsBalance;
+      if (sync.planId.isNotEmpty) {
+        _planTier = sync.planId;
+      }
+    });
   }
 
   void _scrollToBottom() {
@@ -104,10 +133,15 @@ class _HomeTabState extends State<HomeTab> {
     try {
       final profile = await SupabaseClient.instance.getUserProfile(user.id);
       final lectures = await LectureService.instance.getLecturesForUser();
+      var plan = 'free';
+      try {
+        plan = await SupabaseClient.instance.getPlanTier(user.id);
+      } catch (_) {}
       if (!mounted) return;
       setState(() {
         _creditsBalance = profile?['credits_balance'] as int? ?? 0;
         _userName = (profile?['full_name'] as String?) ?? user.email ?? 'User';
+        _planTier = plan;
         _recentLectures = lectures.take(5).toList();
         _isRefreshing = false;
       });
@@ -216,6 +250,10 @@ class _HomeTabState extends State<HomeTab> {
   }
 
   void _handleRecord() {
+    if (!_audioUnlocked) {
+      _showAudioLockedSheet();
+      return;
+    }
     Navigator.pushNamed(context, '/recording_setup');
   }
 
@@ -224,6 +262,11 @@ class _HomeTabState extends State<HomeTab> {
       context: context,
       backgroundColor: Colors.transparent,
       builder: (context) => _UploadOptionsSheet(
+        audioLocked: !_audioUnlocked,
+        onAudioLocked: () {
+          Navigator.pop(context);
+          _showAudioLockedSheet();
+        },
         onOptionSelected: (inputMethod) {
           Navigator.pushNamed(
             context,
@@ -235,19 +278,131 @@ class _HomeTabState extends State<HomeTab> {
     );
   }
 
+  void _showAudioLockedSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(Icons.lock_outline, size: 40),
+              const SizedBox(height: 12),
+              Text(
+                'Audio locked',
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+              ),
+              const SizedBox(height: 8),
+              Text(PlanTierGating.lockMessage(GatedFeature.recordLecture)),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    Navigator.pushNamed(context, '/subscription');
+                  },
+                  child: const Text('View Plans'),
+                ),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Not now'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _handleYoutube() {
     showYoutubeLinkDialog(
       context,
-      onSubmit: (url) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'YouTube Notes — coming soon (backend pipeline in Phase 5)',
-            ),
-          ),
-        );
-      },
+      onSubmit: (url) => _startYoutubeNotes(url),
     );
+  }
+
+  Future<void> _startYoutubeNotes(String url) async {
+    if (!AppConfig.isApiConfigured) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('API not configured — see API_SETUP.md')),
+      );
+      return;
+    }
+
+    if (!PlanTierGating.isFeatureUnlocked(
+      currentPlanId: _planTier,
+      feature: GatedFeature.youtubeLink,
+    )) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(PlanTierGating.lockMessage(GatedFeature.youtubeLink))),
+      );
+      return;
+    }
+
+    // Soft check: min band (35). Server charges exact 35/65/100 after duration.
+    if (_creditsBalance < CreditCosts.youtubeUpTo20Min) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'Need at least ${CreditCosts.youtubeUpTo20Min} credits for YouTube Notes '
+            '(longer videos cost up to ${CreditCosts.youtube40To60Min}).',
+          ),
+        ),
+      );
+      return;
+    }
+
+    String? lectureId;
+    try {
+      lectureId = await LectureService.instance.createLecture(
+        title: 'YouTube Notes',
+        sourceType: 'youtube_link',
+      );
+      if (!mounted) return;
+
+      Navigator.pushNamed(
+        context,
+        '/processing',
+        arguments: {
+          'lectureId': lectureId,
+          'retryYoutubeUrl': url,
+          'retrySourceType': 'youtube_link',
+        },
+      );
+
+      await LectureService.instance.invokeYoutubeProcessing(
+        lectureId: lectureId,
+        youtubeUrl: url,
+      );
+    } catch (e) {
+      final msg = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
+      if (lectureId != null) {
+        await LectureService.instance.updateStatus(
+          lectureId,
+          'error',
+          errorMessage: msg,
+        );
+      } else if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(msg)),
+        );
+      }
+    }
   }
 
   void _openLecture(Map<String, dynamic> lecture) {
@@ -299,6 +454,7 @@ class _HomeTabState extends State<HomeTab> {
             onAttach: _handleAttach,
             onRecord: _handleRecord,
             onYoutube: _handleYoutube,
+            recordLocked: !_audioUnlocked,
           ),
         ],
       ),
@@ -486,8 +642,14 @@ class _UploadOptionsSheet extends StatelessWidget {
   /// once the sheet closes — routes into the already-working upload flow
   /// inside RecorderScreen instead of a dead-end "coming soon" message.
   final ValueChanged<String> onOptionSelected;
+  final bool audioLocked;
+  final VoidCallback? onAudioLocked;
 
-  const _UploadOptionsSheet({required this.onOptionSelected});
+  const _UploadOptionsSheet({
+    required this.onOptionSelected,
+    this.audioLocked = false,
+    this.onAudioLocked,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -522,7 +684,13 @@ class _UploadOptionsSheet extends StatelessWidget {
               'Image / Photo',
               'uploadDocument',
             ),
-            _option(context, Icons.mic_outlined, 'Audio File', 'uploadAudio'),
+            _option(
+              context,
+              Icons.mic_outlined,
+              'Audio File',
+              'uploadAudio',
+              locked: audioLocked,
+            ),
           ],
         ),
       ),
@@ -533,8 +701,9 @@ class _UploadOptionsSheet extends StatelessWidget {
     BuildContext context,
     IconData icon,
     String label,
-    String inputMethod,
-  ) {
+    String inputMethod, {
+    bool locked = false,
+  }) {
     return ListTile(
       contentPadding: EdgeInsets.zero,
       leading: Container(
@@ -548,7 +717,13 @@ class _UploadOptionsSheet extends StatelessWidget {
         child: Icon(icon, color: AppTheme.accentColor, size: 20),
       ),
       title: Text(label),
+      subtitle: locked ? const Text('₹499+ Plan') : null,
+      trailing: locked ? const Icon(Icons.lock_outline, size: 18) : null,
       onTap: () {
+        if (locked) {
+          onAudioLocked?.call();
+          return;
+        }
         Navigator.pop(context);
         onOptionSelected(inputMethod);
       },

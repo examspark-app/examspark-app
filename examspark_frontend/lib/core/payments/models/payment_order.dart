@@ -20,6 +20,10 @@ class PaymentOrder {
   final PaymentGateway gateway;
   final PaymentPlatform platform;
   final String idempotencyKey;
+  final String? gatewayOrderId;
+  final String? razorpayKeyId;
+  final String? googlePlayProductId;
+  final String? creditPackId;
 
   const PaymentOrder({
     required this.orderId,
@@ -29,5 +33,9 @@ class PaymentOrder {
     required this.gateway,
     required this.platform,
     required this.idempotencyKey,
+    this.gatewayOrderId,
+    this.razorpayKeyId,
+    this.googlePlayProductId,
+    this.creditPackId,
   });
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/data/groups_repository.dart';
 import 'package:examspark_frontend/core/models/group_model.dart';
+import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/dashboard/teacher_dashboard_screen.dart' show showSimpleJoinDialog;
 import 'package:examspark_frontend/presentation/widgets/app_top_bar.dart';
@@ -12,8 +13,14 @@ import 'package:examspark_frontend/presentation/screens/groups/widgets/group_car
 /// just without its own AppBar back arrow (bottom nav replaces it).
 class GroupsTab extends StatefulWidget {
   final ValueChanged<int> onGoToTab;
+  /// When Groups becomes visible again [IndexedStack], reload list.
+  final bool isActive;
 
-  const GroupsTab({super.key, required this.onGoToTab});
+  const GroupsTab({
+    super.key,
+    required this.onGoToTab,
+    this.isActive = true,
+  });
 
   @override
   State<GroupsTab> createState() => _GroupsTabState();
@@ -23,11 +30,38 @@ class _GroupsTabState extends State<GroupsTab> {
   List<GroupModel> _groups = [];
   bool _isLoading = true;
   String? _updatingGroupId;
+  int _lastMembershipsVersion = -1;
 
   @override
   void initState() {
     super.initState();
+    _lastMembershipsVersion = SessionLiveSync.instance.membershipsVersion;
+    SessionLiveSync.instance.addListener(_onSessionLive);
     _loadGroups();
+  }
+
+  @override
+  void dispose() {
+    SessionLiveSync.instance.removeListener(_onSessionLive);
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant GroupsTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _loadGroups();
+      SessionLiveSync.instance.refreshAll();
+    }
+  }
+
+  void _onSessionLive() {
+    if (!mounted) return;
+    final v = SessionLiveSync.instance.membershipsVersion;
+    if (v != _lastMembershipsVersion) {
+      _lastMembershipsVersion = v;
+      _loadGroups();
+    }
   }
 
   Future<void> _loadGroups() async {
@@ -60,19 +94,33 @@ class _GroupsTabState extends State<GroupsTab> {
     }
 
     final wasJoined = group.isJoined;
-    final updated = await GroupsRepository.instance.toggleMembership(group);
-    if (!mounted) return;
-    setState(() {
-      _groups = _groups.map((g) => g.id == updated.id ? updated : g).toList();
-      _updatingGroupId = null;
-    });
-    if (!wasJoined && updated.isJoined) {
-      _openGroupInfo(updated);
-      return;
+    try {
+      final updated = await GroupsRepository.instance.toggleMembership(group);
+      if (!mounted) return;
+      setState(() {
+        _groups = _groups.map((g) => g.id == updated.id ? updated : g).toList();
+        _updatingGroupId = null;
+      });
+      if (!wasJoined && updated.isJoined) {
+        _openGroupInfo(updated);
+        return;
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(updated.isJoined ? 'Joined "${updated.name}"' : 'Left "${updated.name}"')),
+      );
+    } on GroupMembershipException catch (e) {
+      if (!mounted) return;
+      setState(() => _updatingGroupId = null);
+      if (!wasJoined) {
+        final eligibility = await GroupsRepository.instance.canJoinAnotherGroup();
+        if (!mounted) return;
+        if (!eligibility.allowed || e.isJoinLimit) {
+          showBuyPlanSheet(context, eligibility);
+          return;
+        }
+      }
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
     }
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(updated.isJoined ? 'Joined "${updated.name}"' : 'Left "${updated.name}"')),
-    );
   }
 
   void _openGroupInfo(GroupModel group) {

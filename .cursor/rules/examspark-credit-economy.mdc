@@ -35,15 +35,18 @@ Full spec: [`CREDIT_ECONOMY.md`](CREDIT_ECONOMY.md)
 | Translate | 8 |
 | Voice Read | 5 |
 
-## Plans (v2.1 — Jul 13, 2026)
+## Plans (v2.2 — Jul 15, 2026)
 
 | Plan | Credits/mo | Unlocks |
 |------|------------|---------|
-| Free | 75 | Ask AI + PDF Analysis |
-| ₹199 | 1,500 | + PDF, Diagram, study features |
-| ₹499 | 3,500 | + Audio Recording |
-| ₹999 | 8,000 | Full access |
+| Guest (no account) | 1 free Ask only | No credits ledger |
+| Free | 50 | Ask AI, PDF, Photo/Diagram (credits). Audio locked. Groups = 0 |
+| ₹199 | 1,500 | More credits. Join 1 Group. Audio still locked |
+| ₹499 | 3,500 | + Audio recording/upload. Join 3 Groups |
+| ₹999 | 8,000 | Full access. Join 6 Groups |
 | Teacher ₹1999 | 16,000 | Bulk record + B2B tools |
+
+Paid plans get **their** monthly credits only — Free’s 50 is **not** added on top.
 
 ## Buy Extra Credits (a-la-carte, no teacher commission)
 
@@ -65,6 +68,10 @@ Full spec: [`CREDIT_ECONOMY.md`](CREDIT_ECONOMY.md)
 1. Plan tier unlocks feature? → if no: 🔒 locked modal
 2. Enough credits? → if no: insufficient credits modal
 3. Deduct credits server-side only
+
+## Group Join Caps
+
+Free=0 · ₹199=1 · ₹499=3 · ₹999=6 · Teacher=unlimited. Client fail-closed + DB trigger; refund/plan drop → `fn_trim_group_memberships`.
 
 ## Code
 

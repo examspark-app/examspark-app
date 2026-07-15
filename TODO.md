@@ -84,7 +84,7 @@
 - [x] Auth UI redesign (Login/Sign Up toggle, Google icon, forgot password, email verification)
 - [x] Student onboarding + Teacher/Student role selection (skip button both)
 - [x] Guest "try before signup" flow (one free Ask AI, then signup prompt)
-- [x] YouTube Link → Notes — Flutter UI only (icon + dialog); backend fetch/transcribe is Phase 5
+- [x] YouTube Link → Notes — Flutter UI + FastAPI captions pipeline (Jul 16, 2026); founder smoke: [`FOUNDER_YOUTUBE_LINK_SMOKE.md`](examspark_backend/FOUNDER_YOUTUBE_LINK_SMOKE.md)
 - [x] Teacher/Groups refinement — recording source restriction, real certificate upload UI, Group Join Limits + Buy Plan sheet, removed Copy Code, interactive group quiz, recorder duration warnings + call-interruption auto-save
 - [ ] **Founder must run** `examspark_backend/teacher_group_features_migration.sql` in Supabase (adds `lectures.source_type`, `teacher_certificates.status`, `subscription_plans.max_groups`)
 
@@ -139,8 +139,9 @@ After founder says **`smoke test pass`**:
 
 1. **Session 3** — RAG + Ask AI — **core shipped Jul 14, 2026** (run `session3_rag_match.sql`; then Ask with RAG on notes). Flashcards/MCQ still pending.
 2. **Session 4** — R2 path polish (absorbs half-done R2 polish)
-3. **Session 5** — Plan-tier + credit gating polish (absorbs half-done gating polish)
-4. **Session 6** — Razorpay live (absorbs credit-pack checkout stubs)
+3. **Session 5** — Plan-tier + credit gating polish — **shipped Jul 15, 2026**
+4. **Session 6** — Razorpay live (absorbs credit-pack checkout stubs) — **code shipped Jul 15, 2026** (founder keys + SQL + smoke remaining)
+5. **Group join limits on refund** — **code shipped Jul 15, 2026** — founder must run `group_join_limits_enforce_migration.sql`
 
 | Half-done / polish leftover | Goes into |
 |-----------------------------|-----------|
@@ -149,7 +150,7 @@ After founder says **`smoke test pass`**:
 | MCQ / Flashcards / Revision / extras on edge function | After Session 3 Ask AI core — founder OK required |
 | Home AI chip generate on click + Tavily + PYQ bank | Pending list (Jul 15) — wait for founder |
 | Deduct-then-R2 gap | Small fast-follow when founder asks |
-| Live payments | Session 6 |
+| Live payments | Session 6 — code ready; founder test keys + smoke |
 
 **Remember later (not now):**
 - Session 3 RAG + Ask AI — **blocked** until `smoke test pass`
@@ -200,8 +201,18 @@ After founder says **`smoke test pass`**:
 
 - [x] Session 3 — RAG chunking + pgvector embed + Ask AI endpoint — **core done Jul 14, 2026** (founder must run `session3_rag_match.sql`; flashcards/MCQ still edge)
 - [x] Session 4 — R2 folder/path conventions for PDF/image/exports (canonical `Users/{user_id}/Library/{lecture_id}`; helpers for Teachers/Exports; source PDF/image persist) — **Jul 15, 2026** see [`SESSION_4_R2.md`](examspark_backend/SESSION_4_R2.md)
-- [ ] Session 5 — Server-side plan-tier + credit gating polish (absorbs half-done gating; vision/recording checks already stubbed)
-- [ ] Session 6 — Razorpay live webhooks + founder manual setup guide (absorbs credit-pack checkout stubs)
+- [x] Session 5 — Server-side plan-tier + credit gating polish (absorbs half-done gating; vision/recording checks already stubbed)
+- [x] Session 6 — Razorpay Web test-mode path (order/verify/webhook + Flutter checkout + credit packs) — **Jul 15, 2026**; founder: [`FOUNDER_RAZORPAY_SESSION6.md`](examspark_backend/FOUNDER_RAZORPAY_SESSION6.md) + `session6_fn_grant_credits_migration.sql`
+- [x] Google Play Billing Android code (catalog + verify API + `in_app_purchase`) — **Jul 15, 2026**; founder smoke later: [`FOUNDER_GOOGLE_PLAY_BILLING.md`](examspark_backend/FOUNDER_GOOGLE_PLAY_BILLING.md)
+- [x] Refund policy + webhook handler (Razorpay / Play) — **Jul 15, 2026**; [`REFUND_POLICY_AND_PROCESS.md`](REFUND_POLICY_AND_PROCESS.md) · [`FOUNDER_PAYMENT_KEYS_WHEN_READY.md`](examspark_backend/FOUNDER_PAYMENT_KEYS_WHEN_READY.md)
+- [x] Group join limits — fail-closed Flutter + DB trigger + trim on plan refund — **Jul 15, 2026**
+- [x] Group join mock UI pass (Free lock + ₹199 1/1) — founder Jul 16
+- [x] YouTube Link → Notes smoke pass — founder Jul 16
+- [x] Session live sync (credits/plan/groups Realtime + tab refresh) — Jul 15, 2026
+- [ ] **Founder NEXT (only open checklist):** [`FOUNDER_NEXT_SESSION.md`](examspark_backend/FOUNDER_NEXT_SESSION.md) — Realtime 3 tables + trim SQL
+- [ ] **Founder:** Session 6 Razorpay keys + smoke — **⏸ paused** until Test API keys ([`FOUNDER_RAZORPAY_SESSION6.md`](examspark_backend/FOUNDER_RAZORPAY_SESSION6.md))
+- [ ] **Next coding (founder OK):** Flashcards / Quiz / Revision extras → FastAPI
+- [ ] PhonePe live (stub only — ask when ready)
 
 ---
 

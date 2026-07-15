@@ -34,7 +34,7 @@ async def health_check():
         "status": "ExamSpark Backend Active",
         "version": app.version,
         "database": db_status,
-        "payments": "architecture_ready",
+        "payments": "razorpay_web_and_play_code_ready",
         "lectures": "live_pipeline_audio_vision",
         "ask_ai": "rag_notes_transcript",
         "home_ai": "education_chat",

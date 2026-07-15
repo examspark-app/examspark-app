@@ -11,7 +11,7 @@
 --      the Realtime stream, NOT from FastAPI/uvicorn)
 --   5. Adds `error_message` column so real backend failure reasons show on
 --      screen instead of a generic "network problem" message
---   (Credits: default 75 on signup is enough — do NOT direct UPDATE credits_balance)
+--   (Credits: default 50 on signup is enough — do NOT direct UPDATE credits_balance)
 --
 -- Safe to re-run (idempotent where possible).
 -- ============================================================================
@@ -81,7 +81,7 @@ BEGIN
             split_part(COALESCE(NEW.email, ''), '@', 1)
         ),
         'student',
-        75
+        50
     )
     ON CONFLICT (id) DO UPDATE SET
         email = EXCLUDED.email,
@@ -107,7 +107,7 @@ SELECT
         split_part(COALESCE(au.email, ''), '@', 1)
     ),
     'student',
-    75
+    50
 FROM auth.users au
 LEFT JOIN public.users pu ON pu.id = au.id
 WHERE pu.id IS NULL;
@@ -143,7 +143,7 @@ WHERE NOT EXISTS (
 );
 
 -- Credits: DO NOT direct UPDATE — trigger blocks it.
--- Default 75 on signup is enough for smoke test (JPG=25 credits, short record=40).
+-- Default 50 on signup is enough for smoke test (JPG=25 credits, short record=40).
 -- Optional top-up ONLY if balance is low (uses same bypass as fn_deduct_credits):
 /*
 DO $$

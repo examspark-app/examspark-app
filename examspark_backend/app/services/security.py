@@ -1,5 +1,6 @@
-"""Payment security primitives — verification stubs until live keys."""
+"""Payment security — Razorpay HMAC, idempotency, replay protection."""
 import hashlib
+import hmac
 import time
 from typing import Optional
 
@@ -7,10 +8,27 @@ from app.config import PaymentConfig
 
 
 class PaymentSecurity:
-    """Webhook verification, replay protection, idempotency."""
+    """Webhook verification, payment signature, replay protection, idempotency."""
 
-    # In-memory idempotency store — replace with Redis in production
+    # In-memory idempotency store — Redis preferred at scale
     _idempotency_cache: dict[str, tuple[float, dict]] = {}
+
+    @staticmethod
+    def verify_razorpay_webhook_signature(
+        payload: bytes,
+        signature: str,
+        webhook_secret: Optional[str] = None,
+    ) -> bool:
+        """HMAC-SHA256 of raw body with RAZORPAY_WEBHOOK_SECRET."""
+        secret = webhook_secret or PaymentConfig.RAZORPAY_WEBHOOK_SECRET
+        if not secret or not signature:
+            return False
+        expected = hmac.new(
+            secret.encode("utf-8"),
+            payload,
+            hashlib.sha256,
+        ).hexdigest()
+        return hmac.compare_digest(expected, signature)
 
     @staticmethod
     def verify_razorpay_signature(
@@ -18,12 +36,29 @@ class PaymentSecurity:
         signature: str,
         webhook_secret: Optional[str] = None,
     ) -> bool:
-        # TODO: Razorpay Integration
-        # Use hmac.compare_digest with RAZORPAY_WEBHOOK_SECRET
-        secret = webhook_secret or PaymentConfig.RAZORPAY_WEBHOOK_SECRET
-        if not secret:
+        """Alias used by webhook_service — webhook body HMAC."""
+        return PaymentSecurity.verify_razorpay_webhook_signature(
+            payload, signature, webhook_secret
+        )
+
+    @staticmethod
+    def verify_razorpay_payment_signature(
+        gateway_order_id: str,
+        gateway_payment_id: str,
+        signature: str,
+        key_secret: Optional[str] = None,
+    ) -> bool:
+        """Checkout signature: HMAC-SHA256(order_id|payment_id, KEY_SECRET)."""
+        secret = key_secret or PaymentConfig.RAZORPAY_KEY_SECRET
+        if not secret or not gateway_order_id or not gateway_payment_id or not signature:
             return False
-        return False  # Not implemented
+        message = f"{gateway_order_id}|{gateway_payment_id}".encode("utf-8")
+        expected = hmac.new(
+            secret.encode("utf-8"),
+            message,
+            hashlib.sha256,
+        ).hexdigest()
+        return hmac.compare_digest(expected, signature)
 
     @staticmethod
     def verify_phonepe_signature(payload: bytes, signature: str) -> bool:
@@ -38,14 +73,21 @@ class PaymentSecurity:
         product_id: str,
         purchase_token: str,
     ) -> bool:
-        # TODO: Google Play Billing — server-side verification via Play Developer API
+        from app.services.play_billing_verify import verify_play_purchase
+
         if not PaymentConfig.google_play_configured():
             return False
-        return False
+        return verify_play_purchase(
+            product_id=product_id,
+            purchase_token=purchase_token,
+            package_name=package_name,
+        )
 
     @staticmethod
     def is_replay(event_id: str, seen_events: set[str]) -> bool:
         """Replay protection — event_id must be unique per gateway."""
+        if not event_id:
+            return False
         if event_id in seen_events:
             return True
         seen_events.add(event_id)
@@ -67,6 +109,10 @@ class PaymentSecurity:
     def store_idempotency(cls, key: str, response: dict) -> None:
         ttl = PaymentConfig.IDEMPOTENCY_TTL_SECONDS
         cls._idempotency_cache[key] = (time.time() + ttl, response)
+
+    @classmethod
+    def clear_idempotency_for_tests(cls) -> None:
+        cls._idempotency_cache.clear()
 
     @staticmethod
     def hash_payload(payload: bytes) -> str:

@@ -30,6 +30,8 @@ class _LibraryTabState extends State<LibraryTab> {
   List<Map<String, dynamic>> _lectures = [];
   int _creditsBalance = 0;
   String _searchQuery = '';
+  /// null = root Library (folders list). Non-null = open subject folder.
+  String? _openFolderName;
 
   @override
   void initState() {
@@ -43,6 +45,14 @@ class _LibraryTabState extends State<LibraryTab> {
     if (widget.isActive && !oldWidget.isActive) {
       _load(silent: true);
     }
+  }
+
+  void _closeFolder() {
+    setState(() => _openFolderName = null);
+  }
+
+  void _openFolder(String name) {
+    setState(() => _openFolderName = name);
   }
 
   Future<void> _load({bool silent = false}) async {
@@ -100,6 +110,73 @@ class _LibraryTabState extends State<LibraryTab> {
     final recent = filtered.take(5).toList();
     final folders = _groupBySubject(filtered);
 
+    // Subject folder open: show only that folder's lectures (IA: Library → Physics tap).
+    if (_openFolderName != null) {
+      final folderLectures =
+          _groupBySubject(_lectures)[_openFolderName!] ?? const <Map<String, dynamic>>[];
+      return Scaffold(
+        appBar: AppTopBar(
+          title: _openFolderName!,
+          creditsBalance: _creditsBalance,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_rounded),
+            tooltip: 'Back to Library',
+            onPressed: _closeFolder,
+          ),
+          trailing: [
+            IconButton(
+              icon: _isRefreshing
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+              tooltip: 'Refresh',
+              onPressed: _isRefreshing ? null : () => _load(),
+            ),
+          ],
+        ),
+        body: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : RefreshIndicator(
+                onRefresh: () => _load(silent: true),
+                child: ListView(
+                  padding: const EdgeInsets.all(AppTheme.screenPadding),
+                  children: [
+                    Text(
+                      '${folderLectures.length} lecture${folderLectures.length == 1 ? '' : 's'}',
+                      style: Theme.of(context).textTheme.bodySmall,
+                    ),
+                    const SizedBox(height: 16),
+                    if (folderLectures.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 40),
+                        child: Text(
+                          'No lectures in this folder.',
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                color: AppTheme.getSecondaryText(context),
+                              ),
+                          textAlign: TextAlign.center,
+                        ),
+                      )
+                    else
+                      for (final lecture in folderLectures)
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 10),
+                          child: LectureCard(
+                            title: lecture['title'] as String? ?? 'Untitled Lecture',
+                            subject: lecture['subject'] as String?,
+                            dateLabel: _formatDate(lecture['created_at']),
+                            onTap: () => _openLecture(lecture),
+                          ),
+                        ),
+                  ],
+                ),
+              ),
+      );
+    }
+
     return Scaffold(
       appBar: AppTopBar(
         title: 'Library',
@@ -143,7 +220,11 @@ class _LibraryTabState extends State<LibraryTab> {
                     for (final entry in folders.entries)
                       Padding(
                         padding: const EdgeInsets.only(bottom: 10),
-                        child: _FolderTile(name: entry.key, count: entry.value.length),
+                        child: _FolderTile(
+                          name: entry.key,
+                          count: entry.value.length,
+                          onTap: () => _openFolder(entry.key),
+                        ),
                       ),
                     const SizedBox(height: 16),
                   ],
@@ -234,33 +315,57 @@ class _LibraryTabState extends State<LibraryTab> {
 class _FolderTile extends StatelessWidget {
   final String name;
   final int count;
+  final VoidCallback onTap;
 
-  const _FolderTile({required this.name, required this.count});
+  const _FolderTile({
+    required this.name,
+    required this.count,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.getCardBackground(context),
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
         borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-        border: Border.all(color: AppTheme.getCardBorder(context)),
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 42,
-            height: 42,
-            decoration: BoxDecoration(color: AppTheme.getAccentTint(context), borderRadius: BorderRadius.circular(10)),
-            alignment: Alignment.center,
-            child: Icon(Icons.folder_outlined, color: AppTheme.accentColor, size: 20),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppTheme.getCardBackground(context),
+            borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+            border: Border.all(color: AppTheme.getCardBorder(context)),
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Text(name, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 14)),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: AppTheme.getAccentTint(context),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: Icon(Icons.folder_outlined, color: AppTheme.accentColor, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  name,
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 14),
+                ),
+              ),
+              Text('$count', style: Theme.of(context).textTheme.bodySmall),
+              const SizedBox(width: 4),
+              Icon(
+                Icons.chevron_right_rounded,
+                size: 20,
+                color: AppTheme.getSecondaryText(context),
+              ),
+            ],
           ),
-          Text('$count', style: Theme.of(context).textTheme.bodySmall),
-        ],
+        ),
       ),
     );
   }

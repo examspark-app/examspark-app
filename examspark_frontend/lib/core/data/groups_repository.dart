@@ -1,3 +1,6 @@
+import 'dart:convert';
+
+import 'package:http/http.dart' as http;
 import 'package:examspark_frontend/core/models/group_model.dart';
 import 'package:examspark_frontend/core/models/suggested_teacher_model.dart';
 import 'package:examspark_frontend/core/models/teacher_achievement_model.dart';
@@ -6,10 +9,32 @@ import 'package:examspark_frontend/core/models/teacher_profile_model.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/payments/subscription_plans.dart';
 
+// #region agent log
+void _groupsAgentLog(String hypothesisId, String location, String message, Map<String, Object?> data) {
+  http
+      .post(
+        Uri.parse('http://127.0.0.1:7873/ingest/2b81c552-406d-48cd-a23e-89c0b6b9e62a'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Debug-Session-Id': '945329',
+        },
+        body: jsonEncode({
+          'sessionId': '945329',
+          'runId': 'post-fix',
+          'hypothesisId': hypothesisId,
+          'location': location,
+          'message': message,
+          'data': data,
+          'timestamp': DateTime.now().millisecondsSinceEpoch,
+        }),
+      )
+      .catchError((_) => http.Response('', 500));
+}
+// #endregion
+
 /// Result of [GroupsRepository.canJoinAnotherGroup] — founder-locked
 /// Jul 12, 2026 group-join limits (free=0, ₹199=1, ₹499=3, ₹999=6,
-/// teacher=unlimited). Client-side check only for now; real server-side
-/// enforcement is Phase 5.
+/// teacher=unlimited). Soft UI gate; Postgres trigger also enforces.
 class GroupJoinEligibility {
   final bool allowed;
   final int maxGroups;
@@ -24,6 +49,24 @@ class GroupJoinEligibility {
   });
 
   bool get isUnlimited => maxGroups < 0;
+}
+
+/// Thrown when join/leave against Supabase fails (no mock "success").
+class GroupMembershipException implements Exception {
+  final String message;
+  final bool isJoinLimit;
+
+  const GroupMembershipException(this.message, {this.isJoinLimit = false});
+
+  @override
+  String toString() => message;
+
+  static bool looksLikeJoinLimit(Object error) {
+    final text = error.toString().toLowerCase();
+    return text.contains('group join limit') ||
+        text.contains('join limit reached') ||
+        text.contains('max_groups');
+  }
 }
 
 /// Real Supabase-backed repository (Phase 4).
@@ -51,7 +94,17 @@ class GroupsRepository {
           .select()
           .order('created_at', ascending: false);
       final classes = List<Map<String, dynamic>>.from(classRows as List);
-      if (classes.isEmpty) return List.unmodifiable(_groups);
+
+      // Logged-in: NEVER show mock groups (fake ids break Join INSERT).
+      if (classes.isEmpty) {
+        // #region agent log
+        _groupsAgentLog('H', 'groups_repository.dart:fetchGroups', 'empty class_folders', {
+          'loggedIn': userId != null,
+        });
+        // #endregion
+        if (userId != null) return const [];
+        return List.unmodifiable(_groups);
+      }
 
       final classIds = classes.map((c) => c['id'] as String).toList();
       final teacherIds = classes.map((c) => c['teacher_id'] as String).toSet().toList();
@@ -76,8 +129,23 @@ class GroupsRepository {
         );
       }).toList();
 
+      // #region agent log
+      _groupsAgentLog('F', 'groups_repository.dart:fetchGroups', 'real groups ok', {
+        'count': groups.length,
+        'joinedCount': groups.where((g) => g.isJoined).length,
+        'sampleId': groups.isNotEmpty ? groups.first.id : '',
+      });
+      // #endregion
       return groups;
-    } catch (_) {
+    } catch (e) {
+      // #region agent log
+      _groupsAgentLog('F', 'groups_repository.dart:fetchGroups', 'fetchGroups failed', {
+        'error': e.toString(),
+        'loggedIn': SupabaseClient.instance.currentUser != null,
+      });
+      // #endregion
+      // Logged-in: empty list (not mock). Guest/demo may still see mock.
+      if (SupabaseClient.instance.currentUser != null) return const [];
       return List.unmodifiable(_groups);
     }
   }
@@ -113,9 +181,8 @@ class GroupsRepository {
 
   /// Checks the founder-locked group-join limit for the caller's current
   /// plan (free=0, ₹199=1, ₹499=3, ₹999=6, teacher=unlimited) before a
-  /// join goes through. Client-side only — fails OPEN (allows the join) if
-  /// the check itself errors, so a missing/undeployed RPC never blocks
-  /// joining; real server-side enforcement is Phase 5.
+  /// join goes through. Fail-closed on error (blocks join + lock sheet).
+  /// Server ALSO enforces via `fn_enforce_group_join_limit` trigger.
   Future<GroupJoinEligibility> canJoinAnotherGroup() async {
     final userId = SupabaseClient.instance.currentUser?.id;
     if (userId == null) {
@@ -130,11 +197,31 @@ class GroupsRepository {
         return GroupJoinEligibility(allowed: true, maxGroups: -1, currentGroups: 0, planName: plan.name);
       }
 
+      // Free / max 0 — never join (no count round-trip needed).
+      if (plan.maxGroups <= 0) {
+        return GroupJoinEligibility(
+          allowed: false,
+          maxGroups: plan.maxGroups,
+          currentGroups: 0,
+          planName: plan.name,
+        );
+      }
+
       final rows = await SupabaseClient.instance.client
           .from('class_memberships')
           .select('id')
           .eq('student_id', userId);
-      final currentGroups = List<Map<String, dynamic>>.from(rows as List).length;
+      final list = rows is List ? rows : <dynamic>[];
+      final currentGroups = list.length;
+
+      // #region agent log
+      _groupsAgentLog('G', 'groups_repository.dart:canJoinAnotherGroup', 'eligibility ok', {
+        'planId': planId,
+        'maxGroups': plan.maxGroups,
+        'currentGroups': currentGroups,
+        'allowed': currentGroups < plan.maxGroups,
+      });
+      // #endregion
 
       return GroupJoinEligibility(
         allowed: currentGroups < plan.maxGroups,
@@ -142,16 +229,42 @@ class GroupsRepository {
         currentGroups: currentGroups,
         planName: plan.name,
       );
-    } catch (_) {
-      return const GroupJoinEligibility(allowed: true, maxGroups: -1, currentGroups: 0);
+    } catch (e) {
+      // #region agent log
+      _groupsAgentLog('G', 'groups_repository.dart:canJoinAnotherGroup', 'eligibility failed', {
+        'error': e.toString(),
+      });
+      // #endregion
+      // Fail closed — never allow silent over-join when plan/RPC fails.
+      return const GroupJoinEligibility(
+        allowed: false,
+        maxGroups: 0,
+        currentGroups: 0,
+        planName: 'Unknown',
+      );
     }
   }
 
   /// Joins (`INSERT`) or leaves (`DELETE`) `class_memberships` for the
-  /// current student. Requires the student to be logged in.
+  /// current student. Logged-out only uses mock; logged-in never fakes success.
   Future<GroupModel> toggleMembership(GroupModel group) async {
     final userId = SupabaseClient.instance.currentUser?.id;
     if (userId == null) return _toggleMockMembership(group);
+
+    // Reject fake mock ids (e.g. group_1) — UUID required for class_memberships.
+    final uuidRe = RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
+    );
+    if (!uuidRe.hasMatch(group.id)) {
+      // #region agent log
+      _groupsAgentLog('H', 'groups_repository.dart:toggleMembership', 'reject non-uuid group id', {
+        'groupId': group.id,
+      });
+      // #endregion
+      throw const GroupMembershipException(
+        'No real groups yet. Run seed SQL for demo groups, then try again.',
+      );
+    }
 
     try {
       final client = SupabaseClient.instance.client;
@@ -167,9 +280,26 @@ class GroupsRepository {
           'student_id': userId,
         });
       }
+      // #region agent log
+      _groupsAgentLog('H', 'groups_repository.dart:toggleMembership', 'membership ok', {
+        'joined': !group.isJoined,
+        'groupIdSuffix': group.id.length > 8 ? group.id.substring(group.id.length - 8) : group.id,
+      });
+      // #endregion
       return group.copyWith(isJoined: !group.isJoined);
-    } catch (_) {
-      return _toggleMockMembership(group);
+    } catch (e) {
+      // #region agent log
+      _groupsAgentLog('H', 'groups_repository.dart:toggleMembership', 'membership failed', {
+        'error': e.toString(),
+        'groupId': group.id,
+        'wasJoined': group.isJoined,
+      });
+      // #endregion
+      if (e is GroupMembershipException) rethrow;
+      throw GroupMembershipException(
+        'Could not ${group.isJoined ? 'leave' : 'join'} group. Please try again.',
+        isJoinLimit: GroupMembershipException.looksLikeJoinLimit(e),
+      );
     }
   }
 
@@ -514,7 +644,8 @@ class GroupsRepository {
           isPinned: true,
         ),
       ],
-      isJoined: true,
+      // Never pretends joined — fallback mock must not look like a real membership.
+      isJoined: false,
     ),
     GroupModel(
       id: 'group_3',

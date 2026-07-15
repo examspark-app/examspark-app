@@ -33,6 +33,12 @@ async def _sse_from_events(events: AsyncIterator[dict]) -> AsyncIterator[str]:
         yield format_sse(event)
 
 
+def _http_detail_from_ai_error(exc: AskAiError | HomeAiError) -> dict:
+    if exc.detail is not None:
+        return exc.detail
+    return ai_error_payload(str(exc), exc.result_status)
+
+
 @router.post("/ask-ai", response_model=AskAiResponse)
 async def post_ask_ai(
     body: AskAiRequest,
@@ -50,7 +56,7 @@ async def post_ask_ai(
     except AskAiError as e:
         raise HTTPException(
             status_code=e.status_code,
-            detail=ai_error_payload(str(e), e.result_status),
+            detail=_http_detail_from_ai_error(e),
         ) from e
 
     return _to_response(result, body.mode)
@@ -73,7 +79,7 @@ async def post_home_ai(
     except HomeAiError as e:
         raise HTTPException(
             status_code=e.status_code,
-            detail=ai_error_payload(str(e), e.result_status),
+            detail=_http_detail_from_ai_error(e),
         ) from e
 
     return _to_response(result, body.mode)

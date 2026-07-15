@@ -57,6 +57,7 @@ class AppRouter {
             retrySourceType: args?['retrySourceType'] as String?,
             retryHighAccuracy: args?['retryHighAccuracy'] as bool? ?? false,
             retryDurationMinutes: args?['retryDurationMinutes'] as int?,
+            retryYoutubeUrl: args?['retryYoutubeUrl'] as String?,
           ),
           settings: settings,
         );

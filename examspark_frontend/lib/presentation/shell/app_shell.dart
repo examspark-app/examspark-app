@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:examspark_frontend/core/network/supabase_client.dart';
+import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/theme/responsive.dart';
 import 'package:examspark_frontend/presentation/screens/groups/groups_tab.dart';
@@ -42,6 +44,21 @@ class _AppShellState extends State<AppShell> {
     (icon: Icons.person_outline_rounded, selectedIcon: Icons.person_rounded, label: 'Profile'),
   ];
 
+  @override
+  void initState() {
+    super.initState();
+    final userId = SupabaseClient.instance.currentUser?.id;
+    if (userId != null) {
+      SessionLiveSync.instance.start(userId);
+    }
+  }
+
+  @override
+  void dispose() {
+    SessionLiveSync.instance.stop();
+    super.dispose();
+  }
+
   void _goToTab(int index) {
     setState(() => _selectedIndex = index);
   }
@@ -70,9 +87,15 @@ class _AppShellState extends State<AppShell> {
         onOpenWorkspace: _openStudyWorkspace,
         isActive: _selectedIndex == 1,
       ),
-      GroupsTab(onGoToTab: _goToTab),
+      GroupsTab(
+        onGoToTab: _goToTab,
+        isActive: _selectedIndex == 2,
+      ),
       const ProgressTab(),
-      ProfileTab(onGoToTab: _goToTab),
+      ProfileTab(
+        onGoToTab: _goToTab,
+        isActive: _selectedIndex == 4,
+      ),
     ];
   }
 

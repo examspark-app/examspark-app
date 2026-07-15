@@ -12,6 +12,7 @@ from app.services.plan_tier_service import (
     GatedFeature,
     _MINIMUM_PLAN,
     _rank,
+    feature_locked_payload,
     require_feature_unlocked,
 )
 from app.services.qwen_vision_service import (
@@ -58,16 +59,35 @@ def test_plan_rank_ordering():
 
 def test_minimum_plans_match_credit_economy():
     assert _MINIMUM_PLAN[GatedFeature.PDF_ANALYSIS] == "free"
-    assert _MINIMUM_PLAN[GatedFeature.DIAGRAM_ANALYSIS] == "plan_199"
+    assert _MINIMUM_PLAN[GatedFeature.ASK_AI] == "free"
+    assert _MINIMUM_PLAN[GatedFeature.DIAGRAM_ANALYSIS] == "free"
+    assert _MINIMUM_PLAN[GatedFeature.YOUTUBE_LINK] == "free"
+    assert _MINIMUM_PLAN[GatedFeature.FLASHCARDS] == "free"
+    assert _MINIMUM_PLAN[GatedFeature.QUIZ] == "free"
     assert _MINIMUM_PLAN[GatedFeature.RECORD_LECTURE] == "plan_499"
 
 
-def test_require_feature_unlocked_blocks_free_for_diagram():
+def test_require_feature_unlocked_allows_free_for_diagram():
+    with patch("app.services.plan_tier_service.get_user_plan_tier", return_value="free"):
+        tier = require_feature_unlocked("user-1", GatedFeature.DIAGRAM_ANALYSIS)
+        assert tier == "free"
+
+
+def test_require_feature_unlocked_blocks_free_for_record():
     with patch("app.services.plan_tier_service.get_user_plan_tier", return_value="free"):
         with pytest.raises(FeatureLockedError) as exc:
-            require_feature_unlocked("user-1", GatedFeature.DIAGRAM_ANALYSIS)
-        assert exc.value.required_plan == "plan_199"
-        assert exc.value.current_plan == "free"
+            require_feature_unlocked("user-1", GatedFeature.RECORD_LECTURE)
+        assert exc.value.required_plan == "plan_499"
+        payload = feature_locked_payload(exc.value)
+        assert payload["code"] == "FEATURE_LOCKED"
+        assert payload["feature"] == "record_lecture"
+        assert "499" in payload["message"]
+
+
+def test_require_feature_unlocked_allows_free_for_ask_ai():
+    with patch("app.services.plan_tier_service.get_user_plan_tier", return_value="free"):
+        tier = require_feature_unlocked("user-1", GatedFeature.ASK_AI)
+        assert tier == "free"
 
 
 def test_require_feature_unlocked_allows_free_for_pdf():
@@ -80,6 +100,29 @@ def test_require_feature_unlocked_allows_plan199_for_diagram():
     with patch("app.services.plan_tier_service.get_user_plan_tier", return_value="plan_199"):
         tier = require_feature_unlocked("user-1", GatedFeature.DIAGRAM_ANALYSIS)
         assert tier == "plan_199"
+
+
+def test_require_feature_unlocked_blocks_plan199_for_record():
+    with patch("app.services.plan_tier_service.get_user_plan_tier", return_value="plan_199"):
+        with pytest.raises(FeatureLockedError) as exc:
+            require_feature_unlocked("user-1", GatedFeature.RECORD_LECTURE)
+        assert exc.value.required_plan == "plan_499"
+
+
+def test_require_feature_unlocked_allows_plan499_for_record():
+    with patch("app.services.plan_tier_service.get_user_plan_tier", return_value="plan_499"):
+        tier = require_feature_unlocked("user-1", GatedFeature.RECORD_LECTURE)
+        assert tier == "plan_499"
+
+
+def test_require_feature_unlocked_blocks_free_for_record_not_diagram():
+    """Audio is the only plan lock; diagram must not require paid plan."""
+    with patch("app.services.plan_tier_service.get_user_plan_tier", return_value="free"):
+        require_feature_unlocked("user-1", GatedFeature.DIAGRAM_ANALYSIS)
+        require_feature_unlocked("user-1", GatedFeature.FLASHCARDS)
+        require_feature_unlocked("user-1", GatedFeature.QUIZ)
+        with pytest.raises(FeatureLockedError):
+            require_feature_unlocked("user-1", GatedFeature.RECORD_LECTURE)
 
 
 def _fake_openrouter_response(notes: dict, status_code: int = 200) -> MagicMock:
