@@ -1,16 +1,34 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show SystemSound, SystemSoundType;
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
+import 'package:examspark_frontend/core/services/lecture_service.dart';
 
 /// Screen 3: Processing Screen
 /// Full-screen distraction-free layout with real-time Supabase integration
 class ProcessingScreen extends StatefulWidget {
   final String lectureId;
 
+  /// Original upload bytes + args, forwarded from RecorderScreen so the
+  /// Retry button can actually resend the same request instead of just
+  /// resetting the progress bar. Null for lectures opened without them
+  /// (e.g. a stale/refreshed page) — Retry falls back to "go back" then.
+  final Uint8List? retryFileBytes;
+  final String? retryFilename;
+  final String? retrySourceType;
+  final bool retryHighAccuracy;
+  final int? retryDurationMinutes;
+
   const ProcessingScreen({
     super.key,
     required this.lectureId,
+    this.retryFileBytes,
+    this.retryFilename,
+    this.retrySourceType,
+    this.retryHighAccuracy = false,
+    this.retryDurationMinutes,
   });
 
   @override
@@ -26,6 +44,7 @@ class _ProcessingScreenState extends State<ProcessingScreen>
   ProcessingStage _currentStage = ProcessingStage.splitting;
   double _progressValue = 0.0;
   bool _hasError = false;
+  bool _isRetrying = false;
   String _errorMessage = '';
 
   final List<ProcessingStep> _steps = const [
@@ -110,9 +129,10 @@ class _ProcessingScreenState extends State<ProcessingScreen>
       
       final lecture = data.first;
       final status = lecture['status'] as String?;
+      final errorMessage = lecture['error_message'] as String?;
       
       if (mounted) {
-        _updateProgressBasedOnStatus(status);
+        _updateProgressBasedOnStatus(status, errorMessage);
       }
     }, onError: (error) {
       if (mounted) {
@@ -125,7 +145,7 @@ class _ProcessingScreenState extends State<ProcessingScreen>
     });
   }
 
-  void _updateProgressBasedOnStatus(String? status) {
+  void _updateProgressBasedOnStatus(String? status, [String? errorMessage]) {
     if (status == null) return;
 
     switch (status.toLowerCase()) {
@@ -171,7 +191,12 @@ class _ProcessingScreenState extends State<ProcessingScreen>
         SystemSound.play(SystemSoundType.alert);
         setState(() {
           _hasError = true;
-          _errorMessage = 'Processing failed — this can happen from a network problem or server error. Please retry.';
+          // Real backend/pipeline reason (set by lecture_service.py's
+          // _db_set_status, or by the Flutter catch block on a true network
+          // failure) — only fall back to a generic message if neither fired.
+          _errorMessage = (errorMessage != null && errorMessage.trim().isNotEmpty)
+              ? errorMessage.trim()
+              : 'Processing failed — this can happen from a network problem or server error. Please retry.';
         });
         break;
     }
@@ -225,14 +250,47 @@ class _ProcessingScreenState extends State<ProcessingScreen>
     // Show notification when complete (would use local notifications plugin)
   }
 
-  void _retryProcessing() {
+  /// Actually re-sends the original file to the backend (previously this
+  /// only reset the progress bar and never called the backend again, so
+  /// Retry did nothing). Falls back to going back a screen if this
+  /// ProcessingScreen was opened without the original bytes (e.g. a
+  /// deep-link/refresh with no in-memory file to resend).
+  Future<void> _retryProcessing() async {
+    if (widget.retryFileBytes == null) {
+      if (mounted) Navigator.pop(context);
+      return;
+    }
+
     setState(() {
+      _isRetrying = true;
       _hasError = false;
       _errorMessage = '';
       _currentStage = ProcessingStage.splitting;
       _progressValue = 0.0;
     });
-    // Restart the pipeline by calling the backend again
+
+    try {
+      await LectureService.instance.invokeProcessing(
+        lectureId: widget.lectureId,
+        fileBytes: widget.retryFileBytes!,
+        highAccuracy: widget.retryHighAccuracy,
+        sourceType: widget.retrySourceType ?? 'recording',
+        durationMinutes: widget.retryDurationMinutes,
+        filename: widget.retryFilename ?? 'audio.webm',
+      );
+      // Success path: the realtime listener above picks up 'transcribing' →
+      // ... → 'done' and auto-navigates; nothing else to do here.
+    } catch (e) {
+      await LectureService.instance.updateStatus(
+        widget.lectureId,
+        'error',
+        errorMessage: e.toString(),
+      );
+      // The realtime listener's 'error' case will set _hasError/_errorMessage
+      // from this same message — no need to duplicate that here.
+    } finally {
+      if (mounted) setState(() => _isRetrying = false);
+    }
   }
 
   @override
@@ -439,7 +497,7 @@ class _ProcessingScreenState extends State<ProcessingScreen>
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: _retryProcessing,
+                  onPressed: _isRetrying ? null : _retryProcessing,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.accentColor,
                     foregroundColor: Colors.white,
@@ -447,7 +505,16 @@ class _ProcessingScreenState extends State<ProcessingScreen>
                       borderRadius: BorderRadius.circular(AppTheme.borderRadius),
                     ),
                   ),
-                  child: const Text('Retry'),
+                  child: _isRetrying
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text('Retry'),
                 ),
               ),
               const SizedBox(height: 16),

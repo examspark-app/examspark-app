@@ -110,15 +110,32 @@ class GroupCard extends StatelessWidget {
             SizedBox(
               width: double.infinity,
               child: group.isJoined
-                  ? OutlinedButton(
-                      onPressed: isUpdating ? null : onJoinToggle,
-                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(36)),
-                      child: isUpdating ? _spinner() : const Text('Joined'),
+                  ? Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            onPressed: onTap,
+                            style: ElevatedButton.styleFrom(
+                              minimumSize: const Size.fromHeight(36),
+                            ),
+                            child: const Text('Open group'),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        TextButton(
+                          onPressed: isUpdating ? null : onJoinToggle,
+                          child: isUpdating ? _spinner() : const Text('Leave'),
+                        ),
+                      ],
                     )
                   : ElevatedButton(
                       onPressed: isUpdating ? null : onJoinToggle,
-                      style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(36)),
-                      child: isUpdating ? _spinner() : const Text('Join Group'),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(36),
+                      ),
+                      child: isUpdating
+                          ? _spinner()
+                          : const Text('Join Group'),
                     ),
             ),
           ],

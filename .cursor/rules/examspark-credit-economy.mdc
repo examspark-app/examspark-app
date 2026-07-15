@@ -35,15 +35,25 @@ Full spec: [`CREDIT_ECONOMY.md`](CREDIT_ECONOMY.md)
 | Translate | 8 |
 | Voice Read | 5 |
 
-## Plans (v2)
+## Plans (v2.1 — Jul 13, 2026)
 
 | Plan | Credits/mo | Unlocks |
 |------|------------|---------|
-| Free | 50 | Ask AI only |
-| ₹199 | 1,300 | + PDF, Diagram, study features |
+| Free | 75 | Ask AI + PDF Analysis |
+| ₹199 | 1,500 | + PDF, Diagram, study features |
 | ₹499 | 3,500 | + Audio Recording |
 | ₹999 | 8,000 | Full access |
-| Teacher ₹1999 | 20,000 | Bulk record + B2B tools |
+| Teacher ₹1999 | 16,000 | Bulk record + B2B tools |
+
+## Buy Extra Credits (a-la-carte, no teacher commission)
+
+| Pack | Credits | Price |
+|------|---------|-------|
+| pack_100 | 100 | ₹25 |
+| pack_500 | 500 | ₹110 |
+| pack_1000 | 1,000 | ₹200 |
+| pack_5000 | 5,000 | ₹850 |
+| pack_10000 | 10,000 | ₹1,500 |
 
 ## Dashboard UX
 

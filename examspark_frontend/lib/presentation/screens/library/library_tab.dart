@@ -11,8 +11,14 @@ import 'package:examspark_frontend/presentation/widgets/lecture_card.dart';
 /// fake placeholder lectures, so the founder always sees true progress.
 class LibraryTab extends StatefulWidget {
   final OpenWorkspace onOpenWorkspace;
+  /// When this tab becomes visible again (IndexedStack), reload history.
+  final bool isActive;
 
-  const LibraryTab({super.key, required this.onOpenWorkspace});
+  const LibraryTab({
+    super.key,
+    required this.onOpenWorkspace,
+    this.isActive = true,
+  });
 
   @override
   State<LibraryTab> createState() => _LibraryTabState();
@@ -20,6 +26,7 @@ class LibraryTab extends StatefulWidget {
 
 class _LibraryTabState extends State<LibraryTab> {
   bool _isLoading = true;
+  bool _isRefreshing = false;
   List<Map<String, dynamic>> _lectures = [];
   int _creditsBalance = 0;
   String _searchQuery = '';
@@ -30,7 +37,18 @@ class _LibraryTabState extends State<LibraryTab> {
     _load();
   }
 
-  Future<void> _load() async {
+  @override
+  void didUpdateWidget(covariant LibraryTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.isActive && !oldWidget.isActive) {
+      _load(silent: true);
+    }
+  }
+
+  Future<void> _load({bool silent = false}) async {
+    if (!silent && !_isLoading) {
+      setState(() => _isRefreshing = true);
+    }
     final user = SupabaseClient.instance.currentUser;
     try {
       final lectures = await LectureService.instance.getLecturesForUser();
@@ -44,9 +62,15 @@ class _LibraryTabState extends State<LibraryTab> {
         _lectures = lectures;
         _creditsBalance = credits;
         _isLoading = false;
+        _isRefreshing = false;
       });
     } catch (_) {
-      if (mounted) setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _isRefreshing = false;
+        });
+      }
     }
   }
 
@@ -80,11 +104,24 @@ class _LibraryTabState extends State<LibraryTab> {
       appBar: AppTopBar(
         title: 'Library',
         creditsBalance: _creditsBalance,
+        trailing: [
+          IconButton(
+            icon: _isRefreshing
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.refresh_rounded),
+            tooltip: 'Refresh history',
+            onPressed: _isRefreshing ? null : () => _load(),
+          ),
+        ],
       ),
       body: _isLoading
           ? const Center(child: CircularProgressIndicator())
           : RefreshIndicator(
-              onRefresh: _load,
+              onRefresh: () => _load(silent: true),
               child: ListView(
                 padding: const EdgeInsets.all(AppTheme.screenPadding),
                 children: [

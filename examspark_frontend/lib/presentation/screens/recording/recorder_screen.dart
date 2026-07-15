@@ -16,7 +16,13 @@ class RecorderScreen extends StatefulWidget {
   final String? subject;
   final String? topic;
 
-  const RecorderScreen({super.key, this.subject, this.topic});
+  /// Pre-selects the Record/Upload Audio/Upload Document tab on screen 2 —
+  /// set when opened from Home's attach sheet (e.g. "Image / Photo" should
+  /// land straight on Upload Document/Photo, not the default Record tab).
+  /// Matches [InputMethod].name ('record' / 'uploadAudio' / 'uploadDocument').
+  final String? initialInputMethod;
+
+  const RecorderScreen({super.key, this.subject, this.topic, this.initialInputMethod});
 
   @override
   State<RecorderScreen> createState() => _RecorderScreenState();
@@ -50,6 +56,12 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    if (widget.initialInputMethod != null) {
+      _selectedInputMethod = InputMethod.values.firstWhere(
+        (m) => m.name == widget.initialInputMethod,
+        orElse: () => InputMethod.record,
+      );
+    }
   }
 
   @override
@@ -316,7 +328,9 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () => setState(() => _currentScreen = 2),
+              onPressed: () {
+                setState(() => _currentScreen = 2);
+              },
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
                 backgroundColor: Colors.black87,
@@ -789,7 +803,11 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
     });
   }
 
-  Future<void> _startProcessingWithAudio(List<int> audioBytes) async {
+  Future<void> _startProcessingWithAudio(
+    List<int> audioBytes, {
+    String? filename,
+    String? apiSourceTypeOverride,
+  }) async {
     final title = widget.topic?.isNotEmpty == true
         ? widget.topic!
         : widget.subject ?? 'New Lecture';
@@ -802,6 +820,21 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
       InputMethod.uploadDocument => 'uploaded_document',
     };
 
+    // FastAPI source_type: recording / audio_upload / pdf_upload / image_upload
+    final apiSourceType = apiSourceTypeOverride ??
+        switch (_selectedInputMethod) {
+          InputMethod.record => 'recording',
+          InputMethod.uploadAudio => 'audio_upload',
+          InputMethod.uploadDocument => 'pdf_upload',
+        };
+
+    final resolvedFilename = filename ??
+        switch (apiSourceType) {
+          'image_upload' => 'image.jpg',
+          'pdf_upload' => 'document.pdf',
+          _ => 'audio.webm',
+        };
+
     final lectureId = await _lectureService.createLecture(
       title: title,
       subject: widget.subject,
@@ -812,24 +845,40 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
 
     if (!mounted) return;
 
+    final fileBytesForRetry = Uint8List.fromList(audioBytes);
+    final durationMinutesForRetry =
+        (_recordingService.elapsedSeconds / 60).ceil().clamp(1, 90);
+
+    // Pass the same bytes/args /processing needs so its Retry button can
+    // actually resend this request instead of just resetting the UI.
     Navigator.pushReplacementNamed(
       context,
       '/processing',
-      arguments: {'lectureId': lectureId},
+      arguments: {
+        'lectureId': lectureId,
+        'retryFileBytes': fileBytesForRetry,
+        'retryFilename': resolvedFilename,
+        'retrySourceType': apiSourceType,
+        'retryHighAccuracy': _useHighAccuracy,
+        'retryDurationMinutes': durationMinutesForRetry,
+      },
     );
 
     try {
       await _lectureService.invokeProcessing(
         lectureId: lectureId,
-        audioBytes: Uint8List.fromList(audioBytes),
+        fileBytes: fileBytesForRetry,
         highAccuracy: _useHighAccuracy,
+        sourceType: apiSourceType,
+        durationMinutes: durationMinutesForRetry,
+        filename: resolvedFilename,
       );
-    } catch (_) {
-      // Network problem (or edge function failure) after we've already
-      // navigated to /processing — mark the lecture 'error' so its
-      // realtime listener (ProcessingScreen) shows the retry UI instead of
-      // spinning forever.
-      await _lectureService.updateStatus(lectureId, 'error');
+    } catch (e) {
+      // Network problem (or backend failure) after we've already navigated
+      // to /processing — mark the lecture 'error' with the real reason so
+      // its realtime listener (ProcessingScreen) shows the retry UI with a
+      // useful message instead of a generic one or spinning forever.
+      await _lectureService.updateStatus(lectureId, 'error', errorMessage: e.toString());
     }
   }
 
@@ -857,12 +906,20 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
     if (_isProcessing) return;
     setState(() => _isProcessing = true);
     try {
-      final bytes = await _recordingService.pickDocumentOrImageFile();
-      if (bytes == null) {
+      final picked = await _recordingService.pickDocumentOrImageFile();
+      if (picked == null) {
         setState(() => _isProcessing = false);
         return;
       }
-      await _startProcessingWithAudio(bytes);
+      final lower = picked.name.toLowerCase();
+      final isImage = lower.endsWith('.jpg') ||
+          lower.endsWith('.jpeg') ||
+          lower.endsWith('.png');
+      await _startProcessingWithAudio(
+        picked.bytes,
+        filename: picked.name,
+        apiSourceTypeOverride: isImage ? 'image_upload' : 'pdf_upload',
+      );
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

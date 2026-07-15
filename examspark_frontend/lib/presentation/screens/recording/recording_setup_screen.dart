@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/constants/subjects.dart';
+import 'package:examspark_frontend/core/router/app_navigation.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/recording/widgets/audio_level_indicator.dart';
 import 'package:examspark_frontend/presentation/screens/recording/widgets/camera_preview_placeholder.dart';
 
 class RecordingSetupScreen extends StatefulWidget {
-  const RecordingSetupScreen({super.key});
+  /// Forwarded to [RecorderScreen] so it can pre-select the matching
+  /// upload tab (e.g. Home's "Image / Photo" attach option should land
+  /// directly on the Upload Document/Photo tab, not the default Record tab).
+  final String? initialInputMethod;
+
+  const RecordingSetupScreen({super.key, this.initialInputMethod});
 
   @override
   State<RecordingSetupScreen> createState() => _RecordingSetupScreenState();
@@ -18,6 +24,15 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   String? _selectedSubject;
 
+  /// This screen used to always look like "starting a recording" (camera +
+  /// mic preview, "Start Recording" button) even for a plain PDF/photo/audio
+  /// upload — confusing since Home's "Upload" attach option routed here
+  /// first. Only show the recording-specific preview widgets when the user
+  /// actually picked Record.
+  bool get _isUploadFlow =>
+      widget.initialInputMethod == 'uploadAudio' ||
+      widget.initialInputMethod == 'uploadDocument';
+
   @override
   void dispose() {
     _topicController.dispose();
@@ -27,7 +42,7 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Recording Setup')),
+      appBar: AppBar(title: Text(_isUploadFlow ? 'Upload Details' : 'Recording Setup')),
       body: SafeArea(
         child: Column(
           children: [
@@ -40,19 +55,23 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Prepare your lecture',
+                        _isUploadFlow ? 'Add lecture details' : 'Prepare your lecture',
                         style: Theme.of(context).textTheme.displayLarge,
                       ),
                       const SizedBox(height: 4),
                       Text(
-                        'Set up your camera and enter lecture details before you start.',
+                        _isUploadFlow
+                            ? 'Tell us what this is about, then choose your file.'
+                            : 'Set up your camera and enter lecture details before you start.',
                         style: Theme.of(context).textTheme.bodySmall,
                       ),
                       const SizedBox(height: 20),
-                      const CameraPreviewPlaceholder(),
-                      const SizedBox(height: 12),
-                      const AudioLevelIndicator(),
-                      const SizedBox(height: 24),
+                      if (!_isUploadFlow) ...[
+                        const CameraPreviewPlaceholder(),
+                        const SizedBox(height: 12),
+                        const AudioLevelIndicator(),
+                        const SizedBox(height: 24),
+                      ],
                       Text('Subject', style: Theme.of(context).textTheme.bodyLarge),
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
@@ -86,8 +105,11 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
                 height: 52,
                 child: ElevatedButton.icon(
                   onPressed: _handleStartRecording,
-                  icon: const Icon(Icons.fiber_manual_record, size: 20),
-                  label: const Text('Start Recording'),
+                  icon: Icon(
+                    _isUploadFlow ? Icons.arrow_forward : Icons.fiber_manual_record,
+                    size: 20,
+                  ),
+                  label: Text(_isUploadFlow ? 'Continue' : 'Start Recording'),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppTheme.accentColor,
                     foregroundColor: Colors.white,
@@ -131,15 +153,27 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
   }
 
   void _handleStartRecording() {
-    if (!_formKey.currentState!.validate()) return;
+    if (!_formKey.currentState!.validate()) {
+      return;
+    }
 
-    Navigator.pushNamed(
-      context,
-      '/recorder',
-      arguments: {
-        'subject': _selectedSubject,
-        'topic': _topicController.text.trim(),
-      },
-    );
+    try {
+      // Prefer root navigator — AppShell context can confuse named routes.
+      final nav = AppNavigation.key.currentState ?? Navigator.of(context, rootNavigator: true);
+      nav.pushNamed(
+        '/recorder',
+        arguments: {
+          'subject': _selectedSubject,
+          'topic': _topicController.text.trim(),
+          'initialInputMethod': widget.initialInputMethod,
+        },
+      );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not open recorder: $e'), backgroundColor: Colors.red[700]),
+        );
+      }
+    }
   }
 }

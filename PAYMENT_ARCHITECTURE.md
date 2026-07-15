@@ -42,15 +42,15 @@ Store Transaction     payments + payment_transactions
 
 | Plan | ID | Monthly credits | INR |
 |------|-----|-----------------|-----|
-| Free | `free` | 50 | 0 |
-| ₹199 | `plan_199` | 1,300 | 199 |
+| Free | `free` | 75 | 0 |
+| ₹199 | `plan_199` | 1,500 | 199 |
 | ₹499 | `plan_499` | 3,500 | 499 |
 | ₹999 | `plan_999` | 8,000 | 999 |
-| Teacher | `teacher` | 20,000 | 1999 |
+| Teacher | `teacher` | 16,000 | 1999 |
 
 Optional re-entry: `plan_299` (same unlock tier as `plan_199` if reintroduced).
 
-**Future:** Credit packs in `credit_packs` table + `SubscriptionPlans.creditPacks`.
+**Buy Extra Credits (a-la-carte, Jul 13, 2026):** 5 packs live in `credit_packs` table + `SubscriptionPlans.creditPacks` — 100/₹25, 500/₹110, 1,000/₹200, 5,000/₹850, 10,000/₹1,500. No teacher commission on these. Live checkout still Phase 5 (Razorpay webhooks).
 
 ---
 

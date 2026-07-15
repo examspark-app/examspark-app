@@ -58,12 +58,17 @@ class _GroupsListScreenState extends State<GroupsListScreen> {
       }
     }
 
+    final wasJoined = group.isJoined;
     final updated = await GroupsRepository.instance.toggleMembership(group);
     if (!mounted) return;
     setState(() {
       _groups = _groups.map((g) => g.id == updated.id ? updated : g).toList();
       _updatingGroupId = null;
     });
+    if (!wasJoined && updated.isJoined) {
+      _openGroupInfo(updated);
+      return;
+    }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(updated.isJoined ? 'Joined "${updated.name}"' : 'Left "${updated.name}"'),

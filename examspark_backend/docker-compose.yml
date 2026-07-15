@@ -1,0 +1,18 @@
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - PORT=8000
+    volumes:
+      # Live-reload for local dev — remove this volume mount for the
+      # production Railway build (Railway just uses the Dockerfile).
+      - .:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+# Redis (queue/cache, TECH_STACK.md target) and any AI worker containers
+# get added here starting Session 2/4 once they're actually used — kept
+# out for now so `docker compose up` has nothing idle to fail on.

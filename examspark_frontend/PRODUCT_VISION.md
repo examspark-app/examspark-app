@@ -130,7 +130,7 @@ Partial save command: `save tech`
 
 **Final system saved** — [`CREDIT_ECONOMY.md`](../CREDIT_ECONOMY.md)
 
-**v2 saved** — session-based costs; internal 1 Credit ≈ ₹0.15 (backend only). Recording: 40/80/120 by duration bucket. Plans: Free → ₹199 → ₹499 → ₹999 → Teacher (1,300 / 3,500 / 8,000 / 20,000 credits). Users see credits only — never per-action ₹.
+**v2.1 saved (Jul 13, 2026)** — session-based costs; internal 1 Credit ≈ ₹0.15 (backend only). Recording: 40/80/120 by duration bucket. Plans: Free → ₹199 → ₹499 → ₹999 → Teacher (75 / 1,500 / 3,500 / 8,000 / 16,000 credits). Plus Buy Extra Credits a-la-carte top-ups (100/500/1,000/5,000/10,000). Users see credits only — never per-action ₹.
 
 Partial save command: `save credits` / `save credit-economy`
 

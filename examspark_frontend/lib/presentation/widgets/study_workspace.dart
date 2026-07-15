@@ -3,6 +3,7 @@ import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/widgets/share_to_group_sheet.dart';
+import 'package:examspark_frontend/presentation/widgets/workspace_ask_ai_pane.dart';
 
 /// ExamSpark's core differentiator widget.
 ///
@@ -14,11 +15,9 @@ import 'package:examspark_frontend/presentation/widgets/share_to_group_sheet.dar
 /// Canonical tabs: Notes · Summary · Transcript · Flashcards · Quiz ·
 /// Revision · Ask AI.
 ///
-/// PLACEHOLDER DATA ONLY (Phase 2, UI architecture pass). Real content
-/// wiring (RAG, generated extras, transcript fetch) is Phase 4/5 work —
-/// see TECH_STACK.md RAG pipeline order. This does not touch or replace
-/// `NotesResultScreen`'s live Supabase wiring; that screen keeps working
-/// exactly as before via the existing `/notes_result` route.
+/// Notes / Summary load real content via [LectureService.fetchLectureNotes]
+/// (same R2 path as NotesResultScreen). Flashcards / Quiz / Revision stay
+/// honest placeholders until Generate More is on FastAPI.
 class StudyWorkspace extends StatefulWidget {
   final String lectureId;
   final String title;
@@ -61,11 +60,56 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
   // load; fails closed (button stays hidden) if either fetch fails.
   bool _canShareToGroup = false;
 
+  bool _notesLoading = true;
+  bool _notesError = false;
+  String? _notesErrorMessage;
+  String _shortSummary = '';
+  String _cleanNotes = '';
+  List<dynamic> _keyPoints = [];
+  List<dynamic> _importantTerms = [];
+
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: StudyWorkspace._tabs.length, vsync: this);
     _loadShareEligibility();
+    _loadNotes();
+  }
+
+  @override
+  void didUpdateWidget(covariant StudyWorkspace oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.lectureId != widget.lectureId) {
+      _canShareToGroup = false;
+      _loadShareEligibility();
+      _loadNotes();
+    }
+  }
+
+  Future<void> _loadNotes() async {
+    setState(() {
+      _notesLoading = true;
+      _notesError = false;
+      _notesErrorMessage = null;
+    });
+    try {
+      final data = await LectureService.instance.fetchLectureNotes(widget.lectureId);
+      if (!mounted) return;
+      setState(() {
+        _shortSummary = (data['short_summary'] as String?)?.trim() ?? '';
+        _cleanNotes = (data['clean_notes'] as String?)?.trim() ?? '';
+        _keyPoints = (data['key_points'] as List?) ?? [];
+        _importantTerms = (data['important_terms'] as List?) ?? [];
+        _notesLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _notesLoading = false;
+        _notesError = true;
+        _notesErrorMessage = e.toString();
+      });
+    }
   }
 
   Future<void> _loadShareEligibility() async {
@@ -221,52 +265,159 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
     );
   }
 
+  Widget _notesLoadingOrError() {
+    if (_notesLoading) {
+      return const Center(child: Padding(
+        padding: EdgeInsets.all(32),
+        child: CircularProgressIndicator(),
+      ));
+    }
+    if (_notesError) {
+      return _scrollableTab([
+        _placeholderCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Could not load notes for this lecture.',
+                style: Theme.of(context).textTheme.bodyMedium,
+              ),
+              if (_notesErrorMessage != null) ...[
+                const SizedBox(height: 8),
+                Text(
+                  _notesErrorMessage!,
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+              const SizedBox(height: 12),
+              OutlinedButton(
+                onPressed: _loadNotes,
+                child: const Text('Retry'),
+              ),
+            ],
+          ),
+        ),
+      ]);
+    }
+    return const SizedBox.shrink();
+  }
+
+  Widget _emptyLine(String message) {
+    return Text(
+      message,
+      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+            color: AppTheme.getSecondaryText(context),
+            height: 1.5,
+          ),
+    );
+  }
+
   Widget _notesTab(BuildContext context) {
-    const points = [
-      'Newton\'s first law: an object stays at rest or in uniform motion unless acted on by a net force.',
-      'Force = mass × acceleration (F = ma) — the second law.',
-      'Every action has an equal and opposite reaction — the third law.',
-    ];
-    return _scrollableTab([
+    if (_notesLoading || _notesError) return _notesLoadingOrError();
+
+    final children = <Widget>[
       _sectionLabel('CLEAN NOTES'),
       const SizedBox(height: 10),
       _placeholderCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final p in points)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Icon(Icons.circle, size: 6, color: AppTheme.accentColor),
-                    const SizedBox(width: 10),
-                    Expanded(child: Text(p, style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5))),
-                  ],
-                ),
-              ),
-          ],
-        ),
+        child: _cleanNotes.isNotEmpty
+            ? Text(
+                _cleanNotes,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
+              )
+            : _emptyLine('No clean notes for this lecture yet.'),
       ),
-      const SizedBox(height: 16),
-      _placeholderNote(context, 'Real notes are generated automatically once this lecture finishes processing.'),
-    ]);
+    ];
+
+    if (_keyPoints.isNotEmpty) {
+      children.addAll([
+        const SizedBox(height: 20),
+        _sectionLabel('KEY POINTS'),
+        const SizedBox(height: 10),
+        _placeholderCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final p in _keyPoints)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 10),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(Icons.circle, size: 6, color: AppTheme.accentColor),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          p.toString(),
+                          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ]);
+    }
+
+    if (_importantTerms.isNotEmpty) {
+      children.addAll([
+        const SizedBox(height: 20),
+        _sectionLabel('IMPORTANT TERMS'),
+        const SizedBox(height: 10),
+        _placeholderCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              for (final raw in _importantTerms)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 12),
+                  child: Builder(
+                    builder: (context) {
+                      if (raw is Map) {
+                        final term = raw['term']?.toString() ?? '';
+                        final def = raw['definition']?.toString() ?? '';
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              term,
+                              style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 14),
+                            ),
+                            if (def.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(def, style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.4)),
+                            ],
+                          ],
+                        );
+                      }
+                      return Text(raw.toString(), style: Theme.of(context).textTheme.bodyMedium);
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ]);
+    }
+
+    return _scrollableTab(children);
   }
 
   Widget _summaryTab(BuildContext context) {
+    if (_notesLoading || _notesError) return _notesLoadingOrError();
+
     return _scrollableTab([
       _sectionLabel('SHORT SUMMARY'),
       const SizedBox(height: 10),
       _placeholderCard(
-        child: Text(
-          'This lecture covers the fundamentals of classical mechanics — Newton\'s three laws of '
-          'motion, with worked examples on force, mass and acceleration.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
-        ),
+        child: _shortSummary.isNotEmpty
+            ? Text(
+                _shortSummary,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
+              )
+            : _emptyLine('No summary for this lecture yet.'),
       ),
-      const SizedBox(height: 16),
-      _placeholderNote(context, 'Sample summary shown for preview — actual content connects in Phase 4/5.'),
     ]);
   }
 
@@ -275,40 +426,26 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
       _sectionLabel('CLEAN TRANSCRIPT'),
       const SizedBox(height: 10),
       _placeholderCard(
-        child: Text(
-          '"...so today we\'re going to talk about Newton\'s laws of motion. The first law tells us '
-          'that an object at rest stays at rest, unless a force acts on it..."',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6, fontStyle: FontStyle.italic),
+        child: _emptyLine(
+          'Transcript is not loaded in this panel yet — use Notes / Summary '
+          'from this lecture’s AI output (after processing finishes).',
         ),
       ),
-      const SizedBox(height: 16),
-      _placeholderNote(context, 'Raw audio is deleted after processing — only this clean transcript is kept.'),
     ]);
   }
 
   Widget _flashcardsTab(BuildContext context) {
-    final sample = [
-      ('What is Newton\'s First Law?', 'An object remains at rest or in uniform motion unless acted upon by a net force.'),
-      ('What is the formula for force?', 'F = m × a'),
-    ];
     return _scrollableTab([
-      _sectionLabel('FLASHCARDS PREVIEW'),
+      _sectionLabel('FLASHCARDS'),
       const SizedBox(height: 10),
-      for (final (q, a) in sample)
-        Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: _placeholderCard(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(q, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 14)),
-                const Divider(height: 20),
-                Text(a, style: Theme.of(context).textTheme.bodySmall),
-              ],
-            ),
-          ),
+      _placeholderCard(
+        child: _emptyLine(
+          'Flashcards are not generated here yet. Open this lecture’s notes '
+          'result screen and use Generate More → Flashcards when that feature '
+          'is wired to FastAPI.',
         ),
-      const SizedBox(height: 6),
+      ),
+      const SizedBox(height: 12),
       OutlinedButton.icon(
         onPressed: () => _showComingSoon(context, 'Flashcard generation'),
         icon: const Icon(Icons.style_outlined, size: 18),
@@ -319,26 +456,12 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
 
   Widget _quizTab(BuildContext context) {
     return _scrollableTab([
-      _sectionLabel('QUIZ PREVIEW'),
+      _sectionLabel('QUIZ'),
       const SizedBox(height: 10),
       _placeholderCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Q1. What does Newton\'s 2nd Law state?', style: Theme.of(context).textTheme.bodyMedium),
-            const SizedBox(height: 10),
-            for (final opt in ['F = ma', 'E = mc²', 'V = IR', 'P = mv'])
-              Padding(
-                padding: const EdgeInsets.only(bottom: 6),
-                child: Row(
-                  children: [
-                    Icon(Icons.radio_button_unchecked, size: 16, color: AppTheme.getSecondaryText(context)),
-                    const SizedBox(width: 8),
-                    Text(opt, style: Theme.of(context).textTheme.bodySmall),
-                  ],
-                ),
-              ),
-          ],
+        child: _emptyLine(
+          'Quiz / MCQ is not generated here yet. Use Generate More → MCQ on the '
+          'notes result screen when that feature is wired to FastAPI.',
         ),
       ),
       const SizedBox(height: 16),
@@ -351,83 +474,21 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
   }
 
   Widget _revisionTab(BuildContext context) {
-    const points = [
-      'Revise all three laws of motion before the test.',
-      'Practice at least 5 numerical problems on F = ma.',
-      'Remember: forces always act in pairs (3rd law).',
-    ];
     return _scrollableTab([
       _sectionLabel('REVISION SHEET'),
       const SizedBox(height: 10),
       _placeholderCard(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            for (final p in points)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 8),
-                child: Row(
-                  children: [
-                    Icon(Icons.check_circle_outline, size: 16, color: AppTheme.accentColor),
-                    const SizedBox(width: 8),
-                    Expanded(child: Text(p, style: Theme.of(context).textTheme.bodyMedium)),
-                  ],
-                ),
-              ),
-          ],
+        child: _emptyLine(
+          'Revision notes are not generated here yet. Use Generate More → '
+          'Revision on the notes result screen when that feature is wired to FastAPI. '
+          'For a quick revision now, open Ask AI and ask for a revision summary.',
         ),
       ),
     ]);
   }
 
   Widget _askAiTab(BuildContext context) {
-    return Column(
-      children: [
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              _placeholderNote(
-                context,
-                'Ask AI answers using this lecture\'s Notes → Transcript → Teacher Shared content, '
-                'in that order (RAG priority). Connects in Phase 4/5.',
-              ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.all(12),
-          decoration: BoxDecoration(
-            border: Border(top: BorderSide(color: AppTheme.getCardBorder(context))),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  enabled: false,
-                  decoration: InputDecoration(
-                    hintText: 'Ask about this lecture… (5 credits)',
-                    filled: true,
-                    fillColor: AppTheme.getCardBackground(context),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(20),
-                      borderSide: BorderSide(color: AppTheme.getCardBorder(context)),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              IconButton(
-                icon: const Icon(Icons.send),
-                onPressed: () => _showComingSoon(context, 'Ask AI'),
-                style: IconButton.styleFrom(backgroundColor: AppTheme.accentColor, foregroundColor: Colors.white),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
+    return WorkspaceAskAiPane(lectureId: widget.lectureId);
   }
 
   Widget _sectionLabel(String text) {
@@ -439,22 +500,6 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
         letterSpacing: 1,
         color: AppTheme.getSecondaryText(context),
       ),
-    );
-  }
-
-  Widget _placeholderNote(BuildContext context, String text) {
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Icon(Icons.info_outline, size: 14, color: AppTheme.getSecondaryText(context)),
-        const SizedBox(width: 6),
-        Expanded(
-          child: Text(
-            text,
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontStyle: FontStyle.italic),
-          ),
-        ),
-      ],
     );
   }
 

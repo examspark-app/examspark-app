@@ -1,14 +1,13 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from supabase import create_client, Client
-import os
 
-from app.routers import payments, admin_payments
+from app.routers import payments, admin_payments, lectures, ask_ai
+from app.services.supabase_admin import get_supabase_admin
 
 load_dotenv()
 
-app = FastAPI(title="ExamSpark Backend", version="1.0.0")
+app = FastAPI(title="ExamSpark Backend", version="1.3.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,26 +19,27 @@ app.add_middleware(
 
 app.include_router(payments.router)
 app.include_router(admin_payments.router)
-
-supabase_url: str = os.getenv("SUPABASE_URL")
-supabase_key: str = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_KEY")
-supabase: Client = create_client(supabase_url, supabase_key)
+app.include_router(lectures.router)
+app.include_router(ask_ai.router)
 
 
 @app.get("/")
 async def health_check():
+    db_status = "Connected"
+    try:
+        get_supabase_admin()
+    except RuntimeError:
+        db_status = "Not configured"
     return {
         "status": "ExamSpark Backend Active",
-        "database": "Connected",
+        "version": app.version,
+        "database": db_status,
         "payments": "architecture_ready",
-    }
-
-
-@app.post("/api/v1/ask-ai")
-async def ask_ai():
-    return {
-        "message": "AI endpoint placeholder - implementation pending",
-        "status": "pending",
+        "lectures": "live_pipeline_audio_vision",
+        "ask_ai": "rag_notes_transcript",
+        "home_ai": "education_chat",
+        "ai_stream": "home_ai_stream_ask_ai_stream",
+        "r2_layout": "users_library_v1",
     }
 
 

@@ -88,9 +88,8 @@ class RecordingService {
     return null;
   }
 
-  /// For the recorder's "Upload Document/Photo" tab — PDFs and images only,
-  /// never audio (previously this mistakenly reused [pickAudioFile]).
-  Future<Uint8List?> pickDocumentOrImageFile() async {
+  /// Picked file bytes + original name (needed so FastAPI can route PDF vs image).
+  Future<({Uint8List bytes, String name})?> pickDocumentOrImageFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
@@ -98,11 +97,13 @@ class RecordingService {
     );
     if (result == null || result.files.isEmpty) return null;
     final file = result.files.first;
-    if (file.bytes != null) return file.bytes;
-    if (file.path != null && !kIsWeb) {
-      return File(file.path!).readAsBytes();
+    Uint8List? bytes = file.bytes;
+    if (bytes == null && file.path != null && !kIsWeb) {
+      bytes = await File(file.path!).readAsBytes();
     }
-    return null;
+    if (bytes == null) return null;
+    final name = file.name.isNotEmpty ? file.name : 'document.pdf';
+    return (bytes: bytes, name: name);
   }
 
   Future<String> _tempPath() async {

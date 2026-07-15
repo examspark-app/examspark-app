@@ -18,18 +18,42 @@ Internal (**backend only**): **1 Credit ≈ ₹0.15 charged-value**
 | Plan | Price | Credits | Effective ₹/Credit |
 |------|-------|---------|-------------------|
 | Free | ₹0 | 75 / **month** | — |
-| ₹199 | ₹199 | 1,300 | ₹0.153 |
+| ₹199 | ₹199 | 1,500 | ₹0.133 |
 | ₹499 | ₹499 | 3,500 | ₹0.143 |
 | ₹999 | ₹999 | 8,000 | ₹0.124 |
-| Teacher ₹1,999 | ₹1,999 | 20,000 | ₹0.0999 |
+| Teacher ₹1,999 | ₹1,999 | 16,000 | ₹0.125 |
 
 Plan IDs: `free` (gating only) · `plan_199` · `plan_499` · `plan_999` · `teacher`
+
+**Jul 13, 2026 update:** `plan_199` 1,300 → 1,500 credits (Ask AI headroom — see "Fee-Corrected Margin Validation" below) · `teacher` 20,000 → 16,000 (60hr/month max-usage risk-ceiling validation, not a margin change).
 
 Bigger plans = lower effective per-credit rate (buy more, save more).
 
 **Free credits — founder-locked Jul 12, 2026: 50 → 75/month, monthly reset (not daily).** Real-cost check: even a free user who spends all 75 credits every month (mix of Ask AI + PDF Analysis) costs only **~₹0.35–0.45/user/month** in real AI cost — negligible at any scale. A **daily** reset was considered and rejected: 75 credits/day would allow up to ~2,250/month worth of usage per highly-active free user (~30x higher worst-case cost, ~₹10–13/user/month) with zero revenue — a monthly allowance keeps free-tier cost predictable at scale and preserves upgrade pressure for users who want daily/unlimited usage.
 
-**Teacher credits validation (Jul 12, 2026) — 20,000/month kept unchanged.** Real-cost check: even a heavy teacher (~20 hours of lecture recording/month + Flashcards/Quiz/Revision extras on all of it) only spends ~3,000–4,000 of their 20,000 credits (~₹90–150 real AI cost against ₹1,999 charged). The ~5x headroom is intentional — "never run out of credits mid-month in front of your students" is part of what a B2B teacher customer is paying for, and it costs the platform very little to offer since real usage rarely approaches the ceiling.
+**Teacher credits ceiling resized Jul 13, 2026 — 20,000 → 16,000/month.** Re-validated against a **60 hours/month maximum-usage** assumption (not the typical ~20hr/month case): 60hrs of recording (mostly 60–90min sessions, ≈48 sessions × 120 credits = 5,760 credits) + **every single lecture** also getting Flashcards+Quiz+Revision+Formula+MindMap (~135 credits × 48 = 6,480 credits) + heavy Ask AI (200 Normal + 50 Deep ≈ 1,600 credits) tops out at **~13,840 credits even in this extreme case**. Adding a 15–20% safety buffer on top gives **~16,000** — still comfortably covers the extreme case with room to spare, while tightening the platform's worst-case exposure per teacher by ~4,000 credits (~₹600 charged-value). This is a **risk/abuse-ceiling** adjustment, not a margin lever — real teacher AI cost even at the 60hr extreme is only ~₹250–300/month against ₹1,999 charged, tiny either way.
+
+---
+
+## Buy Extra Credits (a-la-carte top-up — founder-locked Jul 13, 2026)
+
+For users who don't want to upgrade their subscription plan but need more credits this month. **No teacher commission applies** — commission is only on recurring subscription price, not one-time top-ups.
+
+| Pack | Credits | Price | ₹/Credit |
+|------|---------|-------|----------|
+| `pack_100` | 100 | ₹25 | ₹0.25 |
+| `pack_500` | 500 | ₹110 | ₹0.22 |
+| `pack_1000` | 1,000 | ₹200 | ₹0.20 |
+| `pack_5000` | 5,000 | ₹850 | ₹0.17 |
+| `pack_10000` | 10,000 | ₹1,500 | ₹0.15 |
+
+**Pricing rule:** Per-credit rate is always **≥** the cheapest subscription plan's rate (`plan_199` = ₹0.133/credit) — top-ups never undercut the incentive to subscribe.
+
+**Margin (worst-case Google Play 15% fee):**
+- `pack_100` (₹25): −₹3.75 fee, −₹1.50 real AI cost, −₹0.50 hosting → **EBITDA ₹19.25 (~77%)**
+- `pack_10000` (₹1,500): −₹225 fee, −₹150 real AI cost, −₹5 hosting → **EBITDA ₹1,120 (~75%)**
+
+**Status:** Pricing/catalog live in `subscription_plans.dart` (`creditPacks`) and `credit_packs` table. Live checkout is Phase 5 Session 6 (Razorpay webhooks) work.
 
 ---
 
@@ -100,7 +124,7 @@ If an action doesn't call Whisper/Qwen/Tavily, it doesn't cost credits — full 
 
 The buffer between real AI cost and charged credits covers Razorpay's ~2% fee, Redis/Railway/R2 hosting, and the occasional non-turbo/Qwen3-VL-Plus escalation — pricing stays as-is for now.
 
-### Margin after 30% Teacher Commission (per plan, per month)
+### Margin after 30% Teacher Commission (per plan, per month) — superseded below
 
 | Plan | Price | Teacher Commission (30%) | Typical AI Cost/mo | Platform Net |
 |------|-------|---------------------------|---------------------|---------------|
@@ -108,7 +132,22 @@ The buffer between real AI cost and charged credits covers Razorpay's ~2% fee, R
 | ₹499 | ₹499 | ₹149.70 | ~₹30–70 | ~₹280–320 (~56–64%) |
 | ₹999 | ₹999 | ₹299.70 | ~₹60–150 | ~₹550–640 (~55–64%) |
 
-Even after paying teachers 30%, the platform keeps ~55–65% net margin at every tier, because per-feature AI cost is only 4–30% of charged value (see table above). Safe to run.
+Even after paying teachers 30%, the platform keeps ~55–65% net margin at every tier, because per-feature AI cost is only 4–30% of charged value (see table above). **Caveat found Jul 13, 2026: this table never subtracted the payment gateway / Google Play cut — see the corrected version below.**
+
+### Fee-Corrected Margin Validation (founder-locked Jul 13, 2026 — worst-case assumption)
+
+Adds the missing **payment gateway fee** line — assumes **worst case: every payment goes through Android/Google Play Billing at 15%** (vs. Web/Razorpay's ~2%). Commission stays at 30% (unchanged, per founder decision — the credit/ceiling adjustment this round is about the teacher's own monthly allocation, not the commission rate).
+
+| Plan | Price | Google Play Fee (15%, worst case) | Teacher Commission (30%) | Real AI Cost | Hosting | Platform EBITDA |
+|------|-------|-------------------------------------|---------------------------|---------------|---------|-------------------|
+| ₹199 | ₹199 | −₹29.85 | −₹59.70 | −₹7 to −₹10 (no audio feature on this tier) | −₹3 | **~₹99–102 (~50–51%)** |
+| ₹499 | ₹499 | −₹74.85 | −₹149.70 | −₹30 to −₹50 | −₹4 | **~₹220–240 (~44–48%)** |
+| ₹999 | ₹999 | −₹149.85 | −₹299.70 | −₹60 to −₹105 | −₹5 | **~₹440–485 (~44–48%)** |
+
+**Findings:**
+- **₹199** lands almost exactly at the 50% EBITDA target even in the worst case — it has no audio/recording feature, so real AI cost stays cheap. This is what freed the room to bump its credits 1,300 → 1,500 (see Buy Extra Credits / Plans table above).
+- **₹499 / ₹999** land at ~44–48% EBITDA in the worst case, below 50% — driven by the more expensive recording feature plus the Google Play cut. **This is a flagged watch-item, not yet acted on** — founder decision (Jul 13, 2026) was to leave the 30% commission unchanged this round. If a **blended/actual** fee split is used instead of worst-case (e.g. more users checking out via Web/Razorpay's ~2% fee), EBITDA on these tiers recovers to **~70–75%**. Revisit once real Web-vs-Android payment split data is available, or explicitly ask to solve for exactly 50% here (would need commission ~24% instead of 30%, uniformly across tiers).
+- **Teacher ₹1,999** plan has no commission line item (it's the teacher's own plan, not a commission payout) — EBITDA stays healthy at ~₹1,416 (~71%) even at worst-case fee.
 
 ---
 
@@ -227,8 +266,9 @@ Students never spend credits to share notes/PDF — content share blocked entire
 - `credit_costs.dart` — locked costs + `recordCreditsForDurationMinutes()`
 - `plan_tier_gating.dart` — tier unlocks
 - `credit_usage_display.dart` — dashboard translated estimates
-- `subscription_plans.dart` — plan catalog + `maxGroups` per plan
+- `subscription_plans.dart` — plan catalog + `maxGroups` per plan + `creditPacks` (Buy Extra Credits)
 - `groups_repository.dart` — `canJoinAnotherGroup()` (Group Join Limits above)
+- `credit_economy_v2_1_migration.sql` — DB sync for the Jul 13, 2026 numbers (founder must run once)
 
 ---
 
@@ -241,3 +281,4 @@ Students never spend credits to share notes/PDF — content share blocked entire
 | Jul 12, 2026 | Added Group Join Limits (₹199=1, ₹499=3, ₹999=6, teacher=unlimited); removed "Copy Code" from Teacher Dashboard |
 | Jul 12, 2026 | Added Teacher Commission (30% recurring, primary-teacher attribution, display-only Phase 4) + margin-after-commission table |
 | Jul 12, 2026 | Free tier: added PDF Analysis (text-only), 50→75 credits/month; recomputed Margin Validation with real Groq/Qwen pricing; added Non-API Actions (Always Free) list; teacher-credit validation note (20,000 kept unchanged) |
+| Jul 13, 2026 | Added Buy Extra Credits (5 a-la-carte packs, no teacher commission); Fee-Corrected Margin Validation adds worst-case 15% Google Play fee line (was missing); plan_199 1,300→1,500 credits (room found once real no-audio AI cost used, stays ~50% EBITDA); teacher 20,000→16,000 (60hr/month max-usage risk-ceiling validation); free 50→75 code/DB sync fix (doc already said 75 since Jul 12); flagged plan_499/plan_999 at ~44–48% EBITDA worst-case as a watch-item (commission left at 30%, not acted on this round) |

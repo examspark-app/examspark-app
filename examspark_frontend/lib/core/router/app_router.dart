@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/presentation/screens/auth/login_screen.dart';
 import 'package:examspark_frontend/presentation/shell/app_shell.dart';
@@ -35,18 +37,26 @@ class AppRouter {
           builder: (_) => RecorderScreen(
             subject: args?['subject'] as String?,
             topic: args?['topic'] as String?,
+            initialInputMethod: args?['initialInputMethod'] as String?,
           ),
           settings: settings,
         );
       case '/recording_setup':
         return MaterialPageRoute(
-          builder: (_) => const RecordingSetupScreen(),
+          builder: (_) => RecordingSetupScreen(
+            initialInputMethod: args?['initialInputMethod'] as String?,
+          ),
           settings: settings,
         );
       case '/processing':
         return MaterialPageRoute(
           builder: (_) => ProcessingScreen(
             lectureId: args?['lectureId'] as String? ?? '',
+            retryFileBytes: args?['retryFileBytes'] as Uint8List?,
+            retryFilename: args?['retryFilename'] as String?,
+            retrySourceType: args?['retrySourceType'] as String?,
+            retryHighAccuracy: args?['retryHighAccuracy'] as bool? ?? false,
+            retryDurationMinutes: args?['retryDurationMinutes'] as int?,
           ),
           settings: settings,
         );

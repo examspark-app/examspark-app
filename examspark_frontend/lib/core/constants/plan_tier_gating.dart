@@ -13,7 +13,8 @@ class PlanTierGating {
 
   static const Map<GatedFeature, String> minimumPlanId = {
     GatedFeature.askAi: 'free',
-    GatedFeature.pdfAnalysis: 'plan_199',
+    // CREDIT_ECONOMY.md Jul 12: PDF Analysis (text-only) moved into Free.
+    GatedFeature.pdfAnalysis: 'free',
     GatedFeature.diagramAnalysis: 'plan_199',
     GatedFeature.flashcards: 'plan_199',
     GatedFeature.quiz: 'plan_199',
@@ -48,11 +49,12 @@ class PlanTierGating {
         return '🔒 This feature needs the ₹499+ Plan\n'
             'Recording is available starting from the ₹499 Plan.';
       case GatedFeature.pdfAnalysis:
+        return 'PDF Analysis is available on Free and all paid plans.';
       case GatedFeature.diagramAnalysis:
       case GatedFeature.flashcards:
       case GatedFeature.quiz:
         return '🔒 This feature needs the ₹199+ Plan\n'
-            'Upgrade to unlock PDF, photo, and study features.';
+            'Upgrade to unlock photo/diagram and study features.';
       case GatedFeature.askAi:
         return 'Ask AI is available on all plans.';
     }

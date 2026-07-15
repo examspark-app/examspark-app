@@ -1,5 +1,12 @@
 fastapi
-uvicorn
+uvicorn[standard]
 supabase
 python-dotenv
 pydantic
+pyjwt
+python-multipart
+httpx
+boto3
+pypdf
+pytest
+pytest-asyncio

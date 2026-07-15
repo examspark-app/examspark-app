@@ -60,8 +60,16 @@ class _AppShellState extends State<AppShell> {
 
   List<Widget> _buildTabs() {
     return [
-      HomeTab(onOpenWorkspace: _openStudyWorkspace, onGoToTab: _goToTab),
-      LibraryTab(onOpenWorkspace: _openStudyWorkspace),
+      HomeTab(
+        onOpenWorkspace: _openStudyWorkspace,
+        onGoToTab: _goToTab,
+        isActive: _selectedIndex == 0,
+        openLectureId: _openWorkspace?.lectureId,
+      ),
+      LibraryTab(
+        onOpenWorkspace: _openStudyWorkspace,
+        isActive: _selectedIndex == 1,
+      ),
       GroupsTab(onGoToTab: _goToTab),
       const ProgressTab(),
       ProfileTab(onGoToTab: _goToTab),

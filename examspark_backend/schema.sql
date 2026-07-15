@@ -96,6 +96,11 @@ CREATE TABLE lectures (
     topic TEXT,
     status TEXT NOT NULL DEFAULT 'pending'
         CHECK (status IN ('pending', 'splitting', 'transcribing', 'indexing', 'generating', 'almost_done', 'done', 'error')),
+    -- Real backend/pipeline failure reason (e.g. "cannot identify image file",
+    -- "little extractable text — likely a scan"). ProcessingScreen shows this
+    -- verbatim instead of a generic "network problem" message. Cleared
+    -- (set NULL) whenever status moves away from 'error'.
+    error_message TEXT,
     high_accuracy BOOLEAN NOT NULL DEFAULT false,
     -- How this lecture's content was captured. Only 'recorded' (real mic)
     -- lectures may be shared into a Group — prevents a teacher account from
@@ -337,14 +342,21 @@ CREATE TABLE subscription_plans (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Founder-locked Jul 13, 2026: plan_199 1300->1500 credits (Ask AI headroom,
+-- fee-corrected margin calc still lands ~50% EBITDA — see CREDIT_ECONOMY.md);
+-- teacher 20000->16000 (60hr/month max-usage validation, risk-ceiling tighten,
+-- not a margin change — real teacher AI cost is tiny either way); free
+-- 50->75 syncs code to the Jul 12, 2026 doc-locked value (was out of sync).
 INSERT INTO subscription_plans (id, name, tier, monthly_credits, price_inr_paise, platform, max_groups) VALUES
-    ('free', 'Free', 'free', 50, 0, 'both', 0),
-    ('plan_199', '₹199', 'entry', 1300, 19900, 'both', 1),
+    ('free', 'Free', 'free', 75, 0, 'both', 0),
+    ('plan_199', '₹199', 'entry', 1500, 19900, 'both', 1),
     ('plan_499', '₹499', 'mid', 3500, 49900, 'both', 3),
     ('plan_999', '₹999', 'premium', 8000, 99900, 'both', 6),
-    ('teacher', 'Teacher', 'teacher', 20000, 199900, 'both', -1);
+    ('teacher', 'Teacher', 'teacher', 16000, 199900, 'both', -1);
 
--- One-time credit packs (future)
+-- One-time credit packs — a-la-carte top-up, no teacher commission applies.
+-- Founder-locked Jul 13, 2026: per-credit rate always >= cheapest subscription
+-- plan's rate (plan_199 ~Rs0.153/credit) so top-ups never undercut subscribing.
 CREATE TABLE credit_packs (
     id TEXT PRIMARY KEY,
     name TEXT NOT NULL,
@@ -354,6 +366,13 @@ CREATE TABLE credit_packs (
     google_play_product_id TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+
+INSERT INTO credit_packs (id, name, credits, price_inr_paise) VALUES
+    ('pack_100', '100 Credits', 100, 2500),
+    ('pack_500', '500 Credits', 500, 11000),
+    ('pack_1000', '1,000 Credits', 1000, 20000),
+    ('pack_5000', '5,000 Credits', 5000, 85000),
+    ('pack_10000', '10,000 Credits', 10000, 150000);
 
 -- User subscriptions (enhanced)
 CREATE TABLE user_subscriptions (
@@ -691,6 +710,15 @@ GRANT EXECUTE ON FUNCTION fn_deduct_credits(UUID, INTEGER, TEXT, UUID, TEXT) TO 
 GRANT EXECUTE ON FUNCTION fn_user_plan_tier(UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION fn_group_item_access(UUID, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION fn_teacher_estimated_commission(UUID) TO authenticated;
+
+-- PostgREST roles — RLS policies below still enforce row-level access.
+GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
+GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+GRANT SELECT ON public.subscription_plans TO anon, authenticated;
+GRANT SELECT ON public.credit_packs TO anon, authenticated;
 
 -- ============================================================================
 -- ROW LEVEL SECURITY

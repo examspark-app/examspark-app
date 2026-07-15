@@ -282,11 +282,13 @@ Audio → Whisper → Transcript → Delete Audio → Save Transcript (R2)
 
 ```text
 Cloudflare R2
-├── Users
-├── Library/          (Transcript, Notes, Summary, Flashcards, Quiz, Revision, MindMap, Formula, Images, PDFs)
-├── Teachers/         (Groups, Shared Notes, Shared PDFs, Shared Files)
-└── Exports
+├── Users/{user_id}/Library/{lecture_id}/   (Transcript, Clean Transcript, Notes, Summary, extras, source PDF/image, rag chunks)
+├── Teachers/{teacher_id}/Groups/{group_id}/shared/
+└── Exports/{user_id}/
 ```
+
+Legacy (still readable via Postgres paths): `Library/{user_id}/{lecture_id}/…`  
+Canonical builder: `examspark_backend/app/services/r2_storage_service.py` (Session 4).
 
 ### Library UI (user-facing)
 

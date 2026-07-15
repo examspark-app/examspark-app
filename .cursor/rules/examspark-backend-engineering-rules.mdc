@@ -1,0 +1,133 @@
+---
+description: ExamSpark Backend Engineering Rules — credits, payments, storage, AI routing, PYQ, gating, errors, testing (founder-locked Jul 13, 2026)
+alwaysApply: true
+---
+
+# ExamSpark Backend Engineering Rules (Critical — Always Follow)
+
+Founder-provided rules, reconciled Jul 13, 2026 against already-locked architecture
+(`TECH_STACK.md`, `PROJECT_CORE_RULES.md`, `CREDIT_ECONOMY.md`) and the Phase 5
+Session 2 pipeline already built. Two clauses were corrected below to match what's
+already locked/built rather than the other way around — see "Corrected vs. as-given"
+note under each. **Locking this rule does not change any existing code.**
+
+## 1. Credits — Never Trust the Client
+
+- Every credit deduction happens server-side (FastAPI), via `fn_deduct_credits`
+  (Postgres function — atomic balance check + deduct + log in one transaction,
+  see `schema.sql`). Never a client-side `UPDATE`.
+- Never accept a credit amount from Flutter as truth — cost is always computed
+  server-side from `app/constants/credit_costs.py` (mirrors `credit_costs.dart`,
+  the source of truth). *(Corrected: "config table" loosened to "server-side
+  config" — a hardcoded constants file gives the same never-trust-client
+  guarantee as a DB table, simpler at this product's scale.)*
+- Deduct only **after** the AI call succeeds (`lecture_service.py`: Whisper →
+  Qwen3 → *then* `deduct_credits()`). If the AI call fails, no deduction, and a
+  specific error returns to the frontend — never silent.
+- **Home AI + Ask AI (Jul 15, 2026):** deduct only when response `status ==
+  SUCCESS` and answer text is non-empty (AI completed processing). **Free:**
+  `API_ERROR`, `TIMEOUT`, `NETWORK_ERROR`, `VALIDATION_ERROR`, `CANCELLED`.
+  **Charge:** any successful AI answer — including lecture Ask AI "not found in
+  your notes" replies (model still runs; `NOT_FOUND` is not a billing exemption).
+  Balance precheck before OpenRouter may remain; deduction still only after SUCCESS.
+- No partial state: a failure between "credits deducted" and "result persisted"
+  must not leave credits gone with nothing to show. **Known gap (Jul 13, 2026):**
+  today R2 upload happens *after* credit deduction — if R2 fails post-deduction,
+  this rule is violated. Flagged for a fast-follow fix, not yet corrected.
+
+## 2. Payments — Verify, Never Assume
+
+- Every payment (Razorpay now, Google Play later) is verified server-side via the
+  provider's official signature/webhook method — never trust a frontend
+  "success" flag. See `app/services/security.py` / `webhook_service.py` (currently
+  stubbed — real verification is Phase 5 Session 6).
+- Log every verified payment (amount, plan, user_id, timestamp) for audit.
+
+## 3. Storage — R2 Holds Content, Postgres Holds Paths Only
+
+*(Corrected vs. as-given: the founder's original wording said text content
+should live in Postgres and R2 should only stage audio. That's the opposite of
+the already-locked architecture and of what Session 2 already built — reconciled
+Jul 13, 2026, founder confirmed keep the built version.)*
+
+- Transcript, Notes, Summary, key points, important terms — all persisted
+  **long-term as content in Cloudflare R2** (`app/services/r2_storage_service.py`,
+  `Library/{user_id}/{lecture_id}/...`). Postgres (`transcripts`, `notes`,
+  `lectures` tables) stores **only the R2 path string** — never the content
+  itself. This is the hard "Postgres = metadata only" rule (`PROJECT_CORE_RULES.md`).
+- Raw audio is **never** written to R2, Supabase Storage, or disk — today it
+  lives only in FastAPI's request memory, goes straight to Groq Whisper, and is
+  discarded when the request ends. No staging step exists because none is needed
+  for a single-request transcription.
+- If/when chunking is added for very long recordings (>Groq's per-file limit),
+  a temp-staging pattern (R2 or local) may be needed for the audio chunks only —
+  guaranteed cleanup (`finally`/equivalent) would apply to that staging, never to
+  the transcript/notes content, which always stays permanent in R2.
+
+## 4. AI Model Routing — By Input Type, Not Plan Tier
+
+*(Corrected vs. as-given: the founder's original wording routed all paid/pro-tier
+tasks through Qwen3-VL, even plain text. That contradicts the Jul 12, 2026 locked
+`CREDIT_ECONOMY.md` AI cost strategy — reconciled Jul 13, 2026, founder confirmed
+keep the locked version.)*
+
+- Audio input → Groq Whisper Turbo by default (`whisper_service.py`); auto
+  fallback to non-turbo on low confidence (>25% of segments) or API error.
+  Manual user-requested retry-with-non-turbo is not yet wired (gap).
+- Qwen3-VL is used **only when the input is actually an image/diagram/photo** —
+  regardless of plan tier. Qwen3 text handles all text-only tasks (notes, MCQ,
+  revision, flashcards, RAG) — regardless of plan tier.
+- Plan tier gates **whether** a user can use the Diagram/Image feature at all
+  (`plan_tier_gating.dart` — e.g. Free/₹199 can't) — it never changes which
+  model handles a given input type.
+
+## 5. PYQ Matching — Never Fabricate
+
+- A past-exam reference (e.g. "NEET 2024") may only be mentioned if retrieval
+  code finds a real match in the manually-uploaded `pyq_bank` table via vector
+  similarity above a configured threshold (e.g. 0.80 cosine) — deterministic,
+  never left to the LLM's judgment.
+- No match above threshold → the prompt explicitly instructs the model not to
+  mention any exam name/year/number and not to speculate.
+- `pyq_bank` is populated only by manual/admin upload — never scraped/generated.
+- Not yet built (`pyq_bank` table, retrieval code) — this is forward-looking,
+  likely Session 3 (RAG) or a dedicated future session.
+
+## 6. Feature & Plan-Tier Gating — Check Before Credit Check
+
+- Order matters: check plan-tier unlock **first**, credit balance **second**.
+  Locked-feature response short-circuits before ever touching credits.
+- Teacher-group joins are capped per plan tier (1/3/6 — `max_groups`) and
+  tracked as a separate counter from AI credits.
+- **Known gap (Jul 13, 2026):** tier-check is currently Dart-side only
+  (`plan_tier_gating.dart`); server-side enforcement in FastAPI is explicitly
+  Phase 5 Session 5's scope, not yet built.
+
+## 7. Error Handling — Always Explicit
+
+- Every endpoint calling an external API (Groq, Qwen3/Qwen3-VL, Razorpay, R2)
+  has try/except with a specific error message to the frontend — never a bare
+  500 with no context. Matches `whisper_service.py` / `qwen_service.py` /
+  `r2_storage_service.py`'s typed exceptions today.
+- Log all external API failures server-side (which model/service, why).
+
+## 8. Testing — Required for Financial/Critical Logic
+
+- Any function touching credits, payments, plan-tier gating, or PYQ matching
+  needs a passing test before being marked complete, going forward.
+- Any function touching R2/temp-staging needs a test confirming cleanup runs,
+  including failure paths.
+- Run `flutter analyze` (frontend) + backend tests after changes.
+- **Known gap (Jul 13, 2026):** no pytest suite exists yet for
+  `credits_service.py` / `lecture_service.py` — applies to new code from here,
+  not retroactively blocking already-shipped Session 2 code.
+
+## 9. Stack Consistency — Do Not Deviate
+
+- Backend logic lives in FastAPI (Python), hosted on Railway.
+- Supabase = Postgres (+ pgvector) + Auth. Business logic lives in FastAPI, with
+  one deliberate exception: atomic credit deduction (`fn_deduct_credits`) lives
+  in a Postgres function specifically *because* Rule 1 requires a real DB
+  transaction — FastAPI can't get the same atomicity guarantee over HTTP.
+- Cloudflare R2 = permanent content store for Transcript/Notes/Summary/etc.
+  (Rule 3) — not temporary staging, since no staging step exists today.

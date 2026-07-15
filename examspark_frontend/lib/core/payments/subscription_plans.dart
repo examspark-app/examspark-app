@@ -34,6 +34,12 @@ class SubscriptionPlanDef {
       monthlyCredits > 0 ? priceInr / monthlyCredits : 0;
 }
 
+/// A-la-carte credit top-up — for users who don't want to upgrade their
+/// subscription plan but need more credits this month. Founder-locked
+/// Jul 13, 2026: priced so the per-credit rate is always >= the cheapest
+/// subscription plan's rate (plan_199 = ~₹0.153/credit), so top-ups never
+/// undercut the incentive to subscribe. No teacher commission applies to
+/// top-up purchases (commission is on recurring subscription price only).
 class CreditPackDef {
   final String id;
   final String name;
@@ -46,6 +52,10 @@ class CreditPackDef {
     required this.credits,
     required this.priceInrPaise,
   });
+
+  int get priceInr => priceInrPaise ~/ 100;
+
+  double get effectiveRupeePerCredit => credits > 0 ? priceInr / credits : 0;
 }
 
 class SubscriptionPlans {
@@ -55,13 +65,13 @@ class SubscriptionPlans {
     id: 'free',
     name: 'Free',
     tier: 'free',
-    monthlyCredits: 50,
+    monthlyCredits: 75,
     priceInrPaise: 0,
     maxGroups: 0,
     features: [
-      '50 credits/month',
-      'Ask AI only',
-      'No audio, PDF, or photo upload',
+      '75 credits/month',
+      'Ask AI + PDF Analysis',
+      'No audio or photo/diagram upload',
       'Cannot join Groups',
     ],
   );
@@ -70,11 +80,11 @@ class SubscriptionPlans {
     id: 'plan_199',
     name: '₹199',
     tier: 'plan_199',
-    monthlyCredits: 1300,
+    monthlyCredits: 1500,
     priceInrPaise: 19900,
     maxGroups: 1,
     features: [
-      '1,300 credits/month',
+      '1,500 credits/month',
       'Ask AI + PDF + Photo/Diagram',
       'Audio recording locked',
       'Join up to 1 Group',
@@ -115,11 +125,11 @@ class SubscriptionPlans {
     id: 'teacher',
     name: 'Teacher',
     tier: 'teacher',
-    monthlyCredits: 20000,
+    monthlyCredits: 16000,
     priceInrPaise: 199900,
     maxGroups: -1,
     features: [
-      '20,000 credits/month',
+      '16,000 credits/month',
       'Bulk Record Lecture',
       'PDF export + shareable links',
       'Class dashboard',
@@ -142,6 +152,17 @@ class SubscriptionPlans {
   }
 
   static const List<CreditPackDef> creditPacks = [
-    CreditPackDef(id: 'pack_500', name: '500 Credits', credits: 500, priceInrPaise: 19900),
+    CreditPackDef(id: 'pack_100', name: '100 Credits', credits: 100, priceInrPaise: 2500),
+    CreditPackDef(id: 'pack_500', name: '500 Credits', credits: 500, priceInrPaise: 11000),
+    CreditPackDef(id: 'pack_1000', name: '1,000 Credits', credits: 1000, priceInrPaise: 20000),
+    CreditPackDef(id: 'pack_5000', name: '5,000 Credits', credits: 5000, priceInrPaise: 85000),
+    CreditPackDef(id: 'pack_10000', name: '10,000 Credits', credits: 10000, priceInrPaise: 150000),
   ];
+
+  static CreditPackDef? creditPackById(String id) {
+    for (final p in creditPacks) {
+      if (p.id == id) return p;
+    }
+    return null;
+  }
 }

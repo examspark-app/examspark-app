@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:examspark_frontend/core/constants/ai_answer_meta.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/presentation/screens/results/widgets/extra_actions_panel.dart';
+import 'package:examspark_frontend/presentation/widgets/ai/ai_assistant_message.dart';
+import 'package:examspark_frontend/presentation/widgets/ai/ai_thinking_bubble.dart';
 import 'package:examspark_frontend/presentation/widgets/ask_ai_selectable_text.dart';
 
 /// Screen 4: Notes Result Screen
@@ -69,14 +72,12 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
           .eq('id', widget.lectureId)
           .single();
 
-      // Fetch notes
-      final notesResponse = await supabase
-          .from('notes')
-          .select('*')
-          .eq('lecture_id', widget.lectureId)
-          .maybeSingle();
+      // Notes content lives in R2 — FastAPI reads paths from Postgres metadata.
+      final notesResponse = await LectureService.instance.fetchLectureNotes(
+        widget.lectureId,
+      );
 
-      // Fetch transcript
+      // Fetch transcript metadata (content path only; not shown on this screen yet)
       final transcriptResponse = await supabase
           .from('transcripts')
           .select('*')
@@ -991,12 +992,45 @@ class RAGChatModal extends StatefulWidget {
 class _RAGChatModalState extends State<RAGChatModal> {
   late final TextEditingController _messageController =
       TextEditingController(text: widget.initialQuery ?? '');
+  final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
+  String? _conversationLanguage;
+  String? _liveStreamText;
+
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!_scrollController.hasClients) return;
+      _scrollController.animateTo(
+        _scrollController.position.maxScrollExtent,
+        duration: const Duration(milliseconds: 280),
+        curve: Curves.easeOut,
+      );
+    });
+  }
+
+  static const List<String> _suggestionChips = [
+    'Explain the main idea in simple words',
+    'Give a short answer: what is this lecture about?',
+    'Give a long answer suitable for exams',
+    'What facts or numbers are mentioned?',
+    'What should I remember for revision?',
+    'List important terms and definitions',
+    'Give a simple example from these notes',
+  ];
+
+  void _applySuggestion(String suggestion) {
+    setState(() {
+      _messageController.text = suggestion;
+      _messageController.selection = TextSelection.fromPosition(
+        TextPosition(offset: suggestion.length),
+      );
+    });
+  }
 
   Future<void> _sendMessage() async {
     final message = _messageController.text.trim();
-    if (message.isEmpty) return;
+    if (message.isEmpty || _isLoading) return;
 
     setState(() {
       _messages.add(ChatMessage(
@@ -1005,35 +1039,87 @@ class _RAGChatModalState extends State<RAGChatModal> {
       ));
       _messageController.clear();
       _isLoading = true;
+      _liveStreamText = null;
     });
+    _scrollToBottom();
 
     try {
-      final supabase = SupabaseClient.instance.client;
-      final response = await supabase.functions.invoke('process-lecture', body: {
-        'action': 'rag',
-        'userId': supabase.auth.currentUser?.id,
-        'query': message,
-        'lectureId': widget.lectureId,
-      });
-
-      if (response.data['success'] == true) {
+      await _runAskAiStream(message);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _liveStreamText = null);
+      try {
+        await _runAskAiJson(message);
+      } catch (error) {
+        if (!mounted) return;
         setState(() {
           _messages.add(ChatMessage(
-            text: response.data['result']['answer'] ?? 'No answer available',
+            text: 'Ask AI failed: $error',
             isUser: false,
+            animateReveal: false,
           ));
           _isLoading = false;
+          _liveStreamText = null;
         });
+        _scrollToBottom();
       }
-    } catch (error) {
-      setState(() {
-        _messages.add(ChatMessage(
-          text: 'Failed to get answer. Please try again.',
-          isUser: false,
-        ));
-        _isLoading = false;
-      });
     }
+  }
+
+  Future<void> _runAskAiStream(String message) async {
+    final done = await LectureService.instance.askAiStream(
+      lectureId: widget.lectureId,
+      query: message,
+      mode: 'normal',
+      conversationLanguage: _conversationLanguage,
+      onToken: (delta) {
+        if (!mounted) return;
+        setState(() {
+          _liveStreamText = (_liveStreamText ?? '') + delta;
+        });
+        _scrollToBottom();
+      },
+    );
+    if (!mounted) return;
+    _applyAskAiSuccess(done, animateReveal: false);
+  }
+
+  Future<void> _runAskAiJson(String message) async {
+    final result = await LectureService.instance.askAi(
+      lectureId: widget.lectureId,
+      query: message,
+      mode: 'normal',
+      conversationLanguage: _conversationLanguage,
+    );
+    if (!mounted) return;
+    _applyAskAiSuccess(result, animateReveal: true);
+  }
+
+  void _applyAskAiSuccess(
+    Map<String, dynamic> result, {
+    required bool animateReveal,
+  }) {
+    final answer = (result['answer'] as String?)?.trim();
+    final trust = AiAnswerMeta.trustLine(
+      answerSource: result['answer_source'] as String?,
+      confidence: result['confidence'] as String?,
+    );
+    final convLang = result['conversation_language'] as String?;
+    final hasAnswer = answer != null && answer.isNotEmpty;
+    setState(() {
+      if (convLang != null && convLang.isNotEmpty) {
+        _conversationLanguage = convLang;
+      }
+      _messages.add(ChatMessage(
+        text: hasAnswer ? answer : 'No answer available',
+        isUser: false,
+        trustLine: trust,
+        animateReveal: hasAnswer && animateReveal,
+      ));
+      _isLoading = false;
+      _liveStreamText = null;
+    });
+    _scrollToBottom();
   }
 
   @override
@@ -1074,25 +1160,36 @@ class _RAGChatModalState extends State<RAGChatModal> {
             ),
           ),
 
-          // Messages
+          // Messages + suggestion chips (empty state)
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: _messages.length + (_isLoading ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (index == _messages.length && _isLoading) {
-                  return const Padding(
-                    padding: EdgeInsets.symmetric(vertical: 8),
-                    child: Center(
-                      child: CircularProgressIndicator(),
-                    ),
-                  );
-                }
+            child: _messages.isEmpty && !_isLoading
+                ? _buildEmptySuggestions()
+                : ListView.builder(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _messages.length + (_isLoading ? 1 : 0),
+                    itemBuilder: (context, index) {
+                      if (index == _messages.length && _isLoading) {
+                        if (_liveStreamText != null &&
+                            _liveStreamText!.isNotEmpty) {
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 8),
+                            child: AiAssistantMessage(
+                              text: _liveStreamText!,
+                              animate: false,
+                            ),
+                          );
+                        }
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8),
+                          child: AiThinkingBubble(),
+                        );
+                      }
 
-                final message = _messages[index];
-                return _buildMessageBubble(message);
-              },
-            ),
+                      final message = _messages[index];
+                      return _buildMessageBubble(message);
+                    },
+                  ),
           ),
 
           // Input field
@@ -1141,31 +1238,86 @@ class _RAGChatModalState extends State<RAGChatModal> {
     );
   }
 
+  Widget _buildEmptySuggestions() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Try asking about this lecture',
+            style: TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: AppTheme.getPrimaryText(context),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Tap a suggestion to fill the box — edit if you want, then Send (uses 5 credits).',
+            style: TextStyle(
+              fontSize: 13,
+              color: AppTheme.getSecondaryText(context),
+              height: 1.4,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: _suggestionChips.map((suggestion) {
+              return OutlinedButton(
+                onPressed: () => _applySuggestion(suggestion),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.getPrimaryText(context),
+                  side: BorderSide(color: AppTheme.getCardBorder(context)),
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                ),
+                child: Text(
+                  suggestion,
+                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              );
+            }).toList(),
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMessageBubble(ChatMessage message) {
+    if (!message.isUser) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        child: AiAssistantMessage(
+          text: message.text,
+          trustLine: message.trustLine,
+          animate: message.animateReveal,
+          onRevealComplete: _scrollToBottom,
+        ),
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 8),
       child: Align(
-        alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
-        child: Container(
+        alignment: Alignment.centerRight,
+        child: ConstrainedBox(
           constraints: BoxConstraints(
             maxWidth: MediaQuery.of(context).size.width * 0.8,
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: message.isUser
-                ? AppTheme.accentColor
-                : AppTheme.getCardBackground(context),
-            borderRadius: BorderRadius.circular(16),
-            border: message.isUser
-                ? null
-                : Border.all(
-                    color: AppTheme.getCardBorder(context),
-                  ),
-          ),
-          child: Text(
-            message.text,
-            style: TextStyle(
-              color: message.isUser ? Colors.white : AppTheme.getPrimaryText(context),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: AppTheme.accentColor,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Text(
+              message.text,
+              style: const TextStyle(color: Colors.white),
             ),
           ),
         ),
@@ -1176,6 +1328,7 @@ class _RAGChatModalState extends State<RAGChatModal> {
   @override
   void dispose() {
     _messageController.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 }
@@ -1183,9 +1336,13 @@ class _RAGChatModalState extends State<RAGChatModal> {
 class ChatMessage {
   final String text;
   final bool isUser;
+  final String? trustLine;
+  final bool animateReveal;
 
   ChatMessage({
     required this.text,
     required this.isUser,
+    this.trustLine,
+    this.animateReveal = false,
   });
 }
