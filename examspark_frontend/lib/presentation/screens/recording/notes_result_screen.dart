@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:examspark_frontend/core/constants/ai_answer_meta.dart';
+import 'package:examspark_frontend/core/errors/lecture_user_message.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
@@ -9,8 +10,12 @@ import 'package:examspark_frontend/presentation/widgets/ai/ai_assistant_message.
 import 'package:examspark_frontend/presentation/widgets/ai/ai_thinking_bubble.dart';
 import 'package:examspark_frontend/presentation/widgets/ask_ai_selectable_text.dart';
 
-/// Screen 4: Notes Result Screen
-/// View-only screen with modular sections and action chips
+/// Legacy full-page notes view (route `/notes_result`).
+///
+/// New flows open [StudyWorkspace] via [OpenWorkspaceBridge] after processing.
+/// Kept for deep links / old bookmarks — do not delete without founder OK.
+///
+/// Screen 4: Notes Result Screen — view-only with modular sections and action chips.
 class NotesResultScreen extends StatefulWidget {
   final String lectureId;
 
@@ -174,8 +179,11 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppTheme.borderRadius),
         ),
-        title: const Text('Delete Lecture'),
-        content: const Text('This action cannot be undone. Are you sure?'),
+        title: const Text('Delete lecture?'),
+        content: const Text(
+          'Delete this lecture permanently? Notes, transcript, quiz and '
+          'flashcards will be removed.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),
@@ -195,19 +203,17 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
 
     if (confirmed == true) {
       try {
-        final supabase = SupabaseClient.instance.client;
-        await supabase
-            .from('lectures')
-            .delete()
-            .eq('id', widget.lectureId);
-
+        await LectureService.instance.deleteLecture(widget.lectureId);
         if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Lecture deleted.')),
+          );
           Navigator.pop(context);
         }
       } catch (error) {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Failed to delete lecture')),
+            SnackBar(content: Text(lectureUserMessage(error))),
           );
         }
       }
@@ -1103,6 +1109,7 @@ class _RAGChatModalState extends State<RAGChatModal> {
     final trust = AiAnswerMeta.trustLine(
       answerSource: result['answer_source'] as String?,
       confidence: result['confidence'] as String?,
+      webSearchNote: result['web_search_note'] as String?,
     );
     final convLang = result['conversation_language'] as String?;
     final hasAnswer = answer != null && answer.isNotEmpty;

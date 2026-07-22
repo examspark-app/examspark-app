@@ -27,11 +27,15 @@ class AiTypewriterText extends StatefulWidget {
   State<AiTypewriterText> createState() => _AiTypewriterTextState();
 }
 
-class _AiTypewriterTextState extends State<AiTypewriterText> {
+class _AiTypewriterTextState extends State<AiTypewriterText>
+    with AutomaticKeepAliveClientMixin {
   late final List<String> _tokens;
   int _visibleCount = 0;
   bool _done = false;
   Timer? _timer;
+
+  @override
+  bool get wantKeepAlive => !_done;
 
   @override
   void initState() {
@@ -98,6 +102,7 @@ class _AiTypewriterTextState extends State<AiTypewriterText> {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context);
     final visible = _done
         ? widget.text
         : _tokens.take(_visibleCount).join();

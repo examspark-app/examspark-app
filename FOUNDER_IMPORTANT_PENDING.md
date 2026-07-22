@@ -7,13 +7,15 @@
 
 **Health check:** `http://localhost:8000/` (not `/health`)
 
-**➡ Memory card:** [`examspark_backend/FOUNDER_NEXT_SESSION.md`](examspark_backend/FOUNDER_NEXT_SESSION.md)
+**➡ Memory card:** [`examspark_backend/FOUNDER_NEXT_SESSION.md`](examspark_backend/FOUNDER_NEXT_SESSION.md)  
+**➡ Pending LOCK:** [`examspark_backend/FOUNDER_PENDING_LOCKED.md`](examspark_backend/FOUNDER_PENDING_LOCKED.md) — shipped vs manual vs next coding vs NOT complete
 
 | Status | Item |
 |--------|------|
-| **NEXT (founder ~15 min)** | Realtime 3 tables + trim SQL (if open) |
+| **NEXT (SQL + smoke)** | [`FOUNDER_PENDING_LOCKED.md`](examspark_backend/FOUNDER_PENDING_LOCKED.md) + [`FOUNDER_NEXT_SESSION.md`](examspark_backend/FOUNDER_NEXT_SESSION.md) |
+| **Later (founder ~15 min)** | Realtime 3 tables + trim SQL |
 | **⏸ paused** | Session 6 Razorpay — jab Test keys ready |
-| **Next coding (bolo tab)** | Flashcards / Quiz extras → FastAPI |
+| **Next coding (bolo tab)** | `start Tavily` · `start Railway deploy guide` · Teacher lane (PYQs + Phase 4D **pass locked** Jul 18) |
 
 **Credit rules:** [`FOUNDER_CREDIT_RULES_AS_SHIPPED.md`](FOUNDER_CREDIT_RULES_AS_SHIPPED.md)
 
@@ -24,9 +26,12 @@
 - [x] Session live sync **code** (Realtime wire in Flutter)
 - [x] SEED_DEMO_GROUPS / RLS path used in mock pass
 - [x] Free join UI bypass fix · Session 5 gating
+- [x] Flashcards / Quiz / Revision / IQ / Mind Map / Visual Notes / Select AI / **5 Minute Revision** **code** (Jul 16) — UI smoke pending
 
 ### Still open (founder)
 
+- [ ] **SQL once:** [`FOUNDER_SQL_JUL16_PENDING.sql`](examspark_backend/FOUNDER_SQL_JUL16_PENDING.sql) (if not already)
+- [ ] **UI smoke order:** Flashcards/Quiz/Revision → Visual Notes 5A → IQ/Mind Map → Select AI → 5 Minute Revision
 - [ ] **Enable Realtime** on `users`, `user_subscriptions`, `class_memberships`
 - [ ] **Run** [`subscription_change_trim_groups_migration.sql`](examspark_backend/subscription_change_trim_groups_migration.sql) if not already
 - [ ] Chat: `groups + realtime checklist done`
@@ -201,8 +206,12 @@ Expected: wapas `plan_499` (ya jo set kiya). Flutter **`R`**.
 
 ## P2 — Study generate (FastAPI)
 
-- [ ] Flashcards / Quiz / MCQ / Revision / Answer-Key → FastAPI (still edge function today)
-- [ ] Home AI study-action chips → generate on click (today: snackbar)
+- [x] Flashcards / Quiz / Revision → FastAPI (Jul 16) — founder UI smoke pending
+- [x] Important Questions / Mind Map → FastAPI (Jul 16)
+- [x] Home AI study-action chips → FastAPI generate on click (Jul 16)
+- [x] Select AI → FastAPI (Jul 16)
+- [x] 5 Minute Revision → FastAPI (Jul 16) — Home chip; 5 credits
+- [ ] PYQs → FastAPI (when founder says `start PYQs`)
 
 ---
 
@@ -239,7 +248,6 @@ SSE stream · language lock · typo tolerance · AI speed 512 · Perf Phase 1 ca
 
 ## Aapka recommended next
 
-1. Run SQL: `credit_economy_free50_audio199_migration.sql` (Free → 50)
-2. Restart FastAPI + Flutter **`R`**
-3. Free plan pe **E1–E5** ([`FOUNDER_CREDIT_RULES_AS_SHIPPED.md`](FOUNDER_CREDIT_RULES_AS_SHIPPED.md))
-4. Then Session 6 (Razorpay) when ready
+1. Follow [`FOUNDER_PENDING_LOCKED.md`](examspark_backend/FOUNDER_PENDING_LOCKED.md) — start servers → SQL → smoke → pass messages
+2. Later: Realtime + trim; Razorpay when Test keys ready; `commit today` when smoke OK
+3. Then coding: `start PYQs` or `start Railway deploy guide` or `start Tavily`

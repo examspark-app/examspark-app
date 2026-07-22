@@ -8,7 +8,7 @@ python-multipart
 httpx
 boto3
 pypdf
-youtube-transcript-api
+yt-dlp
 pytest
 pytest-asyncio
 google-auth

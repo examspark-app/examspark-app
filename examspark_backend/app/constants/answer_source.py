@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional
 
-AnswerSource = Literal["RAG", "PYQ", "KB", "WEB", "MIXED", "NO_MATCH"]
+AnswerSource = Literal["RAG", "PYQ", "KB", "WEB", "MIXED", "NO_MATCH", "VISION"]
 Confidence = Literal["HIGH", "MEDIUM", "LOW"]
 
 RAG: AnswerSource = "RAG"
@@ -12,6 +12,7 @@ KB: AnswerSource = "KB"
 WEB: AnswerSource = "WEB"
 MIXED: AnswerSource = "MIXED"
 NO_MATCH: AnswerSource = "NO_MATCH"
+VISION: AnswerSource = "VISION"
 
 HIGH: Confidence = "HIGH"
 MEDIUM: Confidence = "MEDIUM"

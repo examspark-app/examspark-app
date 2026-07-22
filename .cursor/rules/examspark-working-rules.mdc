@@ -31,6 +31,7 @@ Full spec: [`PROJECT_WORKING_RULES.md`](PROJECT_WORKING_RULES.md)
 - **Phase by phase** — finish one phase, audit, wait for founder OK before next
 - **Never assume** SQL, Supabase, FastAPI, Cloudflare, Flutter, Git knowledge
 - **Copy-paste commands** whenever possible; verify checkpoint after each step
+- **CTO Charter (locked):** [`FOUNDER_CTO_WORKING_CHARTER.md`](examspark_backend/FOUNDER_CTO_WORKING_CHARTER.md) — honesty, user-first, no fake emotion; Gate A = Phase 4C smoke ([`FOUNDER_PHASE4C_SMOKE_CARD.md`](examspark_backend/FOUNDER_PHASE4C_SMOKE_CARD.md)); Gate B = only `start …` for next coding
 
 ## Product Vision
 

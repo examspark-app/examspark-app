@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show AuthChangeEvent;
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/presentation/screens/auth/update_password_screen.dart';
@@ -8,16 +9,12 @@ import 'package:examspark_frontend/presentation/screens/onboarding/role_selectio
 import 'package:examspark_frontend/presentation/screens/onboarding/student_onboarding_screen.dart';
 import 'package:examspark_frontend/presentation/shell/app_shell.dart';
 
-/// Routes to the guest chat preview, Login (pushed on top when the guest
-/// tries a 2nd question or taps Sign In), the "set new password" screen,
-/// the role-selection / student onboarding screens, or the 5-tab AppShell
-/// based on Supabase auth session. Listens to [authStateChanges] so a
-/// Google OAuth redirect (or a password-reset email link) is picked up
-/// automatically when the user returns from the browser.
+/// Routes guest / login / onboarding / AppShell from Supabase session.
 ///
-/// PRODUCT_VISION.md Core User Flow #1: "Anonymous try → One Ask AI →
-/// Sign up → @username + Library" — [GuestHomeScreen] is that anonymous
-/// try; it pushes [LoginScreen] itself once the free question is used.
+/// Important: ignore [AuthChangeEvent.tokenRefreshed] for UI rebuilds.
+/// On Chrome minimize/tab-switch Supabase refreshes the JWT often — rebuilding
+/// [AppShell] was wiping Home chat, Library scroll, and Study Workspace
+/// ("everything looks new" + jump back to Home).
 class AuthGate extends StatefulWidget {
   const AuthGate({super.key});
 
@@ -28,25 +25,91 @@ class AuthGate extends StatefulWidget {
 class _AuthGateState extends State<AuthGate> {
   bool _isPasswordRecovery = false;
   StreamSubscription? _authSub;
+  Timer? _signOutDebounce;
   String? _cachedUserId;
   Future<Map<String, dynamic>?>? _profileFuture;
   bool _onboardingHandledLocally = false;
   bool _roleChosenAsStudent = false;
+  /// Snapshot used for build — not replaced on token refresh.
+  bool _hasSession = false;
+  /// Once true, never swap AppShell for a profile spinner again (minimize-safe).
+  bool _shellReady = false;
 
   @override
   void initState() {
     super.initState();
-    if (SupabaseClient.instance.isInitialized) {
-      _authSub = SupabaseClient.instance.authStateChanges.listen((state) {
-        if (SupabaseClient.instance.isPasswordRecoveryEvent(state) && mounted) {
-          setState(() => _isPasswordRecovery = true);
+    if (!SupabaseClient.instance.isInitialized) return;
+
+    _hasSession = SupabaseClient.instance.currentSession != null;
+    final uid = SupabaseClient.instance.currentUser?.id;
+    if (uid != null) {
+      _cachedUserId = uid;
+      _profileFuture = SupabaseClient.instance.getUserProfile(uid);
+    }
+
+    _authSub = SupabaseClient.instance.authStateChanges.listen((state) {
+      if (!mounted) return;
+
+      if (SupabaseClient.instance.isPasswordRecoveryEvent(state)) {
+        setState(() => _isPasswordRecovery = true);
+        return;
+      }
+
+      // Auth noise on minimize / tab resume must NOT remount AppShell.
+      if (state.event == AuthChangeEvent.tokenRefreshed ||
+          state.event == AuthChangeEvent.userUpdated) {
+        return;
+      }
+
+      final session = state.session ?? SupabaseClient.instance.currentSession;
+
+      if (session == null) {
+        // Brief null blips during web/mobile resume — keep AppShell mounted.
+        // Founder Lock: Session Persistence — never flash GuestHome mid-session.
+        _signOutDebounce?.cancel();
+        _signOutDebounce = Timer(const Duration(milliseconds: 2500), () {
+          if (!mounted) return;
+          if (SupabaseClient.instance.currentSession != null) return;
+          setState(() {
+            _hasSession = false;
+            _shellReady = false;
+            _cachedUserId = null;
+            _onboardingHandledLocally = false;
+            _roleChosenAsStudent = false;
+            _profileFuture = null;
+          });
+          SessionLiveSync.instance.stop();
+        });
+        return;
+      }
+
+      _signOutDebounce?.cancel();
+      final userId = session.user.id;
+      final userChanged = _cachedUserId != userId;
+      final wasLoggedOut = !_hasSession;
+
+      // Same logged-in user (Chrome minimize / tab resume often re-fires auth
+      // events). Do NOT setState — rebuilding AuthGate was jumping UI back to
+      // Home and wiping in-memory chat / tab position.
+      if (!wasLoggedOut && !userChanged) {
+        return;
+      }
+
+      setState(() {
+        _hasSession = true;
+        if (userChanged) {
+          _cachedUserId = userId;
+          _onboardingHandledLocally = false;
+          _roleChosenAsStudent = false;
+          _profileFuture = SupabaseClient.instance.getUserProfile(userId);
         }
       });
-    }
+    });
   }
 
   @override
   void dispose() {
+    _signOutDebounce?.cancel();
     _authSub?.cancel();
     super.dispose();
   }
@@ -63,60 +126,52 @@ class _AuthGateState extends State<AuthGate> {
       );
     }
 
-    return StreamBuilder(
-      stream: SupabaseClient.instance.authStateChanges,
-      builder: (context, snapshot) {
-        final session = SupabaseClient.instance.currentSession;
-        if (session == null) {
-          _cachedUserId = null;
-          _onboardingHandledLocally = false;
-          _roleChosenAsStudent = false;
-          SessionLiveSync.instance.stop();
-          return const GuestHomeScreen();
+    if (!_hasSession) {
+      return const GuestHomeScreen();
+    }
+
+    final userId = _cachedUserId ?? SupabaseClient.instance.currentUser?.id;
+    if (userId == null) {
+      return const GuestHomeScreen();
+    }
+
+    if (_onboardingHandledLocally) {
+      _shellReady = true;
+      return AppShell(key: ValueKey('shell-$userId'));
+    }
+
+    return FutureBuilder<Map<String, dynamic>?>(
+      future: _profileFuture,
+      builder: (context, profileSnapshot) {
+        final waiting =
+            profileSnapshot.connectionState != ConnectionState.done;
+        // After shell once ready, never flash spinner (wipes chat / notes).
+        if (waiting && !_shellReady) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
         }
 
-        final userId = session.user.id;
-        if (_cachedUserId != userId) {
-          _cachedUserId = userId;
-          _onboardingHandledLocally = false;
-          _roleChosenAsStudent = false;
-          _profileFuture = SupabaseClient.instance.getUserProfile(userId);
+        final profile = profileSnapshot.data;
+        final onboardingCompleted =
+            profile?['onboarding_completed'] as bool? ?? true;
+
+        if (!onboardingCompleted && !_shellReady) {
+          if (_roleChosenAsStudent) {
+            return StudentOnboardingScreen(
+              userId: userId,
+              onDone: () => setState(() => _onboardingHandledLocally = true),
+            );
+          }
+          return RoleSelectionScreen(
+            userId: userId,
+            onPickStudent: () => setState(() => _roleChosenAsStudent = true),
+            onDone: () => setState(() => _onboardingHandledLocally = true),
+          );
         }
 
-        if (_onboardingHandledLocally) {
-          return const AppShell();
-        }
-
-        return FutureBuilder<Map<String, dynamic>?>(
-          future: _profileFuture,
-          builder: (context, profileSnapshot) {
-            if (profileSnapshot.connectionState != ConnectionState.done) {
-              return const Scaffold(body: Center(child: CircularProgressIndicator()));
-            }
-
-            final profile = profileSnapshot.data;
-            // Fail open into the app if the profile row/columns aren't
-            // there yet (e.g. onboarding migration not run) instead of
-            // blocking login.
-            final onboardingCompleted = profile?['onboarding_completed'] as bool? ?? true;
-
-            if (!onboardingCompleted) {
-              if (_roleChosenAsStudent) {
-                return StudentOnboardingScreen(
-                  userId: userId,
-                  onDone: () => setState(() => _onboardingHandledLocally = true),
-                );
-              }
-              return RoleSelectionScreen(
-                userId: userId,
-                onPickStudent: () => setState(() => _roleChosenAsStudent = true),
-                onDone: () => setState(() => _onboardingHandledLocally = true),
-              );
-            }
-
-            return const AppShell();
-          },
-        );
+        _shellReady = true;
+        return AppShell(key: ValueKey('shell-$userId'));
       },
     );
   }

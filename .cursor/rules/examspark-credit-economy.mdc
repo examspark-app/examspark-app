@@ -11,29 +11,38 @@ Full spec: [`CREDIT_ECONOMY.md`](CREDIT_ECONOMY.md)
 
 - Users see **Credits only** — never rupee amounts for AI actions
 - Internal (backend only): **1 Credit ≈ ₹0.15** charged-value — never in UI
-- Credits are **feature/session-based** — never per-minute in UI or config copy
+- Most features are **session/feature-based**. **Exception:** Record + Audio Upload = **per-minute** (1/min, round up, max 180); YouTube stays banded
 
 ## Locked Credit Costs (v2)
 
 | Feature | Credits |
 |---------|---------|
-| Record ≤30 min | 40 |
-| Record 30–60 min | 80 |
-| Record 60–90 min | 120 |
+| **Recording / Audio Upload** | **1 credit per minute** (actual length, max 180) |
 | Summary | Included with recording |
 | Ask AI (Normal) | 5 |
 | Ask AI (Deep) | 12 |
-| Flashcards | 20 |
-| Quiz (20 MCQ) | 25 |
+| Ask AI + live web (Tavily, current events only) | 10 |
+| Ask AI Deep + live web | 20 |
+| Select AI (Explain / Simplify / Translate / Memory / Exam / Ask) | 2 |
+| Select AI (Quiz from selection, 5 MCQ) | 3 |
+| Select AI (Flashcards from selection, 5) | 3 |
+| Home chips after Ask (from Knowledge Object) | 0 (Regenerate paid) |
+| Flashcards | 5 |
+| Quiz (20 MCQ) | 5 |
 | Important Questions | 20 |
-| Revision Notes | 20 |
+| Revision Notes | 5 |
+| 5 Minute Revision | 5 |
 | Formula Sheet | 15 |
 | Mind Map | 30 |
 | Diagram/Image | 25 |
+| Home AI Camera / Upload Image | 10 |
 | PDF Analysis | 20 |
 | OCR Image | 15 |
 | Translate | 8 |
 | Voice Read | 5 |
+| YouTube Link → Notes ≤30 min | 10 |
+| YouTube Link → Notes 30–60 min | 20 |
+| YouTube Link → Notes 60–90 min | 40 |
 
 ## Plans (v2.2 — Jul 15, 2026)
 

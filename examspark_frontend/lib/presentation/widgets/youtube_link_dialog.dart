@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 
-/// "Paste a YouTube link" — captions → Notes + Summary (PDF-parity).
-/// Quiz / Flashcards are separate credit actions later. Public videos only, ≤1 hour.
+/// "Paste a YouTube link" — captions first, Whisper fallback → Notes + Summary.
+/// Same Record credit bands. Public videos, ≤90 minutes.
 Future<void> showYoutubeLinkDialog(
   BuildContext context, {
   required ValueChanged<String> onSubmit,
@@ -23,8 +23,10 @@ Future<void> showYoutubeLinkDialog(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Paste a public YouTube video link (up to 1 hour). We will turn captions into '
-              'Notes and Summary — same as a PDF/lecture. Quiz and Flashcards cost extra credits later.',
+              'Paste a public YouTube link (up to 90 minutes). We use captions when '
+              'available; otherwise we temporarily download audio for Whisper '
+              '(audio is deleted after). Notes + Summary like a lecture. '
+              'Quiz and Flashcards cost extra credits later.',
               style: Theme.of(context).textTheme.bodySmall,
             ),
             const SizedBox(height: 16),
@@ -40,18 +42,22 @@ Future<void> showYoutubeLinkDialog(
               validator: (value) {
                 final url = value?.trim() ?? '';
                 if (url.isEmpty) return 'Please paste a YouTube link';
-                final isYoutube = url.contains('youtube.com/watch') ||
-                    url.contains('youtu.be/') ||
-                    url.contains('youtube.com/shorts/');
+                final lower = url.toLowerCase();
+                final isYoutube = lower.contains('youtube.com/watch') ||
+                    lower.contains('youtu.be/') ||
+                    lower.contains('youtube.com/shorts/') ||
+                    lower.contains('youtube.com/embed/') ||
+                    lower.contains('youtube.com/live/') ||
+                    lower.contains('m.youtube.com');
                 if (!isYoutube) return 'That doesn\'t look like a YouTube link';
                 return null;
               },
             ),
             const SizedBox(height: 12),
             Text(
-              'Cost: ${CreditCosts.youtubeUpTo20Min}–${CreditCosts.youtube40To60Min} credits '
-              'by length (≤20 / 20–40 / 40–60 min). Public videos with captions only — '
-              'private, unlisted, age-restricted or region-locked are not supported.',
+              'Cost: ${CreditCosts.youtubeUpTo30Min}/${CreditCosts.youtube30To60Min}/'
+              '${CreditCosts.youtube60To90Min} credits by length '
+              '(≤30 / 30–60 / 60–90 min). Public videos only.',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.getSecondaryText(context)),
             ),
           ],

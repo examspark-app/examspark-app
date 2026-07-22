@@ -199,7 +199,7 @@ class _ProfileTabState extends State<ProfileTab> {
               icon: Icons.bolt,
               label: 'Credits',
               trailingText: '$_creditsBalance',
-              onTap: () => Navigator.pushNamed(context, '/subscription'),
+              onTap: () => Navigator.pushNamed(context, '/credits/history'),
             ),
             _divider(context),
             ProfileRow(

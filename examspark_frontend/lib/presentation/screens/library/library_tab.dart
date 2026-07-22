@@ -5,6 +5,7 @@ import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/home/home_tab.dart' show OpenWorkspace;
 import 'package:examspark_frontend/presentation/widgets/app_top_bar.dart';
 import 'package:examspark_frontend/presentation/widgets/lecture_card.dart';
+import 'package:examspark_frontend/presentation/widgets/study_workspace/workspace_reading_utils.dart';
 
 /// Library tab: Folders · Search · Recent → tap card → Study Workspace.
 /// Uses real `LectureService` data (kept wired per Phase 2 rule) — no
@@ -47,6 +48,27 @@ class _LibraryTabState extends State<LibraryTab> {
     }
   }
 
+  /// Same title + subject + calendar day → keep newest only (retry spam).
+  List<Map<String, dynamic>> _dedupeLectures(List<Map<String, dynamic>> lectures) {
+    final seen = <String>{};
+    final out = <Map<String, dynamic>>[];
+    for (final lecture in lectures) {
+      final title = ((lecture['title'] as String?) ?? '').trim().toLowerCase();
+      final subject = ((lecture['subject'] as String?) ?? '').trim().toLowerCase();
+      final created = (lecture['created_at'] as String?) ?? '';
+      final day = created.length >= 10 ? created.substring(0, 10) : created;
+      final key = '$title|$subject|$day';
+      if (title.isEmpty) {
+        out.add(lecture);
+        continue;
+      }
+      if (seen.contains(key)) continue;
+      seen.add(key);
+      out.add(lecture);
+    }
+    return out;
+  }
+
   void _closeFolder() {
     setState(() => _openFolderName = null);
   }
@@ -62,6 +84,7 @@ class _LibraryTabState extends State<LibraryTab> {
     final user = SupabaseClient.instance.currentUser;
     try {
       final lectures = await LectureService.instance.getLecturesForUser();
+      final deduped = _dedupeLectures(lectures);
       int credits = 0;
       if (user != null) {
         final profile = await SupabaseClient.instance.getUserProfile(user.id);
@@ -69,7 +92,7 @@ class _LibraryTabState extends State<LibraryTab> {
       }
       if (!mounted) return;
       setState(() {
-        _lectures = lectures;
+        _lectures = deduped;
         _creditsBalance = credits;
         _isLoading = false;
         _isRefreshing = false;
@@ -167,7 +190,9 @@ class _LibraryTabState extends State<LibraryTab> {
                           child: LectureCard(
                             title: lecture['title'] as String? ?? 'Untitled Lecture',
                             subject: lecture['subject'] as String?,
-                            dateLabel: _formatDate(lecture['created_at']),
+                            dateLabel: formatOpenedAtLabel(
+                              lecture['last_opened_at'] ?? lecture['created_at'],
+                            ),
                             onTap: () => _openLecture(lecture),
                           ),
                         ),
@@ -271,7 +296,9 @@ class _LibraryTabState extends State<LibraryTab> {
           child: LectureCard(
             title: lecture['title'] as String? ?? 'Untitled Lecture',
             subject: lecture['subject'] as String?,
-            dateLabel: _formatDate(lecture['created_at']),
+            dateLabel: formatOpenedAtLabel(
+              lecture['last_opened_at'] ?? lecture['created_at'],
+            ),
             onTap: () => _openLecture(lecture),
           ),
         ),
@@ -299,16 +326,6 @@ class _LibraryTabState extends State<LibraryTab> {
         ],
       ),
     );
-  }
-
-  String _formatDate(dynamic date) {
-    if (date == null) return 'Unknown';
-    try {
-      final d = DateTime.parse(date.toString());
-      return '${d.day}/${d.month}/${d.year}';
-    } catch (_) {
-      return 'Unknown';
-    }
   }
 }
 

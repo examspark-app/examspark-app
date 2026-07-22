@@ -8,11 +8,15 @@ const groqApiKey = Deno.env.get('GROQ_API_KEY')!
 
 const supabase = createClient(supabaseUrl, supabaseServiceKey)
 
-// Credit Economy v2 — feature/session-based (never per-minute in UI)
+// Credit Economy — Record/Audio = 1 credit/min (Jul 22, 2026); YouTube stays banded
 const CREDIT_COSTS = {
+  RECORD_CREDITS_PER_MINUTE: 1,
+  RECORD_MAX_MINUTES: 180,
+  // Legacy band constants (pre–per-minute) — reference only
   RECORD_UP_TO_30_MIN: 40,
   RECORD_30_TO_60_MIN: 80,
   RECORD_60_TO_90_MIN: 120,
+  RECORD_90_TO_180_MIN: 240,
   SUMMARY_WITH_RECORDING: 0,
   ASK_AI_NORMAL: 5,
   ASK_AI_DEEP: 12,
@@ -43,10 +47,8 @@ const CREDIT_COSTS = {
 }
 
 function recordCreditsForDurationMinutes(minutes: number): number {
-  if (minutes <= 30) return CREDIT_COSTS.RECORD_UP_TO_30_MIN
-  if (minutes <= 60) return CREDIT_COSTS.RECORD_30_TO_60_MIN
-  if (minutes <= 90) return CREDIT_COSTS.RECORD_60_TO_90_MIN
-  return CREDIT_COSTS.RECORD_60_TO_90_MIN
+  const clamped = Math.max(1, Math.min(CREDIT_COSTS.RECORD_MAX_MINUTES, Math.floor(minutes)))
+  return clamped * CREDIT_COSTS.RECORD_CREDITS_PER_MINUTE
 }
 
 // API Endpoints (4 Final Locked APIs)

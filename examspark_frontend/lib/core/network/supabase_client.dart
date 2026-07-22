@@ -209,12 +209,19 @@ class SupabaseClient {
     return (response as num).toDouble();
   }
 
-  Future<List<Map<String, dynamic>>> getCreditTransactions(String userId) async {
+  Future<List<Map<String, dynamic>>> getCreditTransactions(
+    String userId, {
+    int limit = 100,
+  }) async {
     final response = await client
         .from('credit_transactions')
-        .select()
+        .select(
+          'id, amount, action, description, lecture_id, created_at, '
+          'lectures(title, subject, topic)',
+        )
         .eq('user_id', userId)
-        .order('created_at', ascending: false);
+        .order('created_at', ascending: false)
+        .limit(limit);
 
     return List<Map<String, dynamic>>.from(response as List);
   }

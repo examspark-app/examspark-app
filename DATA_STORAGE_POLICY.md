@@ -1,221 +1,163 @@
-# ExamSpark — Data Storage Policy
+# ExamSpark Storage Architecture Policy (Final — Locked)
 
-> **Saved:** Jul 2026 — pre-Phase 2 documentation
-> **Audience:** Founder (non-developer) + backend team
-> **Rule:** Minimize cost. Store only what matters. Delete the rest.
-
-**Companion:** [`PROJECT_CORE_RULES.md`](PROJECT_CORE_RULES.md) · [`TECH_STACK.md`](TECH_STACK.md)
+> **Status:** LOCKED (Jul 16, 2026). All development must follow this unless explicitly changed by the founder.
+> **Audience:** Founder + backend + Flutter team
+> **Companion:** [`PROJECT_CORE_RULES.md`](PROJECT_CORE_RULES.md) · [`TECH_STACK.md`](TECH_STACK.md) · [`ARCHITECTURE.md`](ARCHITECTURE.md)
 
 ---
 
-## One-line summary
+## Core Principle
 
-| Layer | Stores what | Simple analogy |
-|-------|-------------|----------------|
-| **Temporary** | Raw audio, scratch files | Kitchen prep bowl — throw after cooking |
-| **Cloudflare R2** | Notes, PDFs, transcripts (files) | Filing cabinet for big documents |
-| **PostgreSQL** | IDs, paths, credits, who owns what | Index cards — not the books themselves |
-| **Vector DB** | Search chunks for Ask AI | Smart index for "find the right paragraph" |
+Use the right storage for the right data. **Supabase is not a file store. Cloudflare R2 is not a database.** Never mix responsibilities.
 
-**Never store raw lecture audio permanently** (unless teacher explicitly opts in).
+**Audio is NEVER stored permanently anywhere** — this overrides any other instruction.
 
 ---
 
-## 1. Temporary Storage
+## Cloudflare R2 — Temporary Staging + Permanent Export Files Only
 
-**What:** Files that exist only while AI is working.
+| Content | R2 Role |
+|---|---|
+| **Raw Audio** | **TEMPORARY ONLY** — staged during active transcription/chunking, deleted immediately (success or failure) the moment transcription completes. Never persists beyond that single processing window. |
+| Original PDF/Image uploads (user-provided) | Permanent — kept as source reference |
+| OCR Output (raw, large) | Permanent |
+| Clean Transcript (.txt/.md) | Permanent |
+| Full Lecture Notes (.md, large) | Permanent |
+| Generated exports (PDF, DOCX, PPT, ZIP) | Permanent |
+| Backup files | Permanent |
 
-| Item | Why it exists | When deleted |
-|------|---------------|--------------|
-| **Raw audio** | Whisper needs the sound file to transcribe | **Immediately after** transcript is ready |
-| **Temporary AI files** | Mid-step outputs (chunks, scratch JSON) | After that pipeline step finishes |
-| **Temporary OCR files** | Image → text conversion workspace | After text is extracted |
-| **Temporary upload cache** | Buffer while file moves to R2 | After permanent save succeeds |
+**Critical:** Audio is the one exception to "R2 = permanent" — it is explicitly temporary, deleted right after transcription. Everything else listed above in R2 is a legitimate large file that can stay permanently.
 
-**Why this layer exists:** AI needs raw input briefly. Keeping it wastes money (storage + privacy risk).
-
-**Where (today vs target):**
-
-| Today (interim) | Target |
-|-----------------|--------|
-| Supabase `temp-audio` bucket | Same pattern on R2 temp prefix, then delete |
-
-**Exception — teacher only:**
-
-```
-Settings → ☐ Save Original Audio (default OFF)
-```
-
-If ON → move audio to R2 teacher folder instead of delete. Default = delete.
+**Do NOT store in R2:** Flashcards JSON, Quiz JSON, Mind Map JSON, Revision/Cheat Sheet text (structured) — these live in Supabase. R2 holds **export files** of those features when the user exports to PDF/image.
 
 ---
 
-## 2. Permanent Storage — Cloudflare R2
+## Supabase (Postgres + pgvector) — Structured, Searchable Data Only
 
-**What:** All **user-visible files** and **AI outputs** that must survive.
+| Content | Notes |
+|---|---|
+| Users, Teacher Accounts, Student Accounts | |
+| Lecture Metadata (title, subject, date, R2 file paths) | |
+| Credits, Plans, Purchases | |
+| Chat History / Saved Conversations / Bookmarks | Only if user explicitly saves/bookmarks (see Home AI rule below) |
+| Flashcards (JSON) | `extras.payload_json` |
+| Quiz (JSON) | `extras.payload_json` |
+| Mind Map (structured JSON) | Future — Supabase |
+| Revision Sheet / Cheat Sheet (Markdown, short) | Future — Supabase |
+| Important Questions | Future — Supabase |
+| PYQ Metadata (never the actual copyrighted paper text unless licensed) | |
+| AI Analytics: token usage, AI cost, confidence score, processing status | |
+| Embeddings (pgvector) | |
+| R2 File Paths, file size, content type, checksum, created date | Reference only — never duplicate the actual large file in Postgres |
 
-R2 = cheap cloud file storage (like a hard drive in the cloud). **Big files live here, not in the database.**
+**Short notes** (summary, key points, important terms) → Supabase.  
+**Full/large lecture notes** (complete markdown document) → R2, with metadata (title, R2 path, word count) in Supabase.
 
-### What we store in R2
-
-| Asset | What it is | Why we keep it |
-|-------|------------|----------------|
-| **Transcript** | Full text from Whisper (user can re-read teacher's words) | Users need original explanation in Library |
-| **Clean Transcript** | Same content, cleaned for search (no "umm", "dekho") | Better Ask AI without showing messy text |
-| **Notes** | Structured AI notes (key points, concepts) | Main study material |
-| **Summary** | Short overview | Quick revision |
-| **Quiz** | Generated MCQ set | Practice tests |
-| **Flashcards** | Front/back revision cards | Memorization |
-| **Revision** | Exam-focused recap | Board/exam prep |
-| **Formula Sheet** | Extracted formulas (future) | STEM subjects |
-| **Mind Map** | Visual map data (future) | Visual learners |
-| **Images** | Uploaded photos, diagrams | Source material + vision AI input |
-| **PDFs** | Uploaded documents | Textbooks, notes PDFs |
-| **Teacher Shared Files** | Files broadcast to a group | Group content delivery |
-
-### What we NEVER store in R2 (default)
-
-| Asset | Why not |
-|-------|---------|
-| **Raw lecture audio** | Large, privacy-sensitive, not needed after transcript — **delete** |
-
-### R2 folder idea (simple)
-
-```
-R2
-├── Users/{user_id}/Library/{lecture_id}/
-│     ├── transcript.json
-│     ├── clean_transcript.json
-│     ├── notes.json
-│     ├── summary.json
-│     ├── flashcards.json
-│     ├── quiz.json
-│     └── ...
-├── Teachers/{teacher_id}/Groups/{group_id}/
-│     └── shared/...
-└── Exports/   (PDF exports when built)
-```
-
-Postgres only stores **the path** to each file (e.g. `Users/abc/Library/lect12/notes.json`).
+Never store large binary files inside Postgres.
 
 ---
 
-## 3. PostgreSQL (Supabase) — Metadata Only
-
-**What:** Small structured records — **who, what, when, how much** — not the actual essay-length content.
-
-### What we store
-
-| Data | Why it exists |
-|------|---------------|
-| **User / Teacher profile** | Login, name, role, @username |
-| **Groups** | Batch name, teacher, join code, description |
-| **Group memberships** | Which student joined which batch, when |
-| **Lecture metadata** | Title, subject, date, status (`processing` / `done`) |
-| **R2 storage paths** | Pointer to each file in R2 |
-| **Credits balance** | How many AI credits left |
-| **Subscription** | Which plan, renew date, active/expired |
-| **Payment history** | Transaction IDs, amounts (business records) |
-| **Usage history** | Which AI action used how many credits |
-| **Analytics** | Active students, opens, quiz completion counts |
-| **Library metadata** | Folder name, favorite flag, last opened |
-| **Permissions** | Who can see which group content |
-
-### What we do NOT store in PostgreSQL
-
-| Data | Why not |
-|------|---------|
-| **Audio files** | Too large — temp only |
-| **PDF / image binaries** | Too large — R2 |
-| **Full transcript text (at scale)** | Can be huge — R2 JSON; Postgres may hold snippet for search preview only |
-| **Embeddings vectors** | Use pgvector tables separately, not mixed with user rows |
-
-**Simple analogy:** Postgres = library **catalog card** (title, shelf number). R2 = the **actual book** on the shelf.
-
----
-
-## 4. Vector Database (pgvector)
-
-**What:** Small **chunks** of text converted to numbers (embeddings) so Ask AI can find the right paragraph.
-
-### What we store ONLY
-
-| Source | Why |
-|--------|-----|
-| **Clean Transcript chunks** | Backup search when Notes don't have the answer — without noisy filler words |
-| **AI Notes chunks** | Primary search — structured, high quality |
-| **Teacher Shared Notes chunks** | Answers for students in a group context |
-
-### What we do NOT put in Vector DB
-
-| Item | Why not |
-|------|---------|
-| **Raw audio** | Not text — cannot embed |
-| **Raw PDF binary** | Extract text first → then chunk |
-| **Raw image binary** | OCR/VL extracts text first → then chunk |
-| **Duplicate chunks** | Cost rule: upsert by lecture + source — never duplicate vectors |
-
-### How Ask AI uses it (order)
-
-```
-1. Search Notes chunks
-2. If weak → Search Clean Transcript chunks
-3. If weak → Search Teacher Shared chunks
-4. If weak → Web Search (Tavily)
-```
-
-**Simple analogy:** Vector DB = smart **index at the back of a textbook**, not the whole textbook.
-
----
-
-## 5. Data flow (one lecture)
+## RAG Architecture Flow
 
 ```text
-User records audio
-        ↓
-[TEMP] Raw audio file
-        ↓
-Whisper → Transcript text
-        ↓
-[TEMP] Audio DELETED ✓
-        ↓
-[R2] Save Transcript + Clean Transcript
-        ↓
-[VECTOR] Chunk + embed Clean Transcript + Notes
-        ↓
-[R2] Save Notes, Summary, Quiz, Flashcards…
-        ↓
-[POSTGRES] Save lecture row + R2 paths + credits used
-        ↓
-User sees in Library → Study Workspace
+Lecture Audio
+  → R2 (temporary staging)
+  → Groq Whisper transcription
+  → Clean Transcript (saved to R2 permanently as .txt/.md; audio deleted from R2 now)
+  → Chunk transcript
+  → Generate embeddings
+  → Store embeddings in Supabase pgvector
+  → [User asks a question]
+  → Similarity search in pgvector (never search R2 directly)
+  → Retrieved context + question → Qwen3/Qwen3-VL
+  → Answer
 ```
 
+**RAG always searches pgvector, never R2 directly.**
+
 ---
 
-## 6. Cost & security rules
+## Feature-by-Feature Save Rules
 
-| Rule | Reason |
+### Home AI (general chat, not tied to a specific lecture)
+
+Do **NOT** auto-save every response. Save only if the user bookmarks, pins, explicitly saves the conversation, or has auto-history enabled.
+
+### Ask AI (RAG, lecture/PYQ-grounded)
+
+Store: user question, AI answer, timestamp, lecture ID, answer source, confidence score, credits used — all in Supabase.
+
+Do **NOT** store the retrieved chunks themselves (they're regenerable from pgvector on demand).
+
+### Flashcards / Quiz / Mind Map
+
+Store the structured JSON in **Supabase**. If the user exports to PDF/image, that export file goes to **R2**.
+
+### Revision Sheet / Cheat Sheet
+
+Markdown/text version in **Supabase**. PDF export goes to **R2**.
+
+### Notes
+
+| Part | Where |
 |------|--------|
-| Delete temp immediately | Storage cost + privacy |
-| One canonical Notes file per lecture | No duplicate R2 objects |
-| No duplicate vectors | Re-index only when content changes |
-| Students isolated | Cannot read another user's R2 paths |
-| Group content gated | Server checks membership before R2 signed URL |
-| Watermark on shared views | Trace leaks — metadata has `lecture_id` |
+| Short notes (summary, key points, important terms) | Supabase |
+| Full/large lecture notes (complete markdown) | R2 + metadata in Supabase |
+
+### PYQ
+
+Only metadata (exam name, year, topic tags, similarity embedding) in Supabase. Never store the actual copyrighted question-paper text/scans unless properly licensed.
 
 ---
 
-## 7. Current implementation vs policy
+## Search Rule
+
+All searching happens: **Supabase → pgvector → metadata**. Never search R2 directly — R2 is fetched only when the actual file content needs to be displayed/downloaded, after the relevant record is already found via Supabase.
+
+---
+
+## Scalability Rule
+
+| Data type | Store |
+|-----------|--------|
+| Small, searchable, frequently-queried | Supabase |
+| Large, occasionally-downloaded files | Cloudflare R2 |
+
+---
+
+## Final Rule
+
+| System | Role |
+|--------|------|
+| **Supabase** | Structured data + search + metadata + analytics + chat + RAG embeddings |
+| **Cloudflare R2** | Large files + full notes + PDFs + temporary audio staging + exports |
+| **Audio** | Sole R2 exception: staged temporarily, deleted immediately after transcription — **never permanent** |
+
+Never use one system for the other's purpose.
+
+---
+
+## Implementation status (Jul 16, 2026)
 
 | Policy item | Code today |
 |-------------|------------|
-| Temp audio delete | Edge function deletes from `temp-audio` after Whisper |
-| R2 permanent storage | **Not wired** — still Supabase interim |
-| Postgres metadata only | Schema designed; **manual SQL run may be pending** |
-| Clean transcript + vector chunks | **Not implemented** — basic `rag_documents` insert only |
-| Teacher Save Original Audio | **Not implemented** |
+| Flashcards JSON → Supabase | **Done** — `extras.payload_json` |
+| Quiz JSON → Supabase | **Done** — `extras.payload_json` |
+| Legacy extras `r2_path` | Backfill on read; new generates skip R2 |
+| Full notes + transcript → R2 | **Done** (Session 2/4 pipeline) |
+| Short notes split → Supabase | **Done** — `notes.clean_notes`, `notes.short_summary`, `notes.key_points`, `notes.important_terms` |
+| Revision JSON → Supabase | **Done** — `extras.payload_json` (+ optional `visualPayload`) |
+| Visual payload (graphs/diagrams) → Supabase | **Done** — `notes.visual_payload_json`; Ask/Home AI `done.visual_payload` |
+| Mind Map → Supabase | **Done** — `extras.payload_json` |
+| Home AI save-on-bookmark only | **Not built** — superseded by Phase 4D lock (full Study History); see [`FOUNDER_PHASE4D_HOME_HISTORY.md`](examspark_backend/FOUNDER_PHASE4D_HOME_HISTORY.md) |
+| Phase 4C master response + chip cache | **Done** — `home_ai_responses` / `home_ai_tools` (building block for 4D sessions) |
+| Phase 4D sessions + history UI | **Future** — after 4C smoke + `start Phase 4D` |
+| Audio temp R2 staging | In-memory today; temp R2 when chunking added |
+| Raw audio never permanent | **Enforced** (delete after Whisper) |
 
-**Target architecture:** [`TECH_STACK.md`](TECH_STACK.md)
+Migration for Flashcards/Quiz column: [`examspark_backend/extras_payload_json_migration.sql`](examspark_backend/extras_payload_json_migration.sql)
+Migration for short notes columns: [`examspark_backend/notes_short_supabase_migration.sql`](examspark_backend/notes_short_supabase_migration.sql)
+Migration for visual payload: [`examspark_backend/notes_visual_payload_migration.sql`](examspark_backend/notes_visual_payload_migration.sql)
 
 ---
 
@@ -223,4 +165,5 @@ User sees in Library → Study Workspace
 
 | Date | Change |
 |------|--------|
-| Jul 2026 | DATA_STORAGE_POLICY.md — founder-friendly full policy |
+| Jul 2026 | Initial founder-friendly DATA_STORAGE_POLICY.md |
+| Jul 16, 2026 | **Smart Subject Understanding Rule** — expanded per-subject visual decision (Math through English, Economics, CS); teacher-like “text alone vs visual” gate in all Qwen prompts |

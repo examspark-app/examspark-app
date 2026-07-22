@@ -7,6 +7,348 @@
 
 ## Jul 2026
 
+### Freeze lock ~70% core (Jul 22, 2026)
+
+Founder pass: no more feature/backend changes without `start …`. Next allowed lane = UI/UX only when named. Language lock + notes/Ask paths stay as-is.
+
+### Language lock: notes = input; Ask/Home = user chat (Jul 22, 2026)
+
+Notes: English audio/OCR → English notes only (no Hindi/Khmer invent). Ask AI / Home AI: answer in student question language (Hinglish/Marathi/…) with conversation lock + anti-leak so notes language cannot override chat.
+
+### Notes Retry duplicate + YouTube JSON (Jul 22, 2026)
+
+Image Retry L101: `transcripts_lecture_id` unique — upsert now uses `on_conflict=lecture_id`. YouTube L101 JSON delimiter: stronger `_extract_json_object` salvage + clearer generate_notes failure. Download path already OK.
+
+### Image notes JSON truncate fix (Jul 22, 2026)
+
+Root cause of L101/500 on image → notes: vision prompt included huge `NOTES_SYSTEM_EXTENSION` → model cut mid-JSON (`Unterminated string`) → Plus escalation also failed → empty notes / 500. Fix: compact vision prompt, `max_tokens` 8192, truncated-JSON salvage, never return unusable empty notes. YouTube audio download path already OK (verified).
+
+### YouTube non-CC download restore (Jul 22, 2026)
+
+Apology path: non-CC Whisper download was broken by 403 + blame-y CC-only messaging. Restored multi-client yt-dlp attempts (android/ios/tv/web), softer errors, longer timeouts. Image/YouTube UI copy no longer blames photo quality or “must enable CC”.
+
+### YouTube fail-fast + clearer process errors (Jul 22, 2026)
+
+YouTube Whisper fallback: socket timeout + 90s download / 120s Whisper caps (no 5-min hang on 403). Process route logs unexpected 500s with traceback. I101 mapping tightened so random errors are not shown as “image” failures. Founder: restart backend clean once after language edits (`--reload` mid-request caused bare 500s).
+
+### Multilingual India + world (Qwen3) (Jul 22, 2026)
+
+Language policy: match student/source language worldwide (not English-only, not India-only). Ask AI / Home / Select use MATCH_QUESTION for Latin + world scripts; Hindi/Bengali/Hinglish locks kept. Notes + chips + YouTube CC prefer India + major world langs; any CC track still accepted. Prompts state Qwen3 is multilingual.
+
+### All-India multilingual product-wide (Jul 22, 2026)
+
+Ask AI / Home AI / Select AI: language lock covers Hindi, Bengali, Hinglish, English, plus MATCH_QUESTION for other Indic/Urdu scripts (Tamil, Telugu, …). Notes + flashcards/quiz/revision/mind map/important Qs + Home chips use shared STUDY_CONTENT_LANGUAGE_RULE (same language as source). YouTube captions already multilang.
+
+### YouTube multilingual (Bengali/Hindi+) (Jul 22, 2026)
+
+YouTube captions: not English-only — prefer hi/bn/en (+ Indian langs), then any CC track YouTube lists. Notes prompt: write notes in the **same language** as the transcript (Bengali lecture → Bengali notes). Clearer V101 when CC missing / YouTube 403.
+
+### YouTube Bengali/Hindi captions fix (Jul 22, 2026)
+
+Caption fetch was English-only (`languages=('en',)`). Now prefers hi/bn/en + other Indian langs, then any available CC track. Clearer V101 + 403 messages. Hindi often worked via English auto-CC; Bengali-only CC failed before.
+
+### Quiz Attempts Slice A (Jul 22, 2026)
+
+Study Workspace quiz finish saves `quiz_attempts` (score/total). Progress Learning Score = average of recent finishes; Recent Activity shows Quiz Completed. SQL: `quiz_attempts_migration.sql` · guide `FOUNDER_QUIZ_ATTEMPTS.md`. Soft-fail if table missing. No Home AI / Select AI attempts.
+
+### Student Progress Slice 1 live (Jul 22, 2026)
+
+Progress tab loads real lectures + study credit spend: streak (open/save days), Topics Mastered (distinct topic/subject), subject insights, weekly lecture activity bars, honest Recent Activity (Quiz Generated — not scores). Study Time + Learning Score stay `—` until duration/attempts exist. No Home AI / chats. No new SQL.
+
+### Student Progress UX upgrade (Jul 22, 2026)
+
+Student Progress tab only: Topics Mastered + Learning Score cards, AI Insights (strong / needs improvement / recommended next), weekly activity bars, clearer Recent Activity. Same theme/nav; still placeholder stats until server analytics. No teacher dashboard / gaming / Home AI exposure.
+
+### Processing P1 — notes-first + adaptive prompts (Jul 22, 2026)
+
+1. **Notes before optional R2** — Record/upload: Supabase notes → `done` → background R2 transcript + RAG (Workspace opens sooner; Transcript tab may fill seconds later).
+2. **Long-lecture wait copy** — clearer Listening messages for large audio; admin logs `whisper_chunk i/n` (no schema change).
+3. **Adaptive medium prompt** — duration-aware short/medium/long bands; medium uses a lighter prompt than full long-lecture mode.
+
+Credits / UI layout / schema unchanged. PDF/vision/YouTube still use full sync persist.
+
+### Processing P0 reliability — Whisper retry + poll-before-error (Jul 22, 2026)
+
+1. **Groq Whisper safe retry** — same Turbo call up to 2× on timeout / transport / 429 / 5xx (1s→2s backoff); never retry HTTP 400 / no-speech; then existing non-turbo fallback.
+2. **Client poll before error** — on network drop of long `/process`, poll lecture status up to 90s; open notes if `done`; avoid false sticky errors while server still works.
+3. **Admin timing logs** — upload / whisper / openrouter / r2_and_db + `pipeline_timing_fail` with `exc_type` and Groq HTTP status (not shown to students).
+
+Credits still deduct only after notes succeed. No UI / schema / architecture rewrite.
+
+### Processing P0 performance (Jul 22, 2026)
+
+Safe speed/wait improvements only (no product/credits/schema redesign):
+1. **Short-audio smart prompt** — lighter OpenRouter system prompt + lower `max_tokens` for short transcripts (~&lt;2 min); medium/long keep full quality prompt.
+2. **Single R2 transcript upload** — `transcript` + `clean_transcript` DB paths share one object until a real cleaner exists (no duplicate upload).
+3. **Honest processing stages** — Preparing → Listening → Generating notes → Finalizing → Done; progress never jumps to 100% early; “Still processing…” when over estimate.
+4. **Admin pipeline timing logs** — Whisper / OpenRouter / R2+DB stage seconds in server logs only (not student UI).
+
+### Processing time estimate on lecture pipeline (Jul 22, 2026)
+
+Processing screen shows an honest **time range** (from recording length + upload size): low ≈ 75% of model, high ≈ 135% + 45s buffer. Updates every 5s; if work runs past the high end, copy switches to “Still working…” instead of looking broken. Progress bar stays tied to real backend status (not fake %).
+
+### Credits History screen (Jul 22, 2026)
+
+Dedicated read-only **Credits History** (`/credits/history`): This Month spend, date sections, filters. Tap a lecture row → **Study Workspace** on the right tab (Quiz, Flashcards, etc.). Home-only rows show a hint; no re-charge on tap.
+
+### Record / Audio Upload → 1 credit per minute (Jul 22, 2026)
+
+Founder-approved: Recording + Audio Upload charge **1 credit per actual minute** (round up, max 180). Duration chips remain planned-duration warnings only. YouTube stays on 10/20/40 bands. Server still uses ffprobe length → single deduct after Whisper + notes succeed.
+
+### 3-hour Record + hide Fast/High Accuracy (Jul 21, 2026)
+
+Setup Recording no longer shows Fast / High Accuracy (server still Turbo → auto fallback). Duration chips include **90–180 (up to 3 hr)** at **240 credits**. Long Record/upload audio is Whisper-chunked via ffmpeg; short path unchanged. Hard max 180 minutes with a friendly student message.
+
+### Home chat + recording UX polish (Jul 21, 2026)
+
+Home AI/photo failures show friendly network messages + Retry (no duplicate question). Sent photos show a thumbnail in the user bubble (session memory). Add content sheet is scrollable (no bottom overflow). Recording goes straight to consolidated setup (Subject/Topic + Quality/Duration); fake camera/mic placeholder page skipped.
+
+### Teacher-safe 5-minute silence warning (Jul 21, 2026)
+
+Recording silence warning moved from 1 min to **5 continuous minutes** (teacher pauses OK). Beep + `Continue Recording` / `Stop & Process`; re-arms after voice resumes. Call/app interruption Discard/Process dialog also beeps.
+
+### Mic silence + false Retry fix (Jul 21, 2026)
+
+Realtime stream blips no longer show sticky N101; `done` clears error UI; client HTTP failures do not overwrite finished lectures. Silent/no-mic recordings reject before notes/credits (“Kindly check your microphone”); amplitude popup after ~1 min silence while recording.
+
+### Library last-opened time stamp (Jul 21, 2026)
+
+Library / Home Recent cards show time like `3:45pm` (today) or `21/7 · 3:45pm`. Updates when Study Workspace opens (`last_opened_at`). SQL: `lecture_last_opened_migration.sql`. List sorts by last opened.
+
+### Clean Library · Delete · Friendly errors (Jul 21, 2026)
+
+Library / Recent only list `status=done` lectures (draft/error job rows stay for retry, never look like files). Study Workspace three-dot after Ask AI → permanent FastAPI delete (`DELETE /api/v1/lectures/{id}`) with R2 prefix cleanup + duplicate-child removal. Student errors use support codes (V101/N101/C101/…) — no R2/RAG/SSL/Whisper text in UI. Processing copy softened (“Preparing your study tools…”). Legacy Notes Result delete now uses the same FastAPI path.
+
+### Full-page Study Workspace after processing (Jul 21, 2026)
+
+Processing done now uses `pushNamedAndRemoveUntil('/study_workspace')` so recording routes are cleared and Notes · Summary · Quiz open as a real full page (not hidden under Recording Setup). Duplicate notice shows on the result page. Empty YouTube unexpected errors now always include `repr(e)`.
+
+### Post-processing result navigation fix (Jul 21, 2026)
+
+Processing now closes before `OpenWorkspaceBridge` opens the result on the next frame, preventing `Navigator.pop` from immediately dismissing the new mobile workspace sheet. Processing requests a full-page Study Workspace so Notes · Summary · Quiz are clearly visible; repeated `done` realtime events are guarded against duplicate navigation.
+
+### Backend freeze + mic dispose fix (Jul 21, 2026)
+
+Root cause: sync boto3 R2 / Supabase / yt-dlp ran on the FastAPI event loop → one stuck network call froze **all** lecture types + `/health`. Fix: `asyncio.to_thread` for blocking pipeline/extras work; boto3 `connect_timeout=10` / `read_timeout=30` / `max_attempts=2`; YouTube Whisper download uses `worstaudio` + mp3 64k. Mic: shared `RecordingService` no longer permanently disposes `AudioRecorder` on screen leave (`releaseForScreen` + lazy recreate). **Follow-up:** Chrome red-screen `Library not defined` on recording/processing — `recording_service.dart` no longer imports `dart:io` directly (conditional `recording_io_stub` / `recording_io_native`); requires full Flutter quit + restart, not hot reload.
+
+### YouTube Notes UX fixes (Jul 21, 2026)
+
+After processing, opens **StudyWorkspace** (same as Library) via `OpenWorkspaceBridge` — Generate More chips + Ask AI work. Eager RAG index at end of audio/YouTube pipeline (faster first Ask). Auto YouTube title via yt-dlp metadata. Layer 1 dedupe HIT/MISS logs + Supabase verify query in `FOUNDER_LECTURE_DEDUPE.md`. Broader YouTube URL validator in dialog.
+
+### YouTube credits 10/20/40 + Turbo-only Whisper (Jul 21, 2026)
+
+YouTube Notes charges **10 / 20 / 40** (not Record 40/80/120). No-CC path uses **Whisper Turbo only** (`allow_non_turbo_fallback=False`); Record path keeps non-Turbo fallback. Free+ YouTube unlock unchanged; audio still ₹499+.
+
+### Tavily web search — gated live (Jul 18, 2026)
+
+Last-resort current affairs only (`web_deferred` + empty RAG/PYQ + LLM classifier). Credits **10/20** (founder fix). Logs `tavily_usage`. Guide: `FOUNDER_TAVILY.md`. Free-tier `TAVILY_API_KEY` in backend `.env`. Smoke list: `FOUNDER_SMOKE_AFTER_JUL18_PASS.md`.
+
+### Lecture duplicate detection (Jul 18, 2026)
+
+Per-student only: Layer 1 (audio SHA-256 / YouTube video ID) before AI → 0 credits + reuse notes. Layer 2 (transcript embedding ≥ 0.95 vs own RAG) after Whisper → skip notes + RAG pollute, 0 credits. Clear Flutter snackbar. SQL: `lecture_dedupe_migration.sql`. Guide: `FOUNDER_LECTURE_DEDUPE.md`.
+
+### RAG store policy — audio + YouTube only (Jul 18, 2026)
+
+Founder lock: `rag_documents` only for `recorded` / `uploaded_audio` / `youtube_link`. PDF/photo (`uploaded_document`) never indexed; Ask AI still uses that lecture’s notes via direct fallback; chips use Knowledge Object. Optional cleanup: `rag_exclude_pdf_photo_cleanup.sql`.
+
+### YouTube Whisper + full-store RAG (Jul 18, 2026)
+
+Captions-first YouTube; Whisper fallback via temp yt-dlp audio (deleted after). Credits = Record 40/80/120 (max 90 min). User-wide RAG RPC `match_rag_documents_user` + weighted merge (open lecture first). Ask Shape 1/2/3 confirmed. Tavily still not live (web_deferred reinforce only). Guide: `FOUNDER_YOUTUBE_WHISPER_FALLBACK.md`.
+
+### Founder lock — Jul 18 night pass (Jul 18, 2026)
+
+Founder `all pass ok lock`: Phase 4D History + PYQ smoke bank (Important Qs weightage) + Shape 1 short-complete + chip Regenerate disclaimer. Do not re-smoke unless bug. Next coding only on new `start …`.
+
+### Chip disclaimer — Regenerate = AI (Jul 18, 2026)
+
+Phase 4C tool sheet: small black line on free/derived open — “Want a fresh AI version? Tap Regenerate (uses credits).” More sheet copy aligned. Regenerate still Qwen AI from KO (not lecture RAG).
+
+### Shape 1 — short but complete (Jul 18, 2026)
+
+Simple factual Home/Ask answers must be 2–4 useful sentences (not one bare line); still no forced section headers. Prompts in `home_ai_service` / `rag_ask_service` + `_BREVITY_NORMAL`.
+
+### PYQ UX — Important Qs weightage + chip speed (Jul 18, 2026)
+
+Similarity 0.45 hidden from students. Home/Ask answers skip PYQ match (faster). Important Questions uses PYQ `weightage_stars` as chance bias (free derive + paid regen). Learn More regen `max_tokens` 1600; IQ regen 2200. PYQs More-chip stays removed.
+
+### Home — hide PYQs chip (Jul 18, 2026)
+
+Founder: remove More → **PYQs** chip (reply delay confusion). Related tags in answer path stay server-side until founder says otherwise. Learn More: first open = KO free; **Regenerate** = paid AI (5 credits).
+
+### PYQ match speed — less Home reply delay (Jul 18, 2026)
+
+PYQ was adding 3–6s before first token (2 embeds + broken RPC + Supabase each ask). Now: 1 embed, local scan + in-memory bank cache, PYQ overlaps RAG. Warm path ~0.01s.
+
+### PYQ Related fix — IVFFlat empty + Home chip (Jul 18, 2026)
+
+Founder: no Related PYQ in chat; PYQs chip said coming soon. Root cause: IVFFlat on ~12 rows returned zero RPC neighbors despite cosine ~0.55; threshold 0.80 was also too high (now 0.45). Fix: local cosine fallback in `pyq_retrieve.py`; SQL `pyq_fix_ivfflat_index.sql` drops bad index; Home **PYQs** chip → related tags sheet (0 credits).
+
+### Start PYQs — exam_pyqs bank + vector match (Jul 18, 2026)
+
+Founder `ok start` / Gate B. SQL `pyq_exam_pyqs_migration.sql` (metadata + `match_exam_pyqs`); seed embeddings via `scripts/seed_pyq_embeddings.py`; live `match_pyqs_for_query` (tags only). Guide: `FOUNDER_START_PYQS.md`.
+
+### Adaptive RAG + PYQ answer shapes (Jul 18, 2026)
+
+Prompt + retrieval hook: Ask AI / Home AI use Shape 1/2/3 with hard OMIT. Code injects `VERIFIED PYQ` user-message block via `pyq_retrieve.py` (live after `start PYQs` SQL + seed). Metadata-only tags (2A copyright).
+
+### Home/Ask answer template flexibility (Jul 18, 2026)
+
+Prompt-only: `_HOME_SYSTEM` / `_ASK_SYSTEM` keep compact replies but sections are optional by question type (not a forced checklist). Vision `_format_home_vision_answer` skips empty/filler Easy Explanation / Exam Tip. `_BREVITY_NORMAL` aligned. No orchestration/RAG/credits/KO changes.
+
+### Phase 4D Home AI Study History P0 (Jul 18, 2026)
+
+Gate A 4C pass + `start phase 4`. Sessions/messages in Supabase (`home_ai_phase4d_migration.sql`). Every SUCCESS Home AI answer auto-saves into a Study Session; chips stay in Phase 4C `home_ai_tools`. History UI on Home (clock icon) restores Q+A+chips with **0 credits / no AI**. Doc: `FOUNDER_PHASE4D_HOME_HISTORY.md`.
+
+### Library Study Workspace = full page (Jul 18, 2026)
+
+Desktop Library no longer opens Notes in a squeezed right panel next to the list. Lecture opens as a **full-page** Study Workspace (same Notes/Summary/Transcript tabs). Home still uses the right split panel. Close / tap Library again returns to the list. Minimize restores the same full-page (or side panel) via session persistence.
+
+### Home AI Camera + Upload Image (Jul 18, 2026)
+
+Plus (+) menu: **Camera** and **Upload Image** are first. Both send the photo to Home AI chat (`POST /api/v1/home-ai/vision`) — **not** Study Workspace. Credits: **10** (founder). Web Camera uses getUserMedia permission dialog. PDF/Audio stay workspace flows. Phase 4E P0 notes cache lock: `FOUNDER_PHASE4E_NOTES_INSTANT.md`.
+
+### Session Persistence & Ask AI select fix (Jul 18, 2026)
+
+Founder Lock saved: [`FOUNDER_SESSION_PERSISTENCE.md`](examspark_backend/FOUNDER_SESSION_PERSISTENCE.md) — minimize/resume must restore UI; never regenerate AI / never re-charge. Phase 1 code: AuthGate ignores token refresh + same-user auth noise (2.5s sign-out debounce); AppShell persists tab + open workspace; Home AI chat persists (memory + SharedPreferences); visible **Ask AI** on text selection (Home + Notes, Web DOM selection).
+
+### Select → Ask AI → Home chat (Jul 18, 2026)
+
+App-wide minimize: text selection context menu defaults to **Ask AI**. Click adds the selection as the next Home chat question and streams the reply in chat (no Select AI sheet / no follow-up dialog). Study Workspace selection uses `HomeAskBridge` → Home tab.
+
+Photosynthesis (and known topics) auto-get a real Visual Card / diagram — not “Direct Answer → Easy Explanation” boxes. Visual chip moved under More; primary = Quiz/Flashcards/Revision/Learn More/Important Qs. Removed Copy/Export buttons from Home sheets + Study Workspace tabs. Notes R2 fallback hard-timeout 8s; Flutter notes timeout 12s.
+
+Founder lock saved: permanent Study Sessions + history UI + Supabase-only chat (never R2). Extend Phase 4C; do not rewrite Home AI. **No code until** Gate A 4C smoke pass + founder `start Phase 4D`. Doc: `FOUNDER_PHASE4D_HOME_HISTORY.md`.
+
+### Home AI Mobile UX Simplification (Jul 18, 2026)
+
+UI-only Founder Lock: Answer card → collapsible Visual card → max 5 primary chips (Quiz/Flashcards/Visual/Revision/Learn More) + More grid sheet. No API/AI/credit changes. Docs: `FOUNDER_HOME_AI_MOBILE_UX.md`.
+
+**Same-day cull:** Hidden duplicate chips from UI — Cheat Sheet, 5 Min, Exam Booster, Teacher Tips (same KO paragraphs as Revision / Important Qs / Learn More). Backend tool_types kept.
+
+### Smarter free Home chips (Jul 17, 2026)
+
+`home_ai_tool_derive.py` rewritten — each chip is a distinct study job (active-recall cards, shuffled MCQ, timed 5-min drill, marks script, cue+scene memory). Still 0 credits / no LLM on open. Legacy cached payloads without `format` auto-refresh once free.
+
+### CTO Working Charter (Jul 17, 2026)
+
+Founder Lock: honesty / selfless / user-first CTO behavior; Gate A = Phase 4C careful smoke; Gate B = next coding only via `start …`. Docs: `FOUNDER_CTO_WORKING_CHARTER.md`, `FOUNDER_PHASE4C_SMOKE_CARD.md`; wired into `FOUNDER_PENDING_LOCKED.md`, `PROJECT_WORKING_RULES.md`, `.cursor/rules/examspark-cto-charter.mdc`.
+
+**Priority stack (same day):** User → Founder → Easy/Helpful/Ethical → Profit; intent match before multi-file code.
+
+### Phase 4C V2 harden (Jul 17, 2026)
+
+Knowledge follow-up → version N+1 + parent chips marked stale; soft semantic duplicate Ask reuse (0 credits); Exam Booster / Common Mistakes / Teacher Tips identity chips. SQL: `home_ai_phase4c_v2_migration.sql`. Careful smoke order in `FOUNDER_PHASE4C_HOME_AI.md`.
+
+### Phase 4C Final Hardening (Jul 17, 2026)
+
+Founder lock: one Ask → Knowledge Object; study chips open **free** by deriving unique payloads from the KO (no AI on chip open). Explicit Regenerate remains paid. UI: Recommended + More. Dynamic chip recommendations. See `FOUNDER_PHASE4C_HOME_AI.md`.
+
+### AuthGate token-refresh remount fix (Jul 17, 2026)
+
+Chrome minimize / tab switch was firing Supabase `TOKEN_REFRESHED`, which rebuilt `AuthGate` → new `AppShell` → Home chat emptied and tab jumped to Home. AuthGate now ignores token refresh for UI rebuilds, debounces brief session-null blips, and keeps stable `AppShell` / tab keys.
+
+### Study Workspace Notes loading harden (Jul 17, 2026)
+
+Notes GET no longer blocks extras; 25s client timeout + Retry; cached notes stay visible on refresh failure; backend notes load runs off the event loop (`asyncio.to_thread`) so R2 fallback cannot freeze the API.
+
+### Phase 4C Home AI Smart Study Workspace (Jul 17, 2026)
+
+Home AI first answer is compact (Direct / Easy / Key Points). Successful answers persist as a Knowledge Object with `response_id`. Study chips call tool APIs with only `response_id` + `tool_type` — they never resend the full prior answer. Generate once → cache → free reopen; Regenerate is explicit and paid. New SQL: `home_ai_phase4c_migration.sql`. Founder guide: `FOUNDER_PHASE4C_HOME_AI.md`.
+
+### Home Select AI + chip dump fix (Jul 17, 2026)
+
+- Select AI toolbar always visible on finished Home replies; highlight text enables actions (Explain / Simplify / Ask / Memory / Copy). Fixed Flutter Web selection via `SelectableText.onSelectionChanged` (no nested SelectionArea).
+- Select AI + study chips (Flashcards, Quiz, etc.) open a **bottom sheet** — they no longer paste the full prior answer into a new Home chat message.
+- Phase 4C (`response_id` tools) still deferred until founder asks.
+
+### Smart Visual diagrams delivery fix (Jul 17, 2026)
+
+Home / Ask AI normal-mode output budget increased from 512 to 1024 tokens so the trailing `<<VISUAL_JSON>>` block is not cut off. Visual prompts now require compact structured output for explicitly visual topics (graphs, diagrams, timelines, flows, trees). Flutter graph rendering now uses `math_expressions` with implicit-multiplication normalization, fixing quadratic functions such as `x^2 - 5x + 6`. Added deterministic Math graph, Biology diagram, and History timeline widget tests. No credit, model, database, or API changes.
+
+### Home AI chat UX fixes (Jul 17, 2026)
+
+- Home AI reply text now stays “revealed” after scroll (no re-typewriter animation on re-visibility).
+- Home AI text selection now shows a “Select AI” menu (ChatGPT-like interaction).
+- Home reply chips are generated on the topic of the Home AI reply (not lecture/YouTube copy) and deduct correct credits:
+  - Most chips: 5 credits
+  - Mind Map + Important Questions: 10 credits (via `study_chip`)
+- Home AI normal/deep token caps raised to reduce truncation on hard Maths/Physics answers.
+- Visual delivery harden: stronger visual prompt, user-message visual reminder, and server fallback graph/diagram when the model skips `<<VISUAL_JSON>>` (so graph questions still render).
+
+### Flashcards Quiz Revision smoke pass (Jul 17, 2026)
+
+Founder confirmed Study Workspace Flashcards / Quiz / Revision (5/5/5) UI smoke after loading harden + backend up. Next smoke: Visual Notes → IQ/Mind Map → Select AI → 5 Minute Revision.
+
+Flutter-only fix for tab loading: KeepAlive on every Study tab, `ValueKey(lectureId)` on workspace mounts, spinners only when content is empty, soft header “Updating…” while extras fetch in background. **Redis deferred** (wrong tool for tab UX — later for multi-worker AI cache). **Teacher / Groups paused** until loading smoke passes. Hot restart Flutter → open lecture once → switch tabs should be instant (same session).
+
+### Phase 4B Study Workspace performance cache (Jul 16, 2026)
+
+Study Workspace loads lecture content once into an in-memory session cache (`WorkspaceLectureCache`). Tab switches reuse cached Notes/Summary/Transcript/Flashcards/Quiz/Revision — no duplicate GETs or full-page spinners. Extras load in the background after notes. Reload only on header Refresh, Regenerate, or opening a different lecture.
+
+### Phase 4B Study Workspace UI/UX (Jul 16, 2026)
+
+Frontend polish for Study Workspace (Notes · Summary · Transcript · Flashcards · Quiz · Revision · Ask AI): shared header with subject/date/reading time, visual progress bars, premium empty states, Copy/Export actions, flashcard flip UX with local bookmark/difficult/shuffle, quiz Select→Submit→Explain→Next + completion screen. Minimal read-only backend: `GET /api/v1/lectures/{id}/transcript` (R2 text, no credits/AI). No credit or generation prompt changes.
+
+### Pending backlog LOCKED + smoke/start runbook (Jul 16, 2026)
+
+Frozen honest status in [`FOUNDER_PENDING_LOCKED.md`](examspark_backend/FOUNDER_PENDING_LOCKED.md): A shipped/smoke-pending · B founder manual · C next `start …` · D NOT complete (Railway live, Tavily, PYQ bank, full Teacher). Includes copy-paste uvicorn + Flutter start + SQL + smoke pass phrases. Linked from [`FOUNDER_NEXT_SESSION.md`](examspark_backend/FOUNDER_NEXT_SESSION.md) + [`FOUNDER_IMPORTANT_PENDING.md`](FOUNDER_IMPORTANT_PENDING.md). No new feature code.
+
+### 5 Minute Revision → FastAPI (Jul 16, 2026)
+
+Home AI chip **5 Minute Revision** (5 credits) generates a short exam skim sheet via FastAPI + Qwen3, stored in Supabase `extras.payload_json` as type `five_min_revision`. Endpoints: `GET/POST /api/v1/lectures/{id}/five-min-revision`. Distinct from full **Revision Sheet** (also 5 credits). Results open in a Home bottom sheet with `SmartEducationalContent`. Tests extended in `test_extras_generation.py`.
+
+### Founder Jul 16 night-check note (Jul 16, 2026)
+
+Saved tonight’s review card [`FOUNDER_TODAY_JUL16_NIGHT_CHECK.md`](examspark_backend/FOUNDER_TODAY_JUL16_NIGHT_CHECK.md): today’s shipped list, backend pending, code audit, smoke pass phrases. Linked from [`FOUNDER_NEXT_SESSION.md`](examspark_backend/FOUNDER_NEXT_SESSION.md). Tiny doc cleanup: stale Flutter credit comments (5/5/5) + duplicate `visual_notes_prompt.py` docstring.
+
+### Founder master checklist + Jul 16 SQL one-paste (Jul 16, 2026)
+
+Consolidated daily founder to-do in [`FOUNDER_NEXT_SESSION.md`](examspark_backend/FOUNDER_NEXT_SESSION.md): SQL → uvicorn/Flutter → smoke order (Flashcards/Quiz/Revision → Visual Notes → IQ/Mind Map → Select AI) → later Realtime/Razorpay → `start PYQs`. One-paste migration: [`FOUNDER_SQL_JUL16_PENDING.sql`](examspark_backend/FOUNDER_SQL_JUL16_PENDING.sql). Aligned [`FOUNDER_IMPORTANT_PENDING.md`](FOUNDER_IMPORTANT_PENDING.md) + [`FOUNDER_SQL_ORDER.md`](examspark_backend/FOUNDER_SQL_ORDER.md). Cursor `.plan.md` files = history only.
+
+### Select & Ask AI — Phase 6 (Jul 16, 2026)
+
+Students can select text in Study Workspace (Notes, Summary, Revision, Flashcards, Transcript) and run focused AI actions: Explain / Simplify / Memory Trick / Exam View / Translate / Ask follow-up (**2 credits**), or mini Quiz / Flashcards from selection (**3 credits**). FastAPI `POST /api/v1/select-ai` + `/stream`; selection-first + max 2 RAG chunks; Smart Visual Notes reuse; no auto-save. Tests: `tests/test_select_ai.py`.
+
+### Smart Subject Understanding Rule (Jul 16, 2026)
+
+Expanded visual decision prompts: AI must judge if plain text alone is enough before adding graphs/diagrams/tables. Per-subject guidance for Math, Physics, Chemistry, Biology, History, Geography, Economics, CS, English. Wired into notes, revision, Ask AI, Home AI via `visual_notes_prompt.py`. No code/credit changes.
+
+### Smart Visual Notes Engine — Phase 5 (Jul 16, 2026)
+
+Single Qwen3 call now produces optional structured visuals (graphs metadata, text/emoji diagrams, timelines, trees, cheat sheet in notes) stored in `notes.visual_payload_json`. Ask/Home AI attach `visual_payload` on SSE `done` event. Flutter `SmartEducationalContent` renders markdown, LaTeX, graphs. No extra credits, no image APIs. Migration: `notes_visual_payload_migration.sql`.
+
+### Important Questions + Mind Map → FastAPI (Jul 16, 2026)
+
+Home AI chips **Important Questions** (20 credits) and **Mind Map** (30 credits) now generate via FastAPI + Qwen3, stored in Supabase `extras.payload_json`. Endpoints: `GET/POST /api/v1/lectures/{id}/important-questions` and `GET/POST /api/v1/lectures/{id}/mind-map`. Results open in a bottom sheet on Home. Tests extended in `test_extras_generation.py`.
+
+### Flashcards + Quiz + Revision → 5 credits everywhere (Jul 16, 2026)
+
+Founder locked a new unified extras price: **Flashcards = 5**, **Quiz = 5**, **Revision = 5** everywhere in product — Home AI chips, Study Workspace, Ask/RAG lecture extras, backend constants, and Flutter labels/checks all aligned.
+
+### Short notes → Supabase columns (Jul 16, 2026)
+
+`summary`, `key points`, `important terms`, and `clean notes` now store in Supabase `notes` table columns instead of R2 JSON for new lectures. Transcript + clean transcript remain in R2. API notes reads, RAG indexing, and extras source text now prefer Supabase columns with legacy `r2_notes_path` fallback. Migration: `notes_short_supabase_migration.sql`. Tests: `test_notes_storage.py`.
+
+### Revision sheet on FastAPI + Supabase (Jul 16, 2026)
+
+Study Workspace **Revision** tab: generate exam-focused recap via Qwen3 (**5 credits**), stored in `extras.payload_json` per locked Storage Policy. Endpoints: `GET/POST /api/v1/lectures/{id}/revision`. Tests extended in `test_extras_generation.py`.
+
+### Home AI study-action chips → FastAPI (Jul 16, 2026)
+
+From Home screen AI replies, tapping **Flashcards**, **Quiz**, or **Revision Sheet** now generates via FastAPI (credits deducted server-side) and opens the Study Workspace for that lecture. **Learn More** triggers a follow-up Home AI call (5 credits). Other study chips remain “coming soon” until their FastAPI endpoints are built.
+
+### Storage Architecture Policy locked (Jul 16, 2026)
+
+Founder locked final policy in [`DATA_STORAGE_POLICY.md`](DATA_STORAGE_POLICY.md): Supabase = structured JSON + metadata + pgvector; R2 = large files + exports + temp audio only. Synced `PROJECT_CORE_RULES.md`, `TECH_STACK.md`, `ARCHITECTURE.md`, cursor rules (`examspark-core-rules`, `examspark-tech-stack`, `examspark-backend-engineering`). Flashcards/Quiz already aligned in code.
+
+### Flashcards + Quiz storage → Supabase JSON (Jul 16, 2026)
+
+Per locked Storage Policy: Flashcards/Quiz structured JSON now stored in Supabase `extras.payload_json` (not R2). Legacy `r2_path` rows still load with automatic backfill. Migration: `extras_payload_json_migration.sql`. Credits unchanged: Flashcards **20**, Quiz **25**.
+
+### Flashcards + Quiz on FastAPI (Jul 16, 2026)
+
+Study Workspace **Flashcards** (5 credits) and **Quiz / 20 MCQ** (5 credits) now generate via FastAPI + Qwen3, persist to Supabase `extras.payload_json`, metadata in `extras` table. GET = free read; POST = generate + server-side credit deduct. Flutter: `StudyWorkspace` tabs wired; `LectureService.generateFlashcards` / `generateQuiz` / `fetch*`. Tests: `tests/test_extras_generation.py`.
+
 ### Next-session backlog card (Jul 16, 2026)
 
 Single memory doc [`FOUNDER_NEXT_SESSION.md`](examspark_backend/FOUNDER_NEXT_SESSION.md): no re-nag of passed smoke; open = Realtime+trim → Razorpay when keys → Flashcards coding when founder says start. `FOUNDER_IMPORTANT_PENDING.md` / `TODO.md` aligned. YouTube smoke marked pass.

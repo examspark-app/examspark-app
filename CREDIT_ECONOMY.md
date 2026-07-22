@@ -1,7 +1,7 @@
 # ExamSpark — Credit Economy Model (v2)
 
 > **Saved:** Jul 2026 — founder `save` (v2 supersedes v1)
-> **Rule:** Feature/session-based credits — **never per-minute** in UI or pricing config.
+> **Rule:** Most features are session/feature-based. **Exception (founder Jul 22, 2026):** Recording + Audio Upload = **1 credit per minute** (actual length, round up, max 180). YouTube stays banded. Never show rupee amounts for AI cost in UI.
 
 ---
 
@@ -39,7 +39,7 @@ Bigger plans = lower effective per-credit rate (buy more, save more).
 
 Audio (record + audio upload) plan-locked until **₹499+**.
 
-**Teacher credits ceiling resized Jul 13, 2026 — 20,000 → 16,000/month.** Re-validated against a **60 hours/month maximum-usage** assumption (not the typical ~20hr/month case): 60hrs of recording (mostly 60–90min sessions, ≈48 sessions × 120 credits = 5,760 credits) + **every single lecture** also getting Flashcards+Quiz+Revision+Formula+MindMap (~135 credits × 48 = 6,480 credits) + heavy Ask AI (200 Normal + 50 Deep ≈ 1,600 credits) tops out at **~13,840 credits even in this extreme case**. Adding a 15–20% safety buffer on top gives **~16,000** — still comfortably covers the extreme case with room to spare, while tightening the platform's worst-case exposure per teacher by ~4,000 credits (~₹600 charged-value). This is a **risk/abuse-ceiling** adjustment, not a margin lever — real teacher AI cost even at the 60hr extreme is only ~₹250–300/month against ₹1,999 charged, tiny either way.
+**Teacher credits ceiling resized Jul 13, 2026 — 20,000 → 16,000/month.** Re-validated against a **60 hours/month maximum-usage** assumption (not the typical ~20hr/month case): 60hrs of recording (mostly 60–90min sessions, ≈48 sessions × 120 credits = 5,760 credits) + **every single lecture** also getting Flashcards+Quiz+Revision+Formula+MindMap (~60 credits × 48 = 2,880 credits, after Jul 16 extras repricing) + heavy Ask AI (200 Normal + 50 Deep ≈ 1,600 credits) tops out at **~10,240 credits even in this extreme case**. Adding a 15–20% safety buffer on top still keeps **16,000** comfortably safe. This remains a **risk/abuse-ceiling** adjustment, not a margin lever — real teacher AI cost even at the 60hr extreme is only a small fraction of ₹1,999 charged.
 
 ---
 
@@ -82,36 +82,49 @@ If an action doesn't call Whisper/Qwen/Tavily, it doesn't cost credits — full 
 
 | Feature | Credits |
 |---------|---------|
-| Record ≤30 min | 40 |
-| Record 30–60 min | 80 |
-| Record 60–90 min | 120 |
+| **Recording / Audio Upload** | **1 credit per minute** (actual length, round up, max 180 min) |
 | Summary | Included with recording |
 | Ask AI (Normal) | 5 |
 | Ask AI (Deep) | 12 |
-| Flashcards | 20 |
-| Quiz (20 MCQ) | 25 |
+| Ask AI + live web search (Tavily, current events only) | 10 |
+| Ask AI Deep + live web search | 20 |
+| **Home AI study chips** (Flashcards / Quiz / Revision / Mind Map / etc. from that answer’s Knowledge Object) | **0** — included after Ask; Regenerate paid |
+| **Select AI — Explain / Simplify / Translate / Memory Trick / Exam View / Ask follow-up** | **2** |
+| **Select AI — Quiz from selection (5 MCQ)** | **3** |
+| **Select AI — Flashcards from selection (5)** | **3** |
+| Flashcards | 5 |
+| Quiz (20 MCQ) | 5 |
 | Important Questions | 20 |
-| Revision Notes | 20 |
+| Revision Notes | 5 |
+| 5 Minute Revision | 5 |
 | Formula Sheet | 15 |
 | Mind Map | 30 |
 | Diagram/Image (Qwen3-VL) | 25 |
+| Home AI Camera / Upload Image (chat answer) | 10 |
 | PDF Analysis | 20 |
 | OCR Image | 15 |
 | Translate | 8 |
 | Voice Read | 5 |
-| YouTube Link → Notes (≤20 min) | 35 |
-| YouTube Link → Notes (20–40 min) | 65 |
-| YouTube Link → Notes (40–60 min) | 100 |
+| YouTube Link → Notes (≤30 min) | 10 |
+| YouTube Link → Notes (30–60 min) | 20 |
+| YouTube Link → Notes (60–90 min) | 40 |
 
-**Critical:** Credits are **feature-based**, never minute-based in user-facing copy.
+**Critical:** Most credits are **feature-based**. **Recording / Audio Upload** charge **1 credit per minute** of actual length (founder-approved Jul 22, 2026). YouTube stays banded. Never show rupee amounts for AI cost in UI.
 
-### YouTube Link → Notes (founder-locked Jul 12, 2026)
+### Recording / Audio Upload — per-minute (Jul 22, 2026)
 
-- **Basis:** ~₹15/hour charged-value (founder-specified), converted at ₹0.15/credit → 100 credits at the 1-hour cap. Cheaper than Recording because there's no Whisper/STT cost — the video's own captions/transcript feed the same Notes/Summary/Flashcards/Quiz pipeline.
-- **Hard limit:** 1 hour max per video. Longer videos are rejected before any credits are charged.
-- **Restriction:** Public videos only. Private, unlisted, age-restricted, region-locked, or live-stream videos are rejected with a clear error (no partial charge).
-- **UI placement:** Dedicated icon next to Record in the bottom input bar (not inside the "+" Attach sheet) — founder-requested for visibility.
-- **Status:** Built Jul 16, 2026 — captions → Notes + Summary (PDF-parity); Quiz/Flashcards stay separate credits. Smoke: [`examspark_backend/FOUNDER_YOUTUBE_LINK_SMOKE.md`](examspark_backend/FOUNDER_YOUTUBE_LINK_SMOKE.md).
+- **Rate:** 1 credit per minute (round up to next full minute).
+- **Source of length:** server ffprobe / elapsed minutes — not the planned-duration chip.
+- **Hard max:** 180 minutes (3 hours). Longer → friendly reject, zero charge.
+- **Charge once** after Whisper + notes succeed. Failure = free.
+- **YouTube Link → Notes** stays on separate bands (10 / 20 / 40), max 90 min.
+
+### YouTube Link → Notes (updated Jul 21, 2026)
+
+- **Credits:** 10 / 20 / 40 by length (≤30 / 30–60 / 60–90 min) — cheaper than Record; unlock on **Free+** (uses credits).
+- **Captions first;** if no CC → temp audio + **Whisper Turbo only** (no expensive non-Turbo fallback).
+- **Hard limit:** 90 minutes max per video.
+- **Restriction:** Public videos only.
 
 ---
 
@@ -121,8 +134,9 @@ If an action doesn't call Whisper/Qwen/Tavily, it doesn't cost credits — full 
 
 | Feature | Charged (₹) | Real AI Cost (computed) | Margin |
 |---------|-------------|--------------------------|--------|
-| Record 30–60 min (Turbo STT + Qwen3 notes) | ₹12 | ~₹3.1 | ~74% |
-| Record 60–90 min | ₹18 | ~₹5.6 | ~69% |
+| Record 60 min (1 credit/min → 60 cr ≈ ₹9) | ₹9 | ~₹3.1 | ~66% |
+| Record 90 min (90 cr ≈ ₹13.5) | ₹13.5 | ~₹5.6 | ~59% |
+| Record 180 min (180 cr ≈ ₹27) | ₹27 | ~₹11–12 | ~56–59% |
 | Ask AI Normal (~500 in / 300 out tokens) | ₹0.75 | ~₹0.03 | ~96% |
 | Ask AI Deep (~1,500 in / 800 out tokens) | ₹1.80 | ~₹0.08 | ~95% |
 | Diagram (Qwen3-VL-Flash, default) | ₹3.75 | ~₹0.02 | ~99% |

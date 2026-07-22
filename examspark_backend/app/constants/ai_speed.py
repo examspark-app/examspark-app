@@ -4,13 +4,19 @@ Deep mode stays fuller. Does not change credits or models.
 """
 from __future__ import annotations
 
-NORMAL_MAX_TOKENS = 512
-DEEP_MAX_TOKENS = 2048
+# Normal: room for visuals + medium Maths/Science. Deep: hard Physics /
+# multi-step equations / long syllabus without cutting mid-answer.
+NORMAL_MAX_TOKENS = 2048
+DEEP_MAX_TOKENS = 4096
 
 _BREVITY_NORMAL = (
-    "SPEED (normal mode): Lead with Direct Answer in the first sentences. "
-    "Omit empty sections. Keep explanations tight (short paragraphs). "
-    "No essay unless the student asks for long / detailed / deep answer."
+    "LENGTH (normal mode): Lead with Direct Answer. Stay compact. "
+    "OMIT irrelevant sections entirely — never write 'not applicable' / "
+    "'no formula applies' under a header. "
+    "Shape 1 (simple facts): 2–4 useful sentences — not one bare line; "
+    "still no forced extra headers. "
+    "Do NOT cut equations, worked examples, or diagrams for hard Science/"
+    "Maths/Physics topics — those may be longer."
 )
 
 

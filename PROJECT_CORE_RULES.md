@@ -8,51 +8,29 @@
 
 ## 1. Data Storage Policy
 
-**Goal:** Minimize storage cost. Store only important data. Never permanently store unnecessary files.
+**Status:** LOCKED Jul 16, 2026. Full spec: [`DATA_STORAGE_POLICY.md`](DATA_STORAGE_POLICY.md)
 
-### Temporary — delete automatically after processing
+**Core principle:** Supabase = structured/searchable data. R2 = large files + exports + **temporary** audio staging only. Never mix roles. **Audio never stored permanently.**
 
-| Asset | When deleted |
-|-------|--------------|
-| Raw Audio | Immediately after Whisper / transcription |
-| Temporary AI files | After pipeline step completes |
-| Temporary OCR files | After text extraction |
-| Temporary Upload Cache | After ingest to R2 |
+### Cloudflare R2
 
-Delete immediately. No orphan temp files.
+| Role | Content |
+|------|---------|
+| **Temp only** | Raw audio — delete immediately after transcription (success or failure) |
+| **Permanent** | Original PDF/image uploads, OCR output, clean transcript, full lecture notes (.md), exports (PDF/DOCX/PPT/ZIP), backups |
 
-**Exception:** Teacher Settings → `☐ Save Original Audio` (default **OFF**).
+**Not in R2:** Flashcards, Quiz, Mind Map, Revision/Cheat Sheet **JSON/text** — Supabase. R2 only for **exports** of those.
 
-### Permanent — Cloudflare R2 only
-
-Store **only**:
-
-- Clean Transcript (RAG-normalized copy or derived artifact)
-- User-facing Transcript (Library — one canonical text per lecture)
-- AI Notes
-- AI Summary
-- Flashcards
-- Quiz / MCQ
-- Revision Notes
-- Formula Sheets
-- Mind Maps (future)
-- Uploaded PDF
-- Uploaded Images
-- Teacher Shared Files
-
-**Do NOT** permanently store raw lecture audio unless teacher opt-in enabled.
-
-Large files **never** in PostgreSQL.
-
-### PostgreSQL — metadata only
+### Supabase (Postgres + pgvector)
 
 | Store | Examples |
 |-------|----------|
-| ✅ | User, Teacher, Groups, Lecture metadata, Credits, Subscription |
-| ✅ | Library metadata, R2 storage paths, Usage history, Payment history, Analytics |
-| ❌ | Audio blobs, PDF binaries, images, full transcript text at scale |
+| Structured JSON | Flashcards, Quiz, Mind Map (future), Revision/Cheat Sheet (future) |
+| Short notes fields | Summary, key points, important terms (target; full notes still R2 today) |
+| Metadata + paths | Users, lectures, credits, R2 path references, analytics |
+| Vectors | Clean transcript chunks, AI notes chunks, teacher shared notes |
 
-Text content pointers live in R2; Postgres holds IDs, paths, status, permissions.
+Never store large binaries in Postgres.
 
 ### Vector Database (pgvector) — embeddings only
 
@@ -62,13 +40,13 @@ Text content pointers live in R2; Postgres holds IDs, paths, status, permissions
 - AI Notes chunks
 - Teacher Shared Notes chunks
 
-**Do NOT vectorize:**
-
-- Raw Audio
-- Raw Images (binary)
-- Raw PDFs (binary)
+**Do NOT vectorize:** Raw Audio · Raw Images (binary) · Raw PDFs (binary)
 
 PDF/image **text** may be extracted → Notes or Clean Transcript path → then chunked for vectors.
+
+**RAG search order (never skip):** Notes → Clean Transcript → Teacher Shared → Web Search
+
+**Search rule:** Supabase/pgvector/metadata first — never search R2 directly.
 
 ---
 

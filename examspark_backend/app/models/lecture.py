@@ -11,6 +11,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.models.visual_payload import VisualPayload
+
 
 class LectureSourceType(str, Enum):
     RECORDING = "recording"
@@ -46,6 +48,69 @@ class ProcessedNotes(BaseModel):
     keyPoints: list = Field(default_factory=list)
     shortSummary: str = ""
     importantTerms: list = Field(default_factory=list)
+    visualPayload: Optional[VisualPayload] = None
+
+
+class TranscriptPayload(BaseModel):
+    """Read-only clean transcript from R2 — no credits, no AI."""
+
+    transcript: str = ""
+    wordCount: int = 0
+    available: bool = False
+
+
+class FlashcardItem(BaseModel):
+    front: str = ""
+    back: str = ""
+
+
+class FlashcardsPayload(BaseModel):
+    cards: list[FlashcardItem] = Field(default_factory=list)
+    credits_charged: Optional[int] = None
+
+
+class QuizQuestionItem(BaseModel):
+    question: str = ""
+    options: list[str] = Field(default_factory=list)
+    correctAnswer: str = ""
+    explanation: Optional[str] = None
+
+
+class QuizPayload(BaseModel):
+    questions: list[QuizQuestionItem] = Field(default_factory=list)
+    credits_charged: Optional[int] = None
+
+
+class RevisionPayload(BaseModel):
+    revisionSheet: str = ""
+    visualPayload: Optional[VisualPayload] = None
+    credits_charged: Optional[int] = None
+
+
+class ImportantQuestionItem(BaseModel):
+    question: str = ""
+    type: str = "short_answer"
+    marks: int = 2
+    hint: Optional[str] = None
+
+
+class ImportantQuestionsPayload(BaseModel):
+    questions: list[ImportantQuestionItem] = Field(default_factory=list)
+    credits_charged: Optional[int] = None
+
+
+class MindMapNode(BaseModel):
+    label: str = ""
+    children: list["MindMapNode"] = Field(default_factory=list)
+
+
+class MindMapPayload(BaseModel):
+    title: str = ""
+    root: Optional[MindMapNode] = None
+    credits_charged: Optional[int] = None
+
+
+MindMapNode.model_rebuild()
 
 
 class ProcessLectureResponse(BaseModel):
@@ -62,6 +127,10 @@ class ProcessLectureResponse(BaseModel):
     usedTurbo: Optional[bool] = None
     # Vision path: True when Qwen3-VL-Plus was used (Flash failed / escalated).
     usedVisionPlus: Optional[bool] = None
+    # Per-student duplicate reuse (Layer 1 hash/YouTube or Layer 2 transcript).
+    is_duplicate: bool = False
+    reused_lecture_id: Optional[UUID] = None
+    duplicate_layer: Optional[str] = None  # "hash" | "youtube" | "transcript"
 
 
 class LectureJobStatusResponse(BaseModel):

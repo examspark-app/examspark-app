@@ -22,12 +22,15 @@ from app.services.youtube_transcript_service import (
 
 def test_youtube_credit_bands():
     assert youtube_credits_for_duration_minutes(1) == YOUTUBE_UP_TO_20_MIN
-    assert youtube_credits_for_duration_minutes(20) == YOUTUBE_UP_TO_20_MIN
-    assert youtube_credits_for_duration_minutes(21) == YOUTUBE_20_TO_40_MIN
-    assert youtube_credits_for_duration_minutes(40) == YOUTUBE_20_TO_40_MIN
-    assert youtube_credits_for_duration_minutes(41) == YOUTUBE_40_TO_60_MIN
-    assert youtube_credits_for_duration_minutes(60) == YOUTUBE_40_TO_60_MIN
-    assert YOUTUBE_MAX_MINUTES == 60
+    assert youtube_credits_for_duration_minutes(30) == YOUTUBE_UP_TO_20_MIN
+    assert youtube_credits_for_duration_minutes(31) == YOUTUBE_20_TO_40_MIN
+    assert youtube_credits_for_duration_minutes(60) == YOUTUBE_20_TO_40_MIN
+    assert youtube_credits_for_duration_minutes(61) == YOUTUBE_40_TO_60_MIN
+    assert youtube_credits_for_duration_minutes(90) == YOUTUBE_40_TO_60_MIN
+    assert YOUTUBE_UP_TO_20_MIN == 10
+    assert YOUTUBE_20_TO_40_MIN == 20
+    assert YOUTUBE_40_TO_60_MIN == 40
+    assert YOUTUBE_MAX_MINUTES == 90
 
 
 def test_youtube_free_gate():
@@ -45,7 +48,7 @@ def test_extract_video_id_watch_and_short():
 
 
 @pytest.mark.asyncio
-async def test_youtube_pipeline_rejects_over_60_no_deduct():
+async def test_youtube_pipeline_rejects_over_90_no_deduct():
     from app.models.lecture import LectureSourceType, ProcessLectureRequest
     from app.services.lecture_service import LecturePipelineError, LectureService
 
@@ -53,7 +56,7 @@ async def test_youtube_pipeline_rejects_over_60_no_deduct():
     captions = YoutubeCaptions(
         video_id="longvid",
         text="x" * 100,
-        duration_minutes=75,
+        duration_minutes=95,
     )
 
     with (
@@ -68,6 +71,10 @@ async def test_youtube_pipeline_rejects_over_60_no_deduct():
         patch("app.services.lecture_service.deduct_credits") as deduct,
         patch.object(service, "_db_set_status"),
         patch.object(service, "_precheck_balance"),
+        patch(
+            "app.services.lecture_service.find_done_by_youtube_video_id",
+            return_value=None,
+        ),
     ):
         with pytest.raises(LecturePipelineError) as exc:
             await service.create_job(
@@ -79,7 +86,7 @@ async def test_youtube_pipeline_rejects_over_60_no_deduct():
                 youtube_url="https://youtu.be/longvid",
             )
         assert exc.value.status_code == 400
-        assert "60" in str(exc.value)
+        assert "90" in str(exc.value)
         deduct.assert_not_called()
 
 

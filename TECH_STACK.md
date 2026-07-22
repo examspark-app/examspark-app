@@ -68,17 +68,17 @@ Canonical source: `examspark_frontend/lib/`
 
 ## Storage
 
-**Cloudflare R2** — permanent assets only
+**Locked:** [`DATA_STORAGE_POLICY.md`](DATA_STORAGE_POLICY.md) (Jul 16, 2026)
 
-**Temporary (delete after processing):** Raw audio · temp AI files · temp OCR · upload cache
+**Cloudflare R2**
 
-**Permanent R2:**
+- **Temp only:** Raw audio — delete immediately after transcription
+- **Permanent:** Original PDF/image, OCR output, clean transcript, full lecture notes (`.md`), exports, backups
+- **Not R2 JSON:** Flashcards, Quiz, Mind Map, Revision text — Supabase (`extras.payload_json` etc.); R2 only for exports
 
-- Clean Transcript · User Transcript (Library)
-- Notes · Summary · Flashcards · Quiz · MCQ · Revision · Formula · Mind Map (future)
-- PDF · Images · Teacher Shared Files
+**Supabase:** Structured JSON, short notes (target), metadata, R2 path refs, pgvector, chat/analytics
 
-**Do not store raw audio permanently** — delete after processing. Teacher opt-in exception only.
+**Do not store raw audio permanently** — delete after processing. Teacher opt-in exception only (future).
 
 ---
 
@@ -258,9 +258,21 @@ Qwen-VL
 ### R2 — Permanently store
 
 ```
-Transcript · Clean Transcript · Notes · Summary · Flashcards · Quiz · MCQ
-Mind Map · Revision Notes · Formula Sheet · PDF · Images · Teacher Files
-User Library · Exports
+Clean Transcript · Full Lecture Notes (.md) · Original PDF/Image · OCR output
+Exports (PDF/DOCX/PPT/ZIP) · Backups · Teacher shared large files
+```
+
+### R2 — Temporary only
+
+```
+Raw Audio (delete immediately after transcription completes)
+```
+
+### Supabase — structured JSON (not R2)
+
+```
+Flashcards · Quiz · Mind Map · Revision/Cheat Sheet (text) · Important Questions
+Short notes: summary, key points, important terms (target split from R2 notes)
 ```
 
 ### R2 — Do NOT store (default)

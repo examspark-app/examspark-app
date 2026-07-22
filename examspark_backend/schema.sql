@@ -116,8 +116,14 @@ CREATE TABLE lectures (
     -- path only, e.g. "Users/{user_id}/Library/{lecture_id}/". Populated by
     -- Phase 5 FastAPI once R2 upload is wired.
     r2_folder_path TEXT,
+    -- Per-student duplicate detection (lecture_dedupe_migration.sql).
+    content_hash TEXT,
+    youtube_video_id TEXT,
+    duplicate_of_lecture_id UUID REFERENCES lectures(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Bumped when student opens Study Workspace (Library / Home Recent sort + time label).
+    last_opened_at TIMESTAMPTZ
 );
 
 -- Transcript metadata only. Full transcript text + clean transcript live in
@@ -139,15 +145,22 @@ CREATE TABLE notes (
     r2_summary_path TEXT,
     r2_key_points_path TEXT,
     r2_important_terms_path TEXT,
+    clean_notes TEXT,
+    short_summary TEXT,
+    key_points JSONB,
+    important_terms JSONB,
+    visual_payload_json JSONB,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
--- Extras metadata only. Flashcards, Quiz JSON, Revision, Formula, Mind Map,
--- Diagrams — all live in Cloudflare R2. Postgres stores type + path only.
+-- Extras: structured JSON in Postgres (Flashcards, Quiz, Mind Map, etc.).
+-- `payload_json` holds the searchable/structured content per Storage Policy.
+-- `r2_path` remains for legacy rows and future export files (PDF/ZIP), not JSON payloads.
 CREATE TABLE extras (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     lecture_id UUID NOT NULL REFERENCES lectures(id) ON DELETE CASCADE,
     type TEXT NOT NULL,
+    payload_json JSONB,
     r2_path TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     UNIQUE (lecture_id, type)
@@ -161,6 +174,18 @@ CREATE TABLE credit_transactions (
     description TEXT NOT NULL,
     lecture_id UUID REFERENCES lectures(id) ON DELETE SET NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Quiz finishes (Study Workspace) — Progress Learning Score (Slice A).
+-- See quiz_attempts_migration.sql for existing projects.
+CREATE TABLE quiz_attempts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    lecture_id UUID NOT NULL REFERENCES lectures(id) ON DELETE CASCADE,
+    score INTEGER NOT NULL CHECK (score >= 0),
+    total INTEGER NOT NULL CHECK (total > 0),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    CONSTRAINT quiz_attempts_score_lte_total CHECK (score <= total)
 );
 
 -- ==================== TEACHER PLATFORM TABLES ====================
@@ -951,6 +976,19 @@ CREATE POLICY "extras_write" ON extras FOR INSERT
     WITH CHECK (EXISTS (SELECT 1 FROM lectures l WHERE l.id = extras.lecture_id AND l.user_id = auth.uid()));
 CREATE POLICY "extras_update" ON extras FOR UPDATE
     USING (EXISTS (SELECT 1 FROM lectures l WHERE l.id = extras.lecture_id AND l.user_id = auth.uid()));
+
+-- ---- quiz_attempts (own finishes only; Progress Learning Score) ----
+ALTER TABLE quiz_attempts ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "quiz_attempts_select_own" ON quiz_attempts
+    FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "quiz_attempts_insert_own" ON quiz_attempts
+    FOR INSERT WITH CHECK (
+        user_id = auth.uid()
+        AND EXISTS (
+            SELECT 1 FROM lectures l
+            WHERE l.id = lecture_id AND l.user_id = auth.uid()
+        )
+    );
 
 -- ---- credit_transactions (read own history only; writes via fn_deduct_credits) ----
 CREATE POLICY "credit_transactions_select_own" ON credit_transactions FOR SELECT

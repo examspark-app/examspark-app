@@ -6,8 +6,9 @@ class CreditUsageDisplay {
 
   /// Primary stat: lecture sessions if ALL credits used only for ~60min recording.
   static int estimateLectureSessions(int creditsRemaining) {
-    if (CreditCosts.record30To60Min <= 0) return 0;
-    return creditsRemaining ~/ CreditCosts.record30To60Min;
+    final perSession = CreditCosts.recordCreditsPerMinute * 60;
+    if (perSession <= 0) return 0;
+    return creditsRemaining ~/ perSession;
   }
 
   static int estimateAskAiQuestions(int creditsRemaining) {

@@ -1,5 +1,5 @@
 """Ask AI request/response models — Session 3."""
-from typing import Literal, Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,12 @@ class HomeAiRequest(BaseModel):
     mode: Literal["normal", "deep"] = "normal"
     lecture_id: Optional[str] = None
     conversation_language: Optional[ConversationLanguage] = None
+    # Home study chips only — server maps to credit amount (never trust client amount).
+    study_chip: Optional[Literal["mind_map", "important_questions"]] = None
+    # Phase 4C V2 — follow-up creates Knowledge version N+1 and stale parent chips.
+    parent_response_id: Optional[str] = None
+    # Phase 4D — continue same Study Session thread.
+    session_id: Optional[str] = None
 
 
 class AskAiSource(BaseModel):
@@ -41,3 +47,9 @@ class AskAiResponse(BaseModel):
     credits_charged: Optional[int] = None
     new_balance: Optional[int] = None
     mode: str = "normal"
+    visual_payload: Optional[dict[str, Any]] = None
+    # Phase 4C — master response id for chip tools (null if SQL not run yet)
+    response_id: Optional[str] = None
+    # Phase 4D — Study Session id (null if SQL not run yet)
+    session_id: Optional[str] = None
+    knowledge: Optional[dict[str, Any]] = None

@@ -9,18 +9,19 @@ Full spec: [`TECH_STACK.md`](TECH_STACK.md) · [`PROJECT_CORE_RULES.md`](PROJECT
 
 ## Hard Rules
 
-- **Temp delete after processing:** Raw audio, temp AI/OCR, upload cache
-- **Postgres metadata only** — never large blobs
+- **Temp delete after processing:** Raw audio (never permanent), temp AI/OCR, upload cache
+- **R2:** Large files + exports + **temp audio staging only** — see [`DATA_STORAGE_POLICY.md`](DATA_STORAGE_POLICY.md)
+- **R2 permanent:** Full notes `.md`, clean transcript, original PDF/image, OCR, exports — **not** Flashcards/Quiz JSON
+- **Supabase:** Structured JSON (Flashcards, Quiz, extras), metadata, short notes (target), pgvector, chat/analytics
+- **Postgres:** Never large binaries — structured/searchable data + R2 path references
 - **RAG priority (mandatory):** Notes → Transcript (clean) → Teacher Shared → Web
 - **Vectors only:** Clean Transcript chunks + Notes + Teacher Shared Notes
 - **Backend target:** FastAPI (Python) on Railway with **Docker from day 1**
-- **Storage:** Cloudflare R2 (not Supabase Storage long-term)
 - **RAG:** pgvector on Supabase PostgreSQL
 - **Queue + Cache:** Redis
 - **Auth:** Supabase Auth (email, Google; Apple future)
 - **Flutter:** `examspark_frontend/lib/` only — Android + Web now; iOS structure ready, App Store later
 - **Transcript saved in User Library** — users re-read original explanation; **raw audio deleted** after processing (optional save-audio = future)
-- **R2 stores:** Transcript, Clean Transcript, Notes, Summary, Flashcards, Quiz, MCQ, MindMap, Revision, Formula, PDF, Images, Teacher Files, Exports — **not** raw audio
 - **R2 layout:** `Users/` · `Library/` · `Teachers/` · `Exports/` — see [`TECH_STACK.md`](TECH_STACK.md)
 - **Teacher platform:** business dashboard + student access logic — [`TEACHER_PLATFORM.md`](TEACHER_PLATFORM.md)
 

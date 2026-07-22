@@ -1,6 +1,4 @@
 import 'dart:async';
-import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:cross_file/cross_file.dart';
 import 'package:file_picker/file_picker.dart';
@@ -8,16 +6,74 @@ import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 
+// dart:io is NOT available on Flutter web — conditional so Chrome does not
+// fail library init with "Library not defined" on recording screens.
+import 'recording_io_stub.dart'
+    if (dart.library.io) 'recording_io_native.dart' as io_helper;
+
+/// Student-facing copy when no voice is captured (also backend NO_SPEECH).
+const String kMicCheckUserMessage =
+    'No speech detected. Kindly check your microphone and try again.';
+
 class RecordingService {
   RecordingService._();
 
   static final RecordingService instance = RecordingService._();
 
-  final AudioRecorder _recorder = AudioRecorder();
+  /// dBFS-ish levels from [AudioRecorder]; voice usually well above this.
+  static const double voiceThresholdDb = -40.0;
+
+  /// First popup when mic may be off — recording never stops.
+  static const int silenceFirstWarnAfterSeconds = 5;
+
+  /// Repeat popup every this many seconds of continuous silence (after speech or after first warn).
+  static const int silenceRepeatWarnAfterSeconds = 300;
+
+  /// Lazy / re-creatable — screen dispose must NOT permanently kill the
+  /// singleton recorder (leave Record tab used to leave a disposed
+  /// AudioRecorder and show "already been disposed").
+  AudioRecorder? _recorder;
+  bool _recorderDisposed = false;
   Timer? _timer;
+  StreamSubscription<Amplitude>? _amplitudeSub;
   int _elapsedSeconds = 0;
 
+  /// Continuous silent seconds in the *current* stretch (resets on voice).
+  int _consecutiveSilentSeconds = 0;
+
+  double _peakDb = -160.0;
+
+  /// Ever heard voice this take — used for final upload validation.
+  bool _heardAnyVoice = false;
+
+  /// True while the latest sample is above the voice threshold.
+  bool _voiceActiveNow = false;
+
+  /// Elapsed seconds when we last fired [ _onSilenceWarning ] (for 5‑min repeats).
+  int? _lastSilenceWarnAtElapsed;
+  bool _amplitudeSamplesReceived = false;
+  VoidCallback? _onSilenceWarning;
+
+  AudioRecorder get _activeRecorder {
+    if (_recorder == null || _recorderDisposed) {
+      _recorder = AudioRecorder();
+      _recorderDisposed = false;
+    }
+    return _recorder!;
+  }
+
   int get elapsedSeconds => _elapsedSeconds;
+
+  /// True if amplitude crossed [voiceThresholdDb] at least once this take.
+  bool get heardVoice => _heardAnyVoice;
+
+  /// Alias kept for callers that prefer the clearer name.
+  bool get heardAnyVoice => _heardAnyVoice;
+
+  /// False on platforms where amplitude never reports (e.g. some web builds).
+  bool get amplitudeMonitoringActive => _amplitudeSamplesReceived;
+
+  double get peakDb => _peakDb;
 
   String get formattedDuration {
     final minutes = (_elapsedSeconds ~/ 60).toString().padLeft(2, '0');
@@ -33,7 +89,12 @@ class RecordingService {
 
   Future<bool> get isSupported async {
     if (kIsWeb) return false;
-    return _recorder.hasPermission();
+    return _activeRecorder.hasPermission();
+  }
+
+  /// Callback when silence thresholds elapse (5s mic check, then every 5 min).
+  void setSilenceWarningListener(VoidCallback? listener) {
+    _onSilenceWarning = listener;
   }
 
   Future<void> start() async {
@@ -41,26 +102,85 @@ class RecordingService {
       throw StateError('Microphone permission denied');
     }
 
-    // Web: dart:io file paths don't exist in the browser, and Chrome/Firefox's
-    // MediaRecorder doesn't reliably support aacLc — leave `path` empty so the
-    // plugin keeps the recording as an in-memory blob (retrieved from stop()
-    // as a blob: URL) and use opus, which browsers do support.
-    await _recorder.start(
+    _elapsedSeconds = 0;
+    _consecutiveSilentSeconds = 0;
+    _peakDb = -160.0;
+    _heardAnyVoice = false;
+    _voiceActiveNow = false;
+    _lastSilenceWarnAtElapsed = null;
+    _amplitudeSamplesReceived = false;
+
+    // Web: no dart:io paths; leave `path` empty for in-memory blob + opus.
+    await _activeRecorder.start(
       RecordConfig(encoder: kIsWeb ? AudioEncoder.opus : AudioEncoder.aacLc),
-      path: kIsWeb ? '' : await _tempPath(),
+      path: kIsWeb ? '' : await io_helper.tempRecordingPath(),
     );
 
-    _elapsedSeconds = 0;
     _timer?.cancel();
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       _elapsedSeconds++;
+      if (!_amplitudeSamplesReceived) {
+        // Web often has no amplitude — time-based mic nudge only (no voice yet).
+        if (!_heardAnyVoice &&
+            _elapsedSeconds >= silenceFirstWarnAfterSeconds) {
+          if (_lastSilenceWarnAtElapsed == null) {
+            _lastSilenceWarnAtElapsed = _elapsedSeconds;
+            _onSilenceWarning?.call();
+          } else if (_elapsedSeconds - _lastSilenceWarnAtElapsed! >=
+              silenceRepeatWarnAfterSeconds) {
+            _lastSilenceWarnAtElapsed = _elapsedSeconds;
+            _onSilenceWarning?.call();
+          }
+        }
+        return;
+      }
+      if (_voiceActiveNow) {
+        _consecutiveSilentSeconds = 0;
+        return;
+      }
+      _consecutiveSilentSeconds++;
+      if (shouldFireSilenceWarning(
+        consecutiveSilentSeconds: _consecutiveSilentSeconds,
+        heardAnyVoice: _heardAnyVoice,
+        lastWarnAtElapsed: _lastSilenceWarnAtElapsed,
+      )) {
+        _lastSilenceWarnAtElapsed = _elapsedSeconds;
+        _consecutiveSilentSeconds = 0;
+        _onSilenceWarning?.call();
+      }
     });
+
+    await _amplitudeSub?.cancel();
+    try {
+      _amplitudeSub = _activeRecorder
+          .onAmplitudeChanged(const Duration(milliseconds: 300))
+          .listen((amp) {
+        _amplitudeSamplesReceived = true;
+        final level = amp.current;
+        if (level > _peakDb) _peakDb = level;
+        if (level >= voiceThresholdDb) {
+          if (!_voiceActiveNow) {
+            _consecutiveSilentSeconds = 0;
+          }
+          _voiceActiveNow = true;
+          _heardAnyVoice = true;
+        } else {
+          _voiceActiveNow = false;
+        }
+      });
+    } catch (_) {
+      // Some platforms (or web) may not support amplitude — backend guard remains.
+    }
   }
 
   Future<String?> stop() async {
     _timer?.cancel();
     _timer = null;
-    return _recorder.stop();
+    await _amplitudeSub?.cancel();
+    _amplitudeSub = null;
+    final recorder = _recorder;
+    if (recorder == null || _recorderDisposed) return null;
+    return recorder.stop();
   }
 
   /// Works for a real file path (mobile/desktop) and a browser `blob:` URL
@@ -83,7 +203,7 @@ class RecordingService {
     final file = result.files.first;
     if (file.bytes != null) return file.bytes;
     if (file.path != null && !kIsWeb) {
-      return File(file.path!).readAsBytes();
+      return io_helper.readFileBytes(file.path!);
     }
     return null;
   }
@@ -99,20 +219,62 @@ class RecordingService {
     final file = result.files.first;
     Uint8List? bytes = file.bytes;
     if (bytes == null && file.path != null && !kIsWeb) {
-      bytes = await File(file.path!).readAsBytes();
+      bytes = await io_helper.readFileBytes(file.path!);
     }
     if (bytes == null) return null;
     final name = file.name.isNotEmpty ? file.name : 'document.pdf';
     return (bytes: bytes, name: name);
   }
 
-  Future<String> _tempPath() async {
-    final dir = Directory.systemTemp;
-    return '${dir.path}/examspark_${DateTime.now().millisecondsSinceEpoch}.m4a';
+  /// Screen leave: stop timer + stop active recording. Do NOT dispose the
+  /// shared [AudioRecorder] permanently — next visit recreates if needed.
+  Future<void> releaseForScreen() async {
+    _timer?.cancel();
+    _timer = null;
+    await _amplitudeSub?.cancel();
+    _amplitudeSub = null;
+    _onSilenceWarning = null;
+    final recorder = _recorder;
+    if (recorder == null || _recorderDisposed) return;
+    try {
+      if (await recorder.isRecording()) {
+        await recorder.stop();
+      }
+    } catch (_) {
+      // Already stopped / disposed mid-flight — ignore.
+    }
   }
 
+  /// Pure logic for silence popups — unit-tested.
+  static bool shouldFireSilenceWarning({
+    required int consecutiveSilentSeconds,
+    required bool heardAnyVoice,
+    required int? lastWarnAtElapsed,
+    int firstWarnSeconds = silenceFirstWarnAfterSeconds,
+    int repeatWarnSeconds = silenceRepeatWarnAfterSeconds,
+  }) {
+    if (!heardAnyVoice) {
+      if (lastWarnAtElapsed == null) {
+        return consecutiveSilentSeconds >= firstWarnSeconds;
+      }
+      return consecutiveSilentSeconds >= repeatWarnSeconds;
+    }
+    return consecutiveSilentSeconds >= repeatWarnSeconds;
+  }
+
+  /// Full teardown (app exit / tests only). Prefer [releaseForScreen] from UI.
   void dispose() {
     _timer?.cancel();
-    _recorder.dispose();
+    _timer = null;
+    unawaited(_amplitudeSub?.cancel());
+    _amplitudeSub = null;
+    _onSilenceWarning = null;
+    final recorder = _recorder;
+    if (recorder != null && !_recorderDisposed) {
+      try {
+        recorder.dispose();
+      } catch (_) {}
+      _recorderDisposed = true;
+    }
   }
 }

@@ -77,6 +77,10 @@ class AIConfig:
     def openrouter_configured(cls) -> bool:
         return bool(cls.OPENROUTER_API_KEY)
 
+    @classmethod
+    def tavily_configured(cls) -> bool:
+        return bool((os.getenv("TAVILY_API_KEY") or "").strip())
+
 
 class StorageConfig:
     """Cloudflare R2 (S3-compatible) — permanent transcript/notes storage.

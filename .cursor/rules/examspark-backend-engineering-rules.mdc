@@ -43,26 +43,17 @@ note under each. **Locking this rule does not change any existing code.**
   stubbed — real verification is Phase 5 Session 6).
 - Log every verified payment (amount, plan, user_id, timestamp) for audit.
 
-## 3. Storage — R2 Holds Content, Postgres Holds Paths Only
+## 3. Storage — R2 Holds Large Files, Postgres Holds Structured Data
 
-*(Corrected vs. as-given: the founder's original wording said text content
-should live in Postgres and R2 should only stage audio. That's the opposite of
-the already-locked architecture and of what Session 2 already built — reconciled
-Jul 13, 2026, founder confirmed keep the built version.)*
+*(Updated Jul 16, 2026 per founder-locked [`DATA_STORAGE_POLICY.md`](DATA_STORAGE_POLICY.md).)*
 
-- Transcript, Notes, Summary, key points, important terms — all persisted
-  **long-term as content in Cloudflare R2** (`app/services/r2_storage_service.py`,
-  `Library/{user_id}/{lecture_id}/...`). Postgres (`transcripts`, `notes`,
-  `lectures` tables) stores **only the R2 path string** — never the content
-  itself. This is the hard "Postgres = metadata only" rule (`PROJECT_CORE_RULES.md`).
-- Raw audio is **never** written to R2, Supabase Storage, or disk — today it
-  lives only in FastAPI's request memory, goes straight to Groq Whisper, and is
-  discarded when the request ends. No staging step exists because none is needed
-  for a single-request transcription.
-- If/when chunking is added for very long recordings (>Groq's per-file limit),
-  a temp-staging pattern (R2 or local) may be needed for the audio chunks only —
-  guaranteed cleanup (`finally`/equivalent) would apply to that staging, never to
-  the transcript/notes content, which always stays permanent in R2.
+- **R2 (permanent):** Clean transcript, full lecture notes (`.md`), original PDF/image uploads, OCR output, exports, backups
+- **R2 (temp only):** Raw audio — staged during transcription/chunking, deleted immediately when transcription completes
+- **Supabase:** Flashcards/Quiz/Mind Map/Revision **JSON**, short notes fields (target), metadata, R2 path refs, chat, analytics
+- **Supabase pgvector:** Embeddings for RAG — search never hits R2 directly
+- Raw audio is **never** written permanently to R2, Supabase Storage, or disk — today it lives in FastAPI request memory for single-request transcription
+- If chunking is added for long recordings, temp audio staging on R2/local with guaranteed `finally` cleanup
+- **Implementation today:** Flashcards/Quiz JSON in `extras.payload_json`; full notes still in R2 until short-notes split is built
 
 ## 4. AI Model Routing — By Input Type, Not Plan Tier
 

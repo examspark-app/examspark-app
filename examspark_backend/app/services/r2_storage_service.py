@@ -57,12 +57,19 @@ class R2StorageService:
                 "R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY in .env."
             )
         if self._client is None:
+            # Short timeouts so a flaky network fails fast instead of freezing
+            # the FastAPI event loop for minutes (default boto3 retries are long).
             self._client = boto3.client(
                 "s3",
                 endpoint_url=StorageConfig.endpoint_url(),
                 aws_access_key_id=StorageConfig.R2_ACCESS_KEY_ID,
                 aws_secret_access_key=StorageConfig.R2_SECRET_ACCESS_KEY,
-                config=BotoConfig(signature_version="s3v4"),
+                config=BotoConfig(
+                    signature_version="s3v4",
+                    connect_timeout=10,
+                    read_timeout=30,
+                    retries={"max_attempts": 2},
+                ),
                 region_name="auto",
             )
         return self._client
@@ -159,3 +166,51 @@ class R2StorageService:
             return response["Body"].read()
         except Exception as e:  # noqa: BLE001
             raise R2StorageError(f"R2 download failed for {path}: {e}") from e
+
+    def delete_prefix(self, prefix: str) -> int:
+        """Delete every object under a key prefix. Returns deleted count.
+
+        Raises R2StorageError on failure so callers can refuse DB delete and
+        avoid orphaning storage.
+        """
+        folder = (prefix or "").strip().lstrip("/")
+        if not folder:
+            raise R2StorageError("Refusing to delete empty R2 prefix.")
+        if not folder.endswith("/"):
+            folder = f"{folder}/"
+
+        client = self._get_client()
+        bucket = StorageConfig.R2_BUCKET_NAME
+        deleted = 0
+        try:
+            continuation: str | None = None
+            while True:
+                kwargs: dict = {
+                    "Bucket": bucket,
+                    "Prefix": folder,
+                    "MaxKeys": 1000,
+                }
+                if continuation:
+                    kwargs["ContinuationToken"] = continuation
+                page = client.list_objects_v2(**kwargs)
+                objects = page.get("Contents") or []
+                if objects:
+                    # Batch delete (up to 1000 keys).
+                    client.delete_objects(
+                        Bucket=bucket,
+                        Delete={
+                            "Objects": [{"Key": obj["Key"]} for obj in objects],
+                            "Quiet": True,
+                        },
+                    )
+                    deleted += len(objects)
+                if not page.get("IsTruncated"):
+                    break
+                continuation = page.get("NextContinuationToken")
+        except R2StorageError:
+            raise
+        except Exception as e:  # noqa: BLE001
+            raise R2StorageError(
+                f"R2 delete failed for prefix {folder}: {e}"
+            ) from e
+        return deleted

@@ -451,16 +451,27 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
           borderRadius: BorderRadius.circular(AppTheme.borderRadius),
           border: Border.all(color: AppTheme.getCardBorder(context)),
         ),
-        child: Text(
-          'No credit activity yet. Ask AI, recording, and purchases will show here with time.',
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.getSecondaryText(context),
-              ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'No credit activity yet. Ask AI, recording, and purchases will show in history.',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: AppTheme.getSecondaryText(context),
+                  ),
+            ),
+            const SizedBox(height: 12),
+            TextButton(
+              onPressed: () =>
+                  Navigator.pushNamed(context, '/credits/history'),
+              child: const Text('Open Credits History'),
+            ),
+          ],
         ),
       );
     }
 
-    final shown = _transactions.take(25).toList();
+    final shown = _transactions.take(3).toList();
     return Container(
       decoration: BoxDecoration(
         color: AppTheme.getCardBackground(context),
@@ -470,9 +481,26 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       child: Column(
         children: [
           for (var i = 0; i < shown.length; i++) ...[
-            if (i > 0) Divider(height: 1, color: AppTheme.getCardBorder(context)),
+            if (i > 0)
+              Divider(height: 1, color: AppTheme.getCardBorder(context)),
             _historyRow(shown[i]),
           ],
+          Divider(height: 1, color: AppTheme.getCardBorder(context)),
+          ListTile(
+            dense: true,
+            title: Text(
+              'View full history',
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: AppTheme.accentColor,
+                  ),
+            ),
+            trailing: Icon(
+              Icons.chevron_right,
+              color: AppTheme.accentColor,
+            ),
+            onTap: () => Navigator.pushNamed(context, '/credits/history'),
+          ),
         ],
       ),
     );
@@ -547,9 +575,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             style: Theme.of(context).textTheme.bodyLarge,
           ),
           const SizedBox(height: 12),
-          _buildCostRow('Record ≤30 min', CreditCosts.recordUpTo30Min),
-          _buildCostRow('Record 30–60 min', CreditCosts.record30To60Min),
-          _buildCostRow('Record 60–90 min', CreditCosts.record60To90Min),
+          _buildCostRow(
+            'Recording / Audio (per minute)',
+            CreditCosts.recordCreditsPerMinute,
+          ),
           _buildCostRow('Ask AI (Normal)', CreditCosts.askAiNormal),
           _buildCostRow('Ask AI (Deep)', CreditCosts.askAiDeep),
           _buildCostRow('PDF Analysis', CreditCosts.pdfAnalysis),

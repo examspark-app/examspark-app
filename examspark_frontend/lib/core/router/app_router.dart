@@ -8,10 +8,11 @@ import 'package:examspark_frontend/presentation/screens/dashboard/teacher_dashbo
 import 'package:examspark_frontend/presentation/screens/groups/group_info_screen.dart';
 import 'package:examspark_frontend/presentation/screens/groups/groups_list_screen.dart';
 import 'package:examspark_frontend/presentation/screens/recording/notes_result_screen.dart';
-import 'package:examspark_frontend/presentation/screens/recording/processing_screen.dart';
 import 'package:examspark_frontend/presentation/screens/recording/recorder_screen.dart';
-import 'package:examspark_frontend/presentation/screens/recording/recording_setup_screen.dart';
+import 'package:examspark_frontend/presentation/screens/recording/processing_screen.dart';
+import 'package:examspark_frontend/presentation/screens/recording/study_workspace_page.dart';
 import 'package:examspark_frontend/presentation/screens/subscription/subscription_screen.dart';
+import 'package:examspark_frontend/presentation/screens/credits/credits_history_screen.dart';
 import 'package:examspark_frontend/presentation/screens/admin/admin_payment_hub_screen.dart';
 import 'package:examspark_frontend/presentation/screens/admin/admin_payment_screens.dart';
 
@@ -42,9 +43,13 @@ class AppRouter {
           settings: settings,
         );
       case '/recording_setup':
+        // Legacy route — redirect into consolidated Recorder (Subject/Topic
+        // live on setup step 1; no fake camera/mic placeholder page).
         return MaterialPageRoute(
-          builder: (_) => RecordingSetupScreen(
+          builder: (_) => RecorderScreen(
             initialInputMethod: args?['initialInputMethod'] as String?,
+            subject: args?['subject'] as String?,
+            topic: args?['topic'] as String?,
           ),
           settings: settings,
         );
@@ -61,17 +66,32 @@ class AppRouter {
           ),
           settings: settings,
         );
+      case '/study_workspace':
+        return MaterialPageRoute(
+          builder: (_) => StudyWorkspacePage(
+            lectureId: args?['lectureId'] as String? ?? '',
+            title: args?['title'] as String? ?? 'Lecture',
+            subject: args?['subject'] as String?,
+            showDuplicateNotice: args?['duplicateNotice'] as bool? ?? false,
+            initialTabIndex: args?['initialTabIndex'] as int?,
+          ),
+          settings: settings,
+        );
       case '/notes_result':
       case '/results':
         return MaterialPageRoute(
-          builder: (_) => NotesResultScreen(
-            lectureId: args?['lectureId'] as String? ?? '',
-          ),
+          builder: (_) =>
+              NotesResultScreen(lectureId: args?['lectureId'] as String? ?? ''),
           settings: settings,
         );
       case '/subscription':
         return MaterialPageRoute(
           builder: (_) => const SubscriptionScreen(),
+          settings: settings,
+        );
+      case '/credits/history':
+        return MaterialPageRoute(
+          builder: (_) => const CreditsHistoryScreen(),
           settings: settings,
         );
       case '/teacher':
@@ -93,9 +113,8 @@ class AppRouter {
         );
       case '/group_info':
         return MaterialPageRoute(
-          builder: (_) => GroupInfoScreen(
-            groupId: args?['groupId'] as String? ?? '',
-          ),
+          builder: (_) =>
+              GroupInfoScreen(groupId: args?['groupId'] as String? ?? ''),
           settings: settings,
         );
       case '/admin/payments':

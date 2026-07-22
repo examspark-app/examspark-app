@@ -19,6 +19,9 @@ class GatedFeature(str, Enum):
     RECORD_LECTURE = "record_lecture"
     FLASHCARDS = "flashcards"
     QUIZ = "quiz"
+    REVISION = "revision"
+    IMPORTANT_QUESTIONS = "important_questions"
+    MIND_MAP = "mind_map"
 
 
 # Free monthly credits; Ask/PDF/Photo/YouTube = credits. Audio record/upload = ₹499+.
@@ -29,6 +32,9 @@ _MINIMUM_PLAN: dict[GatedFeature, str] = {
     GatedFeature.YOUTUBE_LINK: "free",
     GatedFeature.FLASHCARDS: "free",
     GatedFeature.QUIZ: "free",
+    GatedFeature.REVISION: "free",
+    GatedFeature.IMPORTANT_QUESTIONS: "free",
+    GatedFeature.MIND_MAP: "free",
     GatedFeature.RECORD_LECTURE: "plan_499",
 }
 
@@ -81,6 +87,9 @@ def lock_user_message(feature: GatedFeature, required_plan: str) -> str:
         GatedFeature.YOUTUBE_LINK,
         GatedFeature.FLASHCARDS,
         GatedFeature.QUIZ,
+        GatedFeature.REVISION,
+        GatedFeature.IMPORTANT_QUESTIONS,
+        GatedFeature.MIND_MAP,
         GatedFeature.ASK_AI,
     ):
         return "Available on Free and all paid plans (uses credits)."

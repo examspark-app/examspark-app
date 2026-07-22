@@ -2,6 +2,12 @@
 
 Does NOT touch the lecture process pipeline. Called on first Ask AI
 (or POST /api/v1/lectures/{id}/index) for a lecture.
+
+Founder lock (Jul 18, 2026): only audio (recorded / uploaded_audio) and
+YouTube lectures are stored in RAG. PDF / photo uploads
+(source_type=uploaded_document) stay out of rag_documents — Ask AI still
+answers from that lecture's notes via direct fallback, and Home chips use
+the Knowledge Object / notes, not the vector store.
 """
 from __future__ import annotations
 
@@ -11,10 +17,20 @@ from app.services.chunk_service import chunk_hash, chunk_text
 from app.services.embedding_service import EmbeddingError, embed_texts
 from app.services.r2_storage_service import R2StorageError, R2StorageService
 from app.services.supabase_admin import get_supabase_admin
+from app.models.visual_payload import parse_visual_payload, visual_payload_to_plain_text
 
 logger = logging.getLogger(__name__)
 
 _EMBED_BATCH = 16
+
+# Library RAG = long-term study memory from spoken / YouTube content only.
+_RAG_INDEX_SOURCE_TYPES = frozenset(
+    {
+        "recorded",
+        "uploaded_audio",
+        "youtube_link",
+    }
+)
 
 
 class RagIndexError(Exception):
@@ -23,11 +39,16 @@ class RagIndexError(Exception):
         super().__init__(message)
 
 
+def is_rag_indexable_source(source_type: str | None) -> bool:
+    """True only for audio + YouTube. PDF/photo (uploaded_document) = False."""
+    return (source_type or "").strip() in _RAG_INDEX_SOURCE_TYPES
+
+
 def _lecture_owned(user_id: str, lecture_id: str) -> dict:
     db = get_supabase_admin()
     result = (
         db.table("lectures")
-        .select("id, user_id, status")
+        .select("id, user_id, status, source_type")
         .eq("id", lecture_id)
         .limit(1)
         .execute()
@@ -57,12 +78,31 @@ def _load_notes_text(user_id: str, lecture_id: str, r2: R2StorageService) -> str
     db = get_supabase_admin()
     notes = (
         db.table("notes")
-        .select("r2_notes_path")
+        .select(
+            "clean_notes, short_summary, key_points, important_terms, "
+            "visual_payload_json, r2_notes_path"
+        )
         .eq("lecture_id", lecture_id)
         .limit(1)
         .execute()
     )
     rows = notes.data or []
+    if rows:
+        row = rows[0]
+        parts = [
+            (row.get("clean_notes") or "").strip(),
+            (row.get("short_summary") or "").strip(),
+        ]
+        key_points = row.get("key_points") or []
+        if isinstance(key_points, list) and key_points:
+            parts.append("Key points: " + "; ".join(str(p) for p in key_points))
+        visual = parse_visual_payload(row.get("visual_payload_json"))
+        visual_text = visual_payload_to_plain_text(visual)
+        if visual_text:
+            parts.append(visual_text)
+        joined = "\n\n".join(p for p in parts if p).strip()
+        if joined:
+            return joined
     path = rows[0].get("r2_notes_path") if rows else None
     if not path:
         return ""
@@ -77,6 +117,12 @@ def _load_notes_text(user_id: str, lecture_id: str, r2: R2StorageService) -> str
     key_points = data.get("keyPoints") or []
     if isinstance(key_points, list) and key_points:
         parts.append("Key points: " + "; ".join(str(p) for p in key_points))
+    visual = parse_visual_payload(
+        data.get("visualPayload") if isinstance(data.get("visualPayload"), dict) else None
+    )
+    visual_text = visual_payload_to_plain_text(visual)
+    if visual_text:
+        parts.append(visual_text)
     return "\n\n".join(p for p in parts if p)
 
 
@@ -162,8 +208,29 @@ async def _index_source(
 
 
 async def ensure_lecture_indexed(user_id: str, lecture_id: str) -> dict:
-    """Index notes + clean_transcript if no rag_documents yet. Idempotent."""
-    _lecture_owned(user_id, lecture_id)
+    """Index notes + clean_transcript if no rag_documents yet. Idempotent.
+
+    Skips PDF/photo uploads (uploaded_document) — never writes to rag_documents.
+    """
+    row = _lecture_owned(user_id, lecture_id)
+    source_type = (row.get("source_type") or "").strip()
+
+    if not is_rag_indexable_source(source_type):
+        logger.info(
+            "Skip RAG index for lecture %s (source_type=%s — PDF/photo not stored in RAG)",
+            lecture_id,
+            source_type or "?",
+        )
+        return {
+            "lecture_id": lecture_id,
+            "already_indexed": False,
+            "skipped": True,
+            "skip_reason": "pdf_photo_not_in_rag",
+            "source_type": source_type,
+            "chunks": 0,
+            "notes_chunks": 0,
+            "transcript_chunks": 0,
+        }
 
     if _already_indexed(lecture_id):
         db = get_supabase_admin()

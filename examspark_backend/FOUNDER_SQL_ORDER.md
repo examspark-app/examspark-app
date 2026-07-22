@@ -30,6 +30,30 @@ Supabase path: **Dashboard → SQL Editor → New query → paste → Run**
 | A | [`credit_economy_v2_1_migration.sql`](credit_economy_v2_1_migration.sql) | Plan credits + credit_packs (agar pehle run nahi kiya) |
 | B | [`smoke_test_all_in_one.sql`](smoke_test_all_in_one.sql) | **GRANTs + user trigger + plan_499** — record/upload 42501 fix |
 | C | [`session3_rag_match.sql`](session3_rag_match.sql) | **Session 3 Ask AI** — `match_rag_documents` RPC (after smoke) |
+| C2 | [`rag_match_user_wide_migration.sql`](rag_match_user_wide_migration.sql) | **Full-store RAG** — `match_rag_documents_user` (cross-lecture weighted Ask) · [`FOUNDER_YOUTUBE_WHISPER_FALLBACK.md`](FOUNDER_YOUTUBE_WHISPER_FALLBACK.md) |
+| C3 | [`lecture_dedupe_migration.sql`](lecture_dedupe_migration.sql) | **Duplicate content** — `content_hash` / `youtube_video_id` / `duplicate_of` + `match_own_transcript_near_dup` · [`FOUNDER_LECTURE_DEDUPE.md`](FOUNDER_LECTURE_DEDUPE.md) |
+| C4 | [`rag_exclude_pdf_photo_cleanup.sql`](rag_exclude_pdf_photo_cleanup.sql) | **Optional** — delete old PDF/photo chunks from RAG (audio+YouTube only lock) |
+| D | [`pyq_exam_pyqs_migration.sql`](pyq_exam_pyqs_migration.sql) | **start PYQs** — `exam_pyqs` + `match_exam_pyqs`; then `python scripts/seed_pyq_embeddings.py` · [`FOUNDER_START_PYQS.md`](FOUNDER_START_PYQS.md) |
+| E | [`quiz_attempts_migration.sql`](quiz_attempts_migration.sql) | **Quiz Attempts Slice A** — Learning Score + Quiz Completed on Progress · [`FOUNDER_QUIZ_ATTEMPTS.md`](FOUNDER_QUIZ_ATTEMPTS.md) |
+
+### Jul 16, 2026 — Study extras + Visual Notes (aapka next SQL)
+
+**One paste (recommended):** [`FOUNDER_SQL_JUL16_PENDING.sql`](FOUNDER_SQL_JUL16_PENDING.sql)
+
+Or separately: `extras_payload_json_migration.sql` → `notes_short_supabase_migration.sql` → `notes_visual_payload_migration.sql`
+
+Daily checklist: [`FOUNDER_NEXT_SESSION.md`](FOUNDER_NEXT_SESSION.md)
+
+### Jul 17, 2026 — Home AI Phase 4C (Gate A smoke — NOW)
+
+Run **in order** (safe IF NOT EXISTS):
+
+| Step | File |
+|------|------|
+| 4C-1 | [`home_ai_phase4c_migration.sql`](home_ai_phase4c_migration.sql) |
+| 4C-2 | [`home_ai_phase4c_v2_migration.sql`](home_ai_phase4c_v2_migration.sql) → expect `phase4c_v2_ok` |
+
+Smoke card: [`FOUNDER_PHASE4C_SMOKE_CARD.md`](FOUNDER_PHASE4C_SMOKE_CARD.md) · CTO: [`FOUNDER_CTO_WORKING_CHARTER.md`](FOUNDER_CTO_WORKING_CHARTER.md)
 
 **Mat run karo dubara:** `schema.sql` (purana DB toot sakta hai)
 

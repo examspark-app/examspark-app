@@ -17,6 +17,9 @@ _MAX_ANSWER_ENTRIES = 128
 
 _embed_cache: dict[str, tuple[float, list[float]]] = {}
 _answer_cache: dict[str, tuple[float, dict[str, Any]]] = {}
+# Soft semantic index: user_id -> list of (expires, query, payload)
+_answer_by_user: dict[str, list[tuple[float, str, dict[str, Any]]]] = {}
+_MAX_USER_ANSWER_ROWS = 24
 
 _WS = re.compile(r"\s+")
 
@@ -41,6 +44,7 @@ def answer_cache_key(
     lecture_id: str | None,
     conversation_language: str | None,
     feature: str,
+    study_chip: str | None = None,
 ) -> str:
     raw = "|".join(
         [
@@ -49,6 +53,7 @@ def answer_cache_key(
             mode,
             lecture_id or "",
             conversation_language or "",
+            study_chip or "",
             normalize_query(query),
         ]
     )
@@ -91,6 +96,35 @@ def get_cached_answer(key: str) -> dict[str, Any] | None:
     return dict(payload)
 
 
+def find_semantic_cached_answer(
+    *,
+    user_id: str,
+    query: str,
+    feature: str = "home_ai",
+    threshold: float = 0.72,
+) -> dict[str, Any] | None:
+    """Reuse a prior SUCCESS answer when the new question is near-duplicate."""
+    from app.services.home_ai_followup import find_similar_in_pairs
+
+    rows = _answer_by_user.get(user_id) or []
+    now = time.time()
+    alive: list[tuple[float, str, dict[str, Any]]] = []
+    candidates: list[tuple[str, dict]] = []
+    for exp, q, payload in rows:
+        if now > exp:
+            continue
+        if (payload.get("_feature") or "home_ai") != feature:
+            alive.append((exp, q, payload))
+            continue
+        alive.append((exp, q, payload))
+        candidates.append((q, payload))
+    _answer_by_user[user_id] = alive[-_MAX_USER_ANSWER_ROWS:]
+    hit = find_similar_in_pairs(query, candidates, threshold=threshold)
+    if not hit:
+        return None
+    return {k: v for k, v in hit.items() if not str(k).startswith("_")}
+
+
 def set_cached_answer(key: str, payload: dict[str, Any]) -> None:
     if len(_answer_cache) >= _MAX_ANSWER_ENTRIES:
         for k, _ in sorted(_answer_cache.items(), key=lambda kv: kv[1][0])[
@@ -105,7 +139,16 @@ def set_cached_answer(key: str, payload: dict[str, Any]) -> None:
     }
     _answer_cache[key] = (time.time() + _ANSWER_TTL_SEC, clean)
 
+    user_id = str(clean.get("_user_id") or "")
+    query = str(clean.get("_query") or "")
+    if user_id and query:
+        bucket = _answer_by_user.setdefault(user_id, [])
+        bucket.append((time.time() + _ANSWER_TTL_SEC, query, dict(clean)))
+        if len(bucket) > _MAX_USER_ANSWER_ROWS:
+            _answer_by_user[user_id] = bucket[-_MAX_USER_ANSWER_ROWS:]
+
 
 def clear_performance_caches_for_tests() -> None:
     _embed_cache.clear()
     _answer_cache.clear()
+    _answer_by_user.clear()

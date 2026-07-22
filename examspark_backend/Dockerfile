@@ -2,10 +2,10 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# System deps for building any wheels that need compilation (kept minimal —
-# add ffmpeg/libpq-dev here in a later session if Whisper/pgvector clients need it)
+# ffmpeg/ffprobe: long Record/upload Whisper chunking (up to 3 hr)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt .

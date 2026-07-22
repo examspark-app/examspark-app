@@ -20,12 +20,14 @@ class _AskMsg {
   final bool isUser;
   final String? trustLine;
   final bool animateReveal;
+  final Map<String, dynamic>? visualPayload;
 
   const _AskMsg(
     this.text, {
     required this.isUser,
     this.trustLine,
     this.animateReveal = false,
+    this.visualPayload,
   });
 }
 
@@ -134,6 +136,7 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
     final trust = AiAnswerMeta.trustLine(
       answerSource: result['answer_source'] as String?,
       confidence: result['confidence'] as String?,
+      webSearchNote: result['web_search_note'] as String?,
     );
     final convLang = result['conversation_language'] as String?;
     final hasAnswer = answer != null && answer.isNotEmpty;
@@ -146,6 +149,9 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
         isUser: false,
         trustLine: trust,
         animateReveal: hasAnswer && animateReveal,
+        visualPayload: result['visual_payload'] is Map
+            ? Map<String, dynamic>.from(result['visual_payload'] as Map)
+            : null,
       ));
       _isSending = false;
       _liveStreamText = null;
@@ -231,6 +237,7 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
                         text: m.text,
                         trustLine: m.trustLine,
                         animate: m.animateReveal,
+                        visualPayload: m.visualPayload,
                       ),
                     );
                   },

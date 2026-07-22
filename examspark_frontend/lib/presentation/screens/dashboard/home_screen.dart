@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/constants/credit_usage_display.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
@@ -100,7 +100,7 @@ class _HomeScreenState extends State<HomeScreen> {
                       Padding(
                         padding: const EdgeInsets.all(16),
                         child: ElevatedButton.icon(
-                          onPressed: () => Navigator.pushNamed(context, '/recording_setup'),
+                          onPressed: () => Navigator.pushNamed(context, '/recorder'),
                           icon: const Icon(Icons.add),
                           label: const Text('New Lecture'),
                           style: ElevatedButton.styleFrom(
@@ -236,7 +236,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                         const SizedBox(height: 32),
                         ElevatedButton.icon(
-                          onPressed: () => Navigator.pushNamed(context, '/recording_setup'),
+                          onPressed: () => Navigator.pushNamed(context, '/recorder'),
                           icon: const Icon(Icons.mic),
                           label: const Text('Start Recording'),
                           style: ElevatedButton.styleFrom(

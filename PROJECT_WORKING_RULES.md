@@ -201,6 +201,15 @@ Quality > speed. Think as:
 
 Production-quality architecture.
 
+### CTO Working Charter (Founder Lock — Jul 17, 2026)
+
+Full lock: [`examspark_backend/FOUNDER_CTO_WORKING_CHARTER.md`](examspark_backend/FOUNDER_CTO_WORKING_CHARTER.md)
+
+- Honesty over ego; user-first; careful one-slice scope
+- **Gate A:** Phase 4C careful smoke before new coding — [`FOUNDER_PHASE4C_SMOKE_CARD.md`](examspark_backend/FOUNDER_PHASE4C_SMOKE_CARD.md)
+- **Gate B:** Next coding only when founder says `start …` — [`FOUNDER_PENDING_LOCKED.md`](examspark_backend/FOUNDER_PENDING_LOCKED.md)
+- Never fake UI smoke pass; never claim external SQL/env done until founder did it
+
 ---
 
 ## 12. End of Every Task (Required Summary)

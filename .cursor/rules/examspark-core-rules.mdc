@@ -9,11 +9,15 @@ Full spec: [`PROJECT_CORE_RULES.md`](PROJECT_CORE_RULES.md)
 
 ## Storage
 
-- **Temp (delete after processing):** Raw audio, temp AI/OCR files, upload cache
-- **R2 permanent:** Notes, Summary, Flashcards, Quiz, transcripts, PDF, images, teacher files
-- **Postgres:** Metadata only — never large blobs
+**Locked policy:** [`DATA_STORAGE_POLICY.md`](DATA_STORAGE_POLICY.md) (Jul 16, 2026)
+
+- **Temp (delete after processing):** Raw audio (never permanent), temp AI/OCR, upload cache
+- **R2 permanent:** Large files — full notes `.md`, clean transcript, original PDF/image, OCR output, exports, backups
+- **R2 temp only:** Raw audio staging during transcription/chunking
+- **Supabase:** Structured JSON (Flashcards, Quiz, Mind Map, Revision), short notes fields, metadata, chat, analytics, pgvector
+- **Not R2:** Flashcards/Quiz/Mind Map/Revision **JSON** — Supabase; R2 only for PDF/image **exports**
 - **Vectors:** Clean Transcript chunks + AI Notes + Teacher Shared Notes only
-- Audio: delete after Whisper unless teacher `Save Original Audio` ON
+- **Search:** Supabase/pgvector/metadata — never search R2 directly
 
 ## Groups
 

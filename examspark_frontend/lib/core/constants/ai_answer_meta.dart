@@ -5,15 +5,23 @@ class AiAnswerMeta {
   static String? trustLine({
     String? answerSource,
     String? confidence,
+    String? webSearchNote,
   }) {
     final sourceLabel = _sourceLabel(answerSource);
     final confLabel = _confidenceLabel(confidence);
-    if (sourceLabel == null && confLabel == null) return null;
+    String? base;
     if (sourceLabel != null && confLabel != null) {
-      return 'Source: $sourceLabel · Confidence: $confLabel';
+      base = 'Source: $sourceLabel · Confidence: $confLabel';
+    } else if (sourceLabel != null) {
+      base = 'Source: $sourceLabel';
+    } else if (confLabel != null) {
+      base = 'Confidence: $confLabel';
     }
-    if (sourceLabel != null) return 'Source: $sourceLabel';
-    return 'Confidence: $confLabel';
+    final note = (webSearchNote ?? '').trim();
+    if (note.isNotEmpty) {
+      return base == null ? note : '$base\n$note';
+    }
+    return base;
   }
 
   static String? _sourceLabel(String? raw) {
@@ -25,7 +33,9 @@ class AiAnswerMeta {
       case 'KB':
         return 'Knowledge';
       case 'WEB':
-        return 'Web Search';
+        return 'Live web search (current events)';
+      case 'VISION':
+        return 'Photo / Diagram';
       case 'MIXED':
         return 'Mixed';
       case 'NO_MATCH':

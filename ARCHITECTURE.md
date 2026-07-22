@@ -72,12 +72,12 @@ Groq Whisper · Qwen3 · Qwen3-VL · Tavily (web)
 
 | Layer | Stores | Rule |
 |-------|--------|------|
-| **Temp** | Raw audio, OCR cache, upload cache | Delete after processing |
-| **R2** | Notes, summary, quiz, PDF, images, transcripts | Permanent blobs |
-| **Postgres** | Users, groups, lecture metadata, credits, paths | Metadata only |
-| **Vectors** | Clean transcript chunks, notes, teacher shared | No raw binaries |
+| **Temp** | Raw audio (R2 staging during transcribe only) | Delete immediately after transcription |
+| **R2** | Full notes, clean transcript, PDF/image, OCR, exports | Large files — not structured JSON extras |
+| **Postgres** | Flashcards/Quiz JSON, metadata, paths, credits, chat | Structured + searchable — no large binaries |
+| **Vectors** | Clean transcript chunks, notes, teacher shared | pgvector — search never hits R2 directly |
 
-Full rules: [`PROJECT_CORE_RULES.md`](PROJECT_CORE_RULES.md) §1
+Full rules: [`DATA_STORAGE_POLICY.md`](DATA_STORAGE_POLICY.md) (LOCKED Jul 16, 2026)
 
 ---
 

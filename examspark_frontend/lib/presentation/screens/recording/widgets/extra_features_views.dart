@@ -1,5 +1,12 @@
+import 'dart:math';
+
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:examspark_frontend/core/services/quiz_attempt_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/widgets/select_ai/selectable_study_text.dart';
+import 'package:examspark_frontend/presentation/widgets/study_workspace/workspace_action_bar.dart';
+import 'package:examspark_frontend/presentation/widgets/study_workspace/workspace_progress_bar.dart';
 
 /// Extra Features Rendering Widgets
 /// Modular minimalist views for MCQ, Flashcards, and RAG Chat
@@ -8,10 +15,16 @@ import 'package:examspark_frontend/core/theme/app_theme.dart';
 
 class MCQQuizView extends StatefulWidget {
   final List<MCQQuestion> questions;
+  final String? lectureId;
+  final VoidCallback? onOpenRevision;
+  final VoidCallback? onGenerateNewQuiz;
 
   const MCQQuizView({
     super.key,
     required this.questions,
+    this.lectureId,
+    this.onOpenRevision,
+    this.onGenerateNewQuiz,
   });
 
   @override
@@ -21,7 +34,74 @@ class MCQQuizView extends StatefulWidget {
 class _MCQQuizViewState extends State<MCQQuizView> {
   int _currentQuestionIndex = 0;
   final Map<int, String?> _selectedAnswers = {};
-  final Map<int, bool> _answeredQuestions = {};
+  final Map<int, bool> _submittedQuestions = {};
+  bool _showCompletion = false;
+  bool _attemptSaved = false;
+
+  @override
+  void didUpdateWidget(covariant MCQQuizView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.questions != widget.questions) {
+      _currentQuestionIndex = 0;
+      _selectedAnswers.clear();
+      _submittedQuestions.clear();
+      _showCompletion = false;
+      _attemptSaved = false;
+    }
+  }
+
+  void _retryQuiz() {
+    setState(() {
+      _currentQuestionIndex = 0;
+      _selectedAnswers.clear();
+      _submittedQuestions.clear();
+      _showCompletion = false;
+      _attemptSaved = false;
+    });
+  }
+
+  Future<void> _persistAttemptOnce() async {
+    if (_attemptSaved) return;
+    final lectureId = widget.lectureId?.trim();
+    if (lectureId == null || lectureId.isEmpty) return;
+    final total = widget.questions.length;
+    if (total <= 0) return;
+    _attemptSaved = true;
+    await QuizAttemptService.instance.recordAttempt(
+      lectureId: lectureId,
+      score: _score,
+      total: total,
+    );
+  }
+
+  int get _score {
+    var correct = 0;
+    for (var i = 0; i < widget.questions.length; i++) {
+      if (_submittedQuestions[i] == true &&
+          _selectedAnswers[i] == widget.questions[i].correctAnswer) {
+        correct++;
+      }
+    }
+    return correct;
+  }
+
+  List<String> get _weakTopics {
+    final topics = <String>[];
+    for (var i = 0; i < widget.questions.length; i++) {
+      if (_submittedQuestions[i] != true) continue;
+      if (_selectedAnswers[i] == widget.questions[i].correctAnswer) continue;
+      final q = widget.questions[i].question.trim();
+      if (q.isEmpty) continue;
+      final words = q
+          .replaceAll(RegExp(r'[^\w\s]'), ' ')
+          .split(RegExp(r'\s+'))
+          .where((w) => w.length > 4)
+          .take(3)
+          .join(' ');
+      if (words.isNotEmpty) topics.add(words);
+    }
+    return topics.take(5).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,54 +125,56 @@ class _MCQQuizViewState extends State<MCQQuizView> {
       );
     }
 
+    if (_showCompletion) {
+      return _buildCompletion(context);
+    }
+
     final currentQuestion = widget.questions[_currentQuestionIndex];
-    final isAnswered = _answeredQuestions[_currentQuestionIndex] ?? false;
+    final isSubmitted = _submittedQuestions[_currentQuestionIndex] ?? false;
     final selectedAnswer = _selectedAnswers[_currentQuestionIndex];
     final isCorrect = selectedAnswer == currentQuestion.correctAnswer;
+    final total = widget.questions.length;
 
     return Column(
       children: [
-        // Progress indicator
         Padding(
-          padding: const EdgeInsets.all(AppTheme.screenPadding),
-          child: Row(
-            children: [
-              Text(
-                'Question ${_currentQuestionIndex + 1} of ${widget.questions.length}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const Spacer(),
-              Text(
-                '${((_currentQuestionIndex + 1) / widget.questions.length * 100).toInt()}%',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-            ],
+          padding: const EdgeInsets.fromLTRB(
+            AppTheme.screenPadding,
+            AppTheme.screenPadding,
+            AppTheme.screenPadding,
+            8,
+          ),
+          child: WorkspaceProgressBar(
+            current: _currentQuestionIndex + 1,
+            total: total,
+            label: 'Question',
+            remainingSuffix: 'questions remaining',
           ),
         ),
-
-        // Question
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: AppTheme.screenPadding),
+            padding: const EdgeInsets.symmetric(
+              horizontal: AppTheme.screenPadding,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                const SizedBox(height: 8),
                 Text(
                   currentQuestion.question,
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w500,
-                  ),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w500,
+                      ),
                 ),
                 const SizedBox(height: 24),
-
-                // Options
                 ...currentQuestion.options.asMap().entries.map((entry) {
                   final index = entry.key;
                   final option = entry.value;
-                  final optionLetter = String.fromCharCode(65 + index); // A, B, C, D
+                  final optionLetter = String.fromCharCode(65 + index);
                   final isSelected = selectedAnswer == optionLetter;
-                  final isCorrectOption = optionLetter == currentQuestion.correctAnswer;
+                  final isCorrectOption =
+                      optionLetter == currentQuestion.correctAnswer;
 
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
@@ -100,60 +182,65 @@ class _MCQQuizViewState extends State<MCQQuizView> {
                       letter: optionLetter,
                       text: option,
                       isSelected: isSelected,
-                      isAnswered: isAnswered,
+                      isAnswered: isSubmitted,
                       isCorrectOption: isCorrectOption,
-                      onTap: isAnswered ? null : () => _selectAnswer(optionLetter),
+                      onTap: isSubmitted
+                          ? null
+                          : () => setState(
+                                () => _selectedAnswers[_currentQuestionIndex] =
+                                    optionLetter,
+                              ),
                     ),
                   );
                 }),
-
-                // Explanation hint
-                if (isAnswered) ...[
-                  const SizedBox(height: 24),
+                if (isSubmitted) ...[
+                  const SizedBox(height: 8),
                   Container(
-                    padding: const EdgeInsets.all(16),
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: AppTheme.getAccentTint(context),
-                      borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+                      color: isCorrect
+                          ? AppTheme.getAccentTint(context)
+                          : Colors.red.withOpacity(0.06),
+                      borderRadius:
+                          BorderRadius.circular(AppTheme.borderRadius),
                       border: Border.all(
-                        color: AppTheme.accentColor.withOpacity(0.3),
+                        color: isCorrect
+                            ? AppTheme.accentColor.withOpacity(0.35)
+                            : Colors.red.withOpacity(0.35),
                       ),
                     ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: Row(
                       children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              size: 16,
-                              color: AppTheme.accentColor,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Explanation',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.accentColor,
-                              ),
-                            ),
-                          ],
+                        Icon(
+                          isCorrect
+                              ? Icons.check_circle_outline
+                              : Icons.cancel_outlined,
+                          color: isCorrect ? AppTheme.accentColor : Colors.red,
+                          size: 20,
                         ),
-                        const SizedBox(height: 8),
+                        const SizedBox(width: 10),
                         Text(
-                          currentQuestion.explanation ?? 'No explanation provided',
-                          style: Theme.of(context).textTheme.bodySmall,
+                          isCorrect ? 'Correct' : 'Incorrect',
+                          style:
+                              Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                    fontWeight: FontWeight.w600,
+                                    color: isCorrect
+                                        ? AppTheme.accentColor
+                                        : Colors.red,
+                                  ),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  _buildExplanation(context, currentQuestion),
                 ],
+                const SizedBox(height: 16),
               ],
             ),
           ),
         ),
-
-        // Navigation buttons
         Padding(
           padding: const EdgeInsets.all(AppTheme.screenPadding),
           child: Row(
@@ -174,14 +261,8 @@ class _MCQQuizViewState extends State<MCQQuizView> {
               const SizedBox(width: 12),
               Expanded(
                 child: ElevatedButton(
-                  onPressed: _currentQuestionIndex < widget.questions.length - 1
-                      ? () => setState(() => _currentQuestionIndex++)
-                      : null,
-                  child: Text(
-                    _currentQuestionIndex < widget.questions.length - 1
-                        ? 'Next'
-                        : 'Finish',
-                  ),
+                  onPressed: _primaryAction(isSubmitted, selectedAnswer),
+                  child: Text(_primaryLabel(isSubmitted)),
                 ),
               ),
             ],
@@ -191,11 +272,168 @@ class _MCQQuizViewState extends State<MCQQuizView> {
     );
   }
 
-  void _selectAnswer(String optionLetter) {
-    setState(() {
-      _selectedAnswers[_currentQuestionIndex] = optionLetter;
-      _answeredQuestions[_currentQuestionIndex] = true;
-    });
+  VoidCallback? _primaryAction(bool isSubmitted, String? selected) {
+    if (!isSubmitted) {
+      if (selected == null) return null;
+      return () => setState(() {
+            _submittedQuestions[_currentQuestionIndex] = true;
+          });
+    }
+    if (_currentQuestionIndex < widget.questions.length - 1) {
+      return () => setState(() => _currentQuestionIndex++);
+    }
+    return () {
+      setState(() => _showCompletion = true);
+      _persistAttemptOnce();
+    };
+  }
+
+  String _primaryLabel(bool isSubmitted) {
+    if (!isSubmitted) return 'Submit';
+    if (_currentQuestionIndex < widget.questions.length - 1) {
+      return 'Next Question';
+    }
+    return 'See Results';
+  }
+
+  Widget _buildExplanation(BuildContext context, MCQQuestion q) {
+    final body = Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.info_outline, size: 16, color: AppTheme.accentColor),
+            const SizedBox(width: 8),
+            Text(
+              'Explanation',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    fontWeight: FontWeight.bold,
+                    color: AppTheme.accentColor,
+                  ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Text(
+          q.explanation ?? 'No explanation provided',
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.45),
+        ),
+      ],
+    );
+
+    final card = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.getAccentTint(context),
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        border: Border.all(color: AppTheme.accentColor.withOpacity(0.3)),
+      ),
+      child: body,
+    );
+
+    if (widget.lectureId == null) return card;
+    return SelectableStudyText(
+      lectureId: widget.lectureId!,
+      sourceSurface: 'quiz',
+      child: card,
+    );
+  }
+
+  Widget _buildCompletion(BuildContext context) {
+    final total = widget.questions.length;
+    final score = _score;
+    final accuracy = total == 0 ? 0 : ((score / total) * 100).round();
+    final weak = _weakTopics;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(AppTheme.screenPadding),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const SizedBox(height: 12),
+          Icon(Icons.emoji_events_outlined, size: 48, color: AppTheme.accentColor),
+          const SizedBox(height: 12),
+          Text(
+            'Quiz Complete',
+            textAlign: TextAlign.center,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 20),
+          _statCard(context, 'Score', '$score / $total'),
+          const SizedBox(height: 10),
+          _statCard(context, 'Accuracy', '$accuracy%'),
+          const SizedBox(height: 16),
+          Text(
+            'Weak Topics',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 8),
+          if (weak.isEmpty)
+            Text(
+              'Nice work — no weak topics spotted this round.',
+              style: Theme.of(context).textTheme.bodySmall,
+            )
+          else
+            for (final t in weak)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  '• $t',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+          const SizedBox(height: 20),
+          if (widget.onOpenRevision != null)
+            OutlinedButton.icon(
+              onPressed: widget.onOpenRevision,
+              icon: const Icon(Icons.assignment_outlined, size: 18),
+              label: const Text('Recommended Revision'),
+            ),
+          const SizedBox(height: 10),
+          ElevatedButton(
+            onPressed: _retryQuiz,
+            child: const Text('Retry Quiz'),
+          ),
+          if (widget.onGenerateNewQuiz != null) ...[
+            const SizedBox(height: 10),
+            TextButton(
+              onPressed: widget.onGenerateNewQuiz,
+              child: const Text('Generate New Quiz'),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _statCard(BuildContext context, String label, String value) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.getCardBackground(context),
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        border: Border.all(color: AppTheme.getCardBorder(context)),
+      ),
+      child: Row(
+        children: [
+          Text(label, style: Theme.of(context).textTheme.bodyMedium),
+          const Spacer(),
+          Text(
+            value,
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.w600,
+                  color: AppTheme.accentColor,
+                ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -213,40 +451,34 @@ class _OptionButton extends StatelessWidget {
     required this.isSelected,
     required this.isAnswered,
     required this.isCorrectOption,
-    required this.onTap,
+    this.onTap,
   });
 
   @override
   Widget build(BuildContext context) {
-    // Determine styling based on state
-    Color? backgroundColor;
-    Color? borderColor;
-    Color? textColor;
+    late Color backgroundColor;
+    late Color borderColor;
+    late Color textColor;
 
     if (isAnswered) {
       if (isSelected && isCorrectOption) {
-        // Correct answer selected
         backgroundColor = AppTheme.getAccentTint(context);
         borderColor = AppTheme.accentColor;
         textColor = AppTheme.accentColor;
       } else if (isSelected && !isCorrectOption) {
-        // Wrong answer selected
         backgroundColor = Colors.transparent;
-        borderColor = AppTheme.getPrimaryText(context);
+        borderColor = Colors.red.shade400;
         textColor = AppTheme.getPrimaryText(context);
       } else if (!isSelected && isCorrectOption) {
-        // Show correct answer
         backgroundColor = AppTheme.getAccentTint(context);
         borderColor = AppTheme.accentColor;
         textColor = AppTheme.accentColor;
       } else {
-        // Unselected option
         backgroundColor = Colors.transparent;
         borderColor = AppTheme.getCardBorder(context);
         textColor = AppTheme.getSecondaryText(context);
       }
     } else {
-      // Not answered yet
       if (isSelected) {
         backgroundColor = AppTheme.getCardBackground(context);
         borderColor = AppTheme.getPrimaryText(context);
@@ -267,8 +499,8 @@ class _OptionButton extends StatelessWidget {
           color: backgroundColor,
           borderRadius: BorderRadius.circular(AppTheme.borderRadius),
           border: Border.all(
-            color: borderColor!,
-            width: isSelected ? 2 : 1,
+            color: borderColor,
+            width: isSelected || (isAnswered && isCorrectOption) ? 2 : 1,
           ),
         ),
         child: Row(
@@ -278,10 +510,7 @@ class _OptionButton extends StatelessWidget {
               height: 32,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                border: Border.all(
-                  color: borderColor!,
-                  width: 1,
-                ),
+                border: Border.all(color: borderColor, width: 1),
               ),
               child: Center(
                 child: Text(
@@ -295,12 +524,7 @@ class _OptionButton extends StatelessWidget {
             ),
             const SizedBox(width: 16),
             Expanded(
-              child: Text(
-                text,
-                style: TextStyle(
-                  color: textColor,
-                ),
-              ),
+              child: Text(text, style: TextStyle(color: textColor)),
             ),
           ],
         ),
@@ -336,10 +560,12 @@ class MCQQuestion {
 
 class FlashcardStackView extends StatefulWidget {
   final List<Flashcard> flashcards;
+  final String? lectureId;
 
   const FlashcardStackView({
     super.key,
     required this.flashcards,
+    this.lectureId,
   });
 
   @override
@@ -350,12 +576,17 @@ class _FlashcardStackViewState extends State<FlashcardStackView>
     with SingleTickerProviderStateMixin {
   late AnimationController _flipController;
   late Animation<double> _flipAnimation;
+  late List<int> _order;
   int _currentIndex = 0;
   bool _isFlipped = false;
+  final Set<int> _bookmarked = {};
+  final Set<int> _difficult = {};
+  bool _reviewDifficultOnly = false;
 
   @override
   void initState() {
     super.initState();
+    _order = List.generate(widget.flashcards.length, (i) => i);
     _flipController = AnimationController(
       duration: const Duration(milliseconds: 400),
       vsync: this,
@@ -363,12 +594,62 @@ class _FlashcardStackViewState extends State<FlashcardStackView>
     _flipAnimation = Tween<double>(begin: 0, end: 1).animate(
       CurvedAnimation(parent: _flipController, curve: Curves.easeInOut),
     );
+    _loadLocalPrefs();
   }
 
-  void _flipCard() {
+  @override
+  void didUpdateWidget(covariant FlashcardStackView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.flashcards != widget.flashcards) {
+      _order = List.generate(widget.flashcards.length, (i) => i);
+      _currentIndex = 0;
+      _isFlipped = false;
+      _flipController.reset();
+      _loadLocalPrefs();
+    }
+  }
+
+  Future<void> _loadLocalPrefs() async {
+    final id = widget.lectureId;
+    if (id == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final bm = prefs.getStringList('fc_bm_$id') ?? [];
+    final df = prefs.getStringList('fc_df_$id') ?? [];
+    if (!mounted) return;
     setState(() {
-      _isFlipped = !_isFlipped;
+      _bookmarked
+        ..clear()
+        ..addAll(bm.map(int.tryParse).whereType<int>());
+      _difficult
+        ..clear()
+        ..addAll(df.map(int.tryParse).whereType<int>());
     });
+  }
+
+  Future<void> _persistLocalPrefs() async {
+    final id = widget.lectureId;
+    if (id == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      'fc_bm_$id',
+      _bookmarked.map((e) => e.toString()).toList(),
+    );
+    await prefs.setStringList(
+      'fc_df_$id',
+      _difficult.map((e) => e.toString()).toList(),
+    );
+  }
+
+  List<int> get _visibleOrder {
+    if (!_reviewDifficultOnly) return _order;
+    final filtered = _order.where(_difficult.contains).toList();
+    return filtered.isEmpty ? _order : filtered;
+  }
+
+  int get _cardSourceIndex => _visibleOrder[_currentIndex];
+
+  void _flipCard() {
+    setState(() => _isFlipped = !_isFlipped);
     if (_isFlipped) {
       _flipController.forward();
     } else {
@@ -377,7 +658,7 @@ class _FlashcardStackViewState extends State<FlashcardStackView>
   }
 
   void _nextCard() {
-    if (_currentIndex < widget.flashcards.length - 1) {
+    if (_currentIndex < _visibleOrder.length - 1) {
       setState(() {
         _currentIndex++;
         _isFlipped = false;
@@ -396,10 +677,59 @@ class _FlashcardStackViewState extends State<FlashcardStackView>
     }
   }
 
+  void _shuffle() {
+    setState(() {
+      _order.shuffle(Random());
+      _currentIndex = 0;
+      _isFlipped = false;
+      _reviewDifficultOnly = false;
+    });
+    _flipController.reverse();
+  }
+
+  void _toggleBookmark() {
+    final idx = _cardSourceIndex;
+    setState(() {
+      if (_bookmarked.contains(idx)) {
+        _bookmarked.remove(idx);
+      } else {
+        _bookmarked.add(idx);
+      }
+    });
+    _persistLocalPrefs();
+  }
+
+  void _toggleDifficult() {
+    final idx = _cardSourceIndex;
+    setState(() {
+      if (_difficult.contains(idx)) {
+        _difficult.remove(idx);
+      } else {
+        _difficult.add(idx);
+      }
+    });
+    _persistLocalPrefs();
+  }
+
+  void _toggleReviewDifficult() {
+    setState(() {
+      _reviewDifficultOnly = !_reviewDifficultOnly;
+      _currentIndex = 0;
+      _isFlipped = false;
+    });
+    _flipController.reverse();
+  }
+
   @override
   void dispose() {
     _flipController.dispose();
     super.dispose();
+  }
+
+  String _conceptLabel(Flashcard card) {
+    final t = card.front.trim();
+    if (t.length <= 24) return t;
+    return '${t.substring(0, 24)}…';
   }
 
   @override
@@ -424,20 +754,90 @@ class _FlashcardStackViewState extends State<FlashcardStackView>
       );
     }
 
-    final currentCard = widget.flashcards[_currentIndex];
+    final visible = _visibleOrder;
+    if (visible.isEmpty) {
+      return const Center(child: Text('No cards to show'));
+    }
+    final safeIndex = _currentIndex.clamp(0, visible.length - 1);
+    if (safeIndex != _currentIndex) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) setState(() => _currentIndex = safeIndex);
+      });
+    }
+
+    final sourceIdx = visible[safeIndex];
+    final currentCard = widget.flashcards[sourceIdx];
+    final isBookmarked = _bookmarked.contains(sourceIdx);
+    final isDifficult = _difficult.contains(sourceIdx);
 
     return Column(
       children: [
-        // Card counter
         Padding(
-          padding: const EdgeInsets.all(AppTheme.screenPadding),
-          child: Text(
-            'Card ${_currentIndex + 1} of ${widget.flashcards.length}',
-            style: Theme.of(context).textTheme.bodySmall,
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+          child: WorkspaceProgressBar(
+            current: safeIndex + 1,
+            total: visible.length,
+            label: 'Card',
+            remainingSuffix: 'cards remaining',
           ),
         ),
-
-        // Flashcard
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 8),
+          child: WorkspaceActionBar(
+            actions: [
+              WorkspaceActionItem(
+                icon: isBookmarked ? Icons.bookmark : Icons.bookmark_border,
+                tooltip: 'Bookmark card',
+                active: isBookmarked,
+                onPressed: _toggleBookmark,
+              ),
+              WorkspaceActionItem(
+                icon: Icons.flag_outlined,
+                tooltip: isDifficult ? 'Unmark difficult' : 'Mark difficult',
+                active: isDifficult,
+                onPressed: _toggleDifficult,
+              ),
+              WorkspaceActionItem(
+                icon: Icons.shuffle,
+                tooltip: 'Shuffle',
+                onPressed: _shuffle,
+              ),
+              WorkspaceActionItem(
+                icon: Icons.filter_list,
+                tooltip: _difficult.isEmpty
+                    ? 'Mark cards difficult to review later'
+                    : (_reviewDifficultOnly
+                        ? 'Show all cards'
+                        : 'Review difficult only'),
+                active: _reviewDifficultOnly,
+                onPressed: _difficult.isEmpty ? null : _toggleReviewDifficult,
+              ),
+            ],
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            children: [
+              _badge(
+                context,
+                _conceptLabel(currentCard),
+                AppTheme.getAccentTint(context),
+                AppTheme.accentColor,
+              ),
+              if (isDifficult) ...[
+                const SizedBox(width: 8),
+                _badge(
+                  context,
+                  'Hard',
+                  Colors.orange.withOpacity(0.12),
+                  Colors.orange.shade800,
+                ),
+              ],
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
         Expanded(
           child: Center(
             child: GestureDetector(
@@ -445,39 +845,49 @@ class _FlashcardStackViewState extends State<FlashcardStackView>
               child: AnimatedBuilder(
                 animation: _flipAnimation,
                 builder: (context, child) {
+                  final angle = _flipAnimation.value * 3.14159;
+                  final showBack = _flipAnimation.value >= 0.5;
                   return Transform(
                     alignment: Alignment.center,
                     transform: Matrix4.identity()
                       ..setEntry(3, 2, 0.001)
-                      ..rotateY(_flipAnimation.value * 3.14159),
-                    child: child,
+                      ..rotateY(angle),
+                    child: showBack
+                        ? Transform(
+                            alignment: Alignment.center,
+                            transform: Matrix4.identity()..rotateY(3.14159),
+                            child: _buildCardBack(currentCard),
+                          )
+                        : _buildCardFront(currentCard),
                   );
                 },
-                child: _isFlipped
-                    ? _buildCardBack(currentCard)
-                    : _buildCardFront(currentCard),
               ),
             ),
           ),
         ),
-
-        // Navigation buttons
         Padding(
           padding: const EdgeInsets.all(AppTheme.screenPadding),
           child: Row(
             children: [
-              IconButton(
-                onPressed: _currentIndex > 0 ? _previousCard : null,
-                icon: const Icon(Icons.chevron_left),
-                iconSize: 32,
+              Expanded(
+                child: OutlinedButton(
+                  onPressed: safeIndex > 0 ? _previousCard : null,
+                  child: const Text('Previous'),
+                ),
               ),
-              const Spacer(),
-              IconButton(
-                onPressed: _currentIndex < widget.flashcards.length - 1
-                    ? _nextCard
-                    : null,
-                icon: const Icon(Icons.chevron_right),
-                iconSize: 32,
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 12),
+                child: Text(
+                  'Card ${safeIndex + 1} of ${visible.length}',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ),
+              Expanded(
+                child: ElevatedButton(
+                  onPressed:
+                      safeIndex < visible.length - 1 ? _nextCard : null,
+                  child: const Text('Next'),
+                ),
               ),
             ],
           ),
@@ -486,18 +896,81 @@ class _FlashcardStackViewState extends State<FlashcardStackView>
     );
   }
 
+  Widget _badge(
+    BuildContext context,
+    String label,
+    Color bg,
+    Color fg,
+  ) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              color: fg,
+              fontWeight: FontWeight.w600,
+              fontSize: 11,
+            ),
+      ),
+    );
+  }
+
   Widget _buildCardFront(Flashcard card) {
     return Container(
       width: 320,
-      height: 200,
+      height: 220,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
         color: AppTheme.getCardBackground(context),
         borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-        border: Border.all(
-          color: AppTheme.getCardBorder(context),
-          width: 1,
-        ),
+        border: Border.all(color: AppTheme.getCardBorder(context), width: 1),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Expanded(
+            child: Center(
+              child: Text(
+                card.front,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w500,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ),
+          Text(
+            'Tap to reveal answer',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTheme.getSecondaryText(context),
+                ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCardBack(Flashcard card) {
+    return Container(
+      width: 320,
+      height: 220,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        color: AppTheme.getAccentTint(context),
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        border: Border.all(color: AppTheme.accentColor, width: 1),
         boxShadow: [
           BoxShadow(
             color: Colors.black.withOpacity(0.05),
@@ -508,49 +981,12 @@ class _FlashcardStackViewState extends State<FlashcardStackView>
       ),
       child: Center(
         child: Text(
-          card.front,
+          card.back,
           style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-            fontSize: 18,
-            fontWeight: FontWeight.w500,
-          ),
+                fontSize: 16,
+                color: AppTheme.accentColor,
+              ),
           textAlign: TextAlign.center,
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCardBack(Flashcard card) {
-    return Transform(
-      alignment: Alignment.center,
-      transform: Matrix4.identity()..rotateY(3.14159),
-      child: Container(
-        width: 320,
-        height: 200,
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: AppTheme.getAccentTint(context),
-          borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-          border: Border.all(
-            color: AppTheme.accentColor,
-            width: 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Center(
-          child: Text(
-            card.back,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontSize: 16,
-              color: AppTheme.accentColor,
-            ),
-            textAlign: TextAlign.center,
-          ),
         ),
       ),
     );
@@ -570,6 +1006,232 @@ class Flashcard {
     return Flashcard(
       front: json['front'] ?? json['question'] ?? '',
       back: json['back'] ?? json['answer'] ?? '',
+    );
+  }
+}
+
+// ==================== IMPORTANT QUESTIONS VIEW ====================
+
+class ImportantQuestion {
+  final String question;
+  final String type;
+  final int marks;
+  final String? hint;
+
+  ImportantQuestion({
+    required this.question,
+    required this.type,
+    required this.marks,
+    this.hint,
+  });
+
+  factory ImportantQuestion.fromJson(Map<String, dynamic> json) {
+    return ImportantQuestion(
+      question: json['question']?.toString() ?? '',
+      type: json['type']?.toString() ?? 'short_answer',
+      marks: (json['marks'] as num?)?.toInt() ?? 2,
+      hint: json['hint']?.toString(),
+    );
+  }
+}
+
+class ImportantQuestionsView extends StatelessWidget {
+  final List<ImportantQuestion> questions;
+
+  const ImportantQuestionsView({
+    super.key,
+    required this.questions,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (questions.isEmpty) {
+      return Center(
+        child: Text(
+          'No questions available',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      );
+    }
+
+    return ListView.separated(
+      padding: const EdgeInsets.all(AppTheme.screenPadding),
+      itemCount: questions.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      itemBuilder: (context, index) {
+        final q = questions[index];
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppTheme.getCardBackground(context),
+            borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+            border: Border.all(color: AppTheme.getCardBorder(context)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Text(
+                    'Q${index + 1}',
+                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    '${q.marks} marks',
+                    style: Theme.of(context).textTheme.bodySmall,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Text(
+                q.question,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.w500,
+                  height: 1.5,
+                ),
+              ),
+              if (q.hint != null && q.hint!.isNotEmpty) ...[
+                const SizedBox(height: 10),
+                Text(
+                  'Hint: ${q.hint}',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.getSecondaryText(context),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+// ==================== MIND MAP VIEW ====================
+
+class MindMapNodeData {
+  final String label;
+  final List<MindMapNodeData> children;
+
+  MindMapNodeData({
+    required this.label,
+    required this.children,
+  });
+
+  factory MindMapNodeData.fromJson(Map<String, dynamic> json) {
+    final rawChildren = json['children'] as List? ?? [];
+    return MindMapNodeData(
+      label: json['label']?.toString() ?? '',
+      children: rawChildren
+          .whereType<Map>()
+          .map((c) => MindMapNodeData.fromJson(Map<String, dynamic>.from(c)))
+          .toList(),
+    );
+  }
+}
+
+class MindMapView extends StatelessWidget {
+  final String title;
+  final MindMapNodeData? root;
+
+  const MindMapView({
+    super.key,
+    required this.title,
+    required this.root,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    if (root == null || root!.label.isEmpty) {
+      return Center(
+        child: Text(
+          'No mind map available',
+          style: Theme.of(context).textTheme.bodyMedium,
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(AppTheme.screenPadding),
+      children: [
+        if (title.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        _MindMapBranch(node: root!, depth: 0),
+      ],
+    );
+  }
+}
+
+class _MindMapBranch extends StatelessWidget {
+  final MindMapNodeData node;
+  final int depth;
+
+  const _MindMapBranch({
+    required this.node,
+    required this.depth,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final leftPad = 12.0 * depth;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: EdgeInsets.only(left: leftPad, bottom: 8, top: depth == 0 ? 0 : 4),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (depth > 0)
+                Padding(
+                  padding: const EdgeInsets.only(top: 6, right: 8),
+                  child: Icon(
+                    Icons.subdirectory_arrow_right,
+                    size: 16,
+                    color: AppTheme.getSecondaryText(context),
+                  ),
+                ),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: depth == 0
+                        ? AppTheme.getAccentTint(context)
+                        : AppTheme.getCardBackground(context),
+                    borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+                    border: Border.all(
+                      color: depth == 0
+                          ? AppTheme.accentColor.withOpacity(0.4)
+                          : AppTheme.getCardBorder(context),
+                    ),
+                  ),
+                  child: Text(
+                    node.label,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      fontWeight: depth == 0 ? FontWeight.w600 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        ...node.children.map(
+          (child) => _MindMapBranch(node: child, depth: depth + 1),
+        ),
+      ],
     );
   }
 }

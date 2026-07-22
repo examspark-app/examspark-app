@@ -8,6 +8,9 @@ enum GatedFeature {
   recordLecture,
   flashcards,
   quiz,
+  revision,
+  importantQuestions,
+  mindMap,
 }
 
 class PlanTierGating {
@@ -20,6 +23,9 @@ class PlanTierGating {
     GatedFeature.youtubeLink: 'free',
     GatedFeature.flashcards: 'free',
     GatedFeature.quiz: 'free',
+    GatedFeature.revision: 'free',
+    GatedFeature.importantQuestions: 'free',
+    GatedFeature.mindMap: 'free',
     // Only plan lock: audio record + audio upload (₹499+).
     GatedFeature.recordLecture: 'plan_499',
   };
@@ -57,6 +63,9 @@ class PlanTierGating {
       case GatedFeature.youtubeLink:
       case GatedFeature.flashcards:
       case GatedFeature.quiz:
+      case GatedFeature.revision:
+      case GatedFeature.importantQuestions:
+      case GatedFeature.mindMap:
       case GatedFeature.askAi:
         return 'Available on Free and all paid plans (uses credits).';
     }
@@ -91,6 +100,15 @@ class PlanTierGating {
       case 'mcq':
       case 'quiz':
         return GatedFeature.quiz;
+      case 'revision':
+      case 'revision_sheet':
+        return GatedFeature.revision;
+      case 'important_questions':
+      case 'important-questions':
+        return GatedFeature.importantQuestions;
+      case 'mind_map':
+      case 'mind-map':
+        return GatedFeature.mindMap;
       default:
         return null;
     }

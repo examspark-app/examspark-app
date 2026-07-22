@@ -54,7 +54,7 @@ def test_ask_always_rag():
 
 def test_web_deferred_home():
     assert route_home_question("today's news about NEET", None) == "web_deferred"
-    assert not should_run_rag("web_deferred")
+    assert should_run_rag("web_deferred")  # RAG must run to prove empty before Tavily
 
 
 def test_embedding_cache_roundtrip():

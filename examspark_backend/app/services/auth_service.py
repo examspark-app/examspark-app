@@ -1,22 +1,24 @@
 """Supabase auth verification — every non-public FastAPI route depends on this.
 
-Previously verified the Supabase access token's signature locally with a
-shared `SUPABASE_JWT_SECRET` copied from the dashboard. That breaks the
-instant the `.env` value drifts from the dashboard's current secret, and
-can never work at all on projects using Supabase's newer asymmetric "JWT
-Signing Keys" instead of a legacy shared secret — both looked identical to
-callers ("Invalid token." on every request). Now we ask Supabase itself to
-verify the token (`GET /auth/v1/user` via `get_user()`), which is
-authoritative regardless of which signing method the project uses, and
-needs no local secret to stay in sync.
+Prefer local JWT verification when the legacy shared `SUPABASE_JWT_SECRET` is
+configured. That avoids a network call to Supabase Auth on every notes/extras
+request, which can otherwise make Flutter Web show a generic "Failed to fetch"
+when Auth is slow. If the project uses newer asymmetric keys or the local secret
+doesn't match, fall back to Supabase's `/auth/v1/user` with a short timeout.
 """
+import os
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from supabase_auth.errors import AuthApiError
+import httpx
+import jwt
+from jwt import ExpiredSignatureError, InvalidTokenError
 
-from app.services.supabase_admin import get_supabase_admin
+from app.services.supabase_admin import _supabase_key, _supabase_url
 
 _bearer_scheme = HTTPBearer(auto_error=False)
+_jwt_secret = os.getenv("SUPABASE_JWT_SECRET", "").strip()
+_auth_timeout_seconds = float(os.getenv("SUPABASE_AUTH_TIMEOUT_SECONDS", "8"))
 
 
 class AuthenticatedUser:
@@ -38,20 +40,80 @@ async def get_current_user(
             detail="Missing Authorization: Bearer <supabase_access_token> header.",
         )
 
-    try:
-        response = get_supabase_admin().auth.get_user(credentials.credentials)
-    except AuthApiError as e:
-        # Covers expired, malformed, and signature-invalid tokens alike —
-        # Supabase's own error message (e.g. "invalid JWT: ... expired")
-        # is more specific than we could produce locally.
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail=str(e)) from e
+    token = credentials.credentials
 
-    user = response.user if response else None
-    if user is None:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid or expired token.")
+    if _jwt_secret:
+        try:
+            claims = jwt.decode(
+                token,
+                _jwt_secret,
+                algorithms=["HS256"],
+                audience="authenticated",
+            )
+            user_id = claims.get("sub")
+            if user_id:
+                return AuthenticatedUser(
+                    user_id=user_id,
+                    email=claims.get("email"),
+                    raw_claims=claims,
+                )
+        except ExpiredSignatureError as e:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token.",
+            ) from e
+        except InvalidTokenError:
+            # Secret may be stale, or the Supabase project may use asymmetric
+            # signing keys. Ask Supabase directly before rejecting the request.
+            pass
+
+    if not _supabase_url or not _supabase_key:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not configured on the server.",
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=_auth_timeout_seconds) as client:
+            response = await client.get(
+                f"{_supabase_url.rstrip('/')}/auth/v1/user",
+                headers={
+                    "apikey": _supabase_key,
+                    "Authorization": f"Bearer {token}",
+                },
+            )
+    except httpx.TimeoutException as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Supabase Auth timeout. Retry in a few seconds.",
+        ) from e
+    except httpx.HTTPError as e:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Supabase Auth unavailable: {e}",
+        ) from e
+
+    if response.status_code == 401:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token.",
+        )
+    if response.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=f"Supabase Auth failed: {response.status_code}",
+        )
+
+    user = response.json()
+    user_id = user.get("id")
+    if not user_id:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired token.",
+        )
 
     return AuthenticatedUser(
-        user_id=user.id,
-        email=user.email,
-        raw_claims=user.model_dump() if hasattr(user, "model_dump") else {},
+        user_id=user_id,
+        email=user.get("email"),
+        raw_claims=user,
     )
