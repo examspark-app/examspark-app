@@ -51,7 +51,7 @@ Store Transaction     payments + payment_transactions
 | ₹199 | `plan_199` | 1,500 | 199 |
 | ₹499 | `plan_499` | 3,500 | 499 |
 | ₹999 | `plan_999` | 8,000 | 999 |
-| Teacher | `teacher` | 16,000 | 1999 |
+| Teacher | `teacher` | 16,000 | 2999 |
 
 Optional re-entry: `plan_299` (same unlock tier as `plan_199` if reintroduced).
 

@@ -313,6 +313,64 @@ async def generate_lecture_mind_map(
         ) from e
 
 
+@router.get("/{lecture_id}/study-tools")
+async def list_lecture_study_tools(
+    lecture_id: uuid.UUID,
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Home-style chip statuses for a recording (extras presence + credit hints)."""
+    from app.services import lecture_study_tools_service as lst
+
+    try:
+        return lst.list_lecture_tool_statuses(user.user_id, str(lecture_id))
+    except LecturePipelineError as e:
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail if e.detail is not None else str(e),
+        ) from e
+
+
+@router.get("/{lecture_id}/study-tools/{tool_type}")
+async def get_lecture_study_tool(
+    lecture_id: uuid.UUID,
+    tool_type: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    from app.services import lecture_study_tools_service as lst
+
+    try:
+        return lst.get_lecture_tool(user.user_id, str(lecture_id), tool_type)
+    except LecturePipelineError as e:
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail if e.detail is not None else str(e),
+        ) from e
+
+
+@router.post("/{lecture_id}/study-tools/{tool_type}")
+async def generate_lecture_study_tool(
+    lecture_id: uuid.UUID,
+    tool_type: str,
+    regenerate: bool = False,
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Generate (or reopen cached) a Home-style chip from lecture notes. Paid on first generate / regenerate."""
+    from app.services import lecture_study_tools_service as lst
+
+    try:
+        return await lst.generate_lecture_tool(
+            user_id=user.user_id,
+            lecture_id=str(lecture_id),
+            tool_type=tool_type,
+            regenerate=regenerate,
+        )
+    except LecturePipelineError as e:
+        raise HTTPException(
+            status_code=e.status_code,
+            detail=e.detail if e.detail is not None else str(e),
+        ) from e
+
+
 @router.delete("/{lecture_id}")
 async def delete_lecture(
     lecture_id: uuid.UUID,

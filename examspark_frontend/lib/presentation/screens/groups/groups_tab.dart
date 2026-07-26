@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/data/groups_repository.dart';
 import 'package:examspark_frontend/core/models/group_model.dart';
+import 'package:examspark_frontend/core/services/notification_service.dart';
 import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
-import 'package:examspark_frontend/presentation/screens/dashboard/teacher_dashboard_screen.dart' show showSimpleJoinDialog;
+import 'package:examspark_frontend/presentation/screens/dashboard/teacher_dashboard_screen.dart'
+    show showRedeemCouponDialog, showSimpleJoinDialog;
+import 'package:examspark_frontend/presentation/screens/groups/teacher_discovery_screen.dart';
+import 'package:examspark_frontend/presentation/screens/groups/widgets/group_channel_row.dart';
 import 'package:examspark_frontend/presentation/widgets/app_top_bar.dart';
-import 'package:examspark_frontend/presentation/widgets/buy_plan_sheet.dart';
-import 'package:examspark_frontend/presentation/screens/groups/widgets/group_card.dart';
+import 'package:examspark_frontend/core/services/open_workspace_bridge.dart';
+import 'package:examspark_frontend/presentation/screens/search/search_overlay_screen.dart';
 
-/// Groups tab — Study Community list embedded in AppShell.
-/// Same GroupsRepository + GroupCard as the standalone `/groups` route,
-/// just without its own AppBar back arrow (bottom nav replaces it).
+/// Groups tab — My Groups (channel list) + Discover (default Discover when zero joined).
 class GroupsTab extends StatefulWidget {
   final ValueChanged<int> onGoToTab;
-  /// When Groups becomes visible again [IndexedStack], reload list.
   final bool isActive;
 
   const GroupsTab({
@@ -26,15 +27,19 @@ class GroupsTab extends StatefulWidget {
   State<GroupsTab> createState() => _GroupsTabState();
 }
 
-class _GroupsTabState extends State<GroupsTab> {
+class _GroupsTabState extends State<GroupsTab>
+    with SingleTickerProviderStateMixin {
   List<GroupModel> _groups = [];
+  Map<String, GroupUnreadInfo> _unread = {};
   bool _isLoading = true;
-  String? _updatingGroupId;
   int _lastMembershipsVersion = -1;
+  late TabController _tabs;
+  bool _defaultedDiscover = false;
 
   @override
   void initState() {
     super.initState();
+    _tabs = TabController(length: 2, vsync: this);
     _lastMembershipsVersion = SessionLiveSync.instance.membershipsVersion;
     SessionLiveSync.instance.addListener(_onSessionLive);
     _loadGroups();
@@ -43,6 +48,7 @@ class _GroupsTabState extends State<GroupsTab> {
   @override
   void dispose() {
     SessionLiveSync.instance.removeListener(_onSessionLive);
+    _tabs.dispose();
     super.dispose();
   }
 
@@ -66,104 +72,127 @@ class _GroupsTabState extends State<GroupsTab> {
 
   Future<void> _loadGroups() async {
     final groups = await GroupsRepository.instance.fetchGroups();
+    final unread = await NotificationService.instance.unreadByClass();
     if (!mounted) return;
+    final joined = groups.where((g) => g.isJoined).toList();
     setState(() {
       _groups = groups;
+      _unread = unread;
       _isLoading = false;
     });
-  }
-
-  Future<void> _toggleJoin(GroupModel group) async {
-    // Guard + spinner set FIRST (before any await) so the button shows
-    // busy feedback on the very first tap instead of sitting there doing
-    // nothing while the group-limit check round-trips to the server —
-    // that gap was making it look unresponsive and inviting a second tap.
-    if (_updatingGroupId != null) return;
-    setState(() => _updatingGroupId = group.id);
-
-    // Only newly joining is gated by the plan's group limit — leaving is
-    // always allowed.
-    if (!group.isJoined) {
-      final eligibility = await GroupsRepository.instance.canJoinAnotherGroup();
-      if (!eligibility.allowed) {
-        if (!mounted) return;
-        setState(() => _updatingGroupId = null);
-        showBuyPlanSheet(context, eligibility);
-        return;
-      }
-    }
-
-    final wasJoined = group.isJoined;
-    try {
-      final updated = await GroupsRepository.instance.toggleMembership(group);
-      if (!mounted) return;
-      setState(() {
-        _groups = _groups.map((g) => g.id == updated.id ? updated : g).toList();
-        _updatingGroupId = null;
-      });
-      if (!wasJoined && updated.isJoined) {
-        _openGroupInfo(updated);
-        return;
-      }
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(updated.isJoined ? 'Joined "${updated.name}"' : 'Left "${updated.name}"')),
-      );
-    } on GroupMembershipException catch (e) {
-      if (!mounted) return;
-      setState(() => _updatingGroupId = null);
-      if (!wasJoined) {
-        final eligibility = await GroupsRepository.instance.canJoinAnotherGroup();
-        if (!mounted) return;
-        if (!eligibility.allowed || e.isJoinLimit) {
-          showBuyPlanSheet(context, eligibility);
-          return;
-        }
-      }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+    if (!_defaultedDiscover && joined.isEmpty) {
+      _defaultedDiscover = true;
+      _tabs.index = 1; // Discover
     }
   }
 
-  void _openGroupInfo(GroupModel group) {
-    Navigator.pushNamed(context, '/group_info', arguments: {'groupId': group.id});
+  Future<void> _openGroupInfo(GroupModel group) async {
+    await NotificationService.instance.markClassRead(group.id);
+    if (!mounted) return;
+    setState(() {
+      _unread = Map<String, GroupUnreadInfo>.from(_unread)..remove(group.id);
+    });
+    await Navigator.pushNamed(
+      context,
+      '/group_info',
+      arguments: {'groupId': group.id},
+    );
+    if (mounted) _loadGroups();
   }
 
   @override
   Widget build(BuildContext context) {
+    final joined = _groups.where((g) => g.isJoined).toList();
+
     return Scaffold(
       appBar: AppTopBar(
         title: 'Groups',
+        onSearchTap: () => showAppSearchOverlay(
+          context,
+          onOpenLecture: (id, title, subject) {
+            OpenWorkspaceBridge.instance.open(
+              lectureId: id,
+              title: title,
+              subject: subject,
+              fullPage: true,
+            );
+          },
+        ),
         trailing: [
           TextButton.icon(
-            onPressed: () => showSimpleJoinDialog(context),
+            onPressed: () async {
+              final ok = await showRedeemCouponDialog(context);
+              if (ok == true) _loadGroups();
+            },
+            icon: const Icon(Icons.confirmation_number_outlined, size: 18),
+            label: const Text('Coupon'),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.accentColor),
+          ),
+          TextButton.icon(
+            onPressed: () async {
+              final ok = await showSimpleJoinDialog(context);
+              if (ok == true) _loadGroups();
+            },
             icon: const Icon(Icons.add, size: 18),
             label: const Text('Join'),
             style: TextButton.styleFrom(foregroundColor: AppTheme.accentColor),
           ),
         ],
       ),
-      body: _isLoading
-          ? const Center(child: CircularProgressIndicator())
-          : _groups.isEmpty
-              ? _buildEmptyState(context)
-              : RefreshIndicator(
-                  onRefresh: _loadGroups,
-                  child: ListView.builder(
-                    padding: const EdgeInsets.all(AppTheme.screenPadding),
-                    itemCount: _groups.length,
-                    itemBuilder: (context, index) {
-                      final group = _groups[index];
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: GroupCard(
-                          group: group,
-                          onTap: () => _openGroupInfo(group),
-                          onJoinToggle: () => _toggleJoin(group),
-                          isUpdating: _updatingGroupId == group.id,
-                        ),
-                      );
-                    },
-                  ),
-                ),
+      body: Column(
+        children: [
+          TabBar(
+            controller: _tabs,
+            labelColor: AppTheme.accentColor,
+            tabs: const [
+              Tab(text: 'My Groups'),
+              Tab(text: 'Discover'),
+            ],
+          ),
+          Expanded(
+            child: TabBarView(
+              controller: _tabs,
+              children: [
+                _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : joined.isEmpty
+                        ? _buildEmptyState(context)
+                        : RefreshIndicator(
+                            onRefresh: _loadGroups,
+                            child: ListView(
+                              children: [
+                                Padding(
+                                  padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+                                  child: Text(
+                                    'Teacher posts only · no chat',
+                                    style: Theme.of(context)
+                                        .textTheme
+                                        .bodySmall
+                                        ?.copyWith(
+                                          color: AppTheme.getSecondaryText(
+                                            context,
+                                          ),
+                                        ),
+                                  ),
+                                ),
+                                for (final group in joined)
+                                  GroupChannelRow(
+                                    group: group,
+                                    onTap: () => _openGroupInfo(group),
+                                    unreadCount:
+                                        _unread[group.id]?.count ?? 0,
+                                    unreadPreview:
+                                        _unread[group.id]?.lastPreview,
+                                  ),
+                              ],
+                            ),
+                          ),
+                const TeacherDiscoveryScreen(embedded: true),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -176,15 +205,20 @@ class _GroupsTabState extends State<GroupsTab> {
           const SizedBox(height: 16),
           Text(
             'No groups yet',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(color: AppTheme.getSecondaryText(context)),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  color: AppTheme.getSecondaryText(context),
+                ),
           ),
           const SizedBox(height: 8),
-          Text("Join a teacher's study community to get started", style: Theme.of(context).textTheme.bodySmall),
+          Text(
+            "Discover teachers or join with a code / coupon",
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
           const SizedBox(height: 24),
           ElevatedButton.icon(
-            onPressed: () => showSimpleJoinDialog(context),
-            icon: const Icon(Icons.add),
-            label: const Text('Join a Group'),
+            onPressed: () => _tabs.animateTo(1),
+            icon: const Icon(Icons.explore_outlined),
+            label: const Text('Discover Teachers'),
           ),
         ],
       ),

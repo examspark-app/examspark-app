@@ -5,6 +5,7 @@ import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/recording/widgets/extra_features_views.dart';
 import 'package:examspark_frontend/presentation/widgets/select_ai/select_ai_toolbar.dart';
 import 'package:examspark_frontend/presentation/widgets/smart_educational_content.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// Shows Select AI result: streamed answer + optional quiz/flashcards/visuals.
 Future<void> showSelectAiResultSheet(
@@ -17,7 +18,7 @@ Future<void> showSelectAiResultSheet(
   if (action == 'copy') {
     await Clipboard.setData(ClipboardData(text: selectedText));
     if (context.mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         const SnackBar(content: Text('Copied.')),
       );
     }
@@ -218,7 +219,7 @@ class _SelectAiResultBodyState extends State<_SelectAiResultBody> {
               children: [
                 OutlinedButton.icon(
                   onPressed: () {
-                    ScaffoldMessenger.of(this.context).showSnackBar(
+                    AppToast.showSnackBar(this.context, 
                       const SnackBar(
                         content: Text('Bookmark coming soon'),
                       ),

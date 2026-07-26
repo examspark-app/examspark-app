@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/presentation/widgets/study_workspace.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// Full-page Study Workspace after lecture processing (Notes · Summary · Quiz…).
 ///
@@ -11,6 +12,7 @@ class StudyWorkspacePage extends StatefulWidget {
   final String? subject;
   final bool showDuplicateNotice;
   final int? initialTabIndex;
+  final bool readOnly;
 
   const StudyWorkspacePage({
     super.key,
@@ -19,6 +21,7 @@ class StudyWorkspacePage extends StatefulWidget {
     this.subject,
     this.showDuplicateNotice = false,
     this.initialTabIndex,
+    this.readOnly = false,
   });
 
   @override
@@ -32,7 +35,7 @@ class _StudyWorkspacePageState extends State<StudyWorkspacePage> {
     if (widget.showDuplicateNotice) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           const SnackBar(
             content: Text(
               "This looks like content you've already added — "
@@ -55,6 +58,7 @@ class _StudyWorkspacePageState extends State<StudyWorkspacePage> {
           title: widget.title.trim().isEmpty ? 'Lecture' : widget.title.trim(),
           subject: widget.subject,
           initialTabIndex: widget.initialTabIndex,
+          readOnly: widget.readOnly,
           onClose: () {
             if (Navigator.of(context).canPop()) {
               Navigator.of(context).pop();

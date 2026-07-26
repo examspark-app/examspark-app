@@ -5,14 +5,18 @@ import 'package:examspark_frontend/presentation/screens/auth/login_screen.dart';
 import 'package:examspark_frontend/presentation/shell/app_shell.dart';
 import 'package:examspark_frontend/presentation/screens/dashboard/student_portal_screen.dart';
 import 'package:examspark_frontend/presentation/screens/dashboard/teacher_dashboard_screen.dart';
+import 'package:examspark_frontend/presentation/screens/groups/group_dashboard_screen.dart';
 import 'package:examspark_frontend/presentation/screens/groups/group_info_screen.dart';
 import 'package:examspark_frontend/presentation/screens/groups/groups_list_screen.dart';
+import 'package:examspark_frontend/presentation/screens/groups/join_invite_screen.dart';
 import 'package:examspark_frontend/presentation/screens/recording/notes_result_screen.dart';
 import 'package:examspark_frontend/presentation/screens/recording/recorder_screen.dart';
 import 'package:examspark_frontend/presentation/screens/recording/processing_screen.dart';
 import 'package:examspark_frontend/presentation/screens/recording/study_workspace_page.dart';
 import 'package:examspark_frontend/presentation/screens/subscription/subscription_screen.dart';
 import 'package:examspark_frontend/presentation/screens/credits/credits_history_screen.dart';
+import 'package:examspark_frontend/presentation/screens/profile/help_screen.dart';
+import 'package:examspark_frontend/presentation/screens/profile/settings_screen.dart';
 import 'package:examspark_frontend/presentation/screens/admin/admin_payment_hub_screen.dart';
 import 'package:examspark_frontend/presentation/screens/admin/admin_payment_screens.dart';
 
@@ -21,11 +25,31 @@ class AppRouter {
 
   static Route<dynamic>? onGenerateRoute(RouteSettings settings) {
     final args = settings.arguments as Map<String, dynamic>?;
+    final name = settings.name ?? '';
+
+    // Deep link: /join/485022 → open teacher group (join if needed).
+    if (name.startsWith('/join/')) {
+      final code = name.substring('/join/'.length).split('?').first.trim();
+      return MaterialPageRoute(
+        builder: (_) => JoinInviteScreen(joinCode: code),
+        settings: settings,
+      );
+    }
+    if (name == '/join') {
+      final code = (args?['code'] as String?) ?? '';
+      return MaterialPageRoute(
+        builder: (_) => JoinInviteScreen(joinCode: code),
+        settings: settings,
+      );
+    }
 
     switch (settings.name) {
       case '/login':
         return MaterialPageRoute(
-          builder: (_) => const LoginScreen(),
+          builder: (_) => LoginScreen(
+            startInSignUp: args?['startInSignUp'] as bool? ?? false,
+            inviteJoinHint: args?['inviteJoinHint'] as bool? ?? false,
+          ),
           settings: settings,
         );
       case '/home':
@@ -39,6 +63,7 @@ class AppRouter {
             subject: args?['subject'] as String?,
             topic: args?['topic'] as String?,
             initialInputMethod: args?['initialInputMethod'] as String?,
+            teacherRecordOnly: args?['teacherRecordOnly'] as bool? ?? false,
           ),
           settings: settings,
         );
@@ -50,6 +75,7 @@ class AppRouter {
             initialInputMethod: args?['initialInputMethod'] as String?,
             subject: args?['subject'] as String?,
             topic: args?['topic'] as String?,
+            teacherRecordOnly: args?['teacherRecordOnly'] as bool? ?? false,
           ),
           settings: settings,
         );
@@ -74,6 +100,7 @@ class AppRouter {
             subject: args?['subject'] as String?,
             showDuplicateNotice: args?['duplicateNotice'] as bool? ?? false,
             initialTabIndex: args?['initialTabIndex'] as int?,
+            readOnly: args?['readOnly'] as bool? ?? false,
           ),
           settings: settings,
         );
@@ -92,6 +119,16 @@ class AppRouter {
       case '/credits/history':
         return MaterialPageRoute(
           builder: (_) => const CreditsHistoryScreen(),
+          settings: settings,
+        );
+      case '/settings':
+        return MaterialPageRoute(
+          builder: (_) => const SettingsScreen(),
+          settings: settings,
+        );
+      case '/help':
+        return MaterialPageRoute(
+          builder: (_) => const HelpScreen(),
           settings: settings,
         );
       case '/teacher':
@@ -115,6 +152,17 @@ class AppRouter {
         return MaterialPageRoute(
           builder: (_) =>
               GroupInfoScreen(groupId: args?['groupId'] as String? ?? ''),
+          settings: settings,
+        );
+      case '/group_dashboard':
+        return MaterialPageRoute(
+          builder: (_) => GroupDashboardScreen(
+            classId: args?['classId'] as String? ?? '',
+            name: args?['name'] as String? ?? 'Study Group',
+            joinCode: args?['joinCode'] as String? ?? '',
+            subject: args?['subject'] as String? ?? '',
+            joinApprovalMode: args?['joinApprovalMode'] as String? ?? 'auto',
+          ),
           settings: settings,
         );
       case '/admin/payments':

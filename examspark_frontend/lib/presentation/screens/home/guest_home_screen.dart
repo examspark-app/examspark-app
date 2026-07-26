@@ -129,7 +129,7 @@ class _GuestHomeScreenState extends State<GuestHomeScreen> {
           Icon(Icons.auto_awesome, size: 56, color: AppTheme.accentColor),
           const SizedBox(height: 16),
           Text(
-            'Ask ExamSpark anything',
+            'Ask Sonaxia anything',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   fontSize: 18,
                   fontWeight: FontWeight.w600,

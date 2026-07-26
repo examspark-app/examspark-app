@@ -10,6 +10,9 @@ class LectureCard extends StatelessWidget {
   final String dateLabel;
   final VoidCallback onTap;
   final IconData icon;
+  final bool isFavorite;
+  /// When set, shows a star control (does not trigger [onTap]).
+  final ValueChanged<bool>? onFavoriteChanged;
 
   const LectureCard({
     super.key,
@@ -18,6 +21,8 @@ class LectureCard extends StatelessWidget {
     required this.dateLabel,
     required this.onTap,
     this.icon = Icons.description_outlined,
+    this.isFavorite = false,
+    this.onFavoriteChanged,
   });
 
   @override
@@ -67,7 +72,19 @@ class LectureCard extends StatelessWidget {
                 ],
               ),
             ),
-            Icon(Icons.chevron_right, color: AppTheme.getSecondaryText(context)),
+            if (onFavoriteChanged != null)
+              IconButton(
+                tooltip: isFavorite ? 'Remove favorite' : 'Add favorite',
+                icon: Icon(
+                  isFavorite ? Icons.star_rounded : Icons.star_outline_rounded,
+                  color: isFavorite
+                      ? AppTheme.accentColor
+                      : AppTheme.getSecondaryText(context),
+                ),
+                onPressed: () => onFavoriteChanged!(!isFavorite),
+              )
+            else
+              Icon(Icons.chevron_right, color: AppTheme.getSecondaryText(context)),
           ],
         ),
       ),

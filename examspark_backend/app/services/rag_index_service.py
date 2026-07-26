@@ -233,17 +233,11 @@ async def ensure_lecture_indexed(user_id: str, lecture_id: str) -> dict:
         }
 
     if _already_indexed(lecture_id):
-        db = get_supabase_admin()
-        count = (
-            db.table("rag_documents")
-            .select("id", count="exact")
-            .eq("lecture_id", lecture_id)
-            .execute()
-        )
+        # Skip exact count — Ask AI hot path only needs skipped/already flags.
         return {
             "lecture_id": lecture_id,
             "already_indexed": True,
-            "chunks": count.count or 0,
+            "chunks": 0,
             "notes_chunks": 0,
             "transcript_chunks": 0,
         }

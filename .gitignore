@@ -27,6 +27,12 @@ ENV/
 .env.local
 .env.*.local
 
+# Firebase Admin / Google service-account private keys (never commit)
+examspark_backend/secrets/**
+!examspark_backend/secrets/README.md
+**/firebase-service-account.json
+
+
 # Node.js
 node_modules/
 npm-debug.log*

@@ -2,11 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/data/groups_repository.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 
-/// Shown instead of letting a join go through when [GroupJoinEligibility]
-/// says no — founder-locked Jul 12, 2026 group-join limits (free=0,
-/// ₹199=1, ₹499=3, ₹999=6, teacher=unlimited). Also shown when server
-/// trigger blocks join; UI never fakes a successful join.
-Future<void> showBuyPlanSheet(BuildContext context, GroupJoinEligibility eligibility) {
+/// Shown when join is blocked — free / limit / Teacher own-Groups-only.
+Future<void> showBuyPlanSheet(
+  BuildContext context,
+  GroupJoinEligibility eligibility,
+) {
   return showModalBottomSheet(
     context: context,
     backgroundColor: Colors.transparent,
@@ -22,7 +22,8 @@ class _BuyPlanSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isFree = eligibility.maxGroups == 0;
+    final isTeacher = eligibility.isTeacherOwnGroupsOnly;
+    final isFree = !isTeacher && eligibility.maxGroups == 0;
     final theme = Theme.of(context);
     final maxH = MediaQuery.sizeOf(context).height * 0.72;
 
@@ -64,14 +65,20 @@ class _BuyPlanSheet extends StatelessWidget {
                       ),
                       alignment: Alignment.center,
                       child: Icon(
-                        Icons.workspace_premium_outlined,
+                        isTeacher
+                            ? Icons.school_outlined
+                            : Icons.workspace_premium_outlined,
                         color: AppTheme.accentColor,
                         size: 24,
                       ),
                     ),
                     const SizedBox(height: 14),
                     Text(
-                      isFree ? 'Upgrade to join Groups' : 'Group limit reached',
+                      isTeacher
+                          ? 'Teacher plan — own Groups only'
+                          : isFree
+                              ? 'Upgrade to join Groups'
+                              : 'Group limit reached',
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                         fontSize: 18,
@@ -79,39 +86,53 @@ class _BuyPlanSheet extends StatelessWidget {
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      isFree
-                          ? 'Your current plan (${eligibility.planName}) doesn\'t include joining Groups. '
-                              'Upgrade to join a teacher\'s Group.'
-                          : 'You\'ve joined ${eligibility.currentGroups}/${eligibility.maxGroups} Groups on '
-                              'your ${eligibility.planName} plan. Upgrade to join more.',
+                      isTeacher
+                          ? 'Teacher ₹2,999 is for your Dashboard and your own Groups. '
+                              'You cannot join another teacher’s Group as a student. '
+                              'Open Teacher Dashboard to manage your groups.'
+                          : isFree
+                              ? 'Your current plan (${eligibility.planName}) doesn\'t include joining Groups. '
+                                  'Upgrade to join a teacher\'s Group.'
+                              : 'You\'ve joined ${eligibility.currentGroups}/${eligibility.maxGroups} Groups on '
+                                  'your ${eligibility.planName} plan. Upgrade to join more.',
                       style: theme.textTheme.bodyMedium?.copyWith(
                         color: AppTheme.getSecondaryText(context),
                         height: 1.4,
                       ),
                     ),
-                    const SizedBox(height: 18),
-                    _PlanCompareCard(
-                      rows: const [
-                        ('₹199', '1 Group'),
-                        ('₹499', '3 Groups'),
-                        ('₹999', '6 Groups'),
-                      ],
-                    ),
+                    if (!isTeacher) ...[
+                      const SizedBox(height: 18),
+                      _PlanCompareCard(
+                        rows: const [
+                          ('₹199', '1 Group'),
+                          ('₹499', '3 Groups'),
+                          ('₹999', '6 Groups'),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 18),
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
                         onPressed: () {
                           Navigator.pop(context);
-                          Navigator.pushNamed(context, '/subscription');
+                          Navigator.pushNamed(
+                            context,
+                            isTeacher ? '/teacher' : '/subscription',
+                          );
                         },
                         style: ElevatedButton.styleFrom(
                           padding: const EdgeInsets.symmetric(vertical: 14),
                           shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+                            borderRadius:
+                                BorderRadius.circular(AppTheme.borderRadius),
                           ),
                         ),
-                        child: const Text('View Plans'),
+                        child: Text(
+                          isTeacher
+                              ? 'Open Teacher Dashboard'
+                              : 'View Plans',
+                        ),
                       ),
                     ),
                     const SizedBox(height: 4),
@@ -121,7 +142,9 @@ class _BuyPlanSheet extends StatelessWidget {
                         onPressed: () => Navigator.pop(context),
                         child: Text(
                           'Not now',
-                          style: TextStyle(color: AppTheme.getSecondaryText(context)),
+                          style: TextStyle(
+                            color: AppTheme.getSecondaryText(context),
+                          ),
                         ),
                       ),
                     ),

@@ -1,11 +1,15 @@
 """Select & Ask AI (Phase 6) — selection-scoped request/response models."""
 from typing import Any, Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from app.constants.ai_response_status import AiResponseStatus
 from app.constants.answer_source import AnswerSource, Confidence
-from app.models.ask_ai import AskAiSource, ConversationLanguage
+from app.models.ask_ai import (
+    AskAiSource,
+    ConversationLanguage,
+    normalize_conversation_language,
+)
 
 SelectAiAction = Literal[
     "explain",
@@ -35,6 +39,11 @@ class SelectAiRequest(BaseModel):
     source_surface: Optional[SelectAiSourceSurface] = "notes"
     conversation_language: Optional[ConversationLanguage] = None
 
+    @field_validator("conversation_language", mode="before")
+    @classmethod
+    def _norm_lang(cls, v):
+        return normalize_conversation_language(v)
+
 
 class SelectAiResponse(BaseModel):
     answer: str
@@ -48,3 +57,8 @@ class SelectAiResponse(BaseModel):
     new_balance: Optional[int] = None
     visual_payload: Optional[dict[str, Any]] = None
     structured_result: Optional[dict[str, Any]] = None
+
+    @field_validator("conversation_language", mode="before")
+    @classmethod
+    def _norm_lang(cls, v):
+        return normalize_conversation_language(v)

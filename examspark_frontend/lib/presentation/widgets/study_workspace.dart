@@ -2,18 +2,24 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
+import 'package:examspark_frontend/core/constants/share_chip_catalog.dart';
+import 'package:examspark_frontend/core/constants/study_tool_copy.dart';
+import 'package:examspark_frontend/core/constants/student_copy.dart';
 import 'package:examspark_frontend/core/errors/lecture_user_message.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/recording/widgets/extra_features_views.dart';
 import 'package:examspark_frontend/presentation/widgets/select_ai/selectable_study_text.dart';
-import 'package:examspark_frontend/presentation/widgets/share_to_group_sheet.dart';
+import 'package:examspark_frontend/presentation/widgets/home/home_study_chip_bar.dart';
+import 'package:examspark_frontend/presentation/widgets/lecture_study_tool_sheet.dart';
 import 'package:examspark_frontend/presentation/widgets/smart_educational_content.dart';
 import 'package:examspark_frontend/presentation/widgets/study_workspace/workspace_empty_state.dart';
 import 'package:examspark_frontend/presentation/widgets/study_workspace/workspace_lecture_cache.dart';
 import 'package:examspark_frontend/presentation/widgets/study_workspace/workspace_reading_utils.dart';
 import 'package:examspark_frontend/presentation/widgets/workspace_ask_ai_pane.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// ExamSpark's core differentiator widget.
 ///
@@ -32,8 +38,13 @@ class StudyWorkspace extends StatefulWidget {
   final String title;
   final String? subject;
   final VoidCallback? onClose;
-  /// Opens directly on Notes / Quiz / Ask AI, etc. (0–6).
+  /// Opens directly on Notes / Quiz / Ask AI, etc. (0–6) in the **visible** tab list.
   final int? initialTabIndex;
+  /// Shared group content: hide Share / Generate / Delete for non-owners.
+  final bool readOnly;
+  /// When set (group share chips), only these tabs/extras are shown.
+  /// Null = owner / legacy full workspace (Ask AI hidden if [readOnly]).
+  final List<String>? allowedChips;
 
   const StudyWorkspace({
     super.key,
@@ -42,16 +53,46 @@ class StudyWorkspace extends StatefulWidget {
     this.subject,
     this.onClose,
     this.initialTabIndex,
+    this.readOnly = false,
+    this.allowedChips,
   });
 
-  static const List<_WorkspaceTab> _tabs = [
-    _WorkspaceTab('Notes', Icons.description_outlined),
-    _WorkspaceTab('Summary', Icons.summarize_outlined),
-    _WorkspaceTab('Transcript', Icons.article_outlined),
-    _WorkspaceTab('Flashcards', Icons.style_outlined),
-    _WorkspaceTab('Quiz', Icons.quiz_outlined),
-    _WorkspaceTab('Revision', Icons.assignment_outlined),
-    _WorkspaceTab('Ask AI', Icons.chat_bubble_outline),
+  static const List<_WorkspaceTab> _allTabs = [
+    _WorkspaceTab(ShareChipCatalog.notes, 'Notes', Icons.description_outlined),
+    _WorkspaceTab(ShareChipCatalog.summary, 'Summary', Icons.summarize_outlined),
+    _WorkspaceTab(
+        ShareChipCatalog.transcript, 'Transcript', Icons.article_outlined),
+    _WorkspaceTab(
+        ShareChipCatalog.flashcards, 'Flashcards', Icons.style_outlined),
+    _WorkspaceTab(ShareChipCatalog.quiz, 'Quiz', Icons.quiz_outlined),
+    _WorkspaceTab(
+        ShareChipCatalog.revision, 'Revision', Icons.assignment_outlined),
+    _WorkspaceTab('ask_ai', 'Ask AI', Icons.chat_bubble_outline),
+  ];
+
+  static const List<_WorkspaceTab> _extraShareTabs = [
+    _WorkspaceTab(
+      ShareChipCatalog.importantQuestions,
+      'Important Qs',
+      Icons.help_outline,
+    ),
+    _WorkspaceTab(ShareChipCatalog.mindMap, 'Mind Map', Icons.account_tree_outlined),
+    _WorkspaceTab(
+      ShareChipCatalog.fiveMinRevision,
+      '5 Min',
+      Icons.timer_outlined,
+    ),
+    _WorkspaceTab(ShareChipCatalog.visual, 'Visual', Icons.image_outlined),
+    _WorkspaceTab(ShareChipCatalog.learnMore, 'Learn More', Icons.menu_book_outlined),
+    _WorkspaceTab(ShareChipCatalog.memoryTricks, 'Memory', Icons.psychology_outlined),
+    _WorkspaceTab(
+      ShareChipCatalog.commonMistakes,
+      'Mistakes',
+      Icons.report_gmailerrorred_outlined,
+    ),
+    _WorkspaceTab(ShareChipCatalog.cheatSheet, 'Cheat Sheet', Icons.fact_check_outlined),
+    _WorkspaceTab(ShareChipCatalog.teacherTips, 'Tips', Icons.school_outlined),
+    _WorkspaceTab(ShareChipCatalog.examBooster, 'Exam', Icons.military_tech_outlined),
   ];
 
   @override
@@ -59,9 +100,10 @@ class StudyWorkspace extends StatefulWidget {
 }
 
 class _WorkspaceTab {
+  final String key;
   final String label;
   final IconData icon;
-  const _WorkspaceTab(this.label, this.icon);
+  const _WorkspaceTab(this.key, this.label, this.icon);
 }
 
 class _KeepAliveTab extends StatefulWidget {
@@ -87,12 +129,9 @@ class _KeepAliveTabState extends State<_KeepAliveTab>
 
 class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProviderStateMixin {
   late final TabController _tabController;
+  late final List<_WorkspaceTab> _visibleTabs;
   late WorkspaceLectureSnapshot _snap;
 
-  // "Share to Group" is only offered for the owning teacher's own
-  // real-mic-recorded lectures (fake-teacher prevention) — resolved once on
-  // load; fails closed (button stays hidden) if either fetch fails.
-  bool _canShareToGroup = false;
   String? _metaSubject;
   DateTime? _createdAt;
   String? _lectureStatus;
@@ -139,10 +178,15 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
   bool _refreshing = false;
   bool _deletingLecture = false;
 
+  /// Home-style chips on recording (owner only) — generate from notes.
+  final Map<String, HomeChipUiState> _chipStates = {};
+  String? _activeChipType;
+
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: StudyWorkspace._tabs.length, vsync: this);
+    _visibleTabs = _resolveVisibleTabs();
+    _tabController = TabController(length: _visibleTabs.length, vsync: this);
     _tabController.addListener(() {
       if (_tabController.indexIsChanging) return;
       unawaited(_onTabChanged());
@@ -150,6 +194,35 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
     _hydrateFromCache(widget.lectureId);
     _bootstrapFromDiskThenOpen();
     _applyInitialTabIfNeeded();
+  }
+
+  List<_WorkspaceTab> _resolveVisibleTabs() {
+    final allowed = widget.allowedChips;
+    if (allowed == null) {
+      // Owner / legacy: full workspace; Ask AI only when not read-only.
+      if (widget.readOnly) {
+        return StudyWorkspace._allTabs
+            .where((t) => t.key != 'ask_ai')
+            .toList();
+      }
+      return List<_WorkspaceTab>.from(StudyWorkspace._allTabs);
+    }
+    final set = allowed
+        .map((e) => e.trim().toLowerCase())
+        .where((e) => e.isNotEmpty && e != 'ask_ai')
+        .toSet();
+    final out = <_WorkspaceTab>[];
+    for (final t in StudyWorkspace._allTabs) {
+      if (t.key == 'ask_ai') continue; // never share Ask AI to group students
+      if (set.contains(t.key)) out.add(t);
+    }
+    for (final t in StudyWorkspace._extraShareTabs) {
+      if (set.contains(t.key)) out.add(t);
+    }
+    if (out.isEmpty) {
+      out.add(StudyWorkspace._allTabs.first); // Notes fallback
+    }
+    return out;
   }
 
   void _applyInitialTabIfNeeded() {
@@ -194,7 +267,6 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
 
   void _hydrateFromCache(String lectureId) {
     _snap = WorkspaceLectureCache.instance.getOrCreate(lectureId);
-    _canShareToGroup = _snap.canShareToGroup;
     _metaSubject = _snap.metaSubject;
     _createdAt = _snap.createdAt;
     _lectureStatus = _snap.lectureStatus;
@@ -248,16 +320,85 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
       _loadShareEligibility(force: force),
       _loadNotes(force: force),
     ]);
+    // Warm RAG before Ask AI so first question is faster (idempotent, free).
+    if (!widget.readOnly) {
+      unawaited(LectureService.instance.warmLectureRagIndex(widget.lectureId));
+      unawaited(_loadChipStates());
+    }
+  }
+
+  Future<void> _loadChipStates() async {
+    try {
+      final data =
+          await LectureService.instance.lectureListStudyTools(widget.lectureId);
+      final tools = data['tools'];
+      if (tools is! Map) return;
+      if (!mounted) return;
+      setState(() {
+        _chipStates.clear();
+        for (final e in tools.entries) {
+          final key = e.key.toString();
+          final v = e.value;
+          if (v is Map && v['has_payload'] == true) {
+            _chipStates[key] = HomeChipUiState.generated;
+          } else {
+            _chipStates[key] = HomeChipUiState.ready;
+          }
+        }
+      });
+    } catch (_) {
+      // Soft-fail — chips still open and generate on tap.
+    }
+  }
+
+  Future<void> _onRecordingChip(HomeStudyChipDef chip) async {
+    if (widget.readOnly) return;
+    setState(() {
+      _chipStates[chip.toolType] = HomeChipUiState.loading;
+      _activeChipType = chip.toolType;
+    });
+    await showLectureStudyToolSheet(
+      context,
+      lectureId: widget.lectureId,
+      toolType: chip.toolType,
+      title: chip.label,
+      onCreditsUpdated: (_) {
+        unawaited(SessionLiveSync.instance.refreshAll());
+      },
+      onGenerated: () {
+        if (!mounted) return;
+        setState(() {
+          _chipStates[chip.toolType] = HomeChipUiState.generated;
+        });
+        // Refresh tab caches for tools that also live as tabs.
+        if (chip.toolType == 'flashcards') {
+          unawaited(_loadFlashcards(force: true));
+        } else if (chip.toolType == 'quiz') {
+          unawaited(_loadQuiz(force: true));
+        } else if (chip.toolType == 'revision') {
+          unawaited(_loadRevision(force: true));
+        }
+      },
+    );
+    if (!mounted) return;
+    setState(() {
+      if (_chipStates[chip.toolType] == HomeChipUiState.loading) {
+        _chipStates[chip.toolType] = HomeChipUiState.ready;
+      }
+      _activeChipType = null;
+    });
+    unawaited(_loadChipStates());
   }
 
   Future<void> _onTabChanged() async {
     if (!mounted) return;
     final i = _tabController.index;
-    // 0 Notes (already), 1 Summary, 2 Transcript, 3 Flashcards, 4 Quiz, 5 Revision, 6 Ask AI
-    if (i == 2) await _loadTranscript(force: false);
-    if (i == 3) await _loadFlashcards(force: false);
-    if (i == 4) await _loadQuiz(force: false);
-    if (i == 5) await _loadRevision(force: false);
+    if (i < 0 || i >= _visibleTabs.length) return;
+    final key = _visibleTabs[i].key;
+    if (key == ShareChipCatalog.transcript) await _loadTranscript(force: false);
+    if (key == ShareChipCatalog.flashcards) await _loadFlashcards(force: false);
+    if (key == ShareChipCatalog.quiz) await _loadQuiz(force: false);
+    if (key == ShareChipCatalog.revision) await _loadRevision(force: false);
   }
 
   Future<void> _refreshAll() async {
@@ -308,7 +449,7 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
       await LectureService.instance.deleteLecture(widget.lectureId);
       await WorkspaceLectureCache.instance.removeLecture(widget.lectureId);
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         const SnackBar(content: Text('Lecture deleted.')),
       );
       if (widget.onClose != null) {
@@ -319,7 +460,7 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
     } catch (e) {
       if (!mounted) return;
       final msg = lectureUserMessage(e);
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(content: Text(msg)),
       );
     } finally {
@@ -373,37 +514,72 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
     }
   }
 
-  Future<void> _generateFlashcards() async {
-    setState(() {
-      _flashcardsGenerating = true;
-      _flashcardsError = null;
-    });
-    try {
-      final data = await LectureService.instance.generateFlashcards(widget.lectureId);
-      if (!mounted) return;
-      final cards = (data['cards'] as List?) ?? [];
-      final charged = data['credits_charged'];
-      setState(() {
+  Future<void> _generateFlashcards({bool regenerate = false}) async {
+    await _generateViaStudyTool(
+      toolType: 'flashcards',
+      regenerate: regenerate || _flashcards.isNotEmpty,
+      setGenerating: (v) => _flashcardsGenerating = v,
+      setError: (e) => _flashcardsError = e,
+      onPayload: (payload) {
+        final cards = (payload['cards'] as List?) ?? [];
         _flashcards = cards
             .whereType<Map>()
             .map((c) => Flashcard.fromJson(Map<String, dynamic>.from(c)))
             .toList();
         _flashcardsFetched = true;
         _flashcardsLoading = false;
-        _flashcardsGenerating = false;
+        _snap.applyFlashcards(cards: _flashcards, error: null);
+        _persistCache();
+      },
+    );
+  }
+
+  Future<void> _generateViaStudyTool({
+    required String toolType,
+    required bool regenerate,
+    required void Function(bool) setGenerating,
+    required void Function(String?) setError,
+    required void Function(Map<String, dynamic> payload) onPayload,
+  }) async {
+    setState(() {
+      setGenerating(true);
+      setError(null);
+    });
+    try {
+      final data = await LectureService.instance.lectureGenerateStudyTool(
+        lectureId: widget.lectureId,
+        toolType: toolType,
+        regenerate: regenerate,
+      );
+      if (!mounted) return;
+      final payload = data['payload'];
+      final map = payload is Map
+          ? Map<String, dynamic>.from(payload)
+          : <String, dynamic>{};
+      setState(() {
+        onPayload(map);
+        setGenerating(false);
       });
-      _snap.applyFlashcards(cards: _flashcards, error: null);
-      _persistCache();
-      if (charged != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Flashcards ready — $charged credits used')),
+      unawaited(SessionLiveSync.instance.refreshAll());
+      final charged = data['credits_charged'];
+      final cached = data['cached'] == true;
+      if (mounted) {
+        AppToast.showSnackBar(
+          context,
+          SnackBar(
+            content: Text(
+              cached
+                  ? StudentCopy.toolReady
+                  : '$toolType ready — ${charged ?? '?'} credits used',
+            ),
+          ),
         );
       }
     } catch (e) {
       if (!mounted) return;
       setState(() {
-        _flashcardsGenerating = false;
-        _flashcardsError = e.toString();
+        setGenerating(false);
+        setError(e.toString());
       });
     }
   }
@@ -447,39 +623,24 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
     }
   }
 
-  Future<void> _generateQuiz() async {
-    setState(() {
-      _quizGenerating = true;
-      _quizError = null;
-    });
-    try {
-      final data = await LectureService.instance.generateQuiz(widget.lectureId);
-      if (!mounted) return;
-      final questions = (data['questions'] as List?) ?? [];
-      final charged = data['credits_charged'];
-      setState(() {
+  Future<void> _generateQuiz({bool regenerate = false}) async {
+    await _generateViaStudyTool(
+      toolType: 'quiz',
+      regenerate: regenerate || _quizQuestions.isNotEmpty,
+      setGenerating: (v) => _quizGenerating = v,
+      setError: (e) => _quizError = e,
+      onPayload: (payload) {
+        final questions = (payload['questions'] as List?) ?? [];
         _quizQuestions = questions
             .whereType<Map>()
             .map((q) => MCQQuestion.fromJson(Map<String, dynamic>.from(q)))
             .toList();
         _quizFetched = true;
         _quizLoading = false;
-        _quizGenerating = false;
-      });
-      _snap.applyQuiz(questions: _quizQuestions, error: null);
-      _persistCache();
-      if (charged != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Quiz ready — $charged credits used')),
-        );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _quizGenerating = false;
-        _quizError = e.toString();
-      });
-    }
+        _snap.applyQuiz(questions: _quizQuestions, error: null);
+        _persistCache();
+      },
+    );
   }
 
   Future<void> _loadRevision({bool force = false}) async {
@@ -529,43 +690,31 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
     }
   }
 
-  Future<void> _generateRevision() async {
-    setState(() {
-      _revisionGenerating = true;
-      _revisionError = null;
-    });
-    try {
-      final data = await LectureService.instance.generateRevision(widget.lectureId);
-      if (!mounted) return;
-      final charged = data['credits_charged'];
-      setState(() {
-        _revisionSheet = (data['revisionSheet'] as String?)?.trim() ?? '';
-        final vp = data['visualPayload'] ?? data['visual_payload'];
+  Future<void> _generateRevision({bool regenerate = false}) async {
+    await _generateViaStudyTool(
+      toolType: 'revision',
+      regenerate: regenerate || _revisionSheet.trim().isNotEmpty,
+      setGenerating: (v) => _revisionGenerating = v,
+      setError: (e) => _revisionError = e,
+      onPayload: (payload) {
+        _revisionSheet =
+            (payload['revisionSheet'] as String?)?.trim() ??
+                (payload['revision_sheet'] as String?)?.trim() ??
+                '';
+        final vp = payload['visualPayload'] ?? payload['visual_payload'];
         _revisionVisualPayload = vp is Map
             ? VisualPayloadData.fromJson(Map<String, dynamic>.from(vp))
             : null;
         _revisionFetched = true;
         _revisionLoading = false;
-        _revisionGenerating = false;
-      });
-      _snap.applyRevision(
-        sheet: _revisionSheet,
-        visualPayload: _revisionVisualPayload,
-        error: null,
-      );
-      _persistCache();
-      if (charged != null && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Revision sheet ready — $charged credits used')),
+        _snap.applyRevision(
+          sheet: _revisionSheet,
+          visualPayload: _revisionVisualPayload,
+          error: null,
         );
-      }
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _revisionGenerating = false;
-        _revisionError = e.toString();
-      });
-    }
+        _persistCache();
+      },
+    );
   }
 
   @override
@@ -733,7 +882,7 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
         _persistCache();
       }
       if ((stillHaveNotes || hasCachedNotes) && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+        AppToast.showSnackBar(context, SnackBar(content: Text(msg)));
       }
     } finally {
       if (gen == _notesLoadGen) _notesLoadInFlight = false;
@@ -780,7 +929,6 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
           _metaSubject = _snap.metaSubject;
           _createdAt = _snap.createdAt;
           _lectureStatus = _snap.lectureStatus;
-          _canShareToGroup = _snap.canShareToGroup;
         });
       }
       return;
@@ -791,34 +939,21 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
       final subject = meta?['subject']?.toString();
       final created = parseCreatedAt(meta?['created_at']);
       final status = meta?['status']?.toString();
-      var canShare = false;
-
-      final userId = SupabaseClient.instance.currentUser?.id;
-      if (userId != null) {
-        final profile = await SupabaseClient.instance.getUserProfile(userId);
-        final isTeacher = profile?['role'] == 'teacher';
-        if (isTeacher) {
-          final isOwnLecture = meta?['user_id'] == userId;
-          final isRecorded = meta?['source_type'] == 'recorded';
-          canShare = isOwnLecture && isRecorded;
-        }
-      }
       if (!mounted) return;
       setState(() {
         _metaSubject = subject;
         _createdAt = created;
         _lectureStatus = status;
-        _canShareToGroup = canShare;
       });
       _snap.applyMeta(
         subject: subject,
         createdAt: created,
         status: status,
-        canShare: canShare,
+        canShare: false, // Personal Workspace never shares — Dashboard My Library only
       );
       _persistCache();
     } catch (_) {
-      // Fails closed — button simply stays hidden.
+      // Meta soft-fail — share stays hidden.
     }
   }
 
@@ -848,6 +983,7 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
       mainAxisSize: MainAxisSize.min,
       children: [
         _buildHeader(context),
+        if (!widget.readOnly) _buildRecordingChipBar(context),
         Container(
           decoration: BoxDecoration(
             border: Border(bottom: BorderSide(color: AppTheme.getCardBorder(context))),
@@ -863,7 +999,7 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
                   indicatorColor: AppTheme.accentColor,
                   indicatorSize: TabBarIndicatorSize.label,
                   tabAlignment: TabAlignment.start,
-                  tabs: StudyWorkspace._tabs
+                  tabs: _visibleTabs
                       .map((t) => Tab(
                             height: 44,
                             child: Row(
@@ -878,31 +1014,32 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
                       .toList(),
                 ),
               ),
-              PopupMenuButton<String>(
-                tooltip: 'More',
-                icon: Icon(
-                  Icons.more_vert,
-                  color: AppTheme.getSecondaryText(context),
-                ),
-                enabled: !_deletingLecture,
-                onSelected: (value) {
-                  if (value == 'delete') {
-                    unawaited(_confirmDeleteLecture());
-                  }
-                },
-                itemBuilder: (context) => [
-                  PopupMenuItem<String>(
-                    value: 'delete',
-                    child: Text(
-                      'Delete lecture',
-                      style: TextStyle(
-                        color: Theme.of(context).colorScheme.error,
-                        fontWeight: FontWeight.w600,
+              if (!widget.readOnly)
+                PopupMenuButton<String>(
+                  tooltip: 'More',
+                  icon: Icon(
+                    Icons.more_vert,
+                    color: AppTheme.getSecondaryText(context),
+                  ),
+                  enabled: !_deletingLecture,
+                  onSelected: (value) {
+                    if (value == 'delete') {
+                      unawaited(_confirmDeleteLecture());
+                    }
+                  },
+                  itemBuilder: (context) => [
+                    PopupMenuItem<String>(
+                      value: 'delete',
+                      child: Text(
+                        'Delete lecture',
+                        style: TextStyle(
+                          color: Theme.of(context).colorScheme.error,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
+                  ],
+                ),
             ],
           ),
         ),
@@ -910,17 +1047,56 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
           child: TabBarView(
             controller: _tabController,
             children: [
-              _KeepAliveTab(child: _notesTab(context)),
-              _KeepAliveTab(child: _summaryTab(context)),
-              _KeepAliveTab(child: _transcriptTab(context)),
-              _KeepAliveTab(child: _flashcardsTab(context)),
-              _KeepAliveTab(child: _quizTab(context)),
-              _KeepAliveTab(child: _revisionTab(context)),
-              _KeepAliveTab(child: _askAiTab(context)),
+              for (final t in _visibleTabs)
+                _KeepAliveTab(child: _tabBodyForKey(context, t.key)),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildRecordingChipBar(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: AppTheme.getCardBorder(context))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          HomeStudyChipBar(
+            toolStates: _chipStates,
+            activeToolType: _activeChipType,
+            recommended: const [],
+            moreHint: StudyToolCopy.recordingPaidFirstGenerate,
+            extraMoreChips: const [
+              HomeStudyChipDef(
+                label: '5 Min',
+                toolType: 'five_min_revision',
+                icon: Icons.timer_outlined,
+              ),
+              HomeStudyChipDef(
+                label: 'Cheat Sheet',
+                toolType: 'cheat_sheet',
+                icon: Icons.fact_check_outlined,
+              ),
+              HomeStudyChipDef(
+                label: 'Teacher Tips',
+                toolType: 'teacher_tips',
+                icon: Icons.school_outlined,
+              ),
+              HomeStudyChipDef(
+                label: 'Exam Booster',
+                toolType: 'exam_booster',
+                icon: Icons.military_tech_outlined,
+              ),
+            ],
+            onTap: _onRecordingChip,
+          ),
+        ],
+      ),
     );
   }
 
@@ -980,16 +1156,6 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
               ],
             ),
           ),
-          if (_canShareToGroup)
-            IconButton(
-              icon: const Icon(Icons.groups_outlined),
-              tooltip: 'Share to Group',
-              onPressed: () => showShareToGroupSheet(
-                context,
-                lectureId: widget.lectureId,
-                lectureTitle: widget.title,
-              ),
-            ),
           IconButton(
             icon: _refreshing
                 ? const SizedBox(
@@ -1039,6 +1205,7 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
     return SelectableStudyText(
       lectureId: widget.lectureId,
       sourceSurface: sourceSurface,
+      enableAskAi: !widget.readOnly,
       child: _scrollableTab(children),
     );
   }
@@ -1347,6 +1514,20 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
     }
 
     if (_flashcards.isEmpty) {
+      if (widget.readOnly) {
+        return _scrollableTab([
+          WorkspaceEmptyState(
+            icon: Icons.style_outlined,
+            title: 'No Flashcards Shared',
+            reasons: const [
+              'Flashcards appear when your teacher generates and shares this lecture',
+            ],
+            primaryLabel: 'Retry',
+            primaryElevated: false,
+            onPrimary: () => _loadFlashcards(force: true),
+          ),
+        ]);
+      }
       return _scrollableTab([
         WorkspaceEmptyState(
           icon: Icons.style_outlined,
@@ -1367,13 +1548,32 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _sectionLabel('FLASHCARDS')),
-              TextButton.icon(
-                onPressed: _flashcardsGenerating ? null : _generateFlashcards,
-                icon: const Icon(Icons.refresh, size: 16),
-                label: Text(_flashcardsGenerating ? '…' : 'Regenerate'),
+              Row(
+                children: [
+                  Expanded(child: _sectionLabel('FLASHCARDS')),
+                  if (!widget.readOnly)
+                    TextButton.icon(
+                      onPressed: _flashcardsGenerating
+                          ? null
+                          : () => _generateFlashcards(regenerate: true),
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: Text(
+                        _flashcardsGenerating
+                            ? '…'
+                            : StudyToolCopy.regenerateButton,
+                      ),
+                    ),
+                ],
+              ),
+              Text(
+                StudyToolCopy.recordingPaidFirstGenerate,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.getSecondaryText(context),
+                      fontSize: 11,
+                    ),
               ),
             ],
           ),
@@ -1382,6 +1582,7 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
           child: SelectableStudyText(
             lectureId: widget.lectureId,
             sourceSurface: 'flashcard',
+            enableAskAi: !widget.readOnly,
             child: FlashcardStackView(
               flashcards: _flashcards,
               lectureId: widget.lectureId,
@@ -1414,6 +1615,20 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
     }
 
     if (_quizQuestions.isEmpty) {
+      if (widget.readOnly) {
+        return _scrollableTab([
+          WorkspaceEmptyState(
+            icon: Icons.quiz_outlined,
+            title: 'No Quiz Shared Yet',
+            reasons: const [
+              'Your teacher has not shared a quiz for this lecture',
+            ],
+            primaryLabel: 'Retry',
+            primaryElevated: false,
+            onPrimary: () => _loadQuiz(force: true),
+          ),
+        ]);
+      }
       return _scrollableTab([
         WorkspaceEmptyState(
           icon: Icons.quiz_outlined,
@@ -1433,13 +1648,32 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
       children: [
         Padding(
           padding: const EdgeInsets.fromLTRB(16, 12, 16, 0),
-          child: Row(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Expanded(child: _sectionLabel('QUIZ (20 MCQ)')),
-              TextButton.icon(
-                onPressed: _quizGenerating ? null : _generateQuiz,
-                icon: const Icon(Icons.refresh, size: 16),
-                label: Text(_quizGenerating ? '…' : 'Regenerate'),
+              Row(
+                children: [
+                  Expanded(child: _sectionLabel('QUIZ (20 MCQ)')),
+                  if (!widget.readOnly)
+                    TextButton.icon(
+                      onPressed: _quizGenerating
+                          ? null
+                          : () => _generateQuiz(regenerate: true),
+                      icon: const Icon(Icons.refresh, size: 16),
+                      label: Text(
+                        _quizGenerating
+                            ? '…'
+                            : StudyToolCopy.regenerateButton,
+                      ),
+                    ),
+                ],
+              ),
+              Text(
+                StudyToolCopy.recordingPaidFirstGenerate,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.getSecondaryText(context),
+                      fontSize: 11,
+                    ),
               ),
             ],
           ),
@@ -1448,8 +1682,13 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
           child: MCQQuizView(
             questions: _quizQuestions,
             lectureId: widget.lectureId,
-            onOpenRevision: () => _tabController.animateTo(5),
-            onGenerateNewQuiz: _generateQuiz,
+            onOpenRevision: () {
+              final i = _visibleTabs.indexWhere(
+                (t) => t.key == ShareChipCatalog.revision,
+              );
+              if (i >= 0) _tabController.animateTo(i);
+            },
+            onGenerateNewQuiz: widget.readOnly ? null : _generateQuiz,
           ),
         ),
       ],
@@ -1478,6 +1717,20 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
     }
 
     if (_revisionSheet.isEmpty) {
+      if (widget.readOnly) {
+        return _scrollableTab([
+          WorkspaceEmptyState(
+            icon: Icons.assignment_outlined,
+            title: 'No Revision Shared',
+            reasons: const [
+              'Revision appears when your teacher generates it for this lecture',
+            ],
+            primaryLabel: 'Retry',
+            primaryElevated: false,
+            onPrimary: () => _loadRevision(force: true),
+          ),
+        ]);
+      }
       return _scrollableTab([
         WorkspaceEmptyState(
           icon: Icons.assignment_outlined,
@@ -1495,13 +1748,32 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
     }
 
     return _selectableScrollableTab([
-      Row(
+      Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(child: _sectionLabel('REVISION SHEET')),
-          TextButton.icon(
-            onPressed: _revisionGenerating ? null : _generateRevision,
-            icon: const Icon(Icons.refresh, size: 16),
-            label: Text(_revisionGenerating ? '…' : 'Regenerate'),
+          Row(
+            children: [
+              Expanded(child: _sectionLabel('REVISION SHEET')),
+              if (!widget.readOnly)
+                TextButton.icon(
+                  onPressed: _revisionGenerating
+                      ? null
+                      : () => _generateRevision(regenerate: true),
+                  icon: const Icon(Icons.refresh, size: 16),
+                  label: Text(
+                    _revisionGenerating
+                        ? '…'
+                        : StudyToolCopy.regenerateButton,
+                  ),
+                ),
+            ],
+          ),
+          Text(
+            StudyToolCopy.recordingPaidFirstGenerate,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTheme.getSecondaryText(context),
+                  fontSize: 11,
+                ),
           ),
         ],
       ),
@@ -1513,6 +1785,78 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
         ),
       ),
     ], sourceSurface: 'revision');
+  }
+
+  Widget _tabBodyForKey(BuildContext context, String key) {
+    switch (key) {
+      case ShareChipCatalog.notes:
+        return _notesTab(context);
+      case ShareChipCatalog.summary:
+        return _summaryTab(context);
+      case ShareChipCatalog.transcript:
+        return _transcriptTab(context);
+      case ShareChipCatalog.flashcards:
+        return _flashcardsTab(context);
+      case ShareChipCatalog.quiz:
+        return _quizTab(context);
+      case ShareChipCatalog.revision:
+        return _revisionTab(context);
+      case 'ask_ai':
+        return _askAiTab(context);
+      case ShareChipCatalog.importantQuestions:
+        return _SharedExtraTab(
+          lectureId: widget.lectureId,
+          chip: ShareChipCatalog.importantQuestions,
+        );
+      case ShareChipCatalog.mindMap:
+        return _SharedExtraTab(
+          lectureId: widget.lectureId,
+          chip: ShareChipCatalog.mindMap,
+        );
+      case ShareChipCatalog.fiveMinRevision:
+        return _SharedExtraTab(
+          lectureId: widget.lectureId,
+          chip: ShareChipCatalog.fiveMinRevision,
+        );
+      case ShareChipCatalog.visual:
+        return _visualOnlyTab(context);
+      case ShareChipCatalog.learnMore:
+      case ShareChipCatalog.memoryTricks:
+      case ShareChipCatalog.commonMistakes:
+      case ShareChipCatalog.cheatSheet:
+      case ShareChipCatalog.teacherTips:
+      case ShareChipCatalog.examBooster:
+        return _SharedExtraTab(
+          lectureId: widget.lectureId,
+          chip: key,
+        );
+      default:
+        return const Center(child: Text('Not available'));
+    }
+  }
+
+  Widget _visualOnlyTab(BuildContext context) {
+    if (_notesLoading && _cleanNotes.isEmpty && _visualPayload == null) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_visualPayload == null) {
+      return const WorkspaceEmptyState(
+        icon: Icons.image_outlined,
+        title: 'No diagram shared',
+        reasons: [
+          'Teacher did not include a visual for this share.',
+        ],
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        SmartEducationalContent(
+          markdownBody: '',
+          visualPayload: _visualPayload,
+        ),
+      ],
+    );
   }
 
   Widget _askAiTab(BuildContext context) {
@@ -1535,6 +1879,145 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
   }
 }
 
+/// Read-only shared Home-style extra (IQ / Mind Map / 5-min) — no Generate.
+class _SharedExtraTab extends StatefulWidget {
+  final String lectureId;
+  final String chip;
+
+  const _SharedExtraTab({
+    required this.lectureId,
+    required this.chip,
+  });
+
+  @override
+  State<_SharedExtraTab> createState() => _SharedExtraTabState();
+}
+
+class _SharedExtraTabState extends State<_SharedExtraTab> {
+  bool _loading = true;
+  String? _error;
+  Map<String, dynamic>? _data;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      Map<String, dynamic> data;
+      switch (widget.chip) {
+        case ShareChipCatalog.importantQuestions:
+          data = await LectureService.instance
+              .fetchImportantQuestions(widget.lectureId);
+          break;
+        case ShareChipCatalog.mindMap:
+          data = await LectureService.instance.fetchMindMap(widget.lectureId);
+          break;
+        case ShareChipCatalog.fiveMinRevision:
+          data = await LectureService.instance
+              .fetchFiveMinRevision(widget.lectureId);
+          break;
+        default:
+          // Home-style extras — free read (students / reopen).
+          final result = await LectureService.instance.lectureFetchStudyTool(
+            lectureId: widget.lectureId,
+            toolType: widget.chip,
+          );
+          final p = result['payload'];
+          data = p is Map ? Map<String, dynamic>.from(p) : <String, dynamic>{};
+      }
+      if (!mounted) return;
+      setState(() {
+        _data = data;
+        _loading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (_error != null) {
+      return WorkspaceEmptyState(
+        icon: Icons.error_outline,
+        title: 'Could not load',
+        reasons: [_error!],
+      );
+    }
+    final data = _data ?? {};
+    switch (widget.chip) {
+      case ShareChipCatalog.importantQuestions:
+        final qs = (data['questions'] as List?) ?? [];
+        return ImportantQuestionsView(
+          questions: qs
+              .whereType<Map>()
+              .map((e) =>
+                  ImportantQuestion.fromJson(Map<String, dynamic>.from(e)))
+              .toList(),
+        );
+      case ShareChipCatalog.mindMap:
+        final root = data['root'];
+        return MindMapView(
+          title: (data['title'] as String?) ?? 'Mind Map',
+          root: root is Map
+              ? MindMapNodeData.fromJson(Map<String, dynamic>.from(root))
+              : null,
+        );
+      case ShareChipCatalog.fiveMinRevision:
+      case ShareChipCatalog.learnMore:
+      case ShareChipCatalog.memoryTricks:
+      case ShareChipCatalog.commonMistakes:
+      case ShareChipCatalog.cheatSheet:
+      case ShareChipCatalog.teacherTips:
+      case ShareChipCatalog.examBooster:
+        final sheet = (data['revisionSheet'] as String?)?.trim() ??
+            (data['revision_sheet'] as String?)?.trim() ??
+            (data['markdown'] as String?)?.trim() ??
+            '';
+        if (sheet.isEmpty && (data['tricks'] is! List) && (data['tips'] is! List)) {
+          return WorkspaceEmptyState(
+            icon: Icons.article_outlined,
+            title: 'Not shared yet',
+            reasons: const ['Teacher has not generated this chip.'],
+          );
+        }
+        if (sheet.isNotEmpty) {
+          return ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
+              SmartEducationalContent(markdownBody: sheet),
+            ],
+          );
+        }
+        return ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Text(
+              data.toString(),
+              style: Theme.of(context).textTheme.bodyMedium,
+            ),
+          ],
+        );
+      default:
+        return const SizedBox.shrink();
+    }
+  }
+}
+
 /// Opens [StudyWorkspace] as a swipe-up bottom sheet (mobile pattern).
 /// On desktop, embed [StudyWorkspace] directly in a side panel instead —
 /// see `AppShell`.
@@ -1543,6 +2026,9 @@ Future<void> showStudyWorkspaceSheet(
   required String lectureId,
   required String title,
   String? subject,
+  int? initialTabIndex,
+  bool readOnly = false,
+  List<String>? allowedChips,
 }) {
   return showModalBottomSheet(
     context: context,
@@ -1580,6 +2066,9 @@ Future<void> showStudyWorkspaceSheet(
                     lectureId: lectureId,
                     title: title,
                     subject: subject,
+                    initialTabIndex: initialTabIndex,
+                    readOnly: readOnly,
+                    allowedChips: allowedChips,
                     onClose: () => Navigator.pop(context),
                   ),
                 ),

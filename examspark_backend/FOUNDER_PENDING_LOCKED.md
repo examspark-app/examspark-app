@@ -18,10 +18,13 @@ Phase 4C careful one-time smoke → [`FOUNDER_PHASE4C_SMOKE_CARD.md`](FOUNDER_PH
 
 ### Freeze — ~70% core PASS (Jul 22, 2026 night)
 
-Founder: **`accha lock pass`** + no more feature/backend churn.
+Founder: **`accha lock pass`** + no more feature/backend churn.  
+**Freeze / lock / freeze lock (Founder Lock Jul 22 night):** jab founder ye bole → agent **backend code / business logic edit nahi karega**. Smoke/test pass ke baad re-edit se naye bugs banne ka risk — isliye freeze = status answers + docs lock notes only. Backend sirf jab founder us lane ke liye explicitly `start …` bole. UI only jab founder screen name kare + `start …` bole.
+
 - Core student AI / notes / Ask+Home language lock / YouTube+image notes path = **PASS locked**
-- **No code changes** unless founder says `start …`
-- Agar change hoga → **UI/UX only** (founder must name the screen)
+- **No backend / business-logic code changes** unless founder says `start …` for that work
+- Prefer: status answers, docs lock notes — not “small fixes” to Python/FastAPI after pass
+- Agar change hoga → **UI/UX only** (founder must name the screen + `start …`)
 - Remaining ~30% = Railway live, Teacher, polish, etc. — **alag session**, not drive-by
 ---
 
@@ -62,15 +65,17 @@ Also already **smoke-passed earlier:** Groups join limits · YouTube Link → No
 | `start PYQs` / `ok start` | PYQ metadata bank + vector match — **PASS locked Jul 18 night** · guide [`FOUNDER_START_PYQS.md`](FOUNDER_START_PYQS.md) · Important Qs uses weightage; Home answer skips PYQ match; no PYQs More-chip |
 | `start Tavily` | Home/Ask Priority 4 web — **CODE Jul 18** · guide [`FOUNDER_TAVILY.md`](FOUNDER_TAVILY.md) — founder: add `TAVILY_API_KEY` + smoke |
 | `start Railway deploy guide` | Production FastAPI (Dockerfile hai; live deploy pending) |
+| ↳ **Deploy-time bundle (same session)** | **AI kill switch + rate limit** — cyber / 50k flood pe paid AI OFF karne ke liye. **Abhi mat banao** — sirf jab Railway live deploy ho. Cloudflare DDoS = alag `start web deploy guide` |
 | `start Phase 4D` / `start home history` | Home AI Study History — **PASS locked Jul 18** · [`FOUNDER_PHASE4D_HOME_HISTORY.md`](FOUNDER_PHASE4D_HOME_HISTORY.md) |
 | YouTube Whisper + full RAG | **CODE Jul 18** — SQL [`rag_match_user_wide_migration.sql`](rag_match_user_wide_migration.sql) · guide [`FOUNDER_YOUTUBE_WHISPER_FALLBACK.md`](FOUNDER_YOUTUBE_WHISPER_FALLBACK.md) — founder smoke pending |
-| Teacher / Groups | Teacher ~40–45% · Groups ~50–60% — alag session; founder must name the lane |
+| Teacher / Groups | Teacher Share loop **CODE Jul 23** — SQL + smoke: [`FOUNDER_TEACHER_SHARE.md`](FOUNDER_TEACHER_SHARE.md) |
 
 ---
 
 ## D — Explicit NOT complete
 
 - Railway **production** live
+- **Deploy-time security (locked on list Jul 26):** AI kill switch (`AI_ENGINE=OFF`) + per-user/IP rate limit — **build only with** `start Railway deploy guide` (not local feature work). Cloudflare shield with web deploy.
 - Tavily web search — **code live Jul 18**; needs founder `TAVILY_API_KEY` + smoke ([`FOUNDER_TAVILY.md`](FOUNDER_TAVILY.md))
 - Full PYQ bank UI / Home PYQs chip (smoke bank + Important Qs Focus **locked**; chip intentionally hidden)
 - Full Teacher dashboard (revenue, analytics, student lists)
@@ -78,6 +83,26 @@ Also already **smoke-passed earlier:** Groups join limits · YouTube Link → No
 - Redis shared cache
 - Phase 6 final polish / dead-code delete
 - Answer Key still on old `process-lecture` edge (legacy)
+
+---
+
+## E — Next work queue (freeze; wait for `start …`)
+
+**Saved:** Jul 22, 2026 night · Founder-ordered FUTURE backlog.  
+**Freeze still ON.** Docs only until founder says `start [item]` for **ONE** item. No coding, no backend/app logic edits, no drive-by polish.
+
+| # | Work | Notes |
+|---|------|--------|
+| 1 | Teacher **OR** student Groups | Prefer `start Teacher Coupon` then Discovery — see [`FOUNDER_TEACHER_COUPON.md`](FOUNDER_TEACHER_COUPON.md) |
+| 2 | Firebase setup + notifications | In-app shipped with coupon SQL; FCM → [`FOUNDER_FCM_SETUP.md`](FOUNDER_FCM_SETUP.md) |
+| 3 | Settings implement | |
+| 4 | Share features | User shares photo/documents → share click shows WhatsApp, ChatGPT, ExamSpark app, etc. (system share sheet / share targets) |
+| 5 | UI polish + navigation | |
+| 6 | Extra file remove + polish carefully | **Ask before delete** |
+| 7 | Extra pages | Terms & Conditions · Privacy Policy · Refund & Cancellation Policy |
+| 8 | Admin panel | **Later only** — founder will say when; **do not start now** |
+
+**Remind:** Coding starts only after founder says e.g. `start Groups` / `start Firebase` / `start Settings` — **one item at a time**. Admin panel = not in queue until founder explicitly calls it.
 
 ---
 
@@ -139,3 +164,5 @@ Detail steps: [`FOUNDER_NEXT_SESSION.md`](FOUNDER_NEXT_SESSION.md)
 Older (if re-checking): `Flashcards Quiz Revision smoke pass` · `Visual Notes 5A smoke pass` · `Select AI smoke pass` · `5 Minute Revision smoke pass` · `groups + realtime checklist done` · `commit today`
 
 **Gate B (after 4C smoke):** `start PYQs` · `start Railway deploy guide` · `start Tavily`
+
+**Freeze queue (§E):** `start Groups` · `start Firebase` · `start Settings` · `start Share` · `start UI polish` · … — **one at a time**. Admin panel mat start karo jab tak founder alag se na bole.

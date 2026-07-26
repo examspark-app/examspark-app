@@ -1,6 +1,8 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart' hide SupabaseClient;
 import 'package:examspark_frontend/core/models/group_model.dart';
 import 'package:examspark_frontend/core/models/suggested_teacher_model.dart';
 import 'package:examspark_frontend/core/models/teacher_achievement_model.dart';
@@ -33,19 +35,21 @@ void _groupsAgentLog(String hypothesisId, String location, String message, Map<S
 // #endregion
 
 /// Result of [GroupsRepository.canJoinAnotherGroup] — founder-locked
-/// Jul 12, 2026 group-join limits (free=0, ₹199=1, ₹499=3, ₹999=6,
-/// teacher=unlimited). Soft UI gate; Postgres trigger also enforces.
+/// group-join caps: free=0, ₹199=1, ₹499=3, ₹999=6, teacher=0 (own only).
 class GroupJoinEligibility {
   final bool allowed;
   final int maxGroups;
   final int currentGroups;
   final String planName;
+  /// Teacher ₹2,999 — cannot join others; manage own Groups only.
+  final bool isTeacherOwnGroupsOnly;
 
   const GroupJoinEligibility({
     required this.allowed,
     required this.maxGroups,
     required this.currentGroups,
     this.planName = 'Free',
+    this.isTeacherOwnGroupsOnly = false,
   });
 
   bool get isUnlimited => maxGroups < 0;
@@ -55,8 +59,14 @@ class GroupJoinEligibility {
 class GroupMembershipException implements Exception {
   final String message;
   final bool isJoinLimit;
+  /// True when teacher requires approval — request submitted, not joined yet.
+  final bool isPendingApproval;
 
-  const GroupMembershipException(this.message, {this.isJoinLimit = false});
+  const GroupMembershipException(
+    this.message, {
+    this.isJoinLimit = false,
+    this.isPendingApproval = false,
+  });
 
   @override
   String toString() => message;
@@ -168,7 +178,10 @@ class GroupsRepository {
         teacher: teacher,
         studentsCount: memberships.length,
         sharedLecturesCount: feedItems.where((f) => f['type'] == 'lecture').length,
-        recentSharedItems: feedItems.take(5).map(GroupSharedItem.fromMap).toList(),
+          recentSharedItems: feedItems
+              .take(20)
+              .map(GroupSharedItem.fromMap)
+              .toList(),
         isJoined: userId != null && memberships.any((m) => m['student_id'] == userId),
       );
     } catch (_) {
@@ -179,10 +192,8 @@ class GroupsRepository {
     }
   }
 
-  /// Checks the founder-locked group-join limit for the caller's current
-  /// plan (free=0, ₹199=1, ₹499=3, ₹999=6, teacher=unlimited) before a
-  /// join goes through. Fail-closed on error (blocks join + lock sheet).
-  /// Server ALSO enforces via `fn_enforce_group_join_limit` trigger.
+  /// Checks group-join limit before join. Teacher plan → never join others.
+  /// Server also enforces via `fn_enforce_group_join_limit` + join RPC.
   Future<GroupJoinEligibility> canJoinAnotherGroup() async {
     final userId = SupabaseClient.instance.currentUser?.id;
     if (userId == null) {
@@ -193,8 +204,24 @@ class GroupsRepository {
       final planId = await SupabaseClient.instance.getPlanTier(userId);
       final plan = SubscriptionPlans.byId(planId) ?? SubscriptionPlans.free;
 
+      // Teacher ₹2,999 — own Groups / dashboard only. No student join.
+      if (planId == 'teacher' || plan.id == 'teacher') {
+        return GroupJoinEligibility(
+          allowed: false,
+          maxGroups: 0,
+          currentGroups: 0,
+          planName: plan.name,
+          isTeacherOwnGroupsOnly: true,
+        );
+      }
+
       if (plan.hasUnlimitedGroups) {
-        return GroupJoinEligibility(allowed: true, maxGroups: -1, currentGroups: 0, planName: plan.name);
+        return GroupJoinEligibility(
+          allowed: true,
+          maxGroups: -1,
+          currentGroups: 0,
+          planName: plan.name,
+        );
       }
 
       // Free / max 0 — never join (no count round-trip needed).
@@ -209,10 +236,17 @@ class GroupsRepository {
 
       final rows = await SupabaseClient.instance.client
           .from('class_memberships')
-          .select('id')
+          .select('id, coupon_id, join_type')
           .eq('student_id', userId);
-      final list = rows is List ? rows : <dynamic>[];
-      final currentGroups = list.length;
+      final list = List<dynamic>.from(rows);
+      // Paid path slots only — coupon joins do not consume 1/3/6.
+      final currentGroups = list.where((raw) {
+        final row = Map<String, dynamic>.from(raw as Map);
+        final joinType = (row['join_type'] as String?)?.trim();
+        final couponId = row['coupon_id'];
+        if (joinType == 'coupon' || couponId != null) return false;
+        return true;
+      }).length;
 
       // #region agent log
       _groupsAgentLog('G', 'groups_repository.dart:canJoinAnotherGroup', 'eligibility ok', {
@@ -262,7 +296,7 @@ class GroupsRepository {
       });
       // #endregion
       throw const GroupMembershipException(
-        'No real groups yet. Run seed SQL for demo groups, then try again.',
+        'No groups yet. Create a group or join with an invite link.',
       );
     }
 
@@ -274,19 +308,24 @@ class GroupsRepository {
             .delete()
             .eq('class_id', group.id)
             .eq('student_id', userId);
-      } else {
-        await client.from('class_memberships').insert({
-          'class_id': group.id,
-          'student_id': userId,
-        });
+        return group.copyWith(isJoined: false);
       }
-      // #region agent log
-      _groupsAgentLog('H', 'groups_repository.dart:toggleMembership', 'membership ok', {
-        'joined': !group.isJoined,
-        'groupIdSuffix': group.id.length > 8 ? group.id.substring(group.id.length - 8) : group.id,
-      });
-      // #endregion
-      return group.copyWith(isJoined: !group.isJoined);
+
+      final raw = await client.rpc(
+        'fn_request_or_join_group',
+        params: {'p_class_id': group.id},
+      );
+      final status = _rpcJoinStatus(raw);
+      if (status == 'pending') {
+        throw const GroupMembershipException(
+          'Join request sent. Waiting for teacher approval.',
+          isPendingApproval: true,
+        );
+      }
+      if (status == 'joined' || status == 'already_member') {
+        return group.copyWith(isJoined: true);
+      }
+      throw const GroupMembershipException('Could not join group. Please try again.');
     } catch (e) {
       // #region agent log
       _groupsAgentLog('H', 'groups_repository.dart:toggleMembership', 'membership failed', {
@@ -301,6 +340,17 @@ class GroupsRepository {
         isJoinLimit: GroupMembershipException.looksLikeJoinLimit(e),
       );
     }
+  }
+
+  String _rpcJoinStatus(dynamic raw) {
+    if (raw is Map) return (raw['status'] ?? '').toString();
+    if (raw is String) {
+      try {
+        final decoded = jsonDecode(raw);
+        if (decoded is Map) return (decoded['status'] ?? '').toString();
+      } catch (_) {}
+    }
+    return raw?.toString() ?? '';
   }
 
   /// Display-only estimate of the CURRENT teacher's recurring commission
@@ -319,6 +369,43 @@ class GroupsRepository {
     }
   }
 
+  /// Paid subscribers attributed to this teacher (same primary-teacher
+  /// rule as commission). Fails safe to `0` if SQL not run yet.
+  Future<int> fetchSubscriberCount() async {
+    final userId = SupabaseClient.instance.currentUser?.id;
+    if (userId == null) return 0;
+
+    try {
+      return await SupabaseClient.instance.getTeacherSubscriberCount(userId);
+    } catch (_) {
+      return 0;
+    }
+  }
+
+  /// Teachers with active Teacher ₹2,999 (`plan_id=teacher` + period not ended).
+  /// Discover / Suggest / Search must hide everyone else (founder Jul 25, 2026).
+  Future<Set<String>> _activeTeacherPlanUserIds() async {
+    try {
+      final client = SupabaseClient.instance.client;
+      final nowIso = DateTime.now().toUtc().toIso8601String();
+      final rows = await client
+          .from('user_subscriptions')
+          .select('user_id')
+          .eq('plan_id', 'teacher')
+          .eq('status', 'active')
+          .gte('current_period_end', nowIso);
+      final out = <String>{};
+      for (final r in List<Map<String, dynamic>>.from(rows as List)) {
+        final id = r['user_id'] as String?;
+        if (id != null && id.isNotEmpty) out.add(id);
+      }
+      return out;
+    } catch (_) {
+      // Fail closed — do not show unpaid teachers in discovery.
+      return {};
+    }
+  }
+
   /// Note: `isJoined` here means "already a member of one of this teacher's
   /// groups" is intentionally left `false` — computing it accurately needs a
   /// per-teacher group lookup that isn't worth the round trip for a
@@ -326,17 +413,556 @@ class GroupsRepository {
   Future<List<SuggestedTeacherModel>> fetchSuggestedTeachers() async {
     try {
       final client = SupabaseClient.instance.client;
+      final activeTeachers = await _activeTeacherPlanUserIds();
+      if (activeTeachers.isEmpty) return const [];
+
       final rows = await client
           .from('teacher_profiles')
           .select()
           .eq('is_suggested', true)
-          .limit(20);
-      final list = List<Map<String, dynamic>>.from(rows as List);
-      if (list.isEmpty) return List.unmodifiable(_suggestedTeachers);
+          .limit(40);
+      var list = List<Map<String, dynamic>>.from(rows as List)
+          .where((r) => activeTeachers.contains(r['user_id'] as String?))
+          .toList();
+      if (list.isEmpty) return const [];
 
-      return list.map((row) => SuggestedTeacherModel.fromMap(row)).toList();
+      final userId = SupabaseClient.instance.currentUser?.id;
+      final scoreByUser = <String, int>{};
+      final factorsByUser = <String, List<String>>{};
+      if (userId != null) {
+        try {
+          final scoreRows = await client.rpc(
+            'fn_teacher_suggestion_scores',
+            params: {
+              'p_student_id': userId,
+              'p_threshold': 0.35,
+            },
+          );
+          for (final raw
+              in List<Map<String, dynamic>>.from(scoreRows as List)) {
+            final tid = raw['teacher_user_id'] as String?;
+            if (tid == null) continue;
+            final ms = raw['match_score'];
+            scoreByUser[tid] = ms is num ? ms.round() : 0;
+            final factors = raw['matched_factors'];
+            if (factors is List) {
+              factorsByUser[tid] = factors
+                  .map((e) => e.toString())
+                  .where((e) => e.isNotEmpty)
+                  .toList();
+            }
+          }
+          list.sort((a, b) {
+            final ua = a['user_id'] as String? ?? '';
+            final ub = b['user_id'] as String? ?? '';
+            return (scoreByUser[ub] ?? 0).compareTo(scoreByUser[ua] ?? 0);
+          });
+        } catch (_) {}
+      }
+
+      return list.take(20).map((row) {
+        final uid = row['user_id'] as String?;
+        return SuggestedTeacherModel.fromMap(
+          row,
+          matchScore: uid == null ? null : scoreByUser[uid],
+          matchedFactors:
+              uid == null ? const [] : (factorsByUser[uid] ?? const []),
+        );
+      }).toList();
     } catch (_) {
+      return const [];
+    }
+  }
+
+  /// Discovery: active Teacher plan + ≥1 group.
+  /// [filterSubjects] / [filterLocation] / [filterClassLevels] / [filterExams]
+  /// = hard AND filters (Option A — City · Subject · Class · Board).
+  Future<List<SuggestedTeacherModel>> discoverTeachers({
+    String query = '',
+    List<String> filterSubjects = const [],
+    String filterLocation = '',
+    List<String> filterClassLevels = const [],
+    List<String> filterExams = const [],
+  }) async {
+    final userId = SupabaseClient.instance.currentUser?.id;
+    List<SuggestedTeacherModel> emptyOrMock() {
+      if (userId != null) return const [];
       return List.unmodifiable(_suggestedTeachers);
+    }
+
+    try {
+      final client = SupabaseClient.instance.client;
+      final activeTeachers = await _activeTeacherPlanUserIds();
+      if (activeTeachers.isEmpty) return emptyOrMock();
+
+      // Only teachers with at least one created class_folders row.
+      final classRows = await client
+          .from('class_folders')
+          .select(
+            'id, teacher_id, is_public, created_at, language, class_level, exam, subject',
+          );
+      final classList = List<Map<String, dynamic>>.from(classRows as List);
+      if (classList.isEmpty) return emptyOrMock();
+
+      final teacherIdsWithGroups = <String>{};
+      final groupClassByTeacher = <String, Set<String>>{};
+      final groupExamByTeacher = <String, Set<String>>{};
+      final groupSubjectByTeacher = <String, Set<String>>{};
+      for (final c in classList) {
+        final tid = c['teacher_id'] as String?;
+        if (tid != null &&
+            tid.isNotEmpty &&
+            activeTeachers.contains(tid)) {
+          teacherIdsWithGroups.add(tid);
+          final gl = (c['class_level'] as String?)?.trim();
+          if (gl != null && gl.isNotEmpty) {
+            groupClassByTeacher.putIfAbsent(tid, () => <String>{}).add(gl);
+          }
+          final ge = (c['exam'] as String?)?.trim();
+          if (ge != null && ge.isNotEmpty) {
+            groupExamByTeacher.putIfAbsent(tid, () => <String>{}).add(ge);
+          }
+          final gs = (c['subject'] as String?)?.trim();
+          if (gs != null && gs.isNotEmpty) {
+            groupSubjectByTeacher.putIfAbsent(tid, () => <String>{}).add(gs);
+          }
+        }
+      }
+      if (teacherIdsWithGroups.isEmpty) return emptyOrMock();
+
+      final rows = await client.from('teacher_profiles').select().limit(80);
+      var list = List<Map<String, dynamic>>.from(rows as List).where((r) {
+        final uid = r['user_id'] as String?;
+        return uid != null && teacherIdsWithGroups.contains(uid);
+      }).toList();
+      if (list.isEmpty) return emptyOrMock();
+
+      // ---- Hard filters (AND) — before search / score ----
+      final subjectsFilter = filterSubjects
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      if (subjectsFilter.isNotEmpty) {
+        list = list.where((r) {
+          final uid = r['user_id'] as String?;
+          final sub = (r['subject'] as String?)?.toLowerCase() ?? '';
+          if (subjectsFilter.any((s) => sub.contains(s.toLowerCase()))) {
+            return true;
+          }
+          final gs = uid == null ? null : groupSubjectByTeacher[uid];
+          if (gs == null) return false;
+          return subjectsFilter.any(
+            (s) => gs.any((g) => g.toLowerCase().contains(s.toLowerCase())),
+          );
+        }).toList();
+      }
+
+      final locFilter = filterLocation.trim();
+      if (locFilter.length >= 2) {
+        final locLower = locFilter.toLowerCase();
+        final fuzzyLocIds = <String>{};
+        try {
+          final fuzzyRows = await client.rpc(
+            'fn_teacher_discover_fuzzy',
+            params: {
+              'p_query': locFilter,
+              'p_threshold': 0.35,
+            },
+          );
+          for (final raw
+              in List<Map<String, dynamic>>.from(fuzzyRows as List)) {
+            final id = raw['id'] as String?;
+            if (id != null) fuzzyLocIds.add(id);
+          }
+        } catch (_) {}
+
+        list = list.where((r) {
+          final city = (r['city'] as String?)?.toLowerCase() ?? '';
+          final state = (r['state'] as String?)?.toLowerCase() ?? '';
+          if (city.contains(locLower) || state.contains(locLower)) {
+            return true;
+          }
+          final id = r['id'] as String?;
+          // Fuzzy hit only counts if teacher has a location to match.
+          return id != null &&
+              fuzzyLocIds.contains(id) &&
+              (city.isNotEmpty || state.isNotEmpty);
+        }).toList();
+      }
+
+      final classFilter = filterClassLevels
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      if (classFilter.isNotEmpty) {
+        list = list.where((r) {
+          final uid = r['user_id'] as String?;
+          final pl = (r['class_levels'] as String?)?.toLowerCase() ?? '';
+          if (classFilter.any((c) => pl.contains(c.toLowerCase()))) {
+            return true;
+          }
+          final gs = uid == null ? null : groupClassByTeacher[uid];
+          if (gs == null) return false;
+          return classFilter.any(
+            (c) => gs.any((g) => g.toLowerCase() == c.toLowerCase()),
+          );
+        }).toList();
+      }
+
+      final examFilter = filterExams
+          .map((s) => s.trim())
+          .where((s) => s.isNotEmpty)
+          .toList();
+      if (examFilter.isNotEmpty) {
+        list = list.where((r) {
+          final uid = r['user_id'] as String?;
+          final pl = (r['exams'] as String?)?.toLowerCase() ?? '';
+          if (examFilter.any((e) => pl.contains(e.toLowerCase()))) {
+            return true;
+          }
+          final gs = uid == null ? null : groupExamByTeacher[uid];
+          if (gs == null) return false;
+          return examFilter.any(
+            (e) => gs.any((g) => g.toLowerCase() == e.toLowerCase()),
+          );
+        }).toList();
+      }
+
+      if (list.isEmpty) return const [];
+
+      String? prefSubject;
+      String? prefCity;
+      String? prefState;
+      if (userId != null) {
+        try {
+          final sp = await client
+              .from('student_profiles')
+              .select('subjects, city, state')
+              .eq('user_id', userId)
+              .maybeSingle();
+          if (sp != null) {
+            final subjects = sp['subjects'];
+            if (subjects is List && subjects.isNotEmpty) {
+              prefSubject = subjects.first.toString().toLowerCase();
+            }
+            prefCity = (sp['city'] as String?)?.toLowerCase();
+            prefState = (sp['state'] as String?)?.toLowerCase();
+          }
+        } catch (_) {}
+      }
+
+      final needle = query.trim();
+      Map<String, double> fuzzySim = {};
+      if (needle.length >= 2) {
+        try {
+          final fuzzyRows = await client.rpc(
+            'fn_teacher_discover_fuzzy',
+            params: {
+              'p_query': needle,
+              'p_threshold': 0.35,
+            },
+          );
+          final matched = <String>{};
+          for (final raw
+              in List<Map<String, dynamic>>.from(fuzzyRows as List)) {
+            final id = raw['id'] as String?;
+            if (id == null) continue;
+            matched.add(id);
+            final sim = raw['sim'];
+            if (sim is num) fuzzySim[id] = sim.toDouble();
+          }
+          if (matched.isNotEmpty) {
+            list =
+                list.where((r) => matched.contains(r['id'] as String?)).toList();
+          } else {
+            final q = needle.toLowerCase();
+            list = list.where((r) {
+              final blob = [
+                r['full_name'],
+                r['subject'],
+                r['city'],
+                r['state'],
+                r['language'],
+              ].whereType<String>().join(' ').toLowerCase();
+              return blob.contains(q);
+            }).toList();
+          }
+        } catch (_) {
+          final q = needle.toLowerCase();
+          list = list.where((r) {
+            final blob = [
+              r['full_name'],
+              r['subject'],
+              r['city'],
+              r['state'],
+              r['language'],
+            ].whereType<String>().join(' ').toLowerCase();
+            return blob.contains(q);
+          }).toList();
+        }
+      }
+
+      if (list.isEmpty) return const [];
+
+      // Personalized match scores (Subject 40 / Exam 30 / City 15 / Language 15,
+      // redistributed when student fields missing).
+      final scoreByUser = <String, int>{};
+      final factorsByUser = <String, List<String>>{};
+      if (userId != null) {
+        try {
+          final scoreRows = await client.rpc(
+            'fn_teacher_suggestion_scores',
+            params: {
+              'p_student_id': userId,
+              'p_threshold': 0.35,
+            },
+          );
+          for (final raw
+              in List<Map<String, dynamic>>.from(scoreRows as List)) {
+            final tid = raw['teacher_user_id'] as String?;
+            if (tid == null) continue;
+            final ms = raw['match_score'];
+            scoreByUser[tid] = ms is num ? ms.round() : 0;
+            final factors = raw['matched_factors'];
+            if (factors is List) {
+              factorsByUser[tid] = factors
+                  .map((e) => e.toString())
+                  .where((e) => e.isNotEmpty)
+                  .toList();
+            }
+          }
+        } catch (_) {
+          // Migration not run — keep legacy soft ranking below.
+        }
+      }
+
+      int score(Map<String, dynamic> r) {
+        final uid = r['user_id'] as String?;
+        if (uid != null && scoreByUser.containsKey(uid)) {
+          // Primary: personalized 0–100. Tie-break with search similarity.
+          var s = scoreByUser[uid]! * 10;
+          final id = r['id'] as String?;
+          if (id != null && fuzzySim.containsKey(id)) {
+            s += (fuzzySim[id]! * 20).round();
+          }
+          if (r['is_suggested'] == true) s += 5;
+          return s;
+        }
+        // Guest / no RPC: light legacy prefs.
+        var s = 0;
+        final id = r['id'] as String?;
+        if (id != null && fuzzySim.containsKey(id)) {
+          s += (fuzzySim[id]! * 200).round();
+        }
+        final sub = (r['subject'] as String?)?.toLowerCase() ?? '';
+        final city = (r['city'] as String?)?.toLowerCase() ?? '';
+        final state = (r['state'] as String?)?.toLowerCase() ?? '';
+        if (prefSubject != null && sub.contains(prefSubject)) s += 100;
+        if (prefCity != null && prefCity.isNotEmpty && city == prefCity) s += 40;
+        if (prefState != null && prefState.isNotEmpty && state == prefState) {
+          s += 20;
+        }
+        if (r['is_suggested'] == true) s += 10;
+        return s;
+      }
+
+      list.sort((a, b) => score(b).compareTo(score(a)));
+
+      final teacherUserIds = list
+          .map((r) => r['user_id'] as String?)
+          .whereType<String>()
+          .toList();
+      final counts = <String, int>{};
+      final classIds = classList
+          .where((c) => teacherUserIds.contains(c['teacher_id']))
+          .map((c) => c['id'] as String)
+          .toList();
+      final teacherByClass = {
+        for (final c in classList)
+          if (c['id'] is String && c['teacher_id'] is String)
+            c['id'] as String: c['teacher_id'] as String,
+      };
+      if (classIds.isNotEmpty) {
+        try {
+          final mem = await client
+              .from('class_memberships')
+              .select('class_id')
+              .inFilter('class_id', classIds);
+          for (final m in List<Map<String, dynamic>>.from(mem as List)) {
+            final tid = teacherByClass[m['class_id']];
+            if (tid != null) counts[tid] = (counts[tid] ?? 0) + 1;
+          }
+        } catch (_) {}
+      }
+
+      final joinedTeacherUsers = <String>{};
+      if (userId != null) {
+        try {
+          final my = await client
+              .from('class_memberships')
+              .select('class_id')
+              .eq('student_id', userId);
+          final myClassIds = List<Map<String, dynamic>>.from(my as List)
+              .map((r) => r['class_id'] as String)
+              .toList();
+          if (myClassIds.isNotEmpty) {
+            final owned = await client
+                .from('class_folders')
+                .select('teacher_id')
+                .inFilter('id', myClassIds);
+            for (final r in List<Map<String, dynamic>>.from(owned as List)) {
+              joinedTeacherUsers.add(r['teacher_id'] as String);
+            }
+          }
+        } catch (_) {}
+      }
+
+      return list
+          .map((row) {
+            final uid = row['user_id'] as String?;
+            return SuggestedTeacherModel.fromMap(
+              row,
+              isJoined: uid != null && joinedTeacherUsers.contains(uid),
+              studentCount: uid == null ? null : counts[uid],
+              matchScore: uid == null ? null : scoreByUser[uid],
+              matchedFactors:
+                  uid == null ? const [] : (factorsByUser[uid] ?? const []),
+            );
+          })
+          .toList();
+    } catch (_) {
+      return emptyOrMock();
+    }
+  }
+
+  /// Prefer public group for Discover join/open; else newest any.
+  /// Returns null if teacher has no active Teacher plan (hidden from Discover).
+  Future<String?> fetchOpenGroupIdForTeacher(String teacherUserId) async {
+    try {
+      final active = await _activeTeacherPlanUserIds();
+      if (!active.contains(teacherUserId)) return null;
+
+      final client = SupabaseClient.instance.client;
+      final classes = await client
+          .from('class_folders')
+          .select('id, is_public, created_at')
+          .eq('teacher_id', teacherUserId)
+          .order('created_at', ascending: false);
+      final list = List<Map<String, dynamic>>.from(classes as List);
+      if (list.isEmpty) return null;
+      final public = list.where((c) => c['is_public'] == true).toList();
+      if (public.isNotEmpty) return public.first['id'] as String?;
+      return list.first['id'] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Join the teacher's open class (prefer public), then return full [GroupModel].
+  Future<GroupModel?> joinFirstOpenGroupForTeacher({
+    required String teacherProfileId,
+    String? teacherUserId,
+  }) async {
+    final userId = SupabaseClient.instance.currentUser?.id;
+    if (userId == null) {
+      throw const GroupMembershipException('Please log in');
+    }
+
+    final client = SupabaseClient.instance.client;
+    String? tid = teacherUserId;
+    if (tid == null || tid.isEmpty) {
+      final tp = await client
+          .from('teacher_profiles')
+          .select('user_id')
+          .eq('id', teacherProfileId)
+          .maybeSingle();
+      tid = tp?['user_id'] as String?;
+    }
+    if (tid == null) {
+      throw const GroupMembershipException('Teacher not found');
+    }
+
+    final classId = await fetchOpenGroupIdForTeacher(tid);
+    if (classId == null || classId.isEmpty) {
+      throw const GroupMembershipException(
+        'This teacher is not on Discover right now '
+        '(Teacher plan ₹2,999 must be active).',
+      );
+    }
+
+    try {
+      final raw = await client.rpc(
+        'fn_request_or_join_group',
+        params: {'p_class_id': classId},
+      );
+      String status = '';
+      if (raw is Map) {
+        status = (raw['status'] ?? '').toString();
+      } else if (raw is String) {
+        try {
+          final d = jsonDecode(raw);
+          if (d is Map) status = (d['status'] ?? '').toString();
+        } catch (_) {
+          status = raw;
+        }
+      }
+      if (status == 'pending') {
+        throw const GroupMembershipException(
+          'Join request sent. Waiting for teacher approval.',
+          isPendingApproval: true,
+        );
+      }
+      if (status != 'joined' && status != 'already_member') {
+        throw const GroupMembershipException('Could not join group');
+      }
+    } catch (e) {
+      if (e is GroupMembershipException) rethrow;
+      throw GroupMembershipException(
+        e.toString().contains('Group join limit')
+            ? 'Group join limit reached'
+            : 'Could not join: $e',
+        isJoinLimit: e.toString().contains('Group join limit'),
+      );
+    }
+
+    final full = await fetchGroupById(classId);
+    if (full != null) return full.copyWith(isJoined: true);
+    return GroupModel(
+      id: classId,
+      name: 'Group',
+      description: '',
+      teacher: TeacherProfileModel(
+        id: teacherProfileId,
+        userId: tid,
+        fullName: 'Teacher',
+        subject: '',
+        joinedSince: DateTime.now(),
+      ),
+      teacherUserId: tid,
+      createdAt: DateTime.now(),
+      isJoined: true,
+    );
+  }
+
+  /// Coupon lock / urgency for current user's membership in this group.
+  Future<Map<String, dynamic>?> fetchCouponMembershipStatus(String classId) async {
+    final userId = SupabaseClient.instance.currentUser?.id;
+    if (userId == null) return null;
+    try {
+      final res = await SupabaseClient.instance.client.rpc(
+        'fn_coupon_membership_status',
+        params: {
+          'p_student_id': userId,
+          'p_class_id': classId,
+        },
+      );
+      if (res is List && res.isNotEmpty) {
+        return Map<String, dynamic>.from(res.first as Map);
+      }
+      if (res is Map) return Map<String, dynamic>.from(res);
+      return null;
+    } catch (_) {
+      return null;
     }
   }
 
@@ -413,6 +1039,33 @@ class GroupsRepository {
     }
   }
 
+  /// Upload teacher avatar to Supabase Storage bucket `teacher-photos`,
+  /// return public URL. Path: `{userId}/avatar.jpg`.
+  /// Founder must create the bucket once — see FOUNDER_TEACHER_PROFILE_PHOTO.md.
+  Future<String> uploadTeacherProfilePhoto({
+    required Uint8List bytes,
+    String contentType = 'image/jpeg',
+    String extension = 'jpg',
+  }) async {
+    final userId = SupabaseClient.instance.currentUser?.id;
+    if (userId == null) {
+      throw StateError('Must be logged in to upload photo');
+    }
+    final client = SupabaseClient.instance.client;
+    final path = '$userId/avatar.$extension';
+    await client.storage.from('teacher-photos').uploadBinary(
+          path,
+          bytes,
+          fileOptions: FileOptions(
+            upsert: true,
+            contentType: contentType,
+          ),
+        );
+    final publicUrl = client.storage.from('teacher-photos').getPublicUrl(path);
+    // Cache-bust so Groups/Discover refresh the new image immediately.
+    return '$publicUrl?v=${DateTime.now().millisecondsSinceEpoch}';
+  }
+
   /// Persists the edit sheet's certificate list to `teacher_certificates`
   /// (title + review `status` only — Postgres metadata rule; `file_url`
   /// stays null until Phase 5 wires Cloudflare R2 upload). Simple
@@ -444,9 +1097,46 @@ class GroupsRepository {
     final client = SupabaseClient.instance.client;
     final rows = await client.from('teacher_profiles').select().inFilter('user_id', userIds);
     final list = List<Map<String, dynamic>>.from(rows as List);
-    return {
-      for (final row in list) row['user_id'] as String: TeacherProfileModel.fromMap(row),
-    };
+    final out = <String, TeacherProfileModel>{};
+
+    for (final row in list) {
+      final teacherId = row['id'] as String;
+      final userId = row['user_id'] as String;
+      final showCerts = row['show_certificates_on_profile'] == true;
+
+      var certificates = const <TeacherCertificateModel>[];
+      var achievements = const <TeacherAchievementModel>[];
+
+      // Certificates: only fetch when teacher opted to show (RLS also enforces).
+      if (showCerts) {
+        try {
+          final certRows = await client
+              .from('teacher_certificates')
+              .select()
+              .eq('teacher_id', teacherId);
+          certificates = List<Map<String, dynamic>>.from(certRows as List)
+              .map(TeacherCertificateModel.fromMap)
+              .toList();
+        } catch (_) {}
+      }
+
+      try {
+        final achievementRows = await client
+            .from('teacher_achievements')
+            .select()
+            .eq('teacher_id', teacherId);
+        achievements = List<Map<String, dynamic>>.from(achievementRows as List)
+            .map(TeacherAchievementModel.fromMap)
+            .toList();
+      } catch (_) {}
+
+      out[userId] = TeacherProfileModel.fromMap(
+        row,
+        certificates: certificates,
+        achievements: achievements,
+      );
+    }
+    return out;
   }
 
   Future<List<Map<String, dynamic>>> _fetchMemberships(List<String> classIds) async {
@@ -467,7 +1157,17 @@ class GroupsRepository {
         .select()
         .inFilter('class_id', classIds)
         .order('shared_at', ascending: false);
-    return List<Map<String, dynamic>>.from(rows as List);
+    final list = List<Map<String, dynamic>>.from(rows as List);
+    // Pinned first, then newest (WhatsApp-channel feel).
+    list.sort((a, b) {
+      final ap = a['is_pinned'] == true;
+      final bp = b['is_pinned'] == true;
+      if (ap != bp) return ap ? -1 : 1;
+      final as = a['shared_at']?.toString() ?? '';
+      final bs = b['shared_at']?.toString() ?? '';
+      return bs.compareTo(as);
+    });
+    return list;
   }
 
   /// Minimal fallback when a group's teacher has no `teacher_profiles` row
@@ -633,7 +1333,7 @@ class GroupsRepository {
       studentsCount: 95,
       sharedLecturesCount: 16,
       createdAt: DateTime(2024, 7, 5),
-      rules: const ['No spamming', 'Ask doubts using Ask AI, not group chat'],
+      rules: const ['No spamming', 'Read shared notes · use Quiz when shared'],
       allowedContent: const ['Notes', 'Quiz'],
       recentSharedItems: [
         GroupSharedItem(

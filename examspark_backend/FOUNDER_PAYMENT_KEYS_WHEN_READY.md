@@ -19,7 +19,7 @@ RAZORPAY_WEBHOOK_SECRET=          # webhook setup ke baad
 ### Google Play (Android)
 
 ```env
-GOOGLE_PLAY_PACKAGE_NAME=com.example.examspark_frontend
+GOOGLE_PLAY_PACKAGE_NAME=com.sonialabs.sonaxia
 GOOGLE_PLAY_SERVICE_ACCOUNT_JSON=C:\secrets\examspark-play.json
 ```
 

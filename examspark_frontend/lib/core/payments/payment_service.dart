@@ -8,13 +8,15 @@ import 'package:examspark_frontend/core/payments/gateways/razorpay_gateway.dart'
 import 'package:examspark_frontend/core/payments/interfaces/payment_gateway.dart';
 import 'package:examspark_frontend/core/payments/models/payment_order.dart';
 import 'package:examspark_frontend/core/payments/models/payment_result.dart';
+import 'package:examspark_frontend/core/payments/payment_repository.dart';
 import 'package:examspark_frontend/core/payments/play_products.dart';
 import 'package:examspark_frontend/core/payments/subscription_plans.dart';
 
-/// Payment orchestrator — no fake success.
+/// Payment orchestrator — no fake success (except explicit IS_TESTING mock).
 ///
 /// Web: Razorpay Checkout → FastAPI verify.
 /// Android: Google Play Billing → FastAPI verify (never Razorpay for Play subs).
+/// Dev: when [AppConfig.isTesting], skips gateways → FastAPI mock +50 credits.
 class PaymentService {
   PaymentService._();
 
@@ -57,6 +59,13 @@ class PaymentService {
       return PaymentResult.notConfigured('FASTAPI_BASE_URL');
     }
 
+    if (AppConfig.isTesting) {
+      return _mockDevPurchase(
+        kind: 'subscription',
+        planId: plan.id,
+      );
+    }
+
     if (kIsWeb) {
       return _purchaseViaRazorpay(
         planId: plan.id,
@@ -81,6 +90,13 @@ class PaymentService {
       return PaymentResult.notConfigured('FASTAPI_BASE_URL');
     }
 
+    if (AppConfig.isTesting) {
+      return _mockDevPurchase(
+        kind: 'credit_pack',
+        creditPackId: pack.id,
+      );
+    }
+
     if (kIsWeb) {
       return _purchaseViaRazorpay(
         planId: 'free',
@@ -97,6 +113,29 @@ class PaymentService {
       creditPackId: pack.id,
       playProductId: PlayProducts.productForPack(pack.id),
     );
+  }
+
+  Future<PaymentResult> _mockDevPurchase({
+    required String kind,
+    String? planId,
+    String? creditPackId,
+  }) async {
+    try {
+      final data = await PaymentRepository.instance.mockDevPurchase(
+        kind: kind,
+        planId: planId,
+        creditPackId: creditPackId,
+      );
+      final credits = data['credits_allocated'];
+      return PaymentResult(
+        status: PaymentResultStatus.verified,
+        message: (data['message'] as String?) ??
+            'Dev mock purchase — credits added',
+        creditsAllocated: credits is int ? credits : 50,
+      );
+    } catch (e) {
+      return PaymentResult.failed(e.toString());
+    }
   }
 
   Future<PaymentResult> _purchaseViaRazorpay({

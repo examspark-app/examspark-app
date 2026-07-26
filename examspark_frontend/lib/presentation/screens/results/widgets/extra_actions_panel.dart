@@ -97,7 +97,7 @@ class ExtraActionsPanel extends StatelessWidget {
             width: double.infinity,
             child: _ActionButton(
               icon: Icons.chat_bubble_outline,
-              label: 'Ask with RAG',
+              label: 'Ask AI',
               cost: CreditCosts.ragQuery,
               onTap: isLoading ? null : () => onAction?.call('rag'),
               isFullWidth: true,

@@ -9,6 +9,7 @@ import httpx
 
 from app.config import AIConfig
 from app.constants.language_hint import notes_language_user_line
+from app.constants.chip_content_intent import CHIP_CONTENT_INTENT_RULE
 from app.constants.visual_notes_prompt import (
     MEDIUM_NOTES_SYSTEM_EXTENSION,
     NOTES_SYSTEM_EXTENSION,
@@ -222,6 +223,7 @@ async def generate_notes(
 
 _FLASHCARDS_SYSTEM = (
     STUDY_CONTENT_LANGUAGE_RULE
+    + CHIP_CONTENT_INTENT_RULE
     + "\nGenerate study flashcards from the lecture content. Return ONLY JSON:\n"
     '{ "cards": [ { "front": "question or term", "back": "answer or definition" } ] }\n'
     "Create 10-15 cards covering the main concepts. Raw JSON only."
@@ -229,16 +231,21 @@ _FLASHCARDS_SYSTEM = (
 
 _QUIZ_SYSTEM = (
     STUDY_CONTENT_LANGUAGE_RULE
+    + CHIP_CONTENT_INTENT_RULE
     + "\nGenerate exactly 20 multiple-choice questions from the lecture content. "
     "Return ONLY JSON:\n"
     '{ "questions": [ { "question": "...", "options": ["opt A text", "opt B", "opt C", "opt D"], '
     '"correctAnswer": "A", "explanation": "brief why" } ] }\n'
     "correctAnswer must be a single letter A, B, C, or D matching the options index. "
-    "Raw JSON only."
+    "If EXAM FOCUS lines are present, prioritize MORE questions on high-weightage "
+    "chapters/topics (weightage 5 = highest exam probability). "
+    "Create ORIGINAL practice MCQs only — never copy or paraphrase copyrighted "
+    "exam paper questions, options, or answer keys. Raw JSON only."
 )
 
 _REVISION_SYSTEM = (
     STUDY_CONTENT_LANGUAGE_RULE
+    + CHIP_CONTENT_INTENT_RULE
     + "\nGenerate a comprehensive exam-focused revision sheet from the lecture content. "
     "Return ONLY JSON:\n"
     '{ "revisionSheet": "markdown with ## headings, bullet points, key formulas (LaTeX $$...$$), and summary", '
@@ -249,6 +256,7 @@ _REVISION_SYSTEM = (
 
 _FIVE_MIN_REVISION_SYSTEM = (
     STUDY_CONTENT_LANGUAGE_RULE
+    + CHIP_CONTENT_INTENT_RULE
     + "\nGenerate a SHORT 5-minute revision recap from the lecture content — "
     "something a student can skim in about five minutes before an exam. "
     "Return ONLY JSON:\n"
@@ -261,17 +269,21 @@ _FIVE_MIN_REVISION_SYSTEM = (
 
 _IMPORTANT_QUESTIONS_SYSTEM = (
     STUDY_CONTENT_LANGUAGE_RULE
+    + CHIP_CONTENT_INTENT_RULE
     + "\nGenerate important exam-style questions from the study content. Return ONLY JSON:\n"
     '{ "questions": [ { "question": "...", "type": "short_answer|long_answer|numerical", '
     '"marks": 2, "hint": "brief study hint without giving the full answer" } ] }\n'
     "Create exactly 8 questions (easy→hard). "
-    "If EXAM FOCUS lines are present, bias MORE questions toward high weightage chapters "
-    "(weightage 5 = highest chance). Metadata tags only — never invent or quote original "
-    "exam paper question text, options, or answer keys. Raw JSON only."
+    "TEACHER QUALITY: Prefer high-probability exam topics first — if EXAM FOCUS / "
+    "weightage lines exist, put most questions on those chapters (weightage 5 first). "
+    "Also prefer concepts that appear strongly in the lecture notes (RAG-style focus). "
+    "Metadata tags only — never invent or quote original exam paper question text, "
+    "options, or answer keys. Raw JSON only."
 )
 
 _MIND_MAP_SYSTEM = (
     STUDY_CONTENT_LANGUAGE_RULE
+    + CHIP_CONTENT_INTENT_RULE
     + "\nGenerate a hierarchical mind map from the lecture content. Return ONLY JSON:\n"
     '{ "title": "topic title", "root": { "label": "central concept", "children": [ '
     '{ "label": "branch", "children": [ { "label": "leaf detail", "children": [] } ] } ] } }\n'

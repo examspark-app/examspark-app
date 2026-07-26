@@ -98,7 +98,7 @@ Phase 4 complete hone ke **baad**, jab payments / notifications wire hon:
 | Razorpay payments | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` | Payment setup step |
 | PhonePe (optional) | `PHONEPE_*` | Jab chuno |
 | Google Play billing | `GOOGLE_PLAY_*` | Android subscription step |
-| Push notifications | `FIREBASE_*` | FCM setup step |
+| Push notifications | `FIREBASE_SERVICE_ACCOUNT_JSON` (+ optional `FIREBASE_PROJECT_ID`) | FCM HTTP v1 — [`FOUNDER_FCM_SETUP.md`](examspark_backend/FOUNDER_FCM_SETUP.md) |
 | Email / OTP | `RESEND_API_KEY` | Email feature step |
 | Analytics | `POSTHOG_*` | Analytics step |
 | Backend security | `JWT_SECRET`, `ENCRYPTION_KEY` | Backend deploy (random generate) |

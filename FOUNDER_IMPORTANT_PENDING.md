@@ -1,7 +1,8 @@
 # ExamSpark — Important Pending Work (Founder)
 
-> **Saved:** Jul 15, 2026 · **Updated:** Jul 16, 2026  
-> **Purpose:** Single list of important unfinished work. Not a grab-bag polish queue.
+> **Saved:** Jul 15, 2026 · **Updated:** Jul 22, 2026 night  
+> **Purpose:** Single list of important unfinished work. Not a grab-bag polish queue.  
+> **Backlog saved:** Founder FUTURE work order → [`FOUNDER_PENDING_LOCKED.md`](examspark_backend/FOUNDER_PENDING_LOCKED.md) §E (freeze; wait for `start …`).
 
 **Rule:** Jo founder **pass / OK** keh chuka — **dobara setup/SQL/smoke re-nag mat karo.**
 
@@ -15,7 +16,7 @@
 | **NEXT (SQL + smoke)** | [`FOUNDER_PENDING_LOCKED.md`](examspark_backend/FOUNDER_PENDING_LOCKED.md) + [`FOUNDER_NEXT_SESSION.md`](examspark_backend/FOUNDER_NEXT_SESSION.md) |
 | **Later (founder ~15 min)** | Realtime 3 tables + trim SQL |
 | **⏸ paused** | Session 6 Razorpay — jab Test keys ready |
-| **Next coding (bolo tab)** | `start Tavily` · `start Railway deploy guide` · Teacher lane (PYQs + Phase 4D **pass locked** Jul 18) |
+| **Next coding (bolo tab)** | Freeze ON — queue §E: Groups → Firebase → Settings → Share → UI polish → careful cleanup · legal pages; Admin **later only**. Say `start [one item]`. Also: `start Tavily` · `start Railway deploy guide` (**includes AI kill switch + rate limit — deploy time only**) |
 
 **Credit rules:** [`FOUNDER_CREDIT_RULES_AS_SHIPPED.md`](FOUNDER_CREDIT_RULES_AS_SHIPPED.md)
 

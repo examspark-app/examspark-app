@@ -9,10 +9,13 @@ import 'package:examspark_frontend/core/config/app_config.dart';
 import 'package:examspark_frontend/core/constants/ai_answer_meta.dart';
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
 import 'package:examspark_frontend/core/constants/plan_tier_gating.dart';
+import 'package:examspark_frontend/core/constants/student_copy.dart';
 import 'package:examspark_frontend/core/errors/lecture_user_message.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/home_ask_bridge.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/services/notification_service.dart';
+import 'package:examspark_frontend/core/services/notification_inbox_controller.dart';
 import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/core/services/ui_session_store.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
@@ -27,7 +30,9 @@ import 'package:examspark_frontend/presentation/widgets/home/home_study_chip_bar
 import 'package:examspark_frontend/presentation/widgets/home/web_camera_capture_export.dart';
 import 'package:examspark_frontend/presentation/widgets/lecture_card.dart';
 import 'package:examspark_frontend/presentation/widgets/study_workspace/workspace_reading_utils.dart';
+import 'package:examspark_frontend/presentation/screens/search/search_overlay_screen.dart';
 import 'package:examspark_frontend/presentation/widgets/youtube_link_dialog.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 typedef OpenWorkspace = void Function(String lectureId, String title, String? subject);
 
@@ -118,6 +123,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   int _creditsBalance = 0;
   String _userName = 'User';
   String _planTier = 'free';
+  bool _isTeacher = false;
   List<Map<String, dynamic>> _recentLectures = [];
   final List<_ChatBubble> _messages = [];
   final ScrollController _scrollController = ScrollController();
@@ -132,10 +138,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   Timer? _persistDebounce;
   bool _restoredDisk = false;
 
-  bool get _audioUnlocked => PlanTierGating.isFeatureUnlocked(
-        currentPlanId: _planTier,
-        feature: GatedFeature.recordLecture,
-      );
+  bool get _audioUnlocked => _isTeacher
+      ? PlanTierGating.isTeacherLiveRecordUnlocked(_planTier)
+      : PlanTierGating.isStudentAudioUnlocked(_planTier);
 
   @override
   void initState() {
@@ -148,6 +153,8 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     }
     SessionLiveSync.instance.addListener(_onSessionLive);
     HomeAskBridge.instance.addListener(_onHomeAskBridge);
+    NotificationInboxController.instance.addListener(_onInboxChanged);
+    unawaited(NotificationInboxController.instance.start());
     _loadUserData();
     _applySessionLive();
     // In case Ask AI was queued before Home mounted.
@@ -155,6 +162,10 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       _restoreChatFromDisk();
       _onHomeAskBridge();
     });
+  }
+
+  void _onInboxChanged() {
+    if (mounted) setState(() {});
   }
 
   @override
@@ -267,7 +278,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 
     if (_creditsBalance < CreditCosts.askAiNormal) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(
           content: Text(
             'Need at least ${CreditCosts.askAiNormal} credits (Home AI).',
@@ -289,6 +300,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     HomeAskBridge.instance.removeListener(_onHomeAskBridge);
     SessionLiveSync.instance.removeListener(_onSessionLive);
+    NotificationInboxController.instance.removeListener(_onInboxChanged);
     _scrollController.dispose();
     super.dispose();
   }
@@ -344,6 +356,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         _creditsBalance = profile?['credits_balance'] as int? ?? 0;
         _userName = (profile?['full_name'] as String?) ?? user.email ?? 'User';
         _planTier = plan;
+        _isTeacher = profile?['role'] == 'teacher';
         _recentLectures = lectures.take(5).toList();
         _isRefreshing = false;
       });
@@ -445,12 +458,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     Uint8List? retryVisionBytes,
     String? retryVisionFilename,
   }) {
-    var raw = error.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
-    if (raw.trim().toLowerCase() == 'not found') {
-      raw =
-          'Home AI API not found. Restart the FastAPI server, then try again.';
-    }
-    final msg = lectureUserMessage(raw);
+    final msg = studentSafeError(error, fallback: StudentCopy.homeFailed);
     setState(() {
       _messages.add(
         _ChatBubble(
@@ -657,7 +665,13 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       _showAudioLockedSheet();
       return;
     }
-    Navigator.pushNamed(context, '/recorder');
+    Navigator.pushNamed(
+      context,
+      '/recorder',
+      arguments: {
+        if (_isTeacher) 'teacherRecordOnly': true,
+      },
+    );
   }
 
   void _handleAttach() {
@@ -668,6 +682,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       useSafeArea: true,
       builder: (sheetContext) => _UploadOptionsSheet(
         audioLocked: !_audioUnlocked,
+        hideAudioUpload: _isTeacher,
         onAudioLocked: () {
           Navigator.pop(sheetContext);
           _showAudioLockedSheet();
@@ -682,10 +697,24 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         },
         onOptionSelected: (inputMethod) {
           Navigator.pop(sheetContext);
+          if (_isTeacher && inputMethod == 'uploadAudio') {
+            Navigator.pushNamed(
+              context,
+              '/recorder',
+              arguments: {
+                'initialInputMethod': 'record',
+                'teacherRecordOnly': true,
+              },
+            );
+            return;
+          }
           Navigator.pushNamed(
             context,
             '/recorder',
-            arguments: {'initialInputMethod': inputMethod},
+            arguments: {
+              'initialInputMethod': inputMethod,
+              if (_isTeacher) 'teacherRecordOnly': true,
+            },
           );
         },
       ),
@@ -695,7 +724,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   Future<void> _pickHomeVisionImage({required bool fromCamera}) async {
     if (!AppConfig.isApiConfigured) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         const SnackBar(content: Text('API not configured — see API_SETUP.md')),
       );
       return;
@@ -705,7 +734,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       feature: GatedFeature.diagramAnalysis,
     )) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(
           content: Text(PlanTierGating.lockMessage(GatedFeature.diagramAnalysis)),
         ),
@@ -714,7 +743,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     }
     if (_creditsBalance < CreditCosts.homeAiVision) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(
           content: Text(
             'Need ${CreditCosts.homeAiVision} credits for Photo / Image Ask.',
@@ -769,14 +798,14 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 
       if (bytes == null || bytes.isEmpty) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           const SnackBar(content: Text('Could not read image. Try again.')),
         );
         return;
       }
       if (bytes.length > 8 * 1024 * 1024) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           const SnackBar(content: Text('Image too large (max 8 MB).')),
         );
         return;
@@ -785,7 +814,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       await _sendHomeVision(bytes, filename);
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(
           content: Text(
             fromCamera
@@ -864,7 +893,11 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                     ),
               ),
               const SizedBox(height: 8),
-              Text(PlanTierGating.lockMessage(GatedFeature.recordLecture)),
+              Text(
+                _isTeacher
+                    ? PlanTierGating.teacherLiveRecordLockMessage()
+                    : PlanTierGating.lockMessage(GatedFeature.recordLecture),
+              ),
               const SizedBox(height: 20),
               SizedBox(
                 width: double.infinity,
@@ -873,7 +906,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                     Navigator.pop(context);
                     Navigator.pushNamed(context, '/subscription');
                   },
-                  child: const Text('View Plans'),
+                  child: Text(
+                    _isTeacher ? 'Buy Teacher plan — ₹2,999' : 'View Plans',
+                  ),
                 ),
               ),
               TextButton(
@@ -897,7 +932,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   Future<void> _startYoutubeNotes(String url) async {
     if (!AppConfig.isApiConfigured) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         const SnackBar(content: Text('API not configured — see API_SETUP.md')),
       );
       return;
@@ -908,7 +943,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       feature: GatedFeature.youtubeLink,
     )) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(content: Text(PlanTierGating.lockMessage(GatedFeature.youtubeLink))),
       );
       return;
@@ -917,7 +952,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     // Soft check: min YouTube band. Server charges 10/20/40 after duration.
     if (_creditsBalance < CreditCosts.youtubeUpTo30Min) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(
           content: Text(
             'Need at least ${CreditCosts.youtubeUpTo30Min} credits for YouTube Notes '
@@ -955,7 +990,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       if (lectureId != null) {
         await LectureService.instance.markErrorUnlessDone(lectureId, msg);
       } else if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           SnackBar(content: Text(lectureUserMessage(e))),
         );
       }
@@ -1007,7 +1042,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       if (!mounted) return;
       final msgs = data['messages'];
       if (msgs is! List) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           const SnackBar(content: Text('Session has no messages.')),
         );
         return;
@@ -1087,14 +1122,14 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       await _persistChatNow();
       _scrollToBottom();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         const SnackBar(
           content: Text('Session restored · 0 credits · no AI call'),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(
           content: Text(
             e.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''),
@@ -1111,11 +1146,22 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         showLogo: true,
         creditsBalance: _creditsBalance,
         userName: _userName,
-        onSearchTap: () => _showComingSoon('Search'),
-        onNotificationTap: () => _showComingSoon('Notifications'),
+        onSearchTap: () => showAppSearchOverlay(
+          context,
+          onOpenLecture: widget.onOpenWorkspace,
+        ),
+        onNotificationTap: _openNotifications,
+        notificationUnreadCount:
+            NotificationInboxController.instance.unreadCount,
         onCreditsTap: () => Navigator.pushNamed(context, '/credits/history'),
         onProfileTap: () => widget.onGoToTab(4),
         trailing: [
+          if (_isTeacher)
+            IconButton(
+              icon: const Icon(Icons.school_outlined),
+              tooltip: 'Teacher Dashboard',
+              onPressed: () => Navigator.pushNamed(context, '/teacher'),
+            ),
           IconButton(
             icon: const Icon(Icons.history_rounded),
             tooltip: 'Study History',
@@ -1308,7 +1354,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       messenger.showSnackBar(
         const SnackBar(
           content: Text(
-            'Phase 4C SQL not ready — run home_ai_phase4c_migration.sql, restart backend, ask again.',
+            'Study tools aren’t ready yet. Ask a new question, then try again.',
           ),
         ),
       );
@@ -1386,7 +1432,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString().replaceFirst('Exception: ', '');
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(content: Text(msg)),
       );
     }
@@ -1578,8 +1624,139 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     );
   }
 
+  Future<void> _openNotifications() async {
+    await NotificationInboxController.instance.refresh(showDesktopIfHidden: false);
+    final items = await NotificationService.instance.listNotifications();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return SafeArea(
+          child: SizedBox(
+            height: MediaQuery.of(ctx).size.height * 0.65,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Padding(
+                  padding: EdgeInsets.all(16),
+                  child: Text(
+                    'Notifications',
+                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+                  ),
+                ),
+                const Divider(height: 1),
+                Expanded(
+                  child: items.isEmpty
+                      ? const Center(child: Text('No notifications yet'))
+                      : ListView.separated(
+                          itemCount: items.length,
+                          separatorBuilder: (_, __) => const Divider(height: 1),
+                          itemBuilder: (_, i) {
+                            final n = items[i];
+                            final title = n['title'] as String? ?? 'Group';
+                            final body = n['body'] as String? ?? '';
+                            final classId = n['class_id'] as String?;
+                            final id = n['id'] as String?;
+                            final unread = n['read_at'] == null;
+                            return ListTile(
+                              leading: Icon(
+                                () {
+                                  final et = n['event_type'] as String? ?? '';
+                                  if (et.startsWith('join_')) {
+                                    return Icons.how_to_reg_outlined;
+                                  }
+                                  if (et == 'payment_success' ||
+                                      et == 'payment_failed') {
+                                    return Icons.payments_outlined;
+                                  }
+                                  if (et.startsWith('expiring_') ||
+                                      et == 'expired') {
+                                    return Icons.event_busy_outlined;
+                                  }
+                                  return Icons.groups_outlined;
+                                }(),
+                                color: unread ? AppTheme.accentColor : null,
+                              ),
+                              title: Text(
+                                title,
+                                style: TextStyle(
+                                  fontWeight:
+                                      unread ? FontWeight.w600 : FontWeight.w400,
+                                ),
+                              ),
+                              subtitle: Text(
+                                body,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              onTap: () async {
+                                if (id != null) {
+                                  await NotificationService.instance.markRead(id);
+                                  await NotificationInboxController.instance
+                                      .markReadLocally(id);
+                                }
+                                if (!ctx.mounted) return;
+                                Navigator.pop(ctx);
+                                if (classId == null || classId.isEmpty) {
+                                  final eventType =
+                                      n['event_type'] as String? ?? '';
+                                  if (eventType.startsWith('expiring_') ||
+                                      eventType == 'expired' ||
+                                      eventType == 'payment_success' ||
+                                      eventType == 'payment_failed') {
+                                    Navigator.pushNamed(
+                                      context,
+                                      '/subscription',
+                                    );
+                                  }
+                                  return;
+                                }
+                                final eventType =
+                                    n['event_type'] as String? ?? '';
+                                if (eventType == 'join_pending_teacher') {
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/group_dashboard',
+                                    arguments: {
+                                      'classId': classId,
+                                      'name': title,
+                                    },
+                                  );
+                                } else if (eventType.startsWith('expiring_') ||
+                                    eventType == 'expired' ||
+                                    eventType == 'payment_success' ||
+                                    eventType == 'payment_failed') {
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/subscription',
+                                  );
+                                } else {
+                                  Navigator.pushNamed(
+                                    context,
+                                    '/group_info',
+                                    arguments: {'groupId': classId},
+                                  );
+                                }
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+    if (mounted) {
+      await NotificationInboxController.instance
+          .refresh(showDesktopIfHidden: false);
+    }
+  }
+
   void _showComingSoon(String feature) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppToast.showSnackBar(context, 
       SnackBar(content: Text('$feature — coming soon')),
     );
   }
@@ -1594,6 +1771,8 @@ class _UploadOptionsSheet extends StatelessWidget {
   final VoidCallback onHomeVisionGallery;
   final bool audioLocked;
   final VoidCallback? onAudioLocked;
+  /// Teachers: no audio-file upload into lecture pipeline.
+  final bool hideAudioUpload;
 
   const _UploadOptionsSheet({
     required this.onOptionSelected,
@@ -1601,6 +1780,7 @@ class _UploadOptionsSheet extends StatelessWidget {
     required this.onHomeVisionGallery,
     this.audioLocked = false,
     this.onAudioLocked,
+    this.hideAudioUpload = false,
   });
 
   @override
@@ -1667,13 +1847,14 @@ class _UploadOptionsSheet extends StatelessWidget {
               'uploadDocument',
               subtitle: 'Creates Notes in Study Workspace',
             ),
-            _option(
-              context,
-              Icons.mic_outlined,
-              'Audio File',
-              'uploadAudio',
-              locked: audioLocked,
-            ),
+            if (!hideAudioUpload)
+              _option(
+                context,
+                Icons.mic_outlined,
+                'Audio File',
+                'uploadAudio',
+                locked: audioLocked,
+              ),
           ],
         ),
       ),

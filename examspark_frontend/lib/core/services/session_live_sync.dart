@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart'
     hide SupabaseClient;
 import 'package:examspark_frontend/core/network/supabase_client.dart';
+import 'package:examspark_frontend/core/services/notification_service.dart';
 
 // #region agent log
 void _agentLog(String hypothesisId, String location, String message, Map<String, Object?> data) {
@@ -72,6 +73,9 @@ class SessionLiveSync extends ChangeNotifier with WidgetsBindingObserver {
     }
     await refreshAll();
     _subscribe(userId);
+    // Soft: subscription expiry catch-up (7/3/1 day + expired).
+    // ignore: unawaited_futures
+    NotificationService.instance.checkSubscriptionExpiry();
   }
 
   Future<void> stop() async {

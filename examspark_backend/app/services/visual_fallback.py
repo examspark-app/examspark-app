@@ -1,14 +1,21 @@
 """Visual safety net when the model skips <<VISUAL_JSON>>.
 
 Only emits real educational diagrams — never a fake "Concept / Key relation" stub.
+Founder Jul 26: Home/Ask — diagram only when student asks (not every answer).
 """
 from __future__ import annotations
 
 import re
 
 _VISUAL_WORDS = re.compile(
-    r"\b(graph|diagram|parabola|timeline|flowchart|mind\s*map|"
-    r"process\s*flow|draw|plot|visual|figure|sketch)\b",
+    r"\b("
+    r"graph|diagram|parabola|timeline|flowchart|mind\s*map|"
+    r"process\s*flow|draw|plot|visual|figure|sketch|"
+    r"show\s+(me\s+)?(a\s+)?(diagram|graph|figure|flowchart)|"
+    r"make\s+(a\s+)?(diagram|graph|figure)|"
+    r"diagram\s+(do|bana|banao)|"
+    r"graph\s+(do|bana|banao)"
+    r")\b",
     re.IGNORECASE,
 )
 
@@ -26,33 +33,18 @@ _WATER_CYCLE = re.compile(r"water\s*cycle", re.IGNORECASE)
 
 
 def wants_visual(query: str) -> bool:
-    """True when a diagram clearly helps — keywords OR known school topics."""
+    """True only when the student asks for a visual — not topic auto-trigger."""
     q = query or ""
-    if _VISUAL_WORDS.search(q):
-        return True
-    # Topic auto-visual (no need to say "diagram")
-    if _PHOTOSYNTHESIS.search(q) or _WATER_CYCLE.search(q):
-        return True
-    if re.search(
-        r"\b(newton|cell\s*division|mitosis|meiosis|water\s*cycle|"
-        r"digestive|respiration|food\s*chain|circuit|atom|"
-        r"periodic\s*table|blood\s*flow|heart)\b",
-        q,
-        re.IGNORECASE,
-    ):
-        return True
-    return False
+    return bool(_VISUAL_WORDS.search(q))
 
 
 def visual_reminder_user_line(query: str) -> str:
-    """Append to Home/Ask user message so visual JSON is hard to skip."""
+    """Append to Home/Ask user message so visual JSON is hard to skip when needed."""
     if not wants_visual(query):
         return (
-            "After the markdown answer, if a graph/diagram/timeline would clearly "
-            "help understanding, append on its own line: <<VISUAL_JSON>> then one "
-            "compact JSON object. Use explicit * in graph functions (5*x). "
-            "Diagram content must be topic-specific — never placeholder labels "
-            "like Concept / Key relation / Result / Direct Answer / Easy Explanation."
+            "DIAGRAM RULE: Do NOT add <<VISUAL_JSON>> or any diagram/graph for this "
+            "question. Text answer only — unless the student explicitly asked for a "
+            "diagram/graph/figure."
         )
     return (
         "VISUAL REQUIRED for this question. After the markdown answer, on its own "
@@ -68,10 +60,13 @@ def visual_reminder_user_line(query: str) -> str:
 
 
 def fallback_visual_payload(query: str, answer: str = "") -> dict | None:
-    """Build a real visual when topic is known. Never invent a generic stub.
+    """Build a real visual ONLY when the student asked for one.
 
-    Runs for known topics even when the user did not type 'diagram'.
+    Never invent a generic stub. Never auto-attach from topic alone.
     """
+    if not wants_visual(query):
+        return None
+
     text = f"{query}\n{answer}"
     fn = _extract_quadratic_function(text)
     if fn is not None:
@@ -89,11 +84,9 @@ def fallback_visual_payload(query: str, answer: str = "") -> dict | None:
     if topic is not None:
         return topic
 
-    # Only parse arrows from answer when user/topic asked for visual
-    if wants_visual(query):
-        from_answer = _diagram_from_answer_arrows(answer)
-        if from_answer is not None:
-            return from_answer
+    from_answer = _diagram_from_answer_arrows(answer)
+    if from_answer is not None:
+        return from_answer
 
     return None
 
@@ -151,7 +144,7 @@ def _topic_process_diagram(query: str, answer: str) -> dict | None:
 
 def _diagram_from_answer_arrows(answer: str) -> dict | None:
     """If the model already wrote A → B → C in the answer, surface it as a diagram."""
-    if not answer or "→" not in answer and "->" not in answer:
+    if not answer or ("→" not in answer and "->" not in answer):
         return None
     lines = []
     for raw in answer.splitlines():

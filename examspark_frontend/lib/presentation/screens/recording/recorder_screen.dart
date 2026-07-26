@@ -1,17 +1,18 @@
 import 'dart:async';
 import 'dart:typed_data';
 
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show SystemSound, SystemSoundType, HapticFeedback;
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
+import 'package:examspark_frontend/core/constants/custom_field_option.dart';
 import 'package:examspark_frontend/core/constants/plan_tier_gating.dart';
 import 'package:examspark_frontend/core/constants/subjects.dart';
 import 'package:examspark_frontend/core/errors/lecture_user_message.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/services/recording_alert_sound.dart';
 import 'package:examspark_frontend/core/services/recording_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// Recording flow: subject/topic + planned duration → record / upload
 ///
@@ -30,7 +31,16 @@ class RecorderScreen extends StatefulWidget {
   /// Matches [InputMethod].name ('record' / 'uploadAudio' / 'uploadDocument').
   final String? initialInputMethod;
 
-  const RecorderScreen({super.key, this.subject, this.topic, this.initialInputMethod});
+  /// Teachers: live Record only (no audio upload) — authentic group content.
+  final bool teacherRecordOnly;
+
+  const RecorderScreen({
+    super.key,
+    this.subject,
+    this.topic,
+    this.initialInputMethod,
+    this.teacherRecordOnly = false,
+  });
 
   @override
   State<RecorderScreen> createState() => _RecorderScreenState();
@@ -45,6 +55,8 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
   String? _recordingPath;
   /// null = still loading plan; false = Record + Upload Audio locked.
   bool? _audioUnlocked;
+  /// Teachers cannot upload audio into the lecture pipeline (live record only).
+  bool _teacherRecordOnly = false;
 
   /// Planned duration bucket in minutes, chosen on the Setup screen —
   /// founder rule: warn (sound + banner) once this is reached, never
@@ -55,6 +67,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
   /// Subject + topic collected on setup (merged from old Recording Setup page).
   final _setupFormKey = GlobalKey<FormState>();
   final _topicController = TextEditingController();
+  final _customSubjectController = TextEditingController();
   String? _selectedSubject;
 
   /// Set when a call/app-switch interrupts an active recording — the
@@ -76,8 +89,11 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
           _selectedInputMethod == InputMethod.uploadAudio);
 
   String? get _effectiveSubject {
-    final s = _selectedSubject?.trim();
-    if (s != null && s.isNotEmpty) return s;
+    final resolved = CustomFieldOption.resolve(
+      _selectedSubject,
+      _customSubjectController.text,
+    );
+    if (resolved != null && resolved.isNotEmpty) return resolved;
     final w = widget.subject?.trim();
     if (w != null && w.isNotEmpty) return w;
     return null;
@@ -103,15 +119,46 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
     }
     final incomingSubject = widget.subject?.trim();
     if (incomingSubject != null && incomingSubject.isNotEmpty) {
-      _selectedSubject = kSubjectOptions.contains(incomingSubject)
-          ? incomingSubject
-          : 'Other';
+      if (kSubjectOptions.contains(incomingSubject)) {
+        _selectedSubject = incomingSubject;
+      } else {
+        _selectedSubject = CustomFieldOption.label;
+        _customSubjectController.text = incomingSubject;
+      }
     }
     final incomingTopic = widget.topic?.trim();
     if (incomingTopic != null && incomingTopic.isNotEmpty) {
       _topicController.text = incomingTopic;
     }
     _loadAudioUnlock();
+    _loadTeacherRecordOnly();
+  }
+
+  Future<void> _loadTeacherRecordOnly() async {
+    if (widget.teacherRecordOnly) {
+      if (mounted) {
+        setState(() {
+          _teacherRecordOnly = true;
+          _selectedInputMethod = InputMethod.record;
+        });
+      }
+      return;
+    }
+    final userId = SupabaseClient.instance.currentUser?.id;
+    if (userId == null) return;
+    try {
+      final profile = await SupabaseClient.instance.getUserProfile(userId);
+      final isTeacher = profile?['role'] == 'teacher';
+      if (!mounted) return;
+      if (isTeacher) {
+        setState(() {
+          _teacherRecordOnly = true;
+          if (_selectedInputMethod == InputMethod.uploadAudio) {
+            _selectedInputMethod = InputMethod.record;
+          }
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _loadAudioUnlock() async {
@@ -121,14 +168,29 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
       return;
     }
     try {
+      // Teacher live Record uses Teacher ₹2999 only — not student ₹499 rank.
+      var teacherOnly = widget.teacherRecordOnly;
+      if (!teacherOnly) {
+        try {
+          final profile = await SupabaseClient.instance.getUserProfile(userId);
+          teacherOnly = profile?['role'] == 'teacher';
+        } catch (_) {}
+      }
       final plan = await SupabaseClient.instance.getPlanTier(userId);
-      final ok = PlanTierGating.isFeatureUnlocked(
-        currentPlanId: plan,
-        feature: GatedFeature.recordLecture,
-      );
-      if (mounted) setState(() => _audioUnlocked = ok);
+      final ok = teacherOnly
+          ? PlanTierGating.isTeacherLiveRecordUnlocked(plan)
+          : PlanTierGating.isStudentAudioUnlocked(plan);
+      if (mounted) {
+        setState(() {
+          if (teacherOnly) {
+            _teacherRecordOnly = true;
+            _selectedInputMethod = InputMethod.record;
+          }
+          _audioUnlocked = ok;
+        });
+      }
     } catch (_) {
-      // Fail closed — hide Record/Upload Audio until we know the plan.
+      // Fail closed — hide Record until we know the plan.
       if (mounted) setState(() => _audioUnlocked = false);
     }
   }
@@ -137,6 +199,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _topicController.dispose();
+    _customSubjectController.dispose();
     // Stop active recording only — never permanently dispose the shared
     // RecordingService singleton (that caused "Record has already been disposed").
     unawaited(_recordingService.releaseForScreen());
@@ -229,7 +292,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
     } catch (e) {
       if (mounted) {
         _playWarningSound();
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           SnackBar(content: Text('Could not process the auto-saved recording: $e')),
         );
         setState(() => _isProcessing = false);
@@ -237,17 +300,13 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
     }
   }
 
-  void _playWarningSound() {
-    void play() {
-      SystemSound.play(SystemSoundType.alert);
-      if (kIsWeb) {
-        HapticFeedback.heavyImpact();
-        SystemSound.play(SystemSoundType.click);
-      }
-    }
-
-    play();
-    WidgetsBinding.instance.addPostFrameCallback((_) => play());
+  void _playWarningSound({bool urgent = false}) {
+    // Mobile: SystemSound. Web/desktop Chrome: Web Audio beep.
+    // urgent=true → 5-sec no-sound mic popup (louder triple beep).
+    unawaited(playRecordingAlertSound(urgent: urgent));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      unawaited(playRecordingAlertSound(urgent: urgent));
+    });
   }
 
   void _showDurationWarningBanner() {
@@ -297,26 +356,26 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
     return Form(
       key: _setupFormKey,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
               'Lecture details',
-              style: TextStyle(
-                fontSize: 24,
-                fontWeight: FontWeight.bold,
-                color: Colors.black87,
-              ),
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
             ),
-            const SizedBox(height: 8),
-            Text(
+          ),
+          const SizedBox(height: 8),
+          Text(
               'Add subject and topic, then choose planned duration before recording.',
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-              ),
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
             ),
+          ),
             const SizedBox(height: 20),
             Text(
               'Subject',
@@ -331,6 +390,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               initialValue: _selectedSubject,
               decoration: InputDecoration(
                 hintText: 'Select a subject',
+                helperText: 'Not listed? Choose Custom…',
                 filled: true,
                 fillColor: Colors.white,
                 border: OutlineInputBorder(
@@ -338,14 +398,42 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                 ),
               ),
               items: [
-                for (final s in kSubjectOptions)
+                for (final s in kSubjectOptionsWithCustom)
                   DropdownMenuItem(value: s, child: Text(s)),
               ],
               onChanged: (v) => setState(() => _selectedSubject = v),
-              validator: (v) =>
-                  (v == null || v.isEmpty) ? 'Please select a subject' : null,
+              validator: (v) {
+                if (v == null || v.isEmpty) return 'Please select a subject';
+                if (v == CustomFieldOption.label &&
+                    _customSubjectController.text.trim().isEmpty) {
+                  return 'Enter custom subject';
+                }
+                return null;
+              },
             ),
-            const SizedBox(height: 16),
+            if (_selectedSubject == CustomFieldOption.label) ...[
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _customSubjectController,
+                textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  hintText: 'Custom subject',
+                  filled: true,
+                  fillColor: Colors.white,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                ),
+                validator: (v) {
+                  if (_selectedSubject != CustomFieldOption.label) return null;
+                  if (v == null || v.trim().isEmpty) {
+                    return 'Enter custom subject';
+                  }
+                  return null;
+                },
+              ),
+            ],
+          const SizedBox(height: 16),
             Text(
               'Lecture Topic',
               style: TextStyle(
@@ -424,61 +512,61 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               ),
             ),
             const SizedBox(height: 24),
-
-            // Audio Source Info
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.blue[50],
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.blue[200]!),
-              ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: Colors.blue[700]),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
+          
+          // Audio Source Info
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.blue[50],
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.blue[200]!),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline, color: Colors.blue[700]),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
                       'Recording uses your device\'s microphone for reliable audio capture',
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.blue[900],
-                      ),
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: Colors.blue[900],
                     ),
                   ),
-                ],
-              ),
+                ),
+              ],
             ),
-            const SizedBox(height: 32),
-
-            // Continue Button
-            SizedBox(
-              width: double.infinity,
-              child: ElevatedButton(
+          ),
+          const SizedBox(height: 32),
+          
+          // Continue Button
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
                 onPressed: () {
                   if (!(_setupFormKey.currentState?.validate() ?? false)) {
                     return;
                   }
                   setState(() => _currentScreen = 2);
                 },
-                style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
                   backgroundColor: AppTheme.accentColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                child: const Text(
-                  'Continue',
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
+              ),
+              child: const Text(
+                'Continue',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
             ),
-          ],
+          ),
+        ],
         ),
       ),
     );
@@ -498,8 +586,8 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
         alignment: Alignment.center,
         child: Text(
           label,
-          style: TextStyle(
-            fontSize: 13,
+                    style: TextStyle(
+                      fontSize: 13,
             fontWeight: FontWeight.w600,
             color: isSelected ? Colors.white : Colors.grey[700],
           ),
@@ -523,6 +611,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                 icon: Icons.mic,
                 label: 'Record',
               ),
+              if (!_teacherRecordOnly) ...[
               const SizedBox(width: 8),
               _buildInputMethodTab(
                 method: InputMethod.uploadAudio,
@@ -535,6 +624,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                 icon: Icons.description,
                 label: 'Upload Document/Photo',
               ),
+              ],
             ],
           ),
         ),
@@ -576,12 +666,12 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               const SizedBox(width: 6),
               Flexible(
                 child: Text(
-                  label,
+                label,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
+                style: TextStyle(
                     fontSize: 13,
-                    fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                    color: isSelected ? Colors.white : Colors.grey[600],
+                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+                  color: isSelected ? Colors.white : Colors.grey[600],
                   ),
                 ),
               ),
@@ -638,16 +728,27 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
             ),
             const SizedBox(height: 10),
             Text(
-              PlanTierGating.lockMessage(GatedFeature.recordLecture),
+              _teacherRecordOnly
+                  ? PlanTierGating.teacherLiveRecordLockMessage()
+                  : PlanTierGating.lockMessage(GatedFeature.recordLecture),
               textAlign: TextAlign.center,
               style: TextStyle(fontSize: 15, height: 1.4, color: Colors.grey[700]),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Record + Upload Audio need ₹499+. PDF / Photo stay available.',
-              textAlign: TextAlign.center,
-              style: TextStyle(fontSize: 13, color: Colors.grey[500]),
-            ),
+            if (!_teacherRecordOnly) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Record + Upload Audio need ₹499+. PDF / Photo stay available.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+              ),
+            ] else ...[
+              const SizedBox(height: 8),
+              Text(
+                'Same recorder features after unlock: credits per minute + 5‑min silence alert.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+              ),
+            ],
             const SizedBox(height: 24),
             SizedBox(
               width: double.infinity,
@@ -658,16 +759,22 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
-                child: const Text('View Plans — unlock at ₹499'),
+                child: Text(
+                  _teacherRecordOnly
+                      ? 'Buy Teacher plan — ₹2,999'
+                      : 'View Plans — unlock at ₹499',
+                ),
               ),
             ),
-            const SizedBox(height: 10),
-            TextButton(
-              onPressed: () => setState(
-                () => _selectedInputMethod = InputMethod.uploadDocument,
+            if (!_teacherRecordOnly) ...[
+              const SizedBox(height: 10),
+              TextButton(
+                onPressed: () => setState(
+                  () => _selectedInputMethod = InputMethod.uploadDocument,
+                ),
+                child: const Text('Upload PDF / Photo instead'),
               ),
-              child: const Text('Upload PDF / Photo instead'),
-            ),
+            ],
           ],
         ),
       ),
@@ -875,11 +982,13 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
 
   Future<void> _toggleRecording() async {
     if (_isProcessing) return;
-
+    
     if (!_isRecording) {
       try {
         _recordingService.setSilenceWarningListener(_onSilenceWhileRecording);
         await _recordingService.start();
+        // Unlock Chrome audio so 5s / 5min silence popups can beep.
+        await unlockRecordingAlertSound();
         setState(() {
           _isRecording = true;
           _durationWarningShown = false;
@@ -890,7 +999,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
         // not just a quiet snackbar.
         if (mounted) {
           _playWarningSound();
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppToast.showSnackBar(context, 
             SnackBar(
               content: Text(lectureUserMessage(e)),
               backgroundColor: Colors.red[700],
@@ -926,7 +1035,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
     } catch (e) {
       if (mounted) {
         _playWarningSound();
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           SnackBar(
             content: Text(lectureUserMessage(e)),
             backgroundColor: Colors.red[700],
@@ -940,10 +1049,12 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
   void _onSilenceWhileRecording() {
     if (!mounted || !_isRecording) return;
 
-    _playWarningSound();
+    // 5-sec first mic check + later repeats — always beep (desktop Chrome too).
+    final isFirstMicCheck = _recordingService.elapsedSeconds <= 15;
+    _playWarningSound(urgent: isFirstMicCheck);
 
     if (_silenceDialogVisible) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         const SnackBar(
           content: Text(
             'Still no voice detected — recording continues. Check your mic.',
@@ -963,16 +1074,27 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
           borderRadius: BorderRadius.circular(12),
         ),
         title: Row(
-          children: [
+            children: [
             Icon(Icons.mic_off_outlined, color: Colors.amber[800]),
             const SizedBox(width: 8),
-            const Expanded(child: Text('Still recording')),
+            Expanded(
+              child: Text(
+                isFirstMicCheck
+                    ? 'No sound detected (5 sec)'
+                    : 'Still recording — silence',
+              ),
+            ),
           ],
         ),
-        content: const Text(
-          'Recording is still running in the background.\n\n'
-          'If we don’t hear you: check your microphone. '
-          'If you’re just pausing, tap Continue — we’ll remind you again after about 5 minutes of silence.',
+        content: Text(
+          isFirstMicCheck
+              ? 'We have not heard your voice yet.\n\n'
+                  'Check microphone / Chrome mic permission. '
+                  'Recording continues. If you pause talking, tap Continue — '
+                  'we’ll remind again after about 5 minutes of silence.'
+              : 'Recording is still running in the background.\n\n'
+                  'If we don’t hear you: check your microphone. '
+                  'If you’re just pausing, tap Continue — we’ll remind you again after about 5 minutes of silence.',
         ),
         actions: [
           TextButton(
@@ -1118,7 +1240,12 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
 
     try {
       final plan = await SupabaseClient.instance.getPlanTier(userId);
-      if (PlanTierGating.isFeatureUnlocked(
+      if (feature == GatedFeature.recordLecture) {
+        final ok = _teacherRecordOnly
+            ? PlanTierGating.isTeacherLiveRecordUnlocked(plan)
+            : PlanTierGating.isStudentAudioUnlocked(plan);
+        if (ok) return true;
+      } else if (PlanTierGating.isFeatureUnlocked(
         currentPlanId: plan,
         feature: feature,
       )) {
@@ -1128,9 +1255,13 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
       // Fail closed for audio; for other features prefer server check.
       if (feature == GatedFeature.recordLecture) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppToast.showSnackBar(context, 
             SnackBar(
-              content: Text(PlanTierGating.lockMessage(GatedFeature.recordLecture)),
+              content: Text(
+                _teacherRecordOnly
+                    ? PlanTierGating.teacherLiveRecordLockMessage()
+                    : PlanTierGating.lockMessage(GatedFeature.recordLecture),
+              ),
             ),
           );
         }
@@ -1140,8 +1271,14 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
     }
 
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(PlanTierGating.lockMessage(feature))),
+      AppToast.showSnackBar(context, 
+        SnackBar(
+          content: Text(
+            feature == GatedFeature.recordLecture && _teacherRecordOnly
+                ? PlanTierGating.teacherLiveRecordLockMessage()
+                : PlanTierGating.lockMessage(feature),
+          ),
+        ),
       );
     }
     return false;
@@ -1159,7 +1296,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
       await _startProcessingWithAudio(bytes);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           SnackBar(content: Text(lectureUserMessage(e))),
         );
         setState(() => _isProcessing = false);
@@ -1187,7 +1324,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           SnackBar(content: Text(lectureUserMessage(e))),
         );
         setState(() => _isProcessing = false);

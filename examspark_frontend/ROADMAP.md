@@ -48,7 +48,7 @@ Premium AI learning platform — ChatGPT-simple home + Study Workspace. _(see PR
 - [ ] Home chat screen (top bar 5 items + bottom input bar)
 - [ ] Inline `LectureResultCard` in conversation (no route to notes_result)
 - [ ] Reusable `StudyWorkspace` widget (Library + Groups + Home expand)
-- [ ] `LibraryScreen` (folders, search, recent, favorites)
+- [x] `LibraryScreen` (folders, search, recent, favorites) — Favorites Slice 2 Jul 26; Home Search = Slice 3
 - [ ] `GroupsScreen` (broadcast feed, no chat input)
 - [ ] `TeacherDashboardScreen` — minimal cards layout
 - [ ] Deprecate standalone `/processing` → `/notes_result` navigation pattern

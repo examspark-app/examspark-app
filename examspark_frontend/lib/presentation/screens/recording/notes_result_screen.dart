@@ -9,6 +9,7 @@ import 'package:examspark_frontend/presentation/screens/results/widgets/extra_ac
 import 'package:examspark_frontend/presentation/widgets/ai/ai_assistant_message.dart';
 import 'package:examspark_frontend/presentation/widgets/ai/ai_thinking_bubble.dart';
 import 'package:examspark_frontend/presentation/widgets/ask_ai_selectable_text.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// Legacy full-page notes view (route `/notes_result`).
 ///
@@ -164,7 +165,7 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
         }
       } catch (error) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppToast.showSnackBar(context, 
             const SnackBar(content: Text('Failed to rename lecture')),
           );
         }
@@ -205,14 +206,14 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
       try {
         await LectureService.instance.deleteLecture(widget.lectureId);
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppToast.showSnackBar(context, 
             const SnackBar(content: Text('Lecture deleted.')),
           );
           Navigator.pop(context);
         }
       } catch (error) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
+          AppToast.showSnackBar(context, 
             SnackBar(content: Text(lectureUserMessage(error))),
           );
         }
@@ -258,7 +259,7 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
     } catch (error) {
       if (mounted) {
         setState(() => _extrasLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           const SnackBar(content: Text('Failed to generate content')),
         );
       }
@@ -309,7 +310,7 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
         setState(() {
           _actionLoadingStates[actionType] = false;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           const SnackBar(content: Text('Failed to generate content')),
         );
       }

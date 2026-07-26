@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/constants/credit_history_display.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// Read-only ledger of credit spend / grants from `credit_transactions`.
 class CreditsHistoryScreen extends StatefulWidget {
@@ -331,7 +332,7 @@ class _CreditsHistoryScreenState extends State<CreditsHistoryScreen> {
         Navigator.pushNamed(context, '/subscription');
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         const SnackBar(
           content: Text(
             'This use was from Home chat — open Home to see it. '

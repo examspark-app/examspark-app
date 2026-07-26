@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// "Forgot password?" entry point — old users request a reset link here.
 class ResetPasswordScreen extends StatefulWidget {
@@ -31,7 +32,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
       if (mounted) setState(() => _sent = true);
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           SnackBar(content: Text('Could not send reset link: ${e.toString()}')),
         );
       }

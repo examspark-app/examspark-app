@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:examspark_frontend/core/constants/study_tool_copy.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/recording/widgets/extra_features_views.dart';
@@ -144,50 +145,23 @@ class _Phase4cToolBodyState extends State<_Phase4cToolBody> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
-                    if (_cached)
-                      Text(
-                        'Cached · free reopen',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.getSecondaryText(context),
-                            ),
-                      )
-                    else if (_result?['derived'] == true)
-                      Text(
-                        'Free · from this answer (not a new AI write)',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.getSecondaryText(context),
-                            ),
-                      )
-                    else if (_result != null &&
-                        (_result!['credits_charged'] is int) &&
-                        (_result!['credits_charged'] as int) > 0)
-                      Text(
-                        'AI regenerated · credits charged',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.getSecondaryText(context),
-                            ),
-                      ),
-                    if (!_loading && _error == null && _result?['derived'] == true)
-                      const Padding(
-                        padding: EdgeInsets.only(top: 4),
-                        child: Text(
-                          'Want a fresh AI version? Tap Regenerate (uses credits).',
-                          style: TextStyle(
-                            fontSize: 11,
-                            height: 1.25,
-                            color: Colors.black87,
-                            fontWeight: FontWeight.w400,
+                    const SizedBox(height: 4),
+                    Text(
+                      StudyToolCopy.freeDbVsRegenerateAi,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.getSecondaryText(context),
+                            height: 1.35,
                           ),
-                        ),
-                      ),
+                    ),
                   ],
                 ),
               ),
               if (!_loading && _error == null)
                 TextButton(
                   onPressed: () => _run(regenerate: true),
-                  child: const Text('Regenerate'),
-                ),              IconButton(
+                  child: const Text(StudyToolCopy.regenerateButton),
+                ),
+              IconButton(
                 onPressed: () => Navigator.pop(context),
                 icon: const Icon(Icons.close),
               ),
@@ -219,9 +193,10 @@ class _Phase4cToolBodyState extends State<_Phase4cToolBody> {
                 const Spacer(),
                 if (_result?['credits_charged'] is int)
                   Text(
-                    _cached
-                        ? '0 credits (cached)'
-                        : '${_result!['credits_charged']} credits',
+                    StudyToolCopy.creditsFooter(
+                      fromDatabase: _cached || _result?['derived'] == true,
+                      charged: _result!['credits_charged'] as int?,
+                    ),
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
                           color: AppTheme.getSecondaryText(context),
                         ),

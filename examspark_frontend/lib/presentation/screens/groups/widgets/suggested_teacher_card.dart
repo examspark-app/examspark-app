@@ -68,6 +68,20 @@ class SuggestedTeacherCard extends StatelessWidget {
               fontSize: 11,
             ),
           ),
+          if (teacher.matchesLabel.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              teacher.matchesLabel,
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: AppTheme.accentColor,
+                fontSize: 10,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
           const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,

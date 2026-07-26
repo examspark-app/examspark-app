@@ -71,7 +71,7 @@
 | **Save Original Audio** | Opt-in keep raw audio | Docs Only | Settings (teacher) | R2 audio path, default OFF |
 | **Teacher Dashboard** | Business cards: students, revenue… | UI Only | Teacher Dashboard | Analytics APIs, payment data |
 | **Teacher public profile** | Photo, name, subject, bio, qualification, experience, certificates, verification, stats — editable | UI Only (placeholder data) | Teacher Dashboard (top card + edit sheet) | Supabase `teacher_profiles` table, R2 photo/certificate storage |
-| **Certificate upload & verification** | Teacher uploads a certificate image → saved with "Pending Review" status; rejected certs show "Contact Support" | UI Only (real image pick + Postgres save of title/status; real/fake AI check is Phase 5) | Teacher Dashboard → Edit Profile sheet | AI real/fake document check, R2 image storage |
+| **Certificate upload & verification** | Optional **Get Verified**. Soft AI + **Tavily** institution soft-check; ≥90% Trusted Badge | **Coded** Jul 23 (needs SQL + OpenRouter; Tavily optional) | Teacher Dashboard → Get Verified | [`FOUNDER_TEACHER_VERIFICATION_V1.md`](examspark_backend/FOUNDER_TEACHER_VERIFICATION_V1.md) |
 | **Student list** | See who joined batch | Docs Only | Dashboard → Students | Memberships query |
 | **Today's lectures** | Quick link to recent content | Docs Only | Dashboard | Lecture metadata |
 | **Subscribers / revenue** | Coaching business metrics | Docs Only | Dashboard | Payment tables (live) |
@@ -172,7 +172,7 @@
 | **₹199 plan** | PDF, image, study features | Docs Only | Subscription | Razorpay / Play Billing |
 | **₹499 plan** | + Audio recording | Docs Only | Subscription | Plan gating |
 | **₹999 plan** | Full access | Docs Only | Subscription | Plan gating |
-| **Teacher ₹1,999** | Bulk + dashboard + groups | Docs Only | Subscription | B2B plan |
+| **Teacher ₹2,999** | Bulk + dashboard + groups | Docs Only | Subscription | B2B plan · setup gate |
 | **Plan comparison UI** | See features per tier | Partial | Subscription | Real plan data from DB |
 | **Upgrade flow** | Buy higher plan | UI Only | Subscription | Payment gateways (all TODO) |
 | **Credit packs** | One-time top-up | Docs Only | Subscription | `credit_packs` table |
@@ -196,7 +196,7 @@
 | **NCERT / books RAG** | Licensed book content | Future | RAG | Licensing |
 | **PYQ deep mapping** | Richer exam tags | Future | Notes | PYQ DB (tags only) |
 | **Important Questions tab** | Dedicated tab | Future | Study Workspace | AI generation |
-| **Notifications push** | "Notes ready" alerts | Future | Home bell | FCM / web push |
+| **Notifications push** | App-wide map: group post **live**; pending/approval, subscription expiry, payment, notes-ready, low credits = backlog | Partial (group post + FCM) | Home bell · Groups · FCM | [`NOTIFICATIONS.md`](NOTIFICATIONS.md) · [`FOUNDER_NOTIFICATIONS.md`](examspark_backend/FOUNDER_NOTIFICATIONS.md) |
 
 ---
 

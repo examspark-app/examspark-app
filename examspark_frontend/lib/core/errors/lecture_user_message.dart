@@ -1,4 +1,6 @@
-// Student-facing lecture errors — never show R2 / RAG / Whisper / SSL / pipeline.
+// Student-facing lecture errors — never show R2 / RAG / Whisper / SQL / Detail dumps.
+
+import 'package:examspark_frontend/core/constants/student_copy.dart';
 
 class LectureUserMessage {
   final String message;
@@ -48,8 +50,7 @@ LectureUserMessage mapLectureUserError(Object? error) {
         'download',
       ])) {
     return const LectureUserMessage(
-      'YouTube notes failed this time (captions or audio download). '
-      'Please Retry — non-CC videos still use Whisper download like before.',
+      'YouTube notes failed this time. Please Retry — or try another video.',
       'V101',
     );
   }
@@ -64,21 +65,28 @@ LectureUserMessage mapLectureUserError(Object? error) {
     'socket',
     'failed host lookup',
     'clientexception',
+    'fastapi',
+    'port 8000',
   ])) {
     return const LectureUserMessage(
-      'The connection was interrupted. Check your internet and try again.',
+      StudentCopy.connectionIssue,
       'N101',
     );
   }
 
   if (_containsAny(cleaned, const [
-    'insufficient credits',
-    'not enough credits',
-    'credits',
-  ]) &&
-      _containsAny(cleaned, const ['insufficient', 'required', 'balance', 'need'])) {
+        'insufficient credits',
+        'not enough credits',
+        'credits',
+      ]) &&
+      _containsAny(cleaned, const [
+        'insufficient',
+        'required',
+        'balance',
+        'need',
+      ])) {
     return const LectureUserMessage(
-      'You don’t have enough credits for this action.',
+      StudentCopy.notEnoughCredits,
       'C101',
     );
   }
@@ -91,17 +99,17 @@ LectureUserMessage mapLectureUserError(Object? error) {
     'locked',
   ])) {
     return const LectureUserMessage(
-      'This feature is locked on your current plan.',
+      StudentCopy.featureLocked,
       'P101',
     );
   }
 
   if (_containsAny(cleaned, const [
-    'little extractable text',
-    'scan',
-    'image-only pdf',
-    'pdf',
-  ]) &&
+        'little extractable text',
+        'scan',
+        'image-only pdf',
+        'pdf',
+      ]) &&
       _containsAny(cleaned, const [
         'text',
         'scan',
@@ -115,11 +123,11 @@ LectureUserMessage mapLectureUserError(Object? error) {
   }
 
   if (_containsAny(cleaned, const [
-    'qwen3-vl',
-    'cannot identify image',
-    'image_upload',
-    'vision model',
-  ]) ||
+        'qwen3-vl',
+        'cannot identify image',
+        'image_upload',
+        'vision model',
+      ]) ||
       (_containsAny(cleaned, const ['image', 'diagram', 'photo']) &&
           _containsAny(cleaned, const [
             'couldn’t read',
@@ -130,7 +138,7 @@ LectureUserMessage mapLectureUserError(Object? error) {
             'ocr',
           ]))) {
     return const LectureUserMessage(
-      'Image notes failed this time. Please Retry — if it keeps failing, tell us the backend log line.',
+      'Image notes failed this time. Please Retry.',
       'I101',
     );
   }
@@ -171,17 +179,20 @@ LectureUserMessage mapLectureUserError(Object? error) {
     );
   }
 
-  // Keep raw hint so Retry failures are diagnosable (not a silent dead-end).
-  final hint = cleaned
-      .replaceAll(RegExp(r'\s+'), ' ')
-      .trim();
-  final short = hint.length > 120 ? '${hint.substring(0, 117)}…' : hint;
-  if (short.isNotEmpty && short != 'null' && short != 'exception:') {
-    return LectureUserMessage(
-      'We couldn’t finish this lecture. Detail: $short',
+  if (_containsAny(cleaned, const [
+    'literal_error',
+    'conversation_language',
+    'validation',
+    'pydantic',
+    'input should be',
+  ])) {
+    return const LectureUserMessage(
+      StudentCopy.askFailed,
       'L101',
     );
   }
+
+  // Never dump raw backend / technical Detail into the UI.
   return const LectureUserMessage(
     'We couldn’t finish this lecture. Please try again.',
     'L101',

@@ -107,13 +107,18 @@ def _normalize_tool_type(tool_type: str) -> str:
     return key
 
 
-async def _generate_learn_more(source: str) -> dict[str, Any]:
+def _chip_system(job: str) -> str:
+    from app.constants.chip_content_intent import CHIP_CONTENT_INTENT_RULE
     from app.constants.visual_notes_prompt import STUDY_CONTENT_LANGUAGE_RULE
+
+    return STUDY_CONTENT_LANGUAGE_RULE + CHIP_CONTENT_INTENT_RULE + "\n" + job
+
+
+async def _generate_learn_more(source: str) -> dict[str, Any]:
     from app.services.qwen_service import _chat_json
 
-    system = (
-        STUDY_CONTENT_LANGUAGE_RULE
-        + "\nYou are ExamSpark Learn More. Return JSON only: "
+    system = _chip_system(
+        "You are ExamSpark Learn More. Return JSON only: "
         '{"markdown":"...","sections":[{"title":"...","body":"..."}]} '
         "Exactly 3 short sections (What students miss / Analogy / Deeper exam angle). "
         "No essay. No Suggested Study Actions. Keep total under ~400 words."
@@ -126,12 +131,10 @@ async def _generate_learn_more(source: str) -> dict[str, Any]:
 
 
 async def _generate_cheat_sheet(source: str) -> dict[str, Any]:
-    from app.constants.visual_notes_prompt import STUDY_CONTENT_LANGUAGE_RULE
     from app.services.qwen_service import _chat_json
 
-    system = (
-        STUDY_CONTENT_LANGUAGE_RULE
-        + "\nYou are ExamSpark Cheat Sheet. Return JSON only: "
+    system = _chip_system(
+        "You are ExamSpark Cheat Sheet. Return JSON only: "
         '{"markdown":"...","formulas":["..."],"quick_facts":["..."],'
         '"mistakes":["..."],"memory_tricks":["..."]} '
         "One-page exam cheat sheet only — ultra compact, not a full essay."
@@ -144,12 +147,10 @@ async def _generate_cheat_sheet(source: str) -> dict[str, Any]:
 
 
 async def _generate_memory_tricks(source: str) -> dict[str, Any]:
-    from app.constants.visual_notes_prompt import STUDY_CONTENT_LANGUAGE_RULE
     from app.services.qwen_service import _chat_json
 
-    system = (
-        STUDY_CONTENT_LANGUAGE_RULE
-        + "\nYou are ExamSpark Memory Tricks. Return JSON only: "
+    system = _chip_system(
+        "You are ExamSpark Memory Tricks. Return JSON only: "
         '{"tricks":[{"trigger":"...","mnemonic":"...","why_it_works":"..."}],'
         '"markdown":"..."} '
         "Mnemonics / memory tricks ONLY — no full re-explanation of the topic."
@@ -159,6 +160,77 @@ async def _generate_memory_tricks(source: str) -> dict[str, Any]:
     if not isinstance(tricks, list) or len(tricks) < 2:
         raise QwenGenerationError("Memory tricks returned too few items.")
     return parsed
+
+
+async def _generate_common_mistakes(source: str) -> dict[str, Any]:
+    from app.services.qwen_service import _chat_json
+
+    system = _chip_system(
+        "You are ExamSpark Common Mistakes. Return JSON only: "
+        '{"markdown":"...","mistakes":[{"wrong":"...","why_wrong":"...","fix":"..."}]} '
+        "Exactly 4–6 exam mistakes students make on this lecture topic."
+    )
+    parsed = await _chat_json(system, source, max_tokens=2048)
+    md = (parsed.get("markdown") or "").strip()
+    if len(md) < 40:
+        raise QwenGenerationError("Common mistakes returned too little content.")
+    return parsed
+
+
+async def _generate_teacher_tips(source: str) -> dict[str, Any]:
+    from app.services.qwen_service import _chat_json
+
+    system = _chip_system(
+        "You are ExamSpark Teacher Tips. Return JSON only: "
+        '{"markdown":"...","tips":["..."]} '
+        "Short coaching tips a good teacher would give after this lecture."
+    )
+    parsed = await _chat_json(system, source, max_tokens=1600)
+    md = (parsed.get("markdown") or "").strip()
+    if len(md) < 40:
+        raise QwenGenerationError("Teacher tips returned too little content.")
+    return parsed
+
+
+async def _generate_exam_booster(source: str) -> dict[str, Any]:
+    from app.services.qwen_service import _chat_json
+
+    system = _chip_system(
+        "You are ExamSpark Exam Booster. Return JSON only: "
+        '{"markdown":"...","must_remember":["..."],"likely_questions":["..."]} '
+        "Exam-focused booster only — what to revise tonight for this lecture."
+    )
+    parsed = await _chat_json(system, source, max_tokens=2048)
+    md = (parsed.get("markdown") or "").strip()
+    if len(md) < 40:
+        raise QwenGenerationError("Exam booster returned too little content.")
+    return parsed
+
+
+async def _generate_visual_from_source(source: str) -> dict[str, Any]:
+    from app.services.qwen_service import _chat_json
+
+    system = _chip_system(
+        "You are ExamSpark Visual Study Aid. Return JSON only: "
+        '{"format":"markdown_diagram","markdown":"...","title":"..."} '
+        "Describe ONE clear study diagram / flow / comparison for this lecture "
+        "in markdown (boxes with arrows ok as text). No full essay."
+    )
+    parsed = await _chat_json(system, source, max_tokens=1600)
+    md = (parsed.get("markdown") or "").strip()
+    if len(md) < 40:
+        raise QwenGenerationError("Visual returned too little content.")
+    return {
+        "format": parsed.get("format") or "markdown_diagram",
+        "markdown": md,
+        "title": parsed.get("title") or "Visual",
+    }
+
+
+async def generate_tool_from_source(tool_type: str, source: str) -> dict[str, Any]:
+    """Public AI generator for Home regenerate + lecture Study Workspace chips."""
+    tool_type = _normalize_tool_type(tool_type)
+    return await _run_generator(tool_type, source)
 
 
 async def _run_generator(tool_type: str, source: str) -> dict[str, Any]:
@@ -180,6 +252,14 @@ async def _run_generator(tool_type: str, source: str) -> dict[str, Any]:
         return await _generate_cheat_sheet(source)
     if tool_type == "memory_tricks":
         return await _generate_memory_tricks(source)
+    if tool_type == "common_mistakes":
+        return await _generate_common_mistakes(source)
+    if tool_type == "teacher_tips":
+        return await _generate_teacher_tips(source)
+    if tool_type == "exam_booster":
+        return await _generate_exam_booster(source)
+    if tool_type == "visual":
+        return await _generate_visual_from_source(source)
     raise HomeAiToolError(f"Unsupported tool: {tool_type}", status_code=400)
 
 

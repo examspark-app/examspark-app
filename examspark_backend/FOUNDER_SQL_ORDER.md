@@ -35,6 +35,18 @@ Supabase path: **Dashboard → SQL Editor → New query → paste → Run**
 | C4 | [`rag_exclude_pdf_photo_cleanup.sql`](rag_exclude_pdf_photo_cleanup.sql) | **Optional** — delete old PDF/photo chunks from RAG (audio+YouTube only lock) |
 | D | [`pyq_exam_pyqs_migration.sql`](pyq_exam_pyqs_migration.sql) | **start PYQs** — `exam_pyqs` + `match_exam_pyqs`; then `python scripts/seed_pyq_embeddings.py` · [`FOUNDER_START_PYQS.md`](FOUNDER_START_PYQS.md) |
 | E | [`quiz_attempts_migration.sql`](quiz_attempts_migration.sql) | **Quiz Attempts Slice A** — Learning Score + Quiz Completed on Progress · [`FOUNDER_QUIZ_ATTEMPTS.md`](FOUNDER_QUIZ_ATTEMPTS.md) |
+| F | [`teacher_coupon_migration.sql`](teacher_coupon_migration.sql) | **Teacher Coupon + Discovery fields + notifications + device_tokens** · [`FOUNDER_TEACHER_COUPON.md`](FOUNDER_TEACHER_COUPON.md) · FCM later [`FOUNDER_FCM_SETUP.md`](FOUNDER_FCM_SETUP.md) |
+| G | [`teacher_share_access_migration.sql`](teacher_share_access_migration.sql) | **Share → real open + quiz_attempts teacher read** · [`FOUNDER_TEACHER_SHARE.md`](FOUNDER_TEACHER_SHARE.md) |
+| H | [`group_daily_active_migration.sql`](group_daily_active_migration.sql) | **Daily Active** — `class_memberships.last_active_at` · [`FOUNDER_DAILY_ACTIVE.md`](FOUNDER_DAILY_ACTIVE.md) |
+| I | [`create_study_group_v1_migration.sql`](create_study_group_v1_migration.sql) | **Create Study Group form v1** — `class_level` / `exam` / `language` · [`FOUNDER_CREATE_GROUP.md`](FOUNDER_CREATE_GROUP.md) |
+| J | [`create_study_group_v2_approval_migration.sql`](create_study_group_v2_approval_migration.sql) | **Join approval + Pending** — `join_approval_mode` + `group_join_requests` · [`FOUNDER_CREATE_GROUP.md`](FOUNDER_CREATE_GROUP.md) |
+| K | [`paid_auto_skip_pending_migration.sql`](paid_auto_skip_pending_migration.sql) | **Paid skip Pending** — Free→Pending; plan_199/499/999 Auto · [`FOUNDER_CREATE_GROUP.md`](FOUNDER_CREATE_GROUP.md) |
+| L | [`teacher_social_links_migration.sql`](teacher_social_links_migration.sql) | **Teacher social / trust links** (optional) · [`FOUNDER_TEACHER_SOCIAL_LINKS.md`](FOUNDER_TEACHER_SOCIAL_LINKS.md) |
+| M | [`teacher_plan_2999_migration.sql`](teacher_plan_2999_migration.sql) | **Teacher plan ₹2,999** · setup gate docs [`FOUNDER_TEACHER_SETUP_GATE.md`](FOUNDER_TEACHER_SETUP_GATE.md) |
+| N | [`teacher_verification_v1_migration.sql`](teacher_verification_v1_migration.sql) | **Teacher Verification v1** (score/hash) + Tavily soft · [`FOUNDER_TEACHER_VERIFICATION_V1.md`](FOUNDER_TEACHER_VERIFICATION_V1.md) |
+| O | [`account_delete_soft_migration.sql`](account_delete_soft_migration.sql) | **Account delete + 30-day recover** · [`FOUNDER_ACCOUNT_DELETE_30_DAY.md`](FOUNDER_ACCOUNT_DELETE_30_DAY.md) |
+| P | [`teacher_subscriber_count_migration.sql`](teacher_subscriber_count_migration.sql) | **Dashboard Subscribers card** (paid + primary teacher) · [`FOUNDER_TEACHER_DASHBOARD_CARDS.md`](FOUNDER_TEACHER_DASHBOARD_CARDS.md) |
+| Q | [`library_favorites_migration.sql`](library_favorites_migration.sql) | **Library Favorites** (`is_favorite`) · [`FOUNDER_PHASE2_SLICE2_FAVORITES.md`](FOUNDER_PHASE2_SLICE2_FAVORITES.md) |
 
 ### Jul 16, 2026 — Study extras + Visual Notes (aapka next SQL)
 

@@ -7,9 +7,400 @@
 
 ## Jul 2026
 
+### Discover ↔ Profile ↔ Group sync Option A (Jul 26, 2026)
+
+Profile = master (subjects/languages/city/class/board, no max). Group create/edit picks only from Profile. Discover filters: City · Subject · Class · Board (+ realtime). SQL: [`teacher_profile_class_exam_migration.sql`](examspark_backend/teacher_profile_class_exam_migration.sql). Guide: [`FOUNDER_DISCOVER_PROFILE_GROUP_SYNC.md`](examspark_backend/FOUNDER_DISCOVER_PROFILE_GROUP_SYNC.md).
+
+### Chips outside + important intent (Jul 26, 2026)
+
+More sheet removed — all study chips visible. Chip generate biased to exam-important intent. Guide: [`FOUNDER_CHIPS_OUTSIDE_INTENT.md`](examspark_backend/FOUNDER_CHIPS_OUTSIDE_INTENT.md).
+
+### Group share — no Ask AI (Jul 26, 2026)
+
+Shared group lectures: no Ask AI tab / selection bar. Guide: [`FOUNDER_GROUP_NO_ASK_AI.md`](examspark_backend/FOUNDER_GROUP_NO_ASK_AI.md).
+
+### Student-safe copy — no tech jargon (Jul 26, 2026)
+
+In-app errors/labels: no RAG / database / FastAPI / SQL / Detail dumps. Short professional student copy. Guide: [`FOUNDER_STUDENT_SAFE_COPY.md`](examspark_backend/FOUNDER_STUDENT_SAFE_COPY.md).
+
+### Answer intelligence — anti-template (Jul 26, 2026)
+
+Home/Ask: intent detect (definition / how-why / short-long exam…) then natural tutor answer — not fixed Direct Answer template. Guide: [`FOUNDER_ANSWER_INTELLIGENCE.md`](examspark_backend/FOUNDER_ANSWER_INTELLIGENCE.md). Restart FastAPI.
+
+### Home / Ask language error + quality (Jul 26, 2026)
+
+Fixed `conversation_language` L101 (accept MATCH_QUESTION + case). Diagrams only when asked. Adaptive short/long by question. Guide: [`FOUNDER_HOME_ASK_QUALITY_FIX.md`](examspark_backend/FOUNDER_HOME_ASK_QUALITY_FIX.md). Restart FastAPI.
+
+### Home / Ask thinking animation (Jul 26, 2026)
+
+Replaced 3-dot “Thinking” with brain ring + fill bar + rotating status lines (Home AI + Ask AI). Guide: [`FOUNDER_THINKING_ANIMATION.md`](examspark_backend/FOUNDER_THINKING_ANIMATION.md). No SQL.
+
+### Ask AI speed + question language (Jul 26, 2026)
+
+Ask AI: English questions stay English (no Hindi leak from notes). Parallel RAG + credit check; warm index on Study Workspace open. Guide: [`FOUNDER_ASK_AI_SPEED_LANGUAGE.md`](examspark_backend/FOUNDER_ASK_AI_SPEED_LANGUAGE.md). No SQL.
+
+### Invite deep link → group page (Jul 26, 2026)
+
+Share/QR: `/#/join/{code}` → **JoinInviteScreen**. No account → **Sign Up** first, then group. Pending code in SharedPreferences (email verify / Google). Cold-start hash in `main.dart`. Guide: [`FOUNDER_INVITE_DEEP_LINK.md`](examspark_backend/FOUNDER_INVITE_DEEP_LINK.md). No SQL.
+
+### Group Edit — minimum fields (Jul 26, 2026)
+
+Teacher Group Dashboard: **Edit** (pencil + button). Name · Subject · Class/Exam/Language · Free join Auto/Approve. Invite code unchanged. No SQL (RLS update_own already exists).
+
+### Study tool sheet copy — free DB vs Regenerate AI (Jul 26, 2026)
+
+One line everywhere: **Free from database · Regenerate AI = better new result (credits)** (`StudyToolCopy`). Home chips, More sheet, lecture tool sheets, Study Workspace Flashcards/Quiz/Revision. No SQL.
+
+### Delete account — always last (Jul 26, 2026)
+
+Profile list ends: Settings → Help → Logout → **Delete account**. Settings screen also ends with Delete account. No SQL.
+
+### Teacher Dashboard Refresh + plan guide (Jul 26, 2026)
+
+Teacher Dashboard AppBar **Refresh** (no Realtime yet). Guide: Teacher ₹2,999 = own tools/credits; students need ₹199/499/999 to join groups — join does not cut teacher credits. [`FOUNDER_TEACHER_PLAN_VS_STUDENT.md`](examspark_backend/FOUNDER_TEACHER_PLAN_VS_STUDENT.md).
+
+### Teacher cannot join other Groups (Jul 26, 2026)
+
+Teacher plan: own Groups / dashboard only — **no student join**. Flutter + SQL [`teacher_no_join_groups_migration.sql`](examspark_backend/teacher_no_join_groups_migration.sql). Guide: [`FOUNDER_TEACHER_NO_JOIN.md`](examspark_backend/FOUNDER_TEACHER_NO_JOIN.md).
+
+### Recording chips fix + teacher exam focus (Jul 26, 2026)
+
+Recording copy: first generate paid. Tabs use `/study-tools` (same as chips). Credits refresh + double-tap lock. Quiz/Important Qs: PYQ weightage bias for teacher quality. Guide: [`FOUNDER_RECORDING_CHIPS_FIX.md`](examspark_backend/FOUNDER_RECORDING_CHIPS_FIX.md). Restart FastAPI.
+
+### Teacher Library — full page + chips wrap + diagram SQL (Jul 26, 2026)
+
+My Library **Open** → full `/study_workspace` (not modal). Study chips **Wrap** multi-line. Diagram missing on TEST lecture = seed `visual_payload_json` was NULL — run [`FOUNDER_FIX_SAMPLE_LECTURE_DIAGRAM.sql`](examspark_backend/FOUNDER_FIX_SAMPLE_LECTURE_DIAGRAM.sql). Guide: [`FOUNDER_TEACHER_OPEN_CHIPS_DIAGRAM.md`](examspark_backend/FOUNDER_TEACHER_OPEN_CHIPS_DIAGRAM.md).
+
+### Profile — Delete account last (Jul 26, 2026)
+
+Profile order: Subscription · Credits · Library Size · Teacher Dashboard · Settings · Help · Logout · **Delete account** (always last). No SQL.
+
+### Profile — Delete account last (Jul 26, 2026)
+
+Profile list order: … Settings · Help · Logout · **Delete account** (always last). No SQL.
+
+### Pending list — AI kill switch @ Railway deploy (Jul 26, 2026)
+
+Founder: cyber / 50k flood protection (kill switch + rate limit) **listed** for **deploy time only** — with `start Railway deploy guide`; Cloudflare with web deploy. Not coding now. [`FOUNDER_PENDING_LOCKED.md`](examspark_backend/FOUNDER_PENDING_LOCKED.md) §C/D.
+
+### Create Group — Free Auto/Approve only (Jul 26, 2026)
+
+Removed Private/Public from Create Group UI. Teacher chooses **Auto** or **Approve** for **Free** joins only. Paid still instant. `is_public` stays true in DB (hidden). No SQL.
+
+### Web notifications badge + desktop tray (Jul 26, 2026)
+
+Home 🔔 unread **badge**. Chrome **desktop tray** when Sonaxia tab stays open but user is on another page. Settings: Enable desktop alerts. **Cancelled:** save-audio server + R2 meter. Settings theme/language still pending. Guide: [`FOUNDER_WEB_NOTIFICATIONS.md`](examspark_backend/FOUNDER_WEB_NOTIFICATIONS.md).
+
+### Phase 2 Slice 3 — Search overlay (Jul 26, 2026)
+
+Home/Library/Groups 🔍 opens real search (Lectures + Groups). Replaces “Coming soon”. No SQL. Guide: [`FOUNDER_PHASE2_SLICE3_SEARCH.md`](examspark_backend/FOUNDER_PHASE2_SLICE3_SEARCH.md).
+
+### Phase 2 Slice 2 — Library Favorites (Jul 26, 2026)
+
+Library lecture cards: star pin → `lectures.is_favorite`. **Favorites** section above Recent. Auth/record untouched. SQL: [`library_favorites_migration.sql`](examspark_backend/library_favorites_migration.sql). Guide: [`FOUNDER_PHASE2_SLICE2_FAVORITES.md`](examspark_backend/FOUNDER_PHASE2_SLICE2_FAVORITES.md).
+
+### Teacher Dashboard cards — Subscribers live (Jul 26, 2026)
+
+Business Overview: **Subscribers** = paid students attributed via primary Group (same base as Est. Commission 30%). **Storage** card removed (account delete). **Revenue** + **Analytics** stay Upcoming. SQL: [`teacher_subscriber_count_migration.sql`](examspark_backend/teacher_subscriber_count_migration.sql). Guide: [`FOUNDER_TEACHER_DASHBOARD_CARDS.md`](examspark_backend/FOUNDER_TEACHER_DASHBOARD_CARDS.md).
+
+### Teacher profile UI — search subjects + verify lock (Jul 26, 2026)
+
+Complete teacher profile: subject chip wall → search/suggest; name disclaimer (match certificate); Custom language first; Get Verified AI button blocked after fail until new file upload.
+
+Shell already existed. Gap pass: Profile → real **Settings** + **Help** screens (no auth/backend). Storage stays replaced by Delete account. Guide: [`FOUNDER_PHASE2_CAREFUL.md`](examspark_backend/FOUNDER_PHASE2_CAREFUL.md).
+
+### Account delete + 30-day Library recovery (Jul 26, 2026)
+
+Profile **Delete account** (replaces Storage). Soft-delete all roles; Recover within 30 days; hard purge via `fn_purge_expired_deleted_accounts`. SQL: [`account_delete_soft_migration.sql`](examspark_backend/account_delete_soft_migration.sql). Guide: [`FOUNDER_ACCOUNT_DELETE_30_DAY.md`](examspark_backend/FOUNDER_ACCOUNT_DELETE_30_DAY.md).
+
+### Student onboarding — no Skip + Profile Edit (Jul 26, 2026)
+
+Removed Skip from role pick + student form. Minimum: username, education, language, ≥1 subject. Profile → **Edit profile** for students only (no Become Teacher for normal users). Guide: [`FOUNDER_STUDENT_PROFILE_NO_SKIP.md`](examspark_backend/FOUNDER_STUDENT_PROFILE_NO_SKIP.md).
+
+### Global Custom fields Option A (Jul 26, 2026)
+
+Short presets + **Custom…** on Language / Exam / Class / Subject (Create Group, onboarding, Discover, record, teacher profile). Stores resolved free text in existing TEXT columns. Comment-only SQL: [`global_custom_fields_comments_migration.sql`](examspark_backend/global_custom_fields_comments_migration.sql). Guide: [`FOUNDER_GLOBAL_CUSTOM_FIELDS.md`](examspark_backend/FOUNDER_GLOBAL_CUSTOM_FIELDS.md).
+
+### Separate personal Library vs Teacher share bank (Jul 25, 2026)
+
+Locked: Library tab + Study Workspace = personal (no Share). Share only **Teacher Dashboard → My Library**. One lecture → one group once unchanged. Guides: `FOUNDER_TEACHER_LIBRARY.md` · `FOUNDER_TEACHER_ANNOUNCE_SHARE_PIN.md`.
+
+### Teacher announce + share message + pin · personal vs share library (Jul 25, 2026)
+
+**Option 2:** Share only from **Teacher Dashboard → My Library** (personal Library / Study Workspace = no Share). Share sheet: optional **message** + **pin** + chips. Feed shows message; announcement keeps title + message + pin. Guide: `FOUNDER_TEACHER_ANNOUNCE_SHARE_PIN.md`.
+
+### Home AI chips for recording (Jul 25, 2026)
+
+Study Workspace (owner): Home-style chip row generates from **lecture notes** (paid first generate / Regenerate; free reopen). Saves to `extras` → shareable via share chips picker. Students still read-only. Guide: `FOUNDER_HOME_AI_CHIPS_FOR_RECORDING.md`.
+
+### Share chips picker — All / specific (Jul 25, 2026)
+
+Teacher Share to Group: pick **All** or specific **already generated** chips (Notes, Quiz, Flashcards, Revision, Mind Map, …). Free link — no regenerate. Students open Study Workspace with only those tabs; no Generate / Ask AI. SQL: `share_chips_picker_migration.sql`. Guide: `FOUNDER_SHARE_CHIPS_PICKER.md`.
+
+### Group feed type parse fix (Jul 25, 2026)
+
+Unknown/`group_shared_items.type` mismatch no longer defaults to **Announcement** (that mislabeled shares for students). Fallback = Lecture. Student banner clarifies: no student messages/announcements.
+
+### Discover filter chips (Jul 25, 2026)
+
+Discovery: Subject (multi) · City/State (fuzzy) · Language chips below search — hard AND filters, then match-score rank. Empty: “No teachers match these filters…” + Clear all.
+
+### Teacher suggestion scores 0–100 (Jul 25, 2026)
+
+Discovery sort: Subject 40 · Exam 30 · City 15 · Language 15 (redistribute if student fields missing). Card badge `Matches: …`. SQL: `teacher_suggestion_score_migration.sql`. Guide: `FOUNDER_TEACHER_SUGGESTION_SCORE.md`.
+
+### Discover fuzzy search + Language dropdown (Jul 25, 2026)
+
+pg_trgm fuzzy Discover on city/state/subject/name (`fn_teacher_discover_fuzzy`, threshold 0.35). Teaching language = bounded dropdown on profile + Create Group. Guide: `FOUNDER_TEACHER_DISCOVER_FUZZY.md`.
+
+### Show certificates on profile toggle (Jul 25, 2026)
+
+Teacher ON/OFF (`show_certificates_on_profile`, default OFF). Students see profile certs only when ON (UI + RLS). Guide: `FOUNDER_SHOW_CERTIFICATES_ON_PROFILE.md`.
+
+### Seed TEST Sample Lecture SQL (Jul 25, 2026)
+
+No-mic smoke: `FOUNDER_SEED_TEST_SAMPLE_LECTURE.sql` inserts `TEST — Sample Lecture` (done + recorded) with sample notes, quiz, inline transcript. Transcript API falls back to `extras.inline_transcript` when R2 empty. Guide: `FOUNDER_SEED_TEST_SAMPLE_LECTURE.md`.
+
+### Teacher Library — reusable content bank (Jul 25, 2026)
+
+Teacher Dashboard **My Library**: recorded lectures + “Shared to: …”. Re-share to another group = free link (no AI / no credits). Same lecture + same group blocked (`uq_group_shared_items_class_lecture` + API “Already shared here”). Guide: `FOUNDER_TEACHER_LIBRARY.md`.
+
+### Teacher share locked without ₹2,999 (Jul 25, 2026)
+
+Inactive Teacher plan: no Record, no Create Group, no Share Study Workspace / announce / pin (server + UI). Discover already hidden. Existing groups + old posts stay.
+
+### Discover hides teachers without active ₹2,999 (Jul 25, 2026)
+
+Suggest / Discover search / public join: only teachers with active Teacher plan. Plan inactive → hidden from new students; existing members keep groups.
+
+### Teacher plan month-end lock B (Jul 25, 2026)
+
+Founder chose **B**: when Teacher ₹2,999 ends → lock **Record + new Create Group**; keep existing Groups/students. Student coupon month → stay + content lock; paid student month → Free / trim. Docs: `TEACHER_PLATFORM.md` §1b.
+
+### Mock Teacher plan grants full monthly credits (Jul 25, 2026)
+
+`IS_TESTING` mock subscription now grants catalog monthly credits (Teacher **16,000**), not +50. Pack mock stays +50. Stuck accounts: `FOUNDER_TEACHER_MOCK_CREDITS_TOPUP.sql`.
+
+### Board/Exam Custom… on Create Group (Jul 25, 2026)
+
+Create Study Group → Board/Exam dropdown ends with **Custom…** (same pattern as Subject). Reveals text field for any board/curriculum (IGCSE, IB, etc.). India presets kept.
+
+### Group join paths architecture (Jul 25, 2026)
+
+One group, two paths locked: Share/QR = `join_type=paid` (plan+slot/paywall); Coupon = `join_type=coupon` (same group, 100 cap, no commission, Free’s 50 credits). SQL: `group_join_paths_architecture_migration.sql` — paid slots ignore coupon members; expired coupon → content lock-in-place.
+
+### 5-sec no-sound popup beep (Jul 25, 2026)
+
+5-second mic-check popup pe bhi desktop beep (urgent triple beep). Record start pe Chrome AudioContext unlock.
+
+### Desktop recording alert sound (Jul 25, 2026)
+
+Chrome/desktop: silence / warning popup ab Web Audio beep use karta hai — `SystemSound` web pe silent tha. Mobile pe pehle jaisa system alert.
+
+### Profile complete → auto Get Verified → payment (Jul 25, 2026)
+
+Incomplete banner only while fields missing (green when complete). Save complete → open Get Verified (AI); Trusted → open Teacher plan. Wrong-step toasts name the missing step/fields.
+
+### Get Verified = AI gate (not profile PDF) (Jul 25, 2026)
+
+Founder correction: **Get Verified (AI)** → Buy ₹2,999 → Create Group. Profile PDF/photo = optional for students (teacher choice), not the unlock gate.
+
+### Get Verified OpenRouter host fix (Jul 25, 2026)
+
+Teacher verify used `api.openrouter.ai` — on some Windows DNS that host fails (`Errno 11001`) while `openrouter.ai` works. Aligned URL with the rest of the backend.
+
+### Teacher setup hard lock + full-page profile (Jul 25, 2026)
+
+Founder: no half-cut sheet / no skip. **Full profile page** (multi-subject chips, scroll, red pending alert) → unlock **Teacher plan** → unlock **Get Verified** → unlock **Create Group**. Gate sheet has no “Not now”. Mock plan activate: no `.single()` on insert. Spec: `TEACHER_PLATFORM.md` §1b.
+
+### Global AppToast — never hide behind popups (Jul 25, 2026)
+
+All error/success toasts use root Overlay (`AppToast`) so they stay **above** every bottom sheet / dialog. Replaced app-wide `ScaffoldMessenger.showSnackBar`.
+
+### Sheet toasts on top of verification popups (Jul 25, 2026)
+
+Get Verified / Edit Profile / Social sheets: error & success show **above** the sheet (banner + floating SnackBar) — no longer hidden behind the modal.
+
+### Teacher profile — minimum then skip (not full skip) (Jul 25, 2026)
+
+Soft profile: **Full Name + Subject required** before save/dismiss. Button **Save minimum & skip rest**. City/cert still skip until Create Group. No empty full skip.
+
+### Get Verified — Chrome PDF upload (Jul 25, 2026)
+
+Chrome Get Verified: PDF/JPG/PNG pick + upload. Server PDF page-1 via `pypdfium2` (fallback pymupdf). Founder: `pip install pypdfium2 Pillow`.
+
+### Get Verified copy + social links open (Jul 25, 2026)
+
+UI no longer says Get Verified “optional” — **required for Create Group**. Social icons: normalize URL + Flutter Web `launchUrl` fix (`platformDefault` / `_blank`).
+
+### Teacher vs student audio — separate gates (Jul 25, 2026)
+
+Student Record/Upload Audio = ₹499+. Teacher live Record (Dashboard / `teacherRecordOnly`) = **Teacher ₹2,999 only** (`plan_id == teacher`). ₹499 does not unlock Teacher Record.
+
+### Mock buy activates plan (Teacher Record unlock) (Jul 25, 2026)
+
+`IS_TESTING` subscription mock now writes `user_subscriptions` (e.g. `teacher`) +50 credits — Record unlocks. Teacher Dashboard recorder = **Record only** (hide upload tabs). Guide: [`FOUNDER_MOCK_PURCHASE_TESTING.md`](examspark_backend/FOUNDER_MOCK_PURCHASE_TESTING.md).
+
+### Teacher verify — PDF/photo + no screenshots; clearer API errors (Jul 25, 2026)
+
+Get Verified / Edit Profile cert: JPG·PNG·WEBP·HEIC·PDF allowed; screenshot filenames + AI `is_screenshot` blocked. Backend wraps OpenRouter network failures (no more opaque Failed to fetch). PDF first page via `pymupdf`.
+
+### Teacher profile photo — Groups everywhere (Jul 25, 2026)
+
+Edit Profile → add/change photo → Supabase Storage `teacher-photos` → `photo_url`. Shown on Dashboard, My Groups, Discover, Group Info. SQL: [`teacher_photos_storage_migration.sql`](examspark_backend/teacher_photos_storage_migration.sql) · Guide: [`FOUNDER_TEACHER_PROFILE_PHOTO.md`](examspark_backend/FOUNDER_TEACHER_PROFILE_PHOTO.md).
+
+### Teacher Create Group flow — verify → ₹2999 → create (Jul 25, 2026)
+
+Create Group now requires **Get Verified** + Teacher plan + profile gate. Checklist lists Teacher plan first. Subscription screen (teacher role) shows Teacher plan on top. Guide: [`FOUNDER_TEACHER_SETUP_GATE.md`](examspark_backend/FOUNDER_TEACHER_SETUP_GATE.md).
+
+### Home — Teacher Dashboard shortcut (Jul 25, 2026)
+
+Teacher role: Home top bar **school icon** → `/teacher` (same as Profile → Teacher Dashboard). Students do not see it.
+
+### Discover: only teachers with a created group (Jul 25, 2026)
+
+Logged-in Discover hides teachers with zero `class_folders` (no mock Demo fallback). Join prefers public group → opens `group_info`. Joined row tap opens group. Empty copy: “No teachers with a group yet”.
+
+### Google Play founder guide — full rewrite (Jul 24, 2026)
+
+Expanded [`FOUNDER_GOOGLE_PLAY_BILLING.md`](examspark_backend/FOUNDER_GOOGLE_PLAY_BILLING.md): mock vs real, checklist A–I, product IDs, service account, Internal AAB, `IS_TESTING=false`, phone LAN API, smoke + troubleshooting.
+
+### Dev mock purchase — `IS_TESTING` +50 credits (Jul 24, 2026)
+
+When `IS_TESTING=true` (backend + Flutter), plan/pack checkout skips Google Play / Razorpay and FastAPI grants **+50 credits** via `POST /api/v1/payments/mock-dev-purchase`. Production must keep flag off (403 otherwise). Guide: [`FOUNDER_MOCK_PURCHASE_TESTING.md`](examspark_backend/FOUNDER_MOCK_PURCHASE_TESTING.md).
+
+### Brand UI — Sonaxia wordmark + clearer text (Jul 24, 2026)
+
+User-facing name **Sonaxia** (Home top bar, Login, launcher). Shared `AppBrand` + `BrandMark`. Body text slightly heavier / higher contrast for one-brand readability. Package ID still `com.sonialabs.sonaxia`.
+
+### Package rename → `com.sonialabs.sonaxia` (Jul 24, 2026)
+
+Android `applicationId` + iOS bundle ID → **`com.sonialabs.sonaxia`**. Display name unchanged (Sonaxia UI). Founder must re-download Firebase `google-services.json` for the new package. Guide: [`FOUNDER_PACKAGE_RENAME_SONAXIA.md`](examspark_backend/FOUNDER_PACKAGE_RENAME_SONAXIA.md).
+
+### Notifications A4 — Create Group soft disclaimer (Jul 23, 2026)
+
+One-time soft sheet before Create Group form: students see shared content · no chat · teacher responsible. Local prefs (`UiSessionStore`). Does not replace Setup Gate. No SQL. Spec: [`NOTIFICATIONS.md`](NOTIFICATIONS.md).
+
+### Notifications A3 — Payment success / fail (Jul 23, 2026)
+
+After verify/fulfill: in-app + FCM **Payment successful** / **Payment failed** (plan name only — no credits/paise). Dedupe via payment `metadata.notify_success` / `notify_fail`. Deep link → `/subscription`. No new SQL. Guide: [`FOUNDER_NOTIFICATIONS.md`](examspark_backend/FOUNDER_NOTIFICATIONS.md).
+
+### Notifications A2 — Subscription expiry 7/3/1 + expired (Jul 23, 2026)
+
+Catch-up alerts on login / Home bell (deduped). API `POST /api/v1/notifications/check-subscription-expiry`. SQL: [`notifications_subscription_expiry_migration.sql`](examspark_backend/notifications_subscription_expiry_migration.sql). Deep link → `/subscription`. Guide: [`FOUNDER_NOTIFICATIONS.md`](examspark_backend/FOUNDER_NOTIFICATIONS.md). Next: `start payment notifications`.
+
+### Notifications A1 — Join pending / accept / reject (Jul 23, 2026)
+
+In-app + FCM: student Pending · teacher new request · student Accepted/Rejected. API `POST /api/v1/groups/join-notify`. SQL: [`notifications_join_events_migration.sql`](examspark_backend/notifications_join_events_migration.sql). Guide: [`FOUNDER_NOTIFICATIONS.md`](examspark_backend/FOUNDER_NOTIFICATIONS.md). Next: `start subscription expiry alerts`.
+
+### Group Analytics v4 (Jul 23, 2026)
+
+Per-group **Top lecture** (by quiz attempts on shared lectures — no open-count table yet). Week/Month toggle switches top lecture window. API: `top_lecture` · `top_lecture_week` · `top_lecture_month`. No new SQL. Restart FastAPI + Flutter R. Analytics A1–A4 slice complete.
+
+### Group Analytics v3 (Jul 23, 2026)
+
+Per-group Analytics **Week / Month** toggle: active count + avg quiz % + member quiz % for that window (shared lectures). API fields: `this_week_percent` · `this_month_percent` · `active_this_week` · `active_this_month`. No new SQL. Restart FastAPI + Flutter R. Next: `a4` / `start group analytics v4` (top lecture).
+
+### Group Analytics v2 (Jul 23, 2026)
+
+Per-group **Members** list: last active label + quiz % on lectures **shared to that group**. API: `GET /api/v1/groups/teacher/groups/{class_id}/students`. No new SQL. Restart FastAPI + Flutter R. Next: `a3` / `start group analytics v3` (week/month toggle).
+
+### Group Analytics v1 (Jul 23, 2026)
+
+Per-group dashboard **Analytics** card: Members · Active today · Notes shared · Quizzes shared (live counts). Assignments still Soon. No new SQL. Next: `start group analytics v2` (student list quiz %).
+
+### Notification map saved (Jul 23, 2026)
+
+Full app notification inventory: live = group share/announce only; backlog = pending/approval, subscription expiry (7/3/1 day), payment success/fail, notes ready, low credits, optional Create Group disclaimer. Spec: [`NOTIFICATIONS.md`](NOTIFICATIONS.md) · [`FOUNDER_NOTIFICATIONS.md`](examspark_backend/FOUNDER_NOTIFICATIONS.md).
+
+### Teacher Verification v1 coded — AI Soft + Tavily (Jul 23, 2026)
+
+Dashboard **Get Verified** (optional). Vision soft score; photocopy OK; fail AI-fake / duplicate / gov ID. **Tavily** soft-checks extracted institution. ≥90% Trusted Badge. SQL: [`teacher_verification_v1_migration.sql`](examspark_backend/teacher_verification_v1_migration.sql) · [`FOUNDER_TEACHER_VERIFICATION_V1.md`](examspark_backend/FOUNDER_TEACHER_VERIFICATION_V1.md).
+
+### Teacher Verification v1 saved — AI Soft (Jul 23, 2026)
+
+Optional Get Verified on Teacher Dashboard. Education certificates only (no gov ID). Soft AI: photocopy OK; catch AI-generated fakes, duplicates, heavy edits. **≥90%** → Trusted Teacher Badge; else clearer upload + Contact Support. No manual review / KYC. Spec: [`TEACHER_PLATFORM.md`](TEACHER_PLATFORM.md) §1c · [`FOUNDER_TEACHER_VERIFICATION_V1.md`](examspark_backend/FOUNDER_TEACHER_VERIFICATION_V1.md). Code: `start teacher verification v1`.
+
+### Teacher Setup Gate coded (Jul 23, 2026)
+
+Dashboard **Teacher setup** checklist (soft). Create Group blocked until Teacher plan ₹2,999 + Name/Subject/City/State/Qualification/Certificate. Sheet: Buy plan / Complete profile. Spec: [`TEACHER_PLATFORM.md`](TEACHER_PLATFORM.md) §1b · [`FOUNDER_TEACHER_SETUP_GATE.md`](examspark_backend/FOUNDER_TEACHER_SETUP_GATE.md).
+
+### Teacher Setup Gate saved (Jul 23, 2026)
+
+Soft profile → buy Teacher **₹2,999** → Create Group blocked until City/State/Qualification/Certificate (+ Name/Subject). Free teacher Create Group blocked. Spec: [`TEACHER_PLATFORM.md`](TEACHER_PLATFORM.md) §1b · [`FOUNDER_TEACHER_SETUP_GATE.md`](examspark_backend/FOUNDER_TEACHER_SETUP_GATE.md). Price SQL: [`teacher_plan_2999_migration.sql`](examspark_backend/teacher_plan_2999_migration.sql). Gate UI: `start teacher setup gate`.
+
+### Teacher social / trust links (Jul 23, 2026)
+
+Optional Website · YouTube · Instagram · Facebook · LinkedIn · WhatsApp · Telegram · X on **Teacher Dashboard** (not buried in profile create). Students see filled icons on Group Info teacher profile. SQL: [`teacher_social_links_migration.sql`](examspark_backend/teacher_social_links_migration.sql) · [`FOUNDER_TEACHER_SOCIAL_LINKS.md`](examspark_backend/FOUNDER_TEACHER_SOCIAL_LINKS.md).
+
+### Create Group v4 — Per-group dashboard (Jul 23, 2026)
+
+Teacher opens one Study Group → Members · Pending Accept/Reject · Invite/QR · activity cards (shared notes/quiz counts) · Assignments/Analytics stubs · Open feed. No new SQL. Guide: [`FOUNDER_CREATE_GROUP.md`](examspark_backend/FOUNDER_CREATE_GROUP.md).
+
+### Groups UI step 5 — Daily Active (Jul 23, 2026)
+
+Student opens group → `last_active_at` heartbeat. Teacher Dashboard **Active today** card + per-student badge. SQL: [`group_daily_active_migration.sql`](examspark_backend/group_daily_active_migration.sql) · guide: [`FOUNDER_DAILY_ACTIVE.md`](examspark_backend/FOUNDER_DAILY_ACTIVE.md). API: `POST /api/v1/groups/heartbeat`. **Founder: SQL daily active done (Jul 23).**
+
+### Create Group v3 — Invite QR (Jul 23, 2026)
+
+Teacher sees invite **QR** after create + Dashboard **QR** button (`qr_flutter`). Encodes `https://examspark.app/join/{code}`. Screenshot / external scanner. In-app student camera scan = later. No SQL.
+
+### Paid auto skip Pending (Jul 23, 2026)
+
+`fn_request_or_join_group`: Free + Approve → Pending; `plan_199` / `plan_499` / `plan_999` (+ teacher) always Auto join. SQL: [`paid_auto_skip_pending_migration.sql`](examspark_backend/paid_auto_skip_pending_migration.sql).
+
+### Join approval rules saved (Jul 23, 2026)
+
+Free + Approve group → Pending. Paid ₹199/499/999 → always Auto (skip Pending). Join caps unchanged. Institute bulk/kick = future. Spec: [`TEACHER_PLATFORM.md`](TEACHER_PLATFORM.md) §5 · [`CREDIT_ECONOMY.md`](CREDIT_ECONOMY.md). Coding: `start paid auto skip pending`.
+
+### Create Study Group v2 — Approval (Jul 23, 2026)
+
+Create form: **Auto** vs **Approve**. Students request join when approval on; teacher **Pending requests** Accept/Reject. SQL: [`create_study_group_v2_approval_migration.sql`](examspark_backend/create_study_group_v2_approval_migration.sql).
+
+### Create Study Group form v1 (Jul 23, 2026)
+
+Teacher Dashboard **Create Group** sheet: Name* · Subject* (one) · Class/Exam/Language · Private/Public → invite code + share link. SQL: [`create_study_group_v1_migration.sql`](examspark_backend/create_study_group_v1_migration.sql) · guide: [`FOUNDER_CREATE_GROUP.md`](examspark_backend/FOUNDER_CREATE_GROUP.md). No QR / approval yet.
+
+### Study Group architecture + Create flow locked (Jul 23, 2026)
+
+Founder lock in [`TEACHER_PLATFORM.md`](TEACHER_PLATFORM.md) §5: Study Group (not chat); 1 subject/group; create &lt;60s; join code/QR/link; auto vs approval. Next coding: `start Create Group form v1`.
+
+### Groups UI step 4 — Channel list polish (Jul 23, 2026)
+
+My Groups = WhatsApp-style **channel rows** (avatar · name · preview · date · unread; no Join/Leave on list). Group Info = feed first (**CHANNEL FEED**), flatter tiles with dates, Leave only for students. Still **no chat**. Discover keeps card + Join.
+
+### Groups UI step 3 — Announcement (Jul 23, 2026)
+
+Teacher **Post announcement** (title + body + optional pin) on Group Info. Feed opens announcement text (read-only; no student comments). API: `POST /api/v1/groups/announce`.
+
+### Teacher Record / Share / Real Open / Performance (Jul 23, 2026)
+
+Teachers: live **Record only** (no audio upload). Share to own groups via FastAPI guard. Group feed opens **real** Study Workspace / Quiz (not placeholders). Teacher Dashboard **Students** list with quiz % + week/month + coupon badge. SQL: [`teacher_share_access_migration.sql`](examspark_backend/teacher_share_access_migration.sql) · guide: [`FOUNDER_TEACHER_SHARE.md`](examspark_backend/FOUNDER_TEACHER_SHARE.md).
+
+### Groups UI step 2 — Pin to top (Jul 23, 2026)
+
+Share sheet **Pin to top**; feed sorts pinned first; teacher can pin/unpin from Group Info. API: `PATCH /api/v1/groups/shared-items/{id}/pin`.
+
+### Groups UI step 1 — Teacher City/State (Jul 23, 2026)
+
+Teacher profile edit + model + cards show City/State; saves to `teacher_profiles` for Discovery ranking. No new SQL if `teacher_coupon_migration.sql` already run.
+
+### FCM HTTP v1 (Service Account) — Jul 23, 2026
+
+Replaced discontinued Legacy `FIREBASE_SERVER_KEY` with FCM HTTP v1 + `FIREBASE_SERVICE_ACCOUNT_JSON` (path or raw JSON). Guide: [`FOUNDER_FCM_SETUP.md`](examspark_backend/FOUNDER_FCM_SETUP.md).
+
+### Teacher Coupon + Discovery + Group Notifications (Jul 23, 2026)
+
+Per-group teacher coupon (100 max, join-limit bypass, no commission, lock-in-place + 7-day urgency). **No extra credits on coupon** — Free signup already has 50/mo. Groups **Discover** tab. In-app + Groups-list unread; FCM path for lock/home screen — [`FOUNDER_FCM_SETUP.md`](examspark_backend/FOUNDER_FCM_SETUP.md). SQL: [`teacher_coupon_migration.sql`](examspark_backend/teacher_coupon_migration.sql).
+
+### Future work queue locked (Jul 22, 2026 night)
+
+Founder FUTURE order saved in [`FOUNDER_PENDING_LOCKED.md`](examspark_backend/FOUNDER_PENDING_LOCKED.md) §E — freeze still ON; coding only after `start [one item]`. Admin panel later-only.
+
 ### Freeze lock ~70% core (Jul 22, 2026)
 
-Founder pass: no more feature/backend changes without `start …`. Next allowed lane = UI/UX only when named. Language lock + notes/Ask paths stay as-is.
+Founder pass: no more feature/backend changes without `start …`. Next allowed lane = UI/UX only when named. Language lock + notes/Ask paths stay as-is.  
+**Freeze / lock / freeze lock:** backend/business logic mat chhedo after pass — naye bugs banne se bachne ke liye; sirf `start …` pe backend.
 
 ### Language lock: notes = input; Ask/Home = user chat (Jul 22, 2026)
 

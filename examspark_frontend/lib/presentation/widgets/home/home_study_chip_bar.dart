@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:examspark_frontend/core/constants/study_tool_copy.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 
-/// Founder Lock — Home AI Mobile UX (Jul 18, 2026).
-/// Primary chips max 5; secondary tools live in More bottom sheet.
-/// Credits: first open free (KO); Regenerate paid server-side.
+/// Founder update Jul 26, 2026 — all study chips visible (no More sheet).
+/// Credits: first open free (KO) on Home; Regenerate paid server-side.
 class HomeStudyChipDef {
   final String label;
   final String toolType;
@@ -18,8 +18,7 @@ class HomeStudyChipDef {
   });
 }
 
-/// Fixed primary row — Quiz → Flashcards → Revision → Learn More → Important Qs.
-/// Visual is NOT a chip: it shows as Visual Card under the answer when available.
+/// Visible row — core study tools.
 const kHomePrimaryChips = <HomeStudyChipDef>[
   HomeStudyChipDef(
     label: 'Quiz',
@@ -48,7 +47,7 @@ const kHomePrimaryChips = <HomeStudyChipDef>[
   ),
 ];
 
-/// Secondary tools — More sheet (only unique jobs; duplicates of Revision/answer removed).
+/// Was under More — now shown outside (Jul 26).
 const kHomeMoreChips = <HomeStudyChipDef>[
   HomeStudyChipDef(
     label: 'Visual',
@@ -72,9 +71,8 @@ const kHomeMoreChips = <HomeStudyChipDef>[
   ),
 ];
 
-/// Hidden from UI — same KO paragraphs as Revision / Learn More / Important Qs.
-/// Backend APIs still accept these tool_types (no breaking change).
-const kHomeHiddenDuplicateChips = <HomeStudyChipDef>[
+/// Extra tools (recording adds these; Home can show via [showExtraCatalogChips]).
+const kHomeExtraChips = <HomeStudyChipDef>[
   HomeStudyChipDef(
     label: 'Cheat Sheet',
     toolType: 'cheat_sheet',
@@ -97,10 +95,14 @@ const kHomeHiddenDuplicateChips = <HomeStudyChipDef>[
   ),
 ];
 
+/// Legacy alias for [kHomeExtraChips].
+const kHomeHiddenDuplicateChips = kHomeExtraChips;
+
 /// All tool defs (lookup).
 const kHomeStudyChips = <HomeStudyChipDef>[
   ...kHomePrimaryChips,
   ...kHomeMoreChips,
+  ...kHomeExtraChips,
 ];
 
 HomeStudyChipDef? homeChipByType(String toolType) {
@@ -112,13 +114,19 @@ HomeStudyChipDef? homeChipByType(String toolType) {
 
 enum HomeChipUiState { ready, loading, generated, active }
 
-/// Mobile-first: horizontal primary chips + More → grid sheet.
+/// All chips visible in a wrap — no More sheet.
 class HomeStudyChipBar extends StatelessWidget {
   final Map<String, HomeChipUiState> toolStates;
   final String? activeToolType;
   final List<String> recommended;
   final void Function(HomeStudyChipDef chip) onTap;
   final bool enabled;
+  /// Hint line under chips (Home vs recording).
+  final String? moreHint;
+  /// Extra tools for this surface — shown outside.
+  final List<HomeStudyChipDef> extraMoreChips;
+  /// When true, also show [kHomeExtraChips] outside.
+  final bool showExtraCatalogChips;
 
   const HomeStudyChipBar({
     super.key,
@@ -127,6 +135,9 @@ class HomeStudyChipBar extends StatelessWidget {
     this.activeToolType,
     this.recommended = const [],
     this.enabled = true,
+    this.moreHint,
+    this.extraMoreChips = const [],
+    this.showExtraCatalogChips = false,
   });
 
   HomeChipUiState _stateFor(String toolType) {
@@ -134,245 +145,53 @@ class HomeStudyChipBar extends StatelessWidget {
     return toolStates[toolType] ?? HomeChipUiState.ready;
   }
 
-  Future<void> _openMoreSheet(BuildContext context) async {
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        final bg = AppTheme.getCardBackground(ctx);
-        final secondary = AppTheme.getSecondaryText(ctx);
-        return SafeArea(
-          child: Container(
-            margin: const EdgeInsets.fromLTRB(12, 0, 12, 12),
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-            decoration: BoxDecoration(
-              color: bg,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppTheme.getCardBorder(ctx)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 12),
-                    decoration: BoxDecoration(
-                      color: secondary.withValues(alpha: 0.35),
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-                Text(
-                  'More study tools',
-                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Free from this answer · AI only if you tap Regenerate',
-                  style: TextStyle(fontSize: 12, color: secondary),
-                ),
-                const SizedBox(height: 16),
-                GridView.count(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  crossAxisCount: 3,
-                  mainAxisSpacing: 10,
-                  crossAxisSpacing: 10,
-                  childAspectRatio: 0.95,
-                  children: [
-                    for (final chip in kHomeMoreChips)
-                      _MoreGridTile(
-                        chip: chip,
-                        state: _stateFor(chip.toolType),
-                        enabled: enabled &&
-                            _stateFor(chip.toolType) != HomeChipUiState.loading,
-                        onTap: () {
-                          Navigator.of(ctx).pop();
-                          onTap(chip);
-                        },
-                      ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
+  List<HomeStudyChipDef> get _visibleChips {
+    final seen = <String>{};
+    final out = <HomeStudyChipDef>[];
+    void addAll(Iterable<HomeStudyChipDef> list) {
+      for (final c in list) {
+        if (seen.add(c.toolType)) out.add(c);
+      }
+    }
+
+    addAll(kHomePrimaryChips);
+    addAll(kHomeMoreChips);
+    if (showExtraCatalogChips) addAll(kHomeExtraChips);
+    addAll(extraMoreChips);
+    return out;
   }
 
   @override
   Widget build(BuildContext context) {
     final secondary = AppTheme.getSecondaryText(context);
+    final chips = _visibleChips;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Study tools',
+          moreHint ?? StudyToolCopy.freeDbVsRegenerateAi,
           style: Theme.of(context).textTheme.labelMedium?.copyWith(
                 color: secondary,
-                fontWeight: FontWeight.w600,
+                fontWeight: FontWeight.w500,
+                height: 1.3,
               ),
         ),
         const SizedBox(height: 8),
-        SizedBox(
-          height: 42,
-          child: ListView(
-            scrollDirection: Axis.horizontal,
-            children: [
-              for (final chip in kHomePrimaryChips) ...[
-                _ChipPill(
-                  chip: chip,
-                  state: _stateFor(chip.toolType),
-                  enabled: enabled &&
-                      _stateFor(chip.toolType) != HomeChipUiState.loading,
-                  onTap: () => onTap(chip),
-                ),
-                const SizedBox(width: 8),
-              ],
-              _MorePill(
-                enabled: enabled,
-                onTap: () => _openMoreSheet(context),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: [
+            for (final chip in chips)
+              _ChipPill(
+                chip: chip,
+                state: _stateFor(chip.toolType),
+                enabled: enabled &&
+                    _stateFor(chip.toolType) != HomeChipUiState.loading,
+                onTap: () => onTap(chip),
               ),
-            ],
-          ),
+          ],
         ),
       ],
-    );
-  }
-}
-
-class _MorePill extends StatelessWidget {
-  final bool enabled;
-  final VoidCallback onTap;
-
-  const _MorePill({required this.enabled, required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.getCardBackground(context),
-      borderRadius: BorderRadius.circular(20),
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(20),
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppTheme.getCardBorder(context)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.grid_view_rounded,
-                size: 16,
-                color: AppTheme.getSecondaryText(context),
-              ),
-              const SizedBox(width: 6),
-              Text(
-                'More',
-                style: TextStyle(
-                  fontSize: 12,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.getPrimaryText(context),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _MoreGridTile extends StatelessWidget {
-  final HomeStudyChipDef chip;
-  final HomeChipUiState state;
-  final bool enabled;
-  final VoidCallback onTap;
-
-  const _MoreGridTile({
-    required this.chip,
-    required this.state,
-    required this.enabled,
-    required this.onTap,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    final generated = state == HomeChipUiState.generated ||
-        state == HomeChipUiState.active;
-    final loading = state == HomeChipUiState.loading;
-    return Material(
-      color: generated
-          ? AppTheme.getAccentTint(context)
-          : Theme.of(context).scaffoldBackgroundColor,
-      borderRadius: BorderRadius.circular(16),
-      child: InkWell(
-        onTap: enabled ? onTap : null,
-        borderRadius: BorderRadius.circular(16),
-        child: Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(
-              color: generated
-                  ? AppTheme.accentColor.withValues(alpha: 0.45)
-                  : AppTheme.getCardBorder(context),
-            ),
-          ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              if (loading)
-                const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              else
-                Icon(
-                  chip.icon,
-                  size: 22,
-                  color: generated
-                      ? AppTheme.accentColor
-                      : AppTheme.getPrimaryText(context),
-                ),
-              const SizedBox(height: 8),
-              Text(
-                chip.label,
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.getPrimaryText(context),
-                ),
-              ),
-              if (generated) ...[
-                const SizedBox(height: 4),
-                Text(
-                  'Cached',
-                  style: TextStyle(
-                    fontSize: 9,
-                    color: AppTheme.accentColor,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
     );
   }
 }

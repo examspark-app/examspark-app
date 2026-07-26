@@ -4,6 +4,39 @@
 
 **Founder important pending (single list):** [`FOUNDER_IMPORTANT_PENDING.md`](FOUNDER_IMPORTANT_PENDING.md)
 
+### ✅ Done recently (Jul 26, 2026)
+
+- [x] **Discover ↔ Profile ↔ Group sync (Option A)** — Profile master; Group from Profile only; Discover City·Subject·Class·Board — SQL [`teacher_profile_class_exam_migration.sql`](examspark_backend/teacher_profile_class_exam_migration.sql) · Guide: [`FOUNDER_DISCOVER_PROFILE_GROUP_SYNC.md`](examspark_backend/FOUNDER_DISCOVER_PROFILE_GROUP_SYNC.md)
+- [x] **Chips outside + important intent** — no More sheet; exam-focused generate — Guide: [`FOUNDER_CHIPS_OUTSIDE_INTENT.md`](examspark_backend/FOUNDER_CHIPS_OUTSIDE_INTENT.md)
+- [x] **Group share — no Ask AI** — students never get Ask AI on shared lectures — Guide: [`FOUNDER_GROUP_NO_ASK_AI.md`](examspark_backend/FOUNDER_GROUP_NO_ASK_AI.md)
+- [x] **Student-safe copy** — no RAG/database/FastAPI in UI errors/labels — Guide: [`FOUNDER_STUDENT_SAFE_COPY.md`](examspark_backend/FOUNDER_STUDENT_SAFE_COPY.md)
+- [x] **Answer intelligence (anti-template)** — understand intent → short/long tutor answer — Guide: [`FOUNDER_ANSWER_INTELLIGENCE.md`](examspark_backend/FOUNDER_ANSWER_INTELLIGENCE.md)
+- [x] **Home / Ask L101 + quality** — conversation_language fix; diagram only if asked; short/long adaptive — Guide: [`FOUNDER_HOME_ASK_QUALITY_FIX.md`](examspark_backend/FOUNDER_HOME_ASK_QUALITY_FIX.md)
+- [x] **Home / Ask thinking animation** — brain ring + fill bar (not 3 dots) — Guide: [`FOUNDER_THINKING_ANIMATION.md`](examspark_backend/FOUNDER_THINKING_ANIMATION.md)
+- [x] **Ask AI speed + question language** — English Q → English A; warm RAG; parallel retrieve — Guide: [`FOUNDER_ASK_AI_SPEED_LANGUAGE.md`](examspark_backend/FOUNDER_ASK_AI_SPEED_LANGUAGE.md)
+- [x] **Web + bell notifications** — badge number · Chrome desktop tray when tab hidden · Save-audio/R2 cancelled — Guide: [`FOUNDER_WEB_NOTIFICATIONS.md`](examspark_backend/FOUNDER_WEB_NOTIFICATIONS.md)
+- [x] **Phase 2 Slice 3 — Search overlay** — Lectures + Groups from Home/Library/Groups 🔍 — Guide: [`FOUNDER_PHASE2_SLICE3_SEARCH.md`](examspark_backend/FOUNDER_PHASE2_SLICE3_SEARCH.md)
+- [x] **Phase 2 Slice 2 — Library Favorites** — star pin + Favorites section — SQL [`library_favorites_migration.sql`](examspark_backend/library_favorites_migration.sql) · Guide: [`FOUNDER_PHASE2_SLICE2_FAVORITES.md`](examspark_backend/FOUNDER_PHASE2_SLICE2_FAVORITES.md)
+- [x] **Teacher Dashboard cards** — Subscribers live (paid + 30% base); Storage removed; Revenue/Analytics Upcoming — SQL [`teacher_subscriber_count_migration.sql`](examspark_backend/teacher_subscriber_count_migration.sql) · Guide: [`FOUNDER_TEACHER_DASHBOARD_CARDS.md`](examspark_backend/FOUNDER_TEACHER_DASHBOARD_CARDS.md)
+- [x] **Phase 2 careful Slice 1** — Profile Settings + Help screens (UI only) — Guide: [`FOUNDER_PHASE2_CAREFUL.md`](examspark_backend/FOUNDER_PHASE2_CAREFUL.md)
+- [x] **Account delete + 30-day recovery** (all roles; Storage replaced) — SQL [`account_delete_soft_migration.sql`](examspark_backend/account_delete_soft_migration.sql) · Guide: [`FOUNDER_ACCOUNT_DELETE_30_DAY.md`](examspark_backend/FOUNDER_ACCOUNT_DELETE_30_DAY.md)
+- [x] **Student onboarding no Skip + Profile Edit** — minimum fields; students Edit profile; no Become Teacher on Profile — Guide: [`FOUNDER_STUDENT_PROFILE_NO_SKIP.md`](examspark_backend/FOUNDER_STUDENT_PROFILE_NO_SKIP.md)
+- [x] **Global Custom fields Option A** — Language / Exam / Class / Subject presets + Custom… (no SQL) — Guide: [`FOUNDER_GLOBAL_CUSTOM_FIELDS.md`](examspark_backend/FOUNDER_GLOBAL_CUSTOM_FIELDS.md)
+
+### ✅ Done recently (Jul 25, 2026)
+
+- [x] **Separate personal Library vs Teacher share bank** — Share only Dashboard My Library; one-group unique rule kept — Guides: [`FOUNDER_TEACHER_LIBRARY.md`](examspark_backend/FOUNDER_TEACHER_LIBRARY.md) · [`FOUNDER_TEACHER_ANNOUNCE_SHARE_PIN.md`](examspark_backend/FOUNDER_TEACHER_ANNOUNCE_SHARE_PIN.md)
+- [x] **Teacher announce + share message + pin** · personal Library ≠ share bank (Dashboard My Library only) — Guide: [`FOUNDER_TEACHER_ANNOUNCE_SHARE_PIN.md`](examspark_backend/FOUNDER_TEACHER_ANNOUNCE_SHARE_PIN.md)
+- [x] **Home AI chips for recording** (Study Workspace generate from notes) — Guide: [`FOUNDER_HOME_AI_CHIPS_FOR_RECORDING.md`](examspark_backend/FOUNDER_HOME_AI_CHIPS_FOR_RECORDING.md)
+- [x] **Share chips picker** (All / specific generated chips; students read-only) — [`share_chips_picker_migration.sql`](examspark_backend/share_chips_picker_migration.sql) · Guide: [`FOUNDER_SHARE_CHIPS_PICKER.md`](examspark_backend/FOUNDER_SHARE_CHIPS_PICKER.md)
+- [x] **Discover filter chips** (Subject / City-State / Language AND + empty clear) — Jul 25, 2026
+- [x] **Teacher suggestion scores** (0–100 + Matches badge) — [`teacher_suggestion_score_migration.sql`](examspark_backend/teacher_suggestion_score_migration.sql) · Guide: [`FOUNDER_TEACHER_SUGGESTION_SCORE.md`](examspark_backend/FOUNDER_TEACHER_SUGGESTION_SCORE.md)
+- [x] **Discover fuzzy (pg_trgm)** + Language dropdown — [`teacher_discover_fuzzy_trgm_migration.sql`](examspark_backend/teacher_discover_fuzzy_trgm_migration.sql) · Guide: [`FOUNDER_TEACHER_DISCOVER_FUZZY.md`](examspark_backend/FOUNDER_TEACHER_DISCOVER_FUZZY.md)
+- [x] **Show certificates on profile** ON/OFF (default OFF) — [`show_certificates_on_profile_migration.sql`](examspark_backend/show_certificates_on_profile_migration.sql) · Guide: [`FOUNDER_SHOW_CERTIFICATES_ON_PROFILE.md`](examspark_backend/FOUNDER_SHOW_CERTIFICATES_ON_PROFILE.md)
+- [x] **Seed TEST Sample Lecture** (no mic) — [`FOUNDER_SEED_TEST_SAMPLE_LECTURE.sql`](examspark_backend/FOUNDER_SEED_TEST_SAMPLE_LECTURE.sql) · Guide: [`FOUNDER_SEED_TEST_SAMPLE_LECTURE.md`](examspark_backend/FOUNDER_SEED_TEST_SAMPLE_LECTURE.md)
+- [x] **Teacher Library** — Dashboard My Library; free re-share across groups; unique `(class_id, lecture_id)`. Founder: run [`teacher_library_share_unique_migration.sql`](examspark_backend/teacher_library_share_unique_migration.sql) · Guide: [`FOUNDER_TEACHER_LIBRARY.md`](examspark_backend/FOUNDER_TEACHER_LIBRARY.md)
+- [x] Teacher profile photo — Edit Profile → Storage `teacher-photos` → shows on Groups / Discover / Group Info. Founder: run [`teacher_photos_storage_migration.sql`](examspark_backend/teacher_photos_storage_migration.sql) · Guide: [`FOUNDER_TEACHER_PROFILE_PHOTO.md`](examspark_backend/FOUNDER_TEACHER_PROFILE_PHOTO.md)
+
 ---
 
 ## ✅ Phase 1A — LOCKED 🔒 (founder Jul 11, 2026)
@@ -151,6 +184,7 @@ After founder says **`smoke test pass`**:
 | Home AI chip generate on click + Tavily + PYQ bank | Pending list (Jul 15) — wait for founder |
 | Deduct-then-R2 gap | Small fast-follow when founder asks |
 | Live payments | Session 6 — code ready; founder test keys + smoke |
+| Dev mock purchase | `IS_TESTING=true` → +50 credits (no Play/Razorpay) — [`FOUNDER_MOCK_PURCHASE_TESTING.md`](examspark_backend/FOUNDER_MOCK_PURCHASE_TESTING.md) |
 
 **Remember later (not now):**
 - Session 3 RAG + Ask AI — **blocked** until `smoke test pass`
@@ -212,7 +246,9 @@ After founder says **`smoke test pass`**:
 - [x] **Phase 4B Study Workspace performance cache** (Jul 16, 2026) — load-once session cache; instant tab switches; background extras; Refresh / Regenerate only
 - [x] **Study Workspace loading harden** (Jul 16, 2026) — KeepAlive + ValueKey + no spinner if content cached; Redis deferred; Teacher/Groups paused until smoke OK
 - [ ] **Redis shared cache** — deferred until Flutter tabs feel instant AND multi-worker Railway needs it (not for tab loading)
+- [ ] **Deploy-time only — AI kill switch + rate limit** (cyber / flood pe paid AI OFF) — **not now**; bundle with `start Railway deploy guide`. Cloudflare DDoS with `start web deploy guide`. Listed Jul 26 in [`FOUNDER_PENDING_LOCKED.md`](examspark_backend/FOUNDER_PENDING_LOCKED.md) §C/D
 - [ ] **Teacher / Groups next work** — paused while Study Workspace loading smoke is priority
+- [x] **Teacher Share loop** (Jul 23, 2026) — record-only teachers, FastAPI share guard, real group Notes/Quiz open, dashboard student performance — SQL `teacher_share_access_migration.sql` · [`FOUNDER_TEACHER_SHARE.md`](examspark_backend/FOUNDER_TEACHER_SHARE.md)
 - [ ] **Not done yet (follow-up):** Answer-Key still calls old `process-lecture` edge function
 - [x] **Vision Session (Jul 13, 2026):** PDF/image pipeline — Qwen3-VL Flash → auto Plus escalation; PDF text → Qwen3; tier check before credits; Flutter document upload routes `image_upload` / `pdf_upload` with real filenames
 - [x] **Qwen3-VL cross-check (Jul 13, 2026):** logic OK — no mandatory code changes; live smoke test still needs OpenRouter $5 + R2

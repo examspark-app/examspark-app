@@ -4,15 +4,16 @@ import 'package:examspark_frontend/core/payments/subscription_plans.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/screens/onboarding/student_onboarding_screen.dart';
 import 'package:examspark_frontend/presentation/widgets/app_top_bar.dart';
 import 'package:examspark_frontend/presentation/widgets/initials_avatar.dart';
 import 'package:examspark_frontend/presentation/widgets/profile_row.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 import 'package:examspark_frontend/presentation/widgets/auth_gate.dart';
 
-/// Profile tab. Rows: Subscription · Credits · Storage · Library Size ·
-/// Settings · Help · Logout — Teacher Dashboard row for teachers.
-/// Per UX rule: Settings/Subscription/Teacher Dashboard all live under
-/// Profile — never separate bottom tabs.
+/// Profile tab. Rows: Edit profile (students) · Subscription · Credits ·
+/// Library Size · Settings · Help · Logout · **Delete account (always last)** —
+/// Teacher Dashboard row for teachers only (no “Become Teacher” for students).
 class ProfileTab extends StatefulWidget {
   final ValueChanged<int> onGoToTab;
   final bool isActive;
@@ -97,13 +98,125 @@ class _ProfileTabState extends State<ProfileTab> {
       setState(() {
         _creditsBalance = profile?['credits_balance'] as int? ?? 0;
         _planId = plan;
-        _userName = (profile?['full_name'] as String?) ?? (user.email?.split('@').first ?? 'User');
+        _userName = (profile?['username'] as String?)?.trim().isNotEmpty == true
+            ? (profile!['username'] as String)
+            : ((profile?['full_name'] as String?) ??
+                (user.email?.split('@').first ?? 'User'));
         _userEmail = user.email ?? '';
         _isTeacher = (profile?['role'] as String?) == 'teacher';
         _libraryLectureCount = lectureCount;
       });
     } catch (_) {
       // Non-fatal.
+    }
+  }
+
+  Future<void> _openStudentProfileEdit() async {
+    final user = SupabaseClient.instance.currentUser;
+    if (user == null) return;
+    final nav = Navigator.of(context);
+    await nav.push(
+      MaterialPageRoute<void>(
+        builder: (_) => StudentOnboardingScreen(
+          userId: user.id,
+          isEditing: true,
+          onDone: () {
+            nav.pop();
+            _load();
+            if (!mounted) return;
+            AppToast.showSnackBar(
+              context,
+              const SnackBar(content: Text('Profile saved')),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteAccount() async {
+    final controller = TextEditingController();
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialog) {
+            final typedOk =
+                controller.text.trim().toUpperCase() == 'DELETE';
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+              ),
+              title: const Text('Delete account?'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Your Library and data stay recoverable for 30 days. '
+                      'After that they are permanently deleted. '
+                      'Teachers: groups stop for you; students keep history until purge.',
+                      style: Theme.of(ctx).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Type DELETE to confirm',
+                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: controller,
+                      autofocus: true,
+                      onChanged: (_) => setDialog(() {}),
+                      decoration: const InputDecoration(
+                        hintText: 'DELETE',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: typedOk ? () => Navigator.pop(ctx, true) : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(ctx).colorScheme.error,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: const Text('Delete account'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    controller.dispose();
+    if (confirmed != true || !mounted) return;
+
+    try {
+      await SupabaseClient.instance.requestAccountDelete();
+      await SessionLiveSync.instance.stop();
+      if (!mounted) return;
+      // Remount AuthGate → AccountRecoveryScreen
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const AuthGate()),
+        (route) => false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.showSnackBar(
+        context,
+        SnackBar(content: Text('Could not delete account: $e')),
+      );
     }
   }
 
@@ -187,6 +300,16 @@ class _ProfileTabState extends State<ProfileTab> {
             ],
           ),
           const SizedBox(height: 24),
+          if (!_isTeacher) ...[
+            _card([
+              ProfileRow(
+                icon: Icons.edit_outlined,
+                label: 'Edit profile',
+                onTap: _openStudentProfileEdit,
+              ),
+            ]),
+            const SizedBox(height: 16),
+          ],
           _card([
             ProfileRow(
               icon: Icons.workspace_premium_outlined,
@@ -200,18 +323,6 @@ class _ProfileTabState extends State<ProfileTab> {
               label: 'Credits',
               trailingText: '$_creditsBalance',
               onTap: () => Navigator.pushNamed(context, '/credits/history'),
-            ),
-            _divider(context),
-            ProfileRow(
-              icon: Icons.cloud_outlined,
-              label: 'Storage',
-              trailingText: 'Soon',
-              onTap: () => _showPlaceholderSheet(
-                'Storage',
-                'Your lectures are already saved in Library. '
-                'A real MB usage meter will appear after Cloudflare R2 storage metering is finished — '
-                'not wired yet. This is not a save error.',
-              ),
             ),
             _divider(context),
             ProfileRow(
@@ -236,23 +347,30 @@ class _ProfileTabState extends State<ProfileTab> {
             ProfileRow(
               icon: Icons.settings_outlined,
               label: 'Settings',
-              onTap: () => _showPlaceholderSheet('Settings', 'Theme, notifications and account settings are coming soon.'),
+              onTap: () => Navigator.pushNamed(context, '/settings'),
             ),
             _divider(context),
             ProfileRow(
               icon: Icons.help_outline,
               label: 'Help',
-              onTap: () => _showPlaceholderSheet('Help & Support', 'Need help? Support chat and FAQs are coming soon.'),
+              onTap: () => Navigator.pushNamed(context, '/help'),
             ),
-          ]),
-          const SizedBox(height: 16),
-          _card([
+            _divider(context),
             ProfileRow(
               icon: Icons.logout,
               label: 'Logout',
               iconColor: Theme.of(context).colorScheme.error,
               labelColor: Theme.of(context).colorScheme.error,
               onTap: _confirmLogout,
+            ),
+            _divider(context),
+            // Always last row on Profile — every role.
+            ProfileRow(
+              icon: Icons.delete_forever_outlined,
+              label: 'Delete account',
+              iconColor: Theme.of(context).colorScheme.error,
+              labelColor: Theme.of(context).colorScheme.error,
+              onTap: _confirmDeleteAccount,
             ),
           ]),
           const SizedBox(height: 24),

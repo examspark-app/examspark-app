@@ -23,6 +23,7 @@
 - [ ] ChatGPT-style conversation canvas
 - [ ] Bottom input: Attachment · Record · Text · Send
 - [ ] Top bar: Logo · Search · Credits · Notification · Profile
+- [x] **Notification map saved** (Jul 23) — group post live; pending/payment/expiry backlog → [`NOTIFICATIONS.md`](NOTIFICATIONS.md)
 - [ ] One free Ask AI before signup
 - [ ] Inline study block after lecture (no new screen)
 - [ ] Anonymous → signup gate
@@ -42,11 +43,14 @@
 
 ### Groups
 
-- [ ] Teacher: create, share, pin, announcements
+- [ ] Teacher: create Study Group (form v1 next), share, pin, announcements
 - [ ] Student: read, quiz, Ask AI — no message, no upload
-- [ ] WhatsApp feel, broadcast only
+- [ ] Study-centric list + feed (not chat / not social)
+- [x] Architecture lock: 1 subject per group · multi-group per teacher (Jul 23, 2026)
+- [x] Join approval: Free→Pending if Approve; Paid always Auto skip Pending (Jul 23, 2026 — SQL [`paid_auto_skip_pending_migration.sql`](examspark_backend/paid_auto_skip_pending_migration.sql))
 - [ ] Watermark: Shared by Teacher • Group
 - [ ] Strict sharing: students invite-link only
+- [x] Create: Class/Exam/Language · Private/Public · code/QR/link · approval mode (Jul 23, 2026)
 
 ### Ask AI / RAG
 
@@ -56,7 +60,9 @@
 ### Teacher
 
 - [ ] Record / upload lecture
-- [ ] Share to group
+- [x] Share to group (teacher own groups; recorded only; real student open) — Jul 23, 2026
+- [x] Teacher Library (My Library) + free re-share across groups + duplicate block — Jul 25, 2026
+- [x] Show certificates on profile ON/OFF (default OFF; students only when ON) — Jul 25, 2026
 - [ ] Dashboard cards (students, revenue, credits, storage…)
 - [ ] Save Original Audio toggle (default OFF)
 

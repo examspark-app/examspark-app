@@ -71,6 +71,34 @@ class PaymentRepository {
     return data;
   }
 
+  /// Dev-only: FastAPI grants +50 credits when backend `IS_TESTING=true`.
+  Future<Map<String, dynamic>> mockDevPurchase({
+    required String kind,
+    String? planId,
+    String? creditPackId,
+  }) async {
+    final token = await _accessToken();
+    final body = <String, dynamic>{
+      'kind': kind,
+      if (planId != null && planId.isNotEmpty) 'plan_id': planId,
+      if (creditPackId != null && creditPackId.isNotEmpty)
+        'credit_pack_id': creditPackId,
+    };
+    final response = await http.post(
+      _uri('/api/v1/payments/mock-dev-purchase'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(body),
+    );
+    final data = _decode(response);
+    if (response.statusCode >= 400) {
+      throw Exception(_errorMessage(data, response.statusCode));
+    }
+    return data;
+  }
+
   Future<Map<String, dynamic>> verifyPayment({
     required String orderId,
     required PaymentGateway gateway,

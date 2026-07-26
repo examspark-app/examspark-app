@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/constants/ai_answer_meta.dart';
+import 'package:examspark_frontend/core/constants/student_copy.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/widgets/ai/ai_assistant_message.dart';
@@ -84,10 +85,7 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
         await _runJson(query);
       } catch (e) {
         if (!mounted) return;
-        var msg = e.toString().replaceFirst(RegExp(r'^Exception:\s*'), '');
-        if (msg.startsWith('Ask AI failed:')) {
-          msg = msg.replaceFirst('Ask AI failed:', '').trim();
-        }
+        final msg = studentSafeError(e, fallback: StudentCopy.askFailed);
         setState(() {
           _messages.add(_AskMsg(
             msg,

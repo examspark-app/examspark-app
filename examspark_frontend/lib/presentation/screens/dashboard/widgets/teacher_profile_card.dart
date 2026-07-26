@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/models/teacher_profile_model.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/screens/dashboard/widgets/teacher_social_links_row.dart';
 import 'package:examspark_frontend/presentation/screens/groups/widgets/verified_badge.dart';
 import 'package:examspark_frontend/presentation/widgets/initials_avatar.dart';
 
@@ -9,8 +10,16 @@ import 'package:examspark_frontend/presentation/widgets/initials_avatar.dart';
 class TeacherProfileCard extends StatelessWidget {
   final TeacherProfileModel profile;
   final VoidCallback onEdit;
+  final VoidCallback? onEditSocialLinks;
+  final VoidCallback? onGetVerified;
 
-  const TeacherProfileCard({super.key, required this.profile, required this.onEdit});
+  const TeacherProfileCard({
+    super.key,
+    required this.profile,
+    required this.onEdit,
+    this.onEditSocialLinks,
+    this.onGetVerified,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -56,6 +65,17 @@ class TeacherProfileCard extends StatelessWidget {
                         fontWeight: FontWeight.w500,
                       ),
                     ),
+                    if (profile.locationLabel.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        profile.locationLabel,
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.getSecondaryText(context),
+                            ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                     if (profile.qualification != null) ...[
                       const SizedBox(height: 2),
                       Text(
@@ -75,6 +95,48 @@ class TeacherProfileCard extends StatelessWidget {
               ),
             ],
           ),
+          if (profile.hasSocialLinks) ...[
+            const SizedBox(height: 12),
+            TeacherSocialLinksRow(profile: profile, compact: true),
+          ],
+          if (onEditSocialLinks != null) ...[
+            const SizedBox(height: 12),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onEditSocialLinks,
+                icon: const Icon(Icons.link, size: 18),
+                label: Text(
+                  profile.hasSocialLinks
+                      ? 'Edit social links'
+                      : 'Social links (optional)',
+                ),
+              ),
+            ),
+          ],
+          if (onGetVerified != null) ...[
+            const SizedBox(height: 8),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onGetVerified,
+                icon: Icon(
+                  profile.isVerified
+                      ? Icons.verified_outlined
+                      : Icons.shield_outlined,
+                  size: 18,
+                ),
+                label: Text(
+                  profile.isVerified
+                      ? 'Trusted · Get Verified again (AI)'
+                      : 'Get Verified (AI) — unlocks Teacher plan',
+                ),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppTheme.accentColor,
+                ),
+              ),
+            ),
+          ],
           const SizedBox(height: 16),
           Container(width: double.infinity, height: 1, color: AppTheme.getCardBorder(context)),
           const SizedBox(height: 16),

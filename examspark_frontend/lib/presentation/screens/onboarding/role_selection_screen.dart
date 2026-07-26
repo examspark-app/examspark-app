@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/router/app_navigation.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// First screen a brand-new user sees after signup — chooses Student or
-/// Teacher. Student continues to [StudentOnboardingScreen] (profile
-/// details). Teacher is routed straight to the Teacher Dashboard's
-/// existing "Edit Teacher Profile" sheet — that flow already covers
-/// profile creation, so it isn't duplicated here.
+/// Teacher. Student continues to [StudentOnboardingScreen] (minimum profile,
+/// no skip). Teacher goes to Teacher Dashboard setup.
+/// No Skip on this screen — must pick Student or Teacher.
 class RoleSelectionScreen extends StatefulWidget {
   const RoleSelectionScreen({
     super.key,
@@ -21,7 +21,7 @@ class RoleSelectionScreen extends StatefulWidget {
   /// Switches `AuthGate` to show the student profile-details screen next.
   final VoidCallback onPickStudent;
 
-  /// Tells `AuthGate` onboarding is fully handled (teacher path / skip) so
+  /// Tells `AuthGate` onboarding is fully handled (teacher path) so
   /// it moves straight to `AppShell`.
   final VoidCallback onDone;
 
@@ -47,23 +47,11 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
       });
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not continue as teacher: ${e.toString()}')),
-        );
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
-  Future<void> _skip() async {
-    setState(() => _isLoading = true);
-    try {
-      await SupabaseClient.instance.skipStudentOnboarding(widget.userId);
-      widget.onDone();
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not skip: ${e.toString()}')),
+        AppToast.showSnackBar(
+          context,
+          SnackBar(
+            content: Text('Could not continue as teacher: ${e.toString()}'),
+          ),
         );
         setState(() => _isLoading = false);
       }
@@ -82,14 +70,7 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: _isLoading ? null : _skip,
-                      child: const Text('Skip'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
+                  const SizedBox(height: 24),
                   Container(
                     width: 64,
                     height: 64,
@@ -100,18 +81,25 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                     alignment: Alignment.center,
                     child: const Text(
                       'E',
-                      style: TextStyle(color: Colors.white, fontSize: 32, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                   ),
                   const SizedBox(height: 24),
                   Text(
                     'Who are you joining as?',
-                    style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 24),
+                    style: Theme.of(context)
+                        .textTheme
+                        .displayLarge
+                        ?.copyWith(fontSize: 24),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'This decides what your account can do — you can\'t switch later without contacting support.',
+                    'Pick Student or Teacher — required. You can\'t switch later without contacting support.',
                     style: Theme.of(context).textTheme.bodySmall,
                     textAlign: TextAlign.center,
                   ),
@@ -119,7 +107,8 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   _RoleCard(
                     icon: Icons.school_outlined,
                     title: 'I\'m a Student',
-                    subtitle: 'Record lectures, get notes, flashcards, quizzes & join teacher groups',
+                    subtitle:
+                        'Record lectures, get notes, flashcards, quizzes & join teacher groups',
                     isLoading: _isLoading,
                     onTap: widget.onPickStudent,
                   ),
@@ -127,7 +116,8 @@ class _RoleSelectionScreenState extends State<RoleSelectionScreen> {
                   _RoleCard(
                     icon: Icons.co_present_outlined,
                     title: 'I\'m a Teacher',
-                    subtitle: 'Create groups, share notes & lectures, manage students',
+                    subtitle:
+                        'Create groups, share notes & lectures, manage students',
                     isLoading: _isLoading,
                     onTap: _pickTeacher,
                   ),

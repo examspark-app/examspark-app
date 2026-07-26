@@ -232,18 +232,18 @@ GOOGLE_PLAY_LICENSE_KEY=
 
 ---
 
-### Firebase (Push notifications)
+### Firebase (Push notifications — FCM HTTP v1)
 
-**Firebase Console**
+**Firebase Console** → Project Settings → **Service accounts** → Generate new private key  
+Save JSON under `examspark_backend/secrets/` (gitignored). Full steps: [`FOUNDER_FCM_SETUP.md`](examspark_backend/FOUNDER_FCM_SETUP.md)
 
 ```env
+FIREBASE_SERVICE_ACCOUNT_JSON=C:\Users\MIRZA COMPUTER\Documents\ExamSpark-Project\examspark_backend\secrets\firebase-service-account.json
 FIREBASE_PROJECT_ID=
-FIREBASE_API_KEY=
-FIREBASE_APP_ID=
-FIREBASE_MESSAGING_SENDER_ID=
 ```
 
-**Used for:** Push notifications (FCM)
+**Used for:** Push notifications (FCM HTTP v1).  
+**Do not use:** Legacy `FIREBASE_SERVER_KEY` (discontinued by Google).
 
 ---
 

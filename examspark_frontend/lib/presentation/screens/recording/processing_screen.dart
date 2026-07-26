@@ -2,10 +2,10 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show SystemSound, SystemSoundType;
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/errors/lecture_user_message.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
+import 'package:examspark_frontend/core/services/recording_alert_sound.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/utils/processing_time_estimate.dart';
 
@@ -252,7 +252,7 @@ class _ProcessingScreenState extends State<ProcessingScreen>
         );
         break;
       case 'error':
-        SystemSound.play(SystemSoundType.alert);
+        playRecordingAlertSound();
         setState(() {
           _hasError = true;
           // Map raw backend/DB error_message to student text + support code.

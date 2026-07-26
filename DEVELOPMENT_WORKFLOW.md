@@ -117,7 +117,7 @@ This workflow is **permanent**. Treat it as the official ExamSpark development p
 
 **Gate:** Phase 1B wireframes approved + founder says **"Phase 2 shuru karo"**.
 
-**Status:** ⏳ Blocked until 1B approved.
+**Status:** 🟡 **Gap pass in progress** (Jul 26, 2026) — shell already shipped earlier; careful slices via `FOUNDER_PHASE2_CAREFUL.md`. Not a full rebuild.
 
 ---
 

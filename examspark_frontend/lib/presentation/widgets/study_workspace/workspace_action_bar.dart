@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 class WorkspaceActionItem {
   final IconData icon;
@@ -52,7 +53,7 @@ Future<void> copyStudyText(BuildContext context, String text) async {
   if (text.trim().isEmpty) return;
   await Clipboard.setData(ClipboardData(text: text));
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
+  AppToast.showSnackBar(context, 
     const SnackBar(content: Text('Copied to clipboard')),
   );
 }
@@ -62,7 +63,7 @@ Future<void> exportStudyText(BuildContext context, String text) async {
   if (text.trim().isEmpty) return;
   await Clipboard.setData(ClipboardData(text: text));
   if (!context.mounted) return;
-  ScaffoldMessenger.of(context).showSnackBar(
+  AppToast.showSnackBar(context, 
     const SnackBar(content: Text('Exported — text copied to clipboard')),
   );
 }

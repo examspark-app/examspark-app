@@ -124,3 +124,34 @@ def require_feature_unlocked(user_id: str, feature: GatedFeature) -> str:
     if _rank(current) < _rank(required):
         raise FeatureLockedError(feature, current, required)
     return current
+
+
+class TeacherPlanRequiredError(Exception):
+    """Teacher ₹2,999 inactive — Record / Create Group / Share workspace locked."""
+
+    def __init__(self, current_plan: str = "free"):
+        self.current_plan = current_plan
+        super().__init__(
+            "Teacher plan ₹2,999 required. "
+            "When the plan month ends: Record, new Create Group, and "
+            "sharing Study Workspace to Groups stay locked until renew."
+        )
+
+
+def require_active_teacher_plan(user_id: str) -> str:
+    """Share / announce / teacher live record path — plan_id must be teacher."""
+    current = get_user_plan_tier(user_id)
+    if (current or "free").strip().lower() != "teacher":
+        raise TeacherPlanRequiredError(current_plan=current or "free")
+    return current
+
+
+def teacher_plan_locked_payload(exc: TeacherPlanRequiredError) -> dict[str, Any]:
+    return {
+        "code": "TEACHER_PLAN_REQUIRED",
+        "status": "FEATURE_LOCKED",
+        "message": str(exc),
+        "feature": "teacher_share_workspace",
+        "current_plan": exc.current_plan,
+        "required_plan": "teacher",
+    }

@@ -67,11 +67,12 @@
 
 **Saved** — [`CREDIT_ECONOMY.md`](../CREDIT_ECONOMY.md) v2
 
-- Plans: Free · ₹199 · ₹499 · ₹999 · Teacher ₹1,999
+- Plans: Free · ₹199 · ₹499 · ₹999 · Teacher ₹2,999
 - Users see credits only — never per-action ₹
 - Feature gating: Free (Ask AI) → Entry (PDF/Image) → Mid (Audio) → Premium (full) → Teacher (B2B)
+- Teacher Setup Gate: soft profile → buy Teacher ₹2,999 → Create Group blocked until City/State/Qualification/Certificate (+ Name/Subject) — [`TEACHER_PLATFORM.md`](../TEACHER_PLATFORM.md) §1b
 
-Partial save: `save credits`
+Partial save: `save credits` · `save teacher setup gate`
 
 ---
 
@@ -150,8 +151,21 @@ Partial save command: `save credits` / `save credit-economy`
 - Business dashboard (not just upload): students, revenue, credits, groups, engagement
 - Student access logic: join timing + subscription expiry (read-only/locked after expiry)
 - R2 corrected asset list + folder architecture
+- **Teacher Verification v1 (soft AI):** optional Get Verified; education cert; photocopy OK; ≥90% Trusted Badge; fail AI-fake / duplicate / heavy edit — no KYC ([`TEACHER_PLATFORM.md`](../TEACHER_PLATFORM.md) §1c)
 
-Partial save: `save teacher` / `save teacher-platform`
+Partial save: `save teacher` / `save teacher-platform` / `save teacher verification v1`
+
+---
+
+## Notifications
+
+**Saved** — [`NOTIFICATIONS.md`](../NOTIFICATIONS.md)
+
+- Live: teacher group share/announce → in-app + FCM  
+- Next: pending/approval · subscription last-date · payment · notes ready · low credits  
+- Create Group legal disclaimer = optional (not required)
+
+Partial save: `save notification map`
 
 ---
 
@@ -228,6 +242,8 @@ Partial save: `save core-rules`
 
 | Date | What changed | Trigger |
 |------|--------------|---------|
+| Jul 23, 2026 | Notification map saved | Founder `save notification map` — [`NOTIFICATIONS.md`](../NOTIFICATIONS.md) |
+| Jul 23, 2026 | Teacher Verification v1 (AI Soft) saved | Founder `save teacher verification v1` — ≥90% badge; photocopy OK; AI-fake/duplicate/edit |
 | Jul 2026 | Platforms + manual ops guidance saved | Founder instruction |
 | Jul 2026 | Tech stack saved to TECH_STACK.md | Founder `save tech` |
 | Jul 2026 | Credit economy saved to CREDIT_ECONOMY.md | Founder `save` |

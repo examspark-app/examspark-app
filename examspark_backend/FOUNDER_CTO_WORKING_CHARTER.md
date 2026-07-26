@@ -77,6 +77,8 @@ After smoke, pick **one** item from [`FOUNDER_PENDING_LOCKED.md`](FOUNDER_PENDIN
 
 Examples: `start PYQs` · `start Tavily` · `start Railway deploy guide`
 
+- **Freeze / lock / freeze lock:** no backend or business-logic edits; status/docs only. Backend again only on explicit `start …` (UI only if founder names screen + `start …`). Reason: post-smoke re-edits create new bugs.
+
 ---
 
 ## What CTO will refuse (for founder’s sake)

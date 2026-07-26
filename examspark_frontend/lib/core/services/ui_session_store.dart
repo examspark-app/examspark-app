@@ -12,8 +12,20 @@ class UiSessionStore {
   static const _kHomeChat = 'ui_session_home_chat_v1';
   static const _kWorkspace = 'ui_session_workspace_v1';
   static const _kHomeSessionId = 'ui_session_home_ai_session_id';
+  static const _kCreateGroupDisclaimer =
+      'ui_create_group_disclaimer_ack_v1';
 
   Future<SharedPreferences> get _prefs => SharedPreferences.getInstance();
+
+  Future<bool> hasAcknowledgedCreateGroupDisclaimer() async {
+    final p = await _prefs;
+    return p.getBool(_kCreateGroupDisclaimer) ?? false;
+  }
+
+  Future<void> setCreateGroupDisclaimerAcknowledged() async {
+    final p = await _prefs;
+    await p.setBool(_kCreateGroupDisclaimer, true);
+  }
 
   Future<void> saveHomeSessionId(String? sessionId) async {
     final p = await _prefs;

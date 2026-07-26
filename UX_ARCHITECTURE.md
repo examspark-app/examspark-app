@@ -448,7 +448,7 @@ Important Questions · Formula Sheet · Mind Map (future) · Translate · Voice 
 
 Bottom tab: **👨‍🏫 Groups**
 
-WhatsApp **list → feed** rhythm. **Not** a chat app.
+**Study Group** list → feed rhythm (**not** a chat app). Locked Jul 23, 2026: one primary subject per group; teacher create flow in [`TEACHER_PLATFORM.md`](TEACHER_PLATFORM.md) §5.
 
 ### Group list
 

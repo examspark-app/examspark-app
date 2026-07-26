@@ -8,11 +8,10 @@ class SubscriptionPlanDef {
   final List<String> features;
   final bool isPopular;
 
-  /// How many Groups a student on this plan may join at once. `-1` means
-  /// unlimited. Founder-locked Jul 12, 2026: free=0, plan_199=1, plan_499=3,
-  /// plan_999=6, teacher=-1. Enforced client-side for now (see
-  /// `GroupsRepository.canJoinAnotherGroup()`) — real server-side
-  /// enforcement is Phase 5.
+  /// How many Groups a student on this plan may **join** at once. `-1` =
+  /// unlimited join. Founder-locked Jul 26, 2026: free=0, plan_199=1,
+  /// plan_499=3, plan_999=6, **teacher=0** (own Groups only — cannot join
+  /// another teacher as a student). Create Group is separate (Teacher plan).
   final int maxGroups;
 
   const SubscriptionPlanDef({
@@ -128,15 +127,17 @@ class SubscriptionPlans {
     name: 'Teacher',
     tier: 'teacher',
     monthlyCredits: 16000,
-    priceInrPaise: 199900,
-    maxGroups: -1,
+    priceInrPaise: 299900,
+    // Join as student = 0. Own Groups create = unlimited (separate gate).
+    maxGroups: 0,
     features: [
       '16,000 credits/month',
       'Bulk Record Lecture',
-      'Audio unlocked + full student features',
+      'Audio unlocked + full AI tools for your content',
       'PDF export + shareable links',
       'Class / Teacher dashboard',
-      'Unlimited Groups',
+      'Create unlimited own Groups (after Get Verified)',
+      'Cannot join another teacher’s Group as a student',
     ],
   );
 

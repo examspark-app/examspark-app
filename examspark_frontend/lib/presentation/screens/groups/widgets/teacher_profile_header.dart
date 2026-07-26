@@ -1,15 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/models/teacher_profile_model.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/screens/dashboard/widgets/teacher_social_links_row.dart';
 import 'package:examspark_frontend/presentation/screens/groups/widgets/verified_badge.dart';
 import 'package:examspark_frontend/presentation/widgets/initials_avatar.dart';
 
 /// Large teacher header for the top of the Group Info screen — photo,
 /// name, subject, verification, qualification, experience, certificate
-/// previews, and a short introduction (bio).
-///
-/// Inspired by WhatsApp Group Info's top section, but styled with
-/// ExamSpark's own premium/minimal design language.
+/// previews, short introduction (bio), and optional social trust links.
 class TeacherProfileHeader extends StatelessWidget {
   final TeacherProfileModel teacher;
   final VoidCallback? onTapCertificates;
@@ -60,6 +58,8 @@ class TeacherProfileHeader extends StatelessWidget {
           spacing: 8,
           runSpacing: 8,
           children: [
+            if (teacher.locationLabel.isNotEmpty)
+              _InfoPill(icon: Icons.location_on_outlined, label: teacher.locationLabel),
             if (teacher.qualification != null)
               _InfoPill(icon: Icons.school_outlined, label: teacher.qualification!),
             if (teacher.experienceYears > 0)
@@ -75,6 +75,10 @@ class TeacherProfileHeader extends StatelessWidget {
               color: AppTheme.getSecondaryText(context),
             ),
           ),
+        ],
+        if (teacher.hasSocialLinks) ...[
+          const SizedBox(height: 16),
+          TeacherSocialLinksRow(profile: teacher),
         ],
         if (teacher.certificates.isNotEmpty) ...[
           const SizedBox(height: 16),

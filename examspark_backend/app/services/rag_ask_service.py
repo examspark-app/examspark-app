@@ -19,7 +19,7 @@ from app.constants.ai_response_status import (
     TIMEOUT,
     http_status_to_ai_status,
 )
-from app.constants.ai_speed import brevity_user_line, max_tokens_for_mode
+from app.constants.ai_speed import answer_length_user_line, max_tokens_for_mode
 from app.constants.answer_source import (
     MEDIUM,
     NO_MATCH,
@@ -28,6 +28,7 @@ from app.constants.answer_source import (
     derive_confidence,
 )
 from app.constants.credit_costs import ask_ai_cost
+from app.constants.answer_intelligence import ANSWER_INTELLIGENCE_BLOCK
 from app.constants.language_hint import (
     language_hint_user_line,
     resolve_answer_language,
@@ -60,7 +61,7 @@ from app.services.question_router import route_ask_question
 from app.services.rag_index_service import RagIndexError, ensure_lecture_indexed
 from app.services.r2_storage_service import R2StorageError, R2StorageService
 from app.services.supabase_admin import get_supabase_admin
-from app.services.visual_fallback import fallback_visual_payload
+from app.services.visual_fallback import fallback_visual_payload, visual_reminder_user_line, wants_visual
 from app.services.visual_stream_parser import VisualStreamParser, split_answer_and_visual
 
 logger = logging.getLogger(__name__)
@@ -154,45 +155,30 @@ Primary signal = STUDENT QUESTION / conversation lock — NEVER notes/RAG langua
 • Explicit switch: "I want Hinglish" / "answer in English" / "Hindi mein batao" /
   "Marathi mein" / "answer in Bengali|Tamil|Spanish|French|Arabic|…" → switch.
 • Devanagari → Hindi (or Marathi if the question is Marathi). Bengali script → Bengali.
-• Latin Hinglish chat → HINGLISH. Other scripts / Latin world languages → match.
+• Latin Hinglish chat → HINGLISH. Clear English Latin → ENGLISH (never Hindi leak from notes).
+• Other scripts / Latin world languages (Spanish, Turkish, Japanese…) → match.
 
 ANTI-LEAK (mandatory):
 • NEVER switch language only because lecture notes / RAG are in another language.
-• If notes are Khmer/Thai/wrong language, still answer in the student's language.
-• If the student asked in English (or locked ENGLISH), explain source IN ENGLISH.
+• If notes are Hindi/Khmer/Thai/wrong language, still answer in the student's language.
+• If the student asked in English (or locked ENGLISH), explain source IN ENGLISH — translate facts if needed.
 
 Same Ask AI credits — NOT the separate Translate (8 cr) product.
 Always keep answers grounded only in the lecture context above.
 
 """
     + typo_intent_rule_block()
+    + ANSWER_INTELLIGENCE_BLOCK
     + """
 ====================================================
-ANSWER FORMAT (adaptive shapes — OMIT irrelevant sections)
+LECTURE GROUNDING + OPTIONAL LABELS
 ====================================================
-Stay brief. Students deepen via Study Workspace tools — do not essay-dump.
+Stay brief unless the student asks for long/detail. Students deepen via
+Study Workspace tools — do not essay-dump by default.
 
-OMIT RULE (HARD): If a section is not genuinely relevant, OMIT it entirely.
-Do NOT keep the header with "not applicable", "N/A", "none", "no formula
-applies", "No PYQ found", or similar filler. A missing section is correct.
+OMIT RULE (HARD): Never invent filler sections or "N/A" headers.
 
-Adaptive shapes (pick by question type):
-• Shape 1 — simple factual doubt from lecture: Direct Answer only — no forced
-  extra headers (no Key Points / Related PYQ / Exam Tip). Still complete:
-  2–4 sentences (fact + brief why/how or one concrete detail). Never a single
-  bare fact line. Example length: "The human heart has four chambers: two
-  atria (upper) and two ventricles (lower). The atria receive blood, while
-  the ventricles pump it out — this separation keeps oxygenated and
-  deoxygenated blood from mixing."
-• Shape 2 — concept question AND user message has VERIFIED PYQ MATCHES:
-  Direct Answer + short Related PYQ using ONLY those metadata tags
-  (e.g. Related: NEET 2024). Never invent years or hedge
-  ("similar to a typical NEET question").
-• Shape 3 — deep / exam-prep (student asks exam-style help, or clearly
-  exam-prep): Direct Answer + Key Points only if multi-part + Related PYQ
-  only if verified matches present + Exam Tip only if non-generic.
-
-When useful (and only then), headers you MAY use:
+When (and only when) a long multi-part lecture answer needs labels, you MAY use:
 1. Direct Answer
 2. Detailed Explanation
 3. Key Points
@@ -201,6 +187,7 @@ When useful (and only then), headers you MAY use:
 6. Related PYQ (ONLY from verified user-message tags — metadata only)
 7. Exam Tip (study tip only — no fake PYQs)
 8. Source — Uploaded Notes | Clean Transcript | (optional) another of your lectures
+Most replies should use NONE of these — natural tutor prose from the lecture.
 
 Context may include high-similarity chunks from your OTHER saved lectures —
 prefer the open lecture; only use other-lecture context when it clearly helps.
@@ -238,7 +225,7 @@ generate original examples / practice MCQs / revision notes when asked.
 IF ANSWER NOT FOUND
 ====================================================
 Reply:
-"I couldn't find this topic in your uploaded notes or exam database."
+"I couldn't find this topic in your uploaded notes."
 
 Do NOT guess. Do NOT hallucinate. Do NOT create fake information.
 If LIVE WEB SEARCH context is present (Tavily last-resort current events),
@@ -774,29 +761,26 @@ async def ask_ai(
             )
 
     try:
+        # Credit precheck + RAG retrieve in parallel (index runs inside retrieve once).
         timer.start("pre_llm")
         if charge_credits:
-            await asyncio.gather(
-                ensure_lecture_indexed(user_id, lecture_id),
-                asyncio.to_thread(_precheck_sync),
+            retrieve_coro = _retrieve_lecture_rag(
+                user_id, lecture_id, query, timer=timer
             )
+            precheck_coro = asyncio.to_thread(_precheck_sync)
+            results = await asyncio.gather(retrieve_coro, precheck_coro)
+            context_blocks, sources_meta = results[0]
         else:
-            await ensure_lecture_indexed(user_id, lecture_id)
+            context_blocks, sources_meta = await _retrieve_lecture_rag(
+                user_id, lecture_id, query, timer=timer
+            )
         timer.end("pre_llm")
-    except RagIndexError as e:
-        raise AskAiError(str(e), status_code=e.status_code) from e
-    except AskAiError:
-        raise
-
-    try:
-        # Index already warm — helper's ensure_lecture_indexed is a cheap no-op.
-        context_blocks, sources_meta = await _retrieve_lecture_rag(
-            user_id, lecture_id, query, timer=timer
-        )
     except RagIndexError as e:
         raise AskAiError(str(e), status_code=e.status_code) from e
     except EmbeddingError as e:
         raise AskAiError(str(e), status_code=502) from e
+    except AskAiError:
+        raise
 
     used_web_search = False
     if route == "web_deferred":
@@ -842,7 +826,9 @@ async def ask_ai(
         used_web_search=used_web_search,
     )
     answer, visual_payload = split_answer_and_visual(raw_answer)
-    if visual_payload is None:
+    if not wants_visual(query):
+        visual_payload = None
+    elif visual_payload is None:
         visual_payload = fallback_visual_payload(query, answer)
     timer.end("llm")
 
@@ -903,21 +889,24 @@ def _ask_user_content(
     lang_line = language_hint_user_line(
         query, conversation_language=conversation_language
     )
-    speed_line = brevity_user_line(mode)
+    speed_line = answer_length_user_line(query, mode)
     speed_suffix = f"\n{speed_line}" if speed_line else ""
+    visual_line = visual_reminder_user_line(query)
     pyq_block = format_verified_pyq_block(pyq_matches)
     if used_web_search:
         return (
+            f"CRITICAL LANGUAGE LOCK (read first — before any context):\n{lang_line}\n\n"
             "LIVE WEB SEARCH context (Tavily — current events last resort). "
             "Not from lecture notes. Label Source as Trusted Web Search.\n\n"
             f"{context}\n\n"
             f"{pyq_block}\n\n"
             f"Student question: {query}\n\n"
-            f"{lang_line}\n"
-            "If snippets are unclear, say you lack reliable current information."
-            f"{speed_suffix}"
+            f"REMINDER: {lang_line}\n"
+            "If snippets are unclear, say you lack reliable current information.\n"
+            f"{visual_line}{speed_suffix}"
         )
     return (
+        f"CRITICAL LANGUAGE LOCK (read first — before any context):\n{lang_line}\n\n"
         "Use adaptive answer shapes (Shape 1 / 2 / 3). OMIT irrelevant "
         "sections entirely — never N/A filler. "
         "Source must be Uploaded Notes or Clean Transcript from "
@@ -925,10 +914,12 @@ def _ask_user_content(
         f"Lecture context:\n{context}\n\n"
         f"{pyq_block}\n\n"
         f"Student question: {query}\n\n"
-        f"{lang_line}\n"
+        f"REMINDER: {lang_line}\n"
         "Answer language MUST match the resolved answer language "
-        "(conversation lock / question — not the language of the notes)."
-        f"{speed_suffix}"
+        "(conversation lock / question — not the language of the notes).\n"
+        "Use adaptive answer shapes ONLY when helpful — prefer natural tutor prose, "
+        "not a fixed Direct Answer / Key Points template.\n"
+        f"{visual_line}{speed_suffix}"
     )
 
 
@@ -1032,18 +1023,20 @@ async def ask_ai_stream(
             )
 
     try:
+        # Credit precheck + RAG retrieve in parallel (index runs inside retrieve once).
         timer.start("pre_llm")
         if charge_credits:
-            await asyncio.gather(
-                ensure_lecture_indexed(user_id, lecture_id),
-                asyncio.to_thread(_precheck_sync),
+            retrieve_coro = _retrieve_lecture_rag(
+                user_id, lecture_id, query, timer=timer
             )
+            precheck_coro = asyncio.to_thread(_precheck_sync)
+            results = await asyncio.gather(retrieve_coro, precheck_coro)
+            context_blocks, sources_meta = results[0]
         else:
-            await ensure_lecture_indexed(user_id, lecture_id)
+            context_blocks, sources_meta = await _retrieve_lecture_rag(
+                user_id, lecture_id, query, timer=timer
+            )
         timer.end("pre_llm")
-        context_blocks, sources_meta = await _retrieve_lecture_rag(
-            user_id, lecture_id, query, timer=timer
-        )
     except RagIndexError as e:
         yield {"type": "error", "status": API_ERROR, "message": str(e)}
         return
@@ -1142,7 +1135,9 @@ async def ask_ai_stream(
 
     answer = parser.answer
     visual_payload = parser.visual_payload
-    if visual_payload is None:
+    if not wants_visual(query):
+        visual_payload = None
+    elif visual_payload is None:
         visual_payload = fallback_visual_payload(query, answer)
     if not answer:
         yield {

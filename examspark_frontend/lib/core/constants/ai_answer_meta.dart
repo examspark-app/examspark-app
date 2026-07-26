@@ -1,4 +1,5 @@
 /// Formats server-derived answer_source + confidence for student trust UI.
+/// Labels stay short and non-technical (no RAG / DB words).
 class AiAnswerMeta {
   AiAnswerMeta._();
 
@@ -11,9 +12,9 @@ class AiAnswerMeta {
     final confLabel = _confidenceLabel(confidence);
     String? base;
     if (sourceLabel != null && confLabel != null) {
-      base = 'Source: $sourceLabel · Confidence: $confLabel';
+      base = 'From: $sourceLabel · Confidence: $confLabel';
     } else if (sourceLabel != null) {
-      base = 'Source: $sourceLabel';
+      base = 'From: $sourceLabel';
     } else if (confLabel != null) {
       base = 'Confidence: $confLabel';
     }
@@ -27,19 +28,19 @@ class AiAnswerMeta {
   static String? _sourceLabel(String? raw) {
     switch ((raw ?? '').toUpperCase()) {
       case 'RAG':
-        return 'Notes';
+        return 'Your notes';
       case 'PYQ':
-        return 'PYQ';
+        return 'Exam focus';
       case 'KB':
-        return 'Knowledge';
+        return 'Study knowledge';
       case 'WEB':
-        return 'Live web search (current events)';
+        return 'Live web (current events)';
       case 'VISION':
-        return 'Photo / Diagram';
+        return 'Your photo';
       case 'MIXED':
-        return 'Mixed';
+        return 'Notes + extras';
       case 'NO_MATCH':
-        return 'No match in notes';
+        return 'Not found in notes';
       default:
         return null;
     }

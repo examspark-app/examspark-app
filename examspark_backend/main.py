@@ -2,12 +2,22 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 
-from app.routers import payments, admin_payments, lectures, ask_ai, select_ai
+from app.routers import (
+    payments,
+    admin_payments,
+    lectures,
+    ask_ai,
+    select_ai,
+    coupons,
+    notifications,
+    groups,
+    teachers,
+)
 from app.services.supabase_admin import get_supabase_admin
 
 load_dotenv()
 
-app = FastAPI(title="ExamSpark Backend", version="1.3.0")
+app = FastAPI(title="ExamSpark Backend", version="1.4.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -22,6 +32,10 @@ app.include_router(admin_payments.router)
 app.include_router(lectures.router)
 app.include_router(ask_ai.router)
 app.include_router(select_ai.router)
+app.include_router(coupons.router)
+app.include_router(notifications.router)
+app.include_router(groups.router)
+app.include_router(teachers.router)
 
 
 @app.get("/")
@@ -42,6 +56,9 @@ async def health_check():
         "select_ai": "selection_scoped_stream",
         "ai_stream": "home_ai_stream_ask_ai_stream",
         "r2_layout": "users_library_v1",
+        "coupons": "teacher_first_month",
+        "notifications": "in_app_and_fcm_ready",
+        "teacher_share": "group_member_read_and_performance",
     }
 
 

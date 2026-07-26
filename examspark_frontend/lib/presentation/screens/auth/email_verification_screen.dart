@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// Shown right after sign-up when Supabase requires email confirmation
 /// (no session is created yet). Gives the founder-visible feedback that a
@@ -22,13 +23,13 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen> {
     try {
       await SupabaseClient.instance.resendSignUpEmail(widget.email);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           const SnackBar(content: Text('Verification email sent again.')),
         );
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           SnackBar(content: Text('Could not resend: ${e.toString()}')),
         );
       }

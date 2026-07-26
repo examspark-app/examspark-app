@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// Shown when the user lands back in the app from a password-reset email
 /// link (Supabase fires a `passwordRecovery` auth event — see `AuthGate`).
@@ -37,14 +38,14 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
     try {
       await SupabaseClient.instance.updatePassword(_passwordController.text);
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           const SnackBar(content: Text('Password updated! You are now signed in.')),
         );
         widget.onDone();
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           SnackBar(content: Text('Could not update password: ${e.toString()}')),
         );
       }

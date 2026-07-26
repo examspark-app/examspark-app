@@ -7,13 +7,13 @@ class AppTheme {
   static const Color accentColor = Color(0xFF10A37F);
   static const Color lightBackground = Color(0xFFFFFFFF);
   static const Color lightPrimaryText = Color(0xFF0D0D0D);
-  static const Color lightSecondaryText = Color(0xFF6E6E6E);
+  static const Color lightSecondaryText = Color(0xFF525252);
   static const Color lightCardBorder = Color(0xFFE5E5E5);
   static const Color lightCardBackground = Color(0xFFFFFFFF);
   static const Color lightAccentTint = Color(0x0D10A37F);
   static const Color darkBackground = Color(0xFF0D0D0D);
   static const Color darkPrimaryText = Color(0xFFFFFFFF);
-  static const Color darkSecondaryText = Color(0xFFA0A0A0);
+  static const Color darkSecondaryText = Color(0xFFB8B8B8);
   static const Color darkCardBorder = Color(0xFF2A2A2A);
   static const Color darkCardBackground = Color(0xFF1A1A1A);
   static const Color darkAccentTint = Color(0x1A10A37F);
@@ -53,18 +53,21 @@ class AppTheme {
         ),
         bodyLarge: TextStyle(
           fontSize: 16,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
           color: lightPrimaryText,
+          height: 1.35,
         ),
         bodyMedium: TextStyle(
           fontSize: 14,
-          fontWeight: FontWeight.normal,
+          fontWeight: FontWeight.w500,
           color: lightPrimaryText,
+          height: 1.4,
         ),
         bodySmall: TextStyle(
           fontSize: 13,
-          fontWeight: FontWeight.normal,
+          fontWeight: FontWeight.w500,
           color: lightSecondaryText,
+          height: 1.4,
         ),
         labelMedium: TextStyle(
           fontSize: 16,
@@ -126,18 +129,21 @@ class AppTheme {
         ),
         bodyLarge: TextStyle(
           fontSize: 16,
-          fontWeight: FontWeight.w500,
+          fontWeight: FontWeight.w600,
           color: darkPrimaryText,
+          height: 1.35,
         ),
         bodyMedium: TextStyle(
           fontSize: 14,
-          fontWeight: FontWeight.normal,
+          fontWeight: FontWeight.w500,
           color: darkPrimaryText,
+          height: 1.4,
         ),
         bodySmall: TextStyle(
           fontSize: 13,
-          fontWeight: FontWeight.normal,
+          fontWeight: FontWeight.w500,
           color: darkSecondaryText,
+          height: 1.4,
         ),
         labelMedium: TextStyle(
           fontSize: 16,

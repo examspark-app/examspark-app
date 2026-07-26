@@ -5,7 +5,7 @@ plugins {
 }
 
 android {
-    namespace = "com.example.examspark_frontend"
+    namespace = "com.sonia.sonialabs"
     compileSdk = flutter.compileSdkVersion
     ndkVersion = flutter.ndkVersion
 
@@ -15,8 +15,8 @@ android {
     }
 
     defaultConfig {
-        // TODO: Specify your own unique Application ID (https://developer.android.com/studio/build/application-id.html).
-        applicationId = "com.example.examspark_frontend"
+        // Sonia Labs — Play Store / Firebase package id.
+        applicationId = "com.sonia.sonialabs"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
         minSdk = flutter.minSdkVersion

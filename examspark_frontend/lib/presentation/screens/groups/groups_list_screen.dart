@@ -5,6 +5,7 @@ import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/dashboard/teacher_dashboard_screen.dart' show showSimpleJoinDialog;
 import 'package:examspark_frontend/presentation/widgets/buy_plan_sheet.dart';
 import 'package:examspark_frontend/presentation/screens/groups/widgets/group_card.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// Groups — a Study Community list (NOT a chat app). Every group belongs
 /// to exactly one teacher; tap a card to open the full Group Information
@@ -70,7 +71,7 @@ class _GroupsListScreenState extends State<GroupsListScreen> {
         _openGroupInfo(updated);
         return;
       }
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(
           content: Text(updated.isJoined ? 'Joined "${updated.name}"' : 'Left "${updated.name}"'),
           duration: const Duration(seconds: 2),
@@ -87,7 +88,7 @@ class _GroupsListScreenState extends State<GroupsListScreen> {
           return;
         }
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      AppToast.showSnackBar(context, SnackBar(content: Text(e.message)));
     }
   }
 

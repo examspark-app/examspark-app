@@ -2,11 +2,17 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthChangeEvent;
 import 'package:examspark_frontend/core/network/supabase_client.dart';
+import 'package:examspark_frontend/core/router/app_navigation.dart';
+import 'package:examspark_frontend/core/router/invite_deep_link.dart';
+import 'package:examspark_frontend/core/services/fcm_push_service.dart';
+import 'package:examspark_frontend/core/services/notification_inbox_controller.dart';
+import 'package:examspark_frontend/core/services/pending_invite_store.dart';
 import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/presentation/screens/auth/update_password_screen.dart';
 import 'package:examspark_frontend/presentation/screens/home/guest_home_screen.dart';
 import 'package:examspark_frontend/presentation/screens/onboarding/role_selection_screen.dart';
 import 'package:examspark_frontend/presentation/screens/onboarding/student_onboarding_screen.dart';
+import 'package:examspark_frontend/presentation/screens/profile/account_recovery_screen.dart';
 import 'package:examspark_frontend/presentation/shell/app_shell.dart';
 
 /// Routes guest / login / onboarding / AppShell from Supabase session.
@@ -34,6 +40,8 @@ class _AuthGateState extends State<AuthGate> {
   bool _hasSession = false;
   /// Once true, never swap AppShell for a profile spinner again (minimize-safe).
   bool _shellReady = false;
+  /// Invite link after Sign Up / Google — open group once shell is ready.
+  bool _pendingInviteRouted = false;
 
   @override
   void initState() {
@@ -104,6 +112,9 @@ class _AuthGateState extends State<AuthGate> {
           _profileFuture = SupabaseClient.instance.getUserProfile(userId);
         }
       });
+      // Register FCM token after login (phone). Start in-app + web desktop inbox.
+      unawaited(FcmPushService.instance.registerTokenWithBackend());
+      unawaited(NotificationInboxController.instance.start());
     });
   }
 
@@ -112,6 +123,40 @@ class _AuthGateState extends State<AuthGate> {
     _signOutDebounce?.cancel();
     _authSub?.cancel();
     super.dispose();
+  }
+
+  /// After founder SQL-deletes the user, JWT may still sit in Chrome.
+  Future<void> _signOutStaleDeletedAccount() async {
+    try {
+      await SupabaseClient.instance.signOut();
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() {
+      _hasSession = false;
+      _shellReady = false;
+      _cachedUserId = null;
+      _onboardingHandledLocally = false;
+      _roleChosenAsStudent = false;
+      _profileFuture = null;
+    });
+    SessionLiveSync.instance.stop();
+  }
+
+  /// After Sign Up / Google / onboarding: open saved invite → group page.
+  /// Skip when URL still has `/#/join/...` — [JoinInviteScreen] already owns that.
+  void _routePendingInviteIfNeeded() {
+    if (_pendingInviteRouted) return;
+    if (InviteDeepLink.joinCodeFromUri(Uri.base) != null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!mounted || _pendingInviteRouted) return;
+      if (InviteDeepLink.joinCodeFromUri(Uri.base) != null) return;
+      final code = await PendingInviteStore.peek();
+      if (code == null) return;
+      final nav = AppNavigation.key.currentState;
+      if (nav == null) return;
+      _pendingInviteRouted = true;
+      nav.pushNamed('/join/$code');
+    });
   }
 
   @override
@@ -137,6 +182,7 @@ class _AuthGateState extends State<AuthGate> {
 
     if (_onboardingHandledLocally) {
       _shellReady = true;
+      _routePendingInviteIfNeeded();
       return AppShell(key: ValueKey('shell-$userId'));
     }
 
@@ -153,6 +199,44 @@ class _AuthGateState extends State<AuthGate> {
         }
 
         final profile = profileSnapshot.data;
+        // SQL account delete / stale Chrome session: no public.users row → force logout
+        // (otherwise app looks "logged in" or falls into guest Demo).
+        if (!waiting && profile == null && !_shellReady) {
+          unawaited(_signOutStaleDeletedAccount());
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+
+        // Soft-delete (30-day recovery) — block AppShell until Recover.
+        if (!waiting &&
+            profile != null &&
+            SupabaseClient.isAccountSoftDeleted(profile)) {
+          _shellReady = false;
+          return AccountRecoveryScreen(
+            purgeAfter: SupabaseClient.parsePurgeAfter(profile),
+            onRecovered: () {
+              setState(() {
+                _profileFuture =
+                    SupabaseClient.instance.getUserProfile(userId);
+                _onboardingHandledLocally = false;
+                _shellReady = false;
+              });
+            },
+            onSignedOut: () {
+              setState(() {
+                _hasSession = false;
+                _shellReady = false;
+                _cachedUserId = null;
+                _profileFuture = null;
+                _onboardingHandledLocally = false;
+                _roleChosenAsStudent = false;
+              });
+              SessionLiveSync.instance.stop();
+            },
+          );
+        }
+
         final onboardingCompleted =
             profile?['onboarding_completed'] as bool? ?? true;
 
@@ -171,6 +255,7 @@ class _AuthGateState extends State<AuthGate> {
         }
 
         _shellReady = true;
+        _routePendingInviteIfNeeded();
         return AppShell(key: ValueKey('shell-$userId'));
       },
     );

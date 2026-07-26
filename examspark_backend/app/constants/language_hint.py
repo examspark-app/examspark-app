@@ -66,10 +66,19 @@ _FORCE_ENGLISH = re.compile(
     r"(?i)\b("
     r"answer\s+in\s+english|"
     r"talk\s+in\s+english|"
+    r"talk\s+english|"
     r"english\s+mein\s+batao|"
+    r"english\s+me\s+batao|"
+    r"english\s+mein\s+baat|"
+    r"english\s+me\s+baat|"
+    r"english\s+main\s+baat|"
+    r"english\s+main\s+bat|"
+    r"baat\s+karo\s+english|"
+    r"bat\s+karo\s+english|"
     r"in\s+english\s+please|"
     r"switch\s+to\s+english|"
-    r"i\s+want\s+english"
+    r"i\s+want\s+english|"
+    r"reply\s+in\s+english"
     r")\b"
 )
 _FORCE_BENGALI = re.compile(
@@ -78,11 +87,30 @@ _FORCE_BENGALI = re.compile(
     r"answer\s+in\s+bangla|"
     r"talk\s+in\s+bengali|"
     r"talk\s+in\s+bangla|"
+    r"bengali\s+mein|"
+    r"bengali\s+me|"
+    r"bangla\s+mein|"
+    r"bangla\s+me|"
     r"bengali\s+te|"
     r"bangla\s+te|"
     r"বাংলা\s+তে|"
     r"বাংলায়"
     r")\b"
+)
+# Clear English Latin (not Hinglish / not Spanish) — Ask AI leak fix Jul 26
+_ENGLISH_MARKERS = re.compile(
+    r"(?i)\b("
+    r"the|what|why|how|when|where|who|which|"
+    r"explain|describe|define|list|summarize|summary|"
+    r"simple|words|please|about|should|would|could|"
+    r"difference|equation|formula|idea|main|revision|"
+    r"remember|important|terms|definitions|lecture|"
+    r"photosynthesis|gravity|because|between|without"
+    r")\b"
+)
+_STRONG_ENGLISH_START = re.compile(
+    r"(?i)^\s*(what|why|how|when|where|who|which|explain|describe|define|"
+    r"list|summarize|tell\s+me|can\s+you)\b"
 )
 # Named language requests (India + world) → MATCH_QUESTION
 _FORCE_NAMED_LANGUAGE = re.compile(
@@ -181,8 +209,14 @@ def detect_question_language_hint(query: str) -> Optional[LanguageHint]:
     # Latin Hinglish chat (e.g. "accha tum batao kya hai") → HINGLISH
     if has_latin and len(_HINGLISH_ROMAN.findall(text)) >= 2:
         return "HINGLISH"
-    # Latin script (English / Spanish / French / …) — match that language;
-    # do not force English-only (Qwen3 is multilingual).
+    # Clear English Latin (chip prompts, study questions) → ENGLISH.
+    # Stops notes/RAG Hindi leaking into English questions.
+    if has_latin and (
+        len(_ENGLISH_MARKERS.findall(text)) >= 2
+        or _STRONG_ENGLISH_START.search(text)
+    ):
+        return "ENGLISH"
+    # Other Latin (Spanish / French / Turkish / …) — match that language.
     if has_latin:
         return "MATCH_QUESTION"
     return None
@@ -230,8 +264,11 @@ def language_hint_user_line(
     if lang == "ENGLISH":
         return (
             f"Detected answer language: ENGLISH.{lock_note} "
-            "Write the ENTIRE answer in English only — including section titles. "
-            "Do NOT switch language only because notes/RAG are in another language."
+            "HARD LOCK: Write the ENTIRE answer in English only — including "
+            "section titles, formulas labels, and explanations. "
+            "Even if lecture notes / transcript / RAG are Hindi, Hinglish, "
+            "Bengali, or any other language — TRANSLATE the grounded facts "
+            "into English. NEVER reply in Hindi for an English question."
         )
     if lang == "HINDI":
         return (
@@ -302,8 +339,9 @@ Primary signal = STUDENT QUESTION / conversation lock — NEVER notes/RAG langua
 • Explicit switch wins: "I want Hinglish" / "answer in English" / "Hindi mein batao" /
   "Marathi mein" / "answer in Bengali|Tamil|Spanish|French|Arabic|…" → switch.
 • Devanagari → Hindi (or match Marathi if the question is Marathi). Bengali script → Bengali.
-• Latin Hinglish markers → HINGLISH. Pure English Latin → English.
-• Any other script or Latin-script language (Spanish, French, …) → match that language.
+• Latin Hinglish markers → HINGLISH. Clear English Latin (explain/what/the…) → ENGLISH.
+• Any other script or Latin-script language (Spanish, French, Turkish, Japanese…) → match that language.
+• Explicit: "English main baat karo" / "Bengali mein" / "answer in Japanese" → switch now.
 
 ANTI-LEAK (critical): never copy the language of lecture notes / transcript / RAG.
 If notes are wrong-language or Khmer/Thai/etc., still answer in the student's language.

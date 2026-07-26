@@ -18,7 +18,7 @@ Credit economy: [`CREDIT_ECONOMY.md`](CREDIT_ECONOMY.md) + [`examspark-credit-ec
 Core rules: [`PROJECT_CORE_RULES.md`](PROJECT_CORE_RULES.md) + [`examspark-core-rules.mdc`](examspark-core-rules.mdc)
 Working rules: [`PROJECT_WORKING_RULES.md`](PROJECT_WORKING_RULES.md) + [`examspark-working-rules.mdc`](examspark-working-rules.mdc)
 UX rule: [`examspark-ux-architecture.mdc`](examspark-ux-architecture.mdc)
-Project docs: `PROJECT_ROADMAP.md` · `FEATURES.md` · `ARCHITECTURE.md` · `TODO.md` · `CHANGELOG.md`
+Project docs: `PROJECT_ROADMAP.md` · `FEATURES.md` · `ARCHITECTURE.md` · `TODO.md` · `CHANGELOG.md` · `NOTIFICATIONS.md`
 Discussion tracker: [`.cursor/plans/examspark_product_vision.plan.md`](.cursor/plans/examspark_product_vision.plan.md)
 
 One-liner:
@@ -72,6 +72,7 @@ Founder can say "save [name]" for any of these:
 - `tech-stack`
 - `credit-economy`
 - `teacher-platform`
+- `notification-map` / `notifications`
 - `ux` / `ux-architecture`
 - `prd`
 - `audio-policy`

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// Phase 4D — Home AI Study History list (open = restore, 0 credits).
 Future<String?> showHomeAiHistorySheet(BuildContext context) {
@@ -72,7 +73,7 @@ class _HomeAiHistorySheetState extends State<_HomeAiHistorySheet> {
       });
     } catch (e) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(
           content: Text(
             e.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''),

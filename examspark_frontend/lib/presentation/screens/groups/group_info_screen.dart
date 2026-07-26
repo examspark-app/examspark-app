@@ -1,16 +1,22 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:examspark_frontend/core/brand/app_brand.dart';
 import 'package:examspark_frontend/core/data/groups_repository.dart';
+import 'package:examspark_frontend/core/constants/plan_tier_gating.dart';
 import 'package:examspark_frontend/core/models/group_model.dart';
 import 'package:examspark_frontend/core/models/suggested_teacher_model.dart';
+import 'package:examspark_frontend/core/network/supabase_client.dart';
+import 'package:examspark_frontend/core/services/class_service.dart';
+import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/groups/widgets/pinned_content_tile.dart';
 import 'package:examspark_frontend/presentation/screens/groups/widgets/suggested_teacher_card.dart';
 import 'package:examspark_frontend/presentation/screens/groups/widgets/teacher_achievements_section.dart';
 import 'package:examspark_frontend/presentation/screens/groups/widgets/teacher_profile_header.dart';
 import 'package:examspark_frontend/presentation/screens/recording/widgets/extra_features_views.dart';
-import 'package:examspark_frontend/presentation/widgets/ask_ai_selectable_text.dart';
 import 'package:examspark_frontend/presentation/widgets/buy_plan_sheet.dart';
+import 'package:examspark_frontend/presentation/widgets/study_workspace.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// Group Information screen — inspired by WhatsApp Group Info, but built
 /// as ExamSpark's own Study Community pattern: no chat, no messaging,
@@ -33,6 +39,40 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   bool _isLoading = true;
   bool _isJoinUpdating = false;
   String? _updatingSuggestedId;
+  Map<String, dynamic>? _couponStatus;
+
+  bool get _isGroupTeacher {
+    final group = _group;
+    final uid = SupabaseClient.instance.currentUser?.id;
+    // Owner only (`class_folders.teacher_id`) — never students / other teachers.
+    return group?.isOwnedByUser(uid) ?? false;
+  }
+
+  Future<void> _togglePin(GroupSharedItem item) async {
+    final group = _group;
+    if (group == null || !_isGroupTeacher) return;
+    final next = !item.isPinned;
+    try {
+      await ClassService.instance.setSharedItemPinned(
+        itemId: item.id,
+        isPinned: next,
+      );
+      if (!mounted) return;
+      final updated = GroupSharedItem.sortedForFeed(
+        group.recentSharedItems.map(
+          (i) => i.id == item.id ? i.copyWith(isPinned: next) : i,
+        ),
+      );
+      setState(() {
+        _group = group.copyWith(recentSharedItems: updated);
+      });
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.showSnackBar(context, 
+        SnackBar(content: Text('Could not update pin: $e')),
+      );
+    }
+  }
 
   @override
   void initState() {
@@ -43,12 +83,23 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   Future<void> _load() async {
     final group = await GroupsRepository.instance.fetchGroupById(widget.groupId);
     final suggested = await GroupsRepository.instance.fetchSuggestedTeachers();
+    final couponStatus =
+        await GroupsRepository.instance.fetchCouponMembershipStatus(widget.groupId);
     if (!mounted) return;
     setState(() {
       _group = group;
       _suggestedTeachers = suggested.where((t) => t.id != group?.teacher.id).toList();
+      _couponStatus = couponStatus;
       _isLoading = false;
     });
+    // Student opened channel → daily active heartbeat (teacher dashboard).
+    if (group != null && group.isJoined) {
+      final uid = SupabaseClient.instance.currentUser?.id;
+      if (uid != null && group.teacher.userId != uid) {
+        // ignore: unawaited_futures
+        ClassService.instance.pingGroupActive(group.id);
+      }
+    }
   }
 
   Future<void> _toggleJoin() async {
@@ -81,12 +132,16 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         _group = updated;
         _isJoinUpdating = false;
       });
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(content: Text(updated.isJoined ? 'Joined "${updated.name}"' : 'Left "${updated.name}"')),
       );
     } on GroupMembershipException catch (e) {
       if (!mounted) return;
       setState(() => _isJoinUpdating = false);
+      if (e.isPendingApproval) {
+        AppToast.showSnackBar(context, SnackBar(content: Text(e.message)));
+        return;
+      }
       if (!wasJoined) {
         final eligibility = await GroupsRepository.instance.canJoinAnotherGroup();
         if (!mounted) return;
@@ -95,7 +150,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           return;
         }
       }
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(e.message)));
+      AppToast.showSnackBar(context, SnackBar(content: Text(e.message)));
     }
   }
 
@@ -111,14 +166,368 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     });
   }
 
-  /// Opens a shared feed item — an interactive MCQ quiz for `quiz` items,
-  /// a simple read-only viewer sheet for everything else. Real quiz/notes
-  /// content lives in R2 (`group_shared_items.r2_path` — metadata-only
-  /// Postgres rule); the sample questions/placeholder text here are a UI
-  /// preview until Phase 5 wires the real fetch.
-  void _openSharedItem(GroupSharedItem item) {
-    if (item.type == GroupSharedItemType.quiz) {
-      showModalBottomSheet(
+  /// Opens shared feed item: real Study Workspace for notes/lecture, real quiz
+  /// from lecture extras for quiz shares. Viewing is free (teacher paid gen).
+  Future<void> _openSharedItem(GroupSharedItem item) async {
+    // Coupon path after month: stay in group, but lock content until upgrade.
+    final coupon = _couponStatus;
+    if (coupon != null &&
+        coupon['joined_via_coupon'] == true &&
+        coupon['access_active'] != true) {
+      if (!mounted) return;
+      AppToast.showSnackBar(
+        context,
+        const SnackBar(
+          content: Text(
+            'Coupon free month ended — content is locked. Upgrade a paid plan to unlock. You stay in this group.',
+          ),
+          backgroundColor: Color(0xFFC62828),
+        ),
+      );
+      return;
+    }
+
+    if (item.type == GroupSharedItemType.announcement) {
+      _showAnnouncementSheet(item);
+      return;
+    }
+
+    final lectureId = item.lectureId?.trim();
+    if (lectureId == null || lectureId.isEmpty) {
+      if (!mounted) return;
+      AppToast.showSnackBar(context, 
+        const SnackBar(
+          content: Text('This shared item has no lecture linked yet.'),
+        ),
+      );
+      return;
+    }
+
+    if (item.type == GroupSharedItemType.quiz &&
+        (item.sharedChips == null || item.sharedChips!.isEmpty)) {
+      // Legacy quiz-only shares (before chip picker).
+      await _openSharedQuiz(item, lectureId);
+      return;
+    }
+
+    if (item.type == GroupSharedItemType.notes ||
+        item.type == GroupSharedItemType.lecture ||
+        item.type == GroupSharedItemType.quiz) {
+      if (!mounted) return;
+      final msg = (item.body ?? '').trim();
+      if (msg.isNotEmpty) {
+        final open = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: Text(item.title),
+            content: Text(msg),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Close'),
+              ),
+              ElevatedButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Open study'),
+              ),
+            ],
+          ),
+        );
+        if (open != true || !mounted) return;
+      }
+      await showStudyWorkspaceSheet(
+        context,
+        lectureId: lectureId,
+        title: item.title,
+        readOnly: true,
+        allowedChips: item.sharedChips,
+        initialTabIndex: 0,
+      );
+      return;
+    }
+
+    // Homework / other — show title + body if any.
+    _showAnnouncementSheet(item);
+  }
+
+  void _showAnnouncementSheet(GroupSharedItem item) {
+    final text = (item.body ?? '').trim();
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(24),
+        decoration: BoxDecoration(
+          color: Theme.of(context).scaffoldBackgroundColor,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.campaign_outlined, color: AppTheme.accentColor, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      item.title,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyLarge
+                          ?.copyWith(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              Text(
+                "From ${_group?.teacher.fullName ?? 'your teacher'} • ${_typeLabel(item.type)}",
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 16),
+              if (text.isNotEmpty)
+                Text(text, style: Theme.of(context).textTheme.bodyMedium)
+              else
+                Text(
+                  'No message text.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.getSecondaryText(context),
+                      ),
+                ),
+              const SizedBox(height: 8),
+              Text(
+                'Students can read only — no comments.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.getSecondaryText(context),
+                    ),
+              ),
+              const SizedBox(height: 16),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: const Text('Close'),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showPostAnnouncementSheet() async {
+    final group = _group;
+    if (group == null || !_isGroupTeacher) return;
+
+    final userId = SupabaseClient.instance.currentUser?.id;
+    if (userId != null) {
+      try {
+        final plan = await SupabaseClient.instance.getPlanTier(userId);
+        if (!PlanTierGating.isTeacherLiveRecordUnlocked(plan)) {
+          if (!mounted) return;
+          AppToast.showSnackBar(
+            context,
+            SnackBar(
+              content: Text(PlanTierGating.teacherShareWorkspaceLockMessage()),
+              backgroundColor: const Color(0xFFC62828),
+            ),
+          );
+          return;
+        }
+      } catch (_) {
+        if (!mounted) return;
+        AppToast.showSnackBar(
+          context,
+          const SnackBar(
+            content: Text('Could not verify Teacher plan — post locked.'),
+            backgroundColor: Color(0xFFC62828),
+          ),
+        );
+        return;
+      }
+    }
+
+    final titleController = TextEditingController();
+    final bodyController = TextEditingController();
+    var pin = false;
+    var posting = false;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModal) {
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(ctx).viewInsets.bottom),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Theme.of(ctx).scaffoldBackgroundColor,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+                ),
+                child: SafeArea(
+                  top: false,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Post announcement',
+                        style: Theme.of(ctx).textTheme.bodyLarge?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Only you can post. Students can read — not comment.',
+                        style: Theme.of(ctx).textTheme.bodySmall,
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: titleController,
+                        decoration: InputDecoration(
+                          labelText: 'Title',
+                          hintText: 'e.g. Tomorrow class cancelled',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: bodyController,
+                        maxLines: 4,
+                        maxLength: 2000,
+                        decoration: InputDecoration(
+                          labelText: 'Message',
+                          hintText: 'Write your announcement…',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+                          ),
+                        ),
+                      ),
+                      SwitchListTile(
+                        contentPadding: EdgeInsets.zero,
+                        value: pin,
+                        onChanged: posting
+                            ? null
+                            : (v) => setModal(() => pin = v),
+                        title: const Text('Pin to top'),
+                        secondary: Icon(
+                          Icons.push_pin_outlined,
+                          color: AppTheme.accentColor,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          onPressed: posting
+                              ? null
+                              : () async {
+                                  final title = titleController.text.trim();
+                                  final body = bodyController.text.trim();
+                                  if (title.isEmpty || body.isEmpty) {
+                                    AppToast.showSnackBar(context, 
+                                      const SnackBar(
+                                        content: Text('Title and message required'),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  setModal(() => posting = true);
+                                  try {
+                                    final row =
+                                        await ClassService.instance.postAnnouncement(
+                                      classId: group.id,
+                                      title: title,
+                                      body: body,
+                                      isPinned: pin,
+                                    );
+                                    if (!mounted) return;
+                                    Navigator.pop(ctx);
+                                    final item = GroupSharedItem.fromMap(row);
+                                    final next = GroupSharedItem.sortedForFeed([
+                                      item,
+                                      ...group.recentSharedItems,
+                                    ]);
+                                    setState(() {
+                                      _group = group.copyWith(recentSharedItems: next);
+                                    });
+                                    AppToast.showSnackBar(context, 
+                                      const SnackBar(
+                                        content: Text('Announcement posted'),
+                                      ),
+                                    );
+                                  } catch (e) {
+                                    setModal(() => posting = false);
+                                    if (!mounted) return;
+                                    AppToast.showSnackBar(context, 
+                                      SnackBar(content: Text('Could not post: $e')),
+                                    );
+                                  }
+                                },
+                          child: posting
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : Text(pin ? 'Post & Pin' : 'Post'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    titleController.dispose();
+    bodyController.dispose();
+  }
+
+  Future<void> _openSharedQuiz(GroupSharedItem item, String lectureId) async {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final data = await LectureService.instance.fetchQuiz(lectureId);
+      final questions = (data['questions'] as List?) ?? [];
+      final parsed = questions
+          .whereType<Map>()
+          .map((q) => MCQQuestion.fromJson(Map<String, dynamic>.from(q)))
+          .toList();
+      if (!mounted) return;
+      Navigator.pop(context);
+      if (parsed.isEmpty) {
+        AppToast.showSnackBar(context, 
+          const SnackBar(
+            content: Text(
+              'No quiz yet for this lecture. Ask your teacher to generate & share Quiz.',
+            ),
+          ),
+        );
+        return;
+      }
+      await showModalBottomSheet(
         context: context,
         isScrollControlled: true,
         backgroundColor: Colors.transparent,
@@ -130,7 +539,8 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           builder: (context, scrollController) => Container(
             decoration: BoxDecoration(
               color: Theme.of(context).scaffoldBackgroundColor,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(20)),
             ),
             child: Column(
               children: [
@@ -148,136 +558,39 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   child: Row(
                     children: [
                       Expanded(
-                        child: Text(item.title, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
+                        child: Text(
+                          item.title,
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyLarge
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
                       ),
-                      IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
                     ],
                   ),
                 ),
-                Expanded(child: MCQQuizView(questions: _sampleQuizQuestions())),
+                Expanded(
+                  child: MCQQuizView(
+                    questions: parsed,
+                    lectureId: lectureId,
+                  ),
+                ),
               ],
             ),
           ),
         ),
       );
-      return;
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context);
+      AppToast.showSnackBar(context, 
+        SnackBar(content: Text('Could not open quiz: $e')),
+      );
     }
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(24),
-        decoration: BoxDecoration(
-          color: Theme.of(context).scaffoldBackgroundColor,
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(item.title, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
-              const SizedBox(height: 4),
-              Text(
-                'Shared by ${_group?.teacher.fullName ?? 'your teacher'} • ${_typeLabel(item.type)}',
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
-              const SizedBox(height: 16),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: AppTheme.getCardBackground(context),
-                  borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-                  border: Border.all(color: AppTheme.getCardBorder(context)),
-                ),
-                child: AskAiSelectableText(
-                  text: 'Full content viewing connects once Cloudflare R2 storage is wired (Phase 5) — '
-                      'this preview just confirms the item shared correctly.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                  onAskAi: _askAiAboutSharedContent,
-                ),
-              ),
-              const SizedBox(height: 16),
-              SizedBox(
-                width: double.infinity,
-                child: OutlinedButton(
-                  onPressed: () => Navigator.pop(context),
-                  child: const Text('Close'),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  /// "Select text → Ask AI" entry point for shared Group content
-  /// (`AskAiSelectableText`). Group items don't have a `lectureId` wired on
-  /// the client model yet, so this shows the same "connects once Phase 5
-  /// RAG is wired" placeholder used elsewhere on this screen instead of the
-  /// lecture-specific `RAGChatModal` — the selection UX itself is real and
-  /// ready for when the backend fetch lands.
-  void _askAiAboutSharedContent(String selectedText) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) => Padding(
-        padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-        child: Container(
-          padding: const EdgeInsets.all(24),
-          decoration: BoxDecoration(
-            color: Theme.of(context).scaffoldBackgroundColor,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          child: SafeArea(
-            top: false,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(Icons.auto_awesome, size: 18),
-                    const SizedBox(width: 8),
-                    Text('Ask AI', style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold)),
-                    const Spacer(),
-                    IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.getCardBackground(context),
-                    borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-                    border: Border.all(color: AppTheme.getCardBorder(context)),
-                  ),
-                  child: Text('"$selectedText"', style: Theme.of(context).textTheme.bodySmall),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'Ask AI on shared Group content connects once Cloudflare R2 + FastAPI RAG (Phase 5) are wired — '
-                  'same Ask AI flow you already have on your own lectures.',
-                  style: Theme.of(context).textTheme.bodySmall,
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: OutlinedButton(
-                    onPressed: () => Navigator.pop(context),
-                    child: const Text('Close'),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
   }
 
   String _typeLabel(GroupSharedItemType type) {
@@ -295,30 +608,15 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     }
   }
 
-  List<MCQQuestion> _sampleQuizQuestions() => [
-        MCQQuestion(
-          question: 'When did the First World War begin?',
-          options: ['1345', '1914', '1934', '1945'],
-          correctAnswer: '1914',
-          explanation: 'World War I began on 28 July 1914.',
-        ),
-        MCQQuestion(
-          question: 'Which treaty officially ended the First World War?',
-          options: ['Treaty of Versailles', 'Treaty of Paris', 'Treaty of Rome', 'Treaty of Vienna'],
-          correctAnswer: 'Treaty of Versailles',
-          explanation: 'Signed in 1919 at the Paris Peace Conference.',
-        ),
-      ];
-
   void _shareGroup() {
     final group = _group;
     if (group == null) return;
     // Uses the same joinCode-based link format as the Teacher Dashboard's
     // "Share Invite Link" — was previously `group.id` (a UUID), which
     // didn't match the dashboard's link at all.
-    final link = 'examspark.app/join/${group.joinCode}';
+    final link = AppBrand.inviteJoinUrl(group.joinCode);
     Clipboard.setData(ClipboardData(text: link));
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Group link copied: $link')));
+    AppToast.showSnackBar(context, SnackBar(content: Text('Group link copied: $link')));
   }
 
   void _reportGroup() {
@@ -333,7 +631,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(
+              AppToast.showSnackBar(context, 
                 const SnackBar(content: Text('Report submitted. Our team will review it.')),
               );
             },
@@ -342,6 +640,22 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         ],
       ),
     );
+  }
+
+  String? _couponBannerText() {
+    final s = _couponStatus;
+    if (s == null) return null;
+    final via = s['joined_via_coupon'] == true;
+    if (!via) return null;
+    final active = s['access_active'] == true;
+    final urgency = s['in_urgency_window'] == true;
+    if (active) {
+      return 'Coupon access active — first-month free. Upgrade before it ends to keep full access.';
+    }
+    if (urgency) {
+      return 'Your free access ended. Upgrade within 7 days, or progress/history access may stay restricted.';
+    }
+    return 'Coupon free access ended. Upgrade your plan to unlock full group content.';
   }
 
   @override
@@ -363,38 +677,88 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
-        title: Text(group.name, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w500)),
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              group.name,
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+            ),
+            Text(
+              '${group.studentsCount} students · Teacher posts only',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.normal,
+                color: AppTheme.getSecondaryText(context),
+              ),
+            ),
+          ],
+        ),
       ),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(AppTheme.screenPadding),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ---- Top Section: Teacher Profile ----
+            // ---- Top: Teacher profile (channel owner) ----
             TeacherProfileHeader(teacher: teacher),
-            const SizedBox(height: 24),
+            if (_couponBannerText() != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.getAccentTint(context),
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppTheme.accentColor.withValues(alpha: 0.4)),
+                ),
+                child: Text(
+                  _couponBannerText()!,
+                  style: const TextStyle(fontSize: 13, height: 1.35),
+                ),
+              ),
+            ],
+            const SizedBox(height: 20),
 
-            // ---- Buttons: Join/Leave, Share, Report ----
-            SizedBox(
-              width: double.infinity,
-              child: group.isJoined
-                  ? OutlinedButton.icon(
-                      onPressed: _isJoinUpdating ? null : _toggleJoin,
-                      icon: const Icon(Icons.exit_to_app, size: 18),
-                      label: Text(_isJoinUpdating ? 'Updating...' : 'Leave Group'),
-                      style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(48),
-                        foregroundColor: Colors.red,
-                        side: const BorderSide(color: Colors.red),
+            // ---- Join (students) / Announce (teacher) ----
+            if (!group.isJoined)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isJoinUpdating ? null : _toggleJoin,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: Text(_isJoinUpdating ? 'Joining...' : 'Join Group'),
+                  style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                ),
+              )
+            else if (_isGroupTeacher)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _showPostAnnouncementSheet,
+                  icon: const Icon(Icons.campaign_outlined, size: 18),
+                  label: const Text('Post announcement'),
+                  style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                ),
+              )
+            else
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppTheme.getCardBackground(context),
+                  borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+                  border: Border.all(color: AppTheme.getCardBorder(context)),
+                ),
+                child: Text(
+                  'Teacher posts only (notes / quiz / lectures). '
+                  'You can read — no messages, no announcements from students.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.getSecondaryText(context),
                       ),
-                    )
-                  : ElevatedButton.icon(
-                      onPressed: _isJoinUpdating ? null : _toggleJoin,
-                      icon: const Icon(Icons.add, size: 18),
-                      label: Text(_isJoinUpdating ? 'Joining...' : 'Join Group'),
-                      style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                    ),
-            ),
+                ),
+              ),
             const SizedBox(height: 12),
             Row(
               children: [
@@ -402,7 +766,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   child: OutlinedButton.icon(
                     onPressed: _shareGroup,
                     icon: const Icon(Icons.share_outlined, size: 16),
-                    label: const Text('Share Group'),
+                    label: Text(_isGroupTeacher ? 'Share invite' : 'Copy invite link'),
                     style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(40)),
                   ),
                 ),
@@ -422,23 +786,70 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             ),
             const SizedBox(height: 28),
 
-            // ---- Middle Section: Group Information ----
+            // ---- Channel feed first (list rhythm, not chat) ----
+            if (group.recentSharedItems.isNotEmpty || _isGroupTeacher) ...[
+              _buildSectionHeader('CHANNEL FEED'),
+              const SizedBox(height: 4),
+              Text(
+                _isGroupTeacher
+                    ? 'You post here. Students only read. Pin keeps post on top.'
+                    : 'Teacher posts only. Tap to read — no reply / no write.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.getSecondaryText(context),
+                    ),
+              ),
+              const SizedBox(height: 8),
+              if (group.recentSharedItems.isEmpty)
+                Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  child: Text(
+                    _isGroupTeacher
+                        ? 'No posts yet. Share a lecture or Post announcement (+ Pin).'
+                        : 'No posts from teacher yet.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: AppTheme.getSecondaryText(context),
+                        ),
+                  ),
+                )
+              else
+                for (final item in GroupSharedItem.sortedForFeed(group.recentSharedItems))
+                  PinnedContentTile(
+                    item: item,
+                    onTap: () => _openSharedItem(item),
+                    onTogglePin: _isGroupTeacher ? () => _togglePin(item) : null,
+                  ),
+              const SizedBox(height: 28),
+            ],
+
+            // ---- Group Information ----
             _buildSectionHeader('GROUP INFORMATION'),
             const SizedBox(height: 12),
             _buildInfoCard(context, group),
             const SizedBox(height: 28),
 
             // ---- Teacher Achievements (only if uploaded) ----
-            TeacherAchievementsSection(certificates: teacher.certificates, achievements: teacher.achievements),
+            TeacherAchievementsSection(
+              certificates: teacher.certificatesForStudents,
+              achievements: teacher.achievements,
+            ),
             if (teacher.hasAchievements) const SizedBox(height: 28),
 
-            // ---- Bottom Section: Recent Shared Content ----
-            if (group.recentSharedItems.isNotEmpty) ...[
-              _buildSectionHeader('RECENT SHARED CONTENT'),
-              const SizedBox(height: 12),
-              for (final item in group.recentSharedItems)
-                PinnedContentTile(item: item, onTap: () => _openSharedItem(item)),
-              const SizedBox(height: 16),
+            // ---- Leave (students only — teacher owns the group) ----
+            if (group.isJoined && !_isGroupTeacher) ...[
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: _isJoinUpdating ? null : _toggleJoin,
+                  icon: const Icon(Icons.exit_to_app, size: 18),
+                  label: Text(_isJoinUpdating ? 'Updating...' : 'Leave Group'),
+                  style: OutlinedButton.styleFrom(
+                    minimumSize: const Size.fromHeight(48),
+                    foregroundColor: Colors.red,
+                    side: const BorderSide(color: Colors.red),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 28),
             ],
 
             // ---- Suggested Teachers ----

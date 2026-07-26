@@ -1,4 +1,4 @@
-package com.example.examspark_frontend
+package com.sonialabs.sonaxia
 
 import io.flutter.embedding.android.FlutterActivity
 

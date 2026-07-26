@@ -10,12 +10,12 @@ from app.constants.language_hint import (
 )
 
 
-def test_latin_question_matches_not_force_english():
-    # Latin script → MATCH_QUESTION (English/Spanish/French — model matches)
-    assert detect_question_language_hint("Explain photosynthesis simply") == "MATCH_QUESTION"
+def test_latin_question_clear_english():
+    # Clear English Latin → ENGLISH (Ask AI notes-language leak fix)
+    assert detect_question_language_hint("Explain photosynthesis simply") == "ENGLISH"
     line = language_hint_user_line("What is HOF?")
-    assert "MATCH_QUESTION" in line
-    assert "world" in line.lower() or "Qwen3" in line
+    assert "ENGLISH" in line
+    assert "HARD LOCK" in line or "English only" in line
 
 
 def test_hindi_devanagari_hint():
@@ -36,6 +36,8 @@ def test_explicit_overrides():
     assert detect_question_language_hint("I want hinglish conversation") == "HINGLISH"
     assert detect_question_language_hint("answer in bangla please") == "BENGALI"
     assert detect_question_language_hint("answer in english please") == "ENGLISH"
+    assert detect_question_language_hint("english main baat karo") == "ENGLISH"
+    assert detect_question_language_hint("bengali mein samjhao") == "BENGALI"
     assert detect_question_language_hint("answer in spanish please") == "MATCH_QUESTION"
 
 
@@ -98,9 +100,12 @@ def test_hinglish_roman_chat_detected():
     assert "ANTI-LEAK" in line
 
 
-def test_pure_english_not_forced_hinglish():
+def test_pure_english_chip_is_english():
     assert detect_question_language_hint("Explain the main idea in simple words") == (
-        "MATCH_QUESTION"
+        "ENGLISH"
+    )
+    assert (
+        resolve_answer_language("Explain the main idea in simple words") == "ENGLISH"
     )
 
 

@@ -1263,20 +1263,8 @@ class LectureService:
         """Reads short notes from Supabase first; R2 only as last resort (timed)."""
         import concurrent.futures
 
+        self._assert_lecture_owner_or_group_member(user_id, lecture_id)
         db = get_supabase_admin()
-        lecture = (
-            db.table("lectures")
-            .select("id, user_id, status")
-            .eq("id", lecture_id)
-            .limit(1)
-            .execute()
-        )
-        rows = lecture.data or []
-        if not rows:
-            raise LecturePipelineError("Lecture not found.", status_code=404)
-        row = rows[0]
-        if row.get("user_id") != user_id:
-            raise LecturePipelineError("Not allowed to view this lecture.", status_code=403)
 
         notes_result = (
             db.table("notes")
@@ -1369,7 +1357,7 @@ class LectureService:
         from app.models.lecture import TranscriptPayload
         from app.services.r2_storage_service import FILE_CLEAN_TRANSCRIPT, FILE_TRANSCRIPT
 
-        row = self._assert_lecture_owner(user_id, lecture_id)
+        row = self._assert_lecture_owner_or_group_member(user_id, lecture_id)
         db = get_supabase_admin()
         transcript_result = (
             db.table("transcripts")
@@ -1404,6 +1392,25 @@ class LectureService:
             except R2StorageError:
                 continue
 
+        # Founder SQL seed / no-R2 smoke: extras.inline_transcript.payload_json.text
+        if not text:
+            try:
+                inline = (
+                    db.table("extras")
+                    .select("payload_json")
+                    .eq("lecture_id", lecture_id)
+                    .eq("type", "inline_transcript")
+                    .limit(1)
+                    .execute()
+                )
+                rows = inline.data or []
+                if rows:
+                    payload = rows[0].get("payload_json") or {}
+                    if isinstance(payload, dict):
+                        text = str(payload.get("text") or "").strip()
+            except Exception:  # noqa: BLE001 — soft fallback
+                text = text or ""
+
         words = len(text.split()) if text else 0
         return TranscriptPayload(
             transcript=text,
@@ -1415,7 +1422,7 @@ class LectureService:
         db = get_supabase_admin()
         lecture = (
             db.table("lectures")
-            .select("id, user_id, status, r2_folder_path")
+            .select("id, user_id, status, r2_folder_path, source_type")
             .eq("id", lecture_id)
             .limit(1)
             .execute()
@@ -1427,6 +1434,64 @@ class LectureService:
         if row.get("user_id") != user_id:
             raise LecturePipelineError("Not allowed to view this lecture.", status_code=403)
         return row
+
+    def _assert_lecture_owner_or_group_member(
+        self, user_id: str, lecture_id: str
+    ) -> dict:
+        """Read access: lecture owner OR active group member via shared item."""
+        db = get_supabase_admin()
+        lecture = (
+            db.table("lectures")
+            .select("id, user_id, status, r2_folder_path, source_type")
+            .eq("id", lecture_id)
+            .limit(1)
+            .execute()
+        )
+        rows = lecture.data or []
+        if not rows:
+            raise LecturePipelineError("Lecture not found.", status_code=404)
+        row = rows[0]
+        if row.get("user_id") == user_id:
+            return row
+
+        try:
+            rpc = db.rpc(
+                "fn_user_can_view_shared_lecture",
+                {"p_user_id": user_id, "p_lecture_id": lecture_id},
+            ).execute()
+            allowed = bool(rpc.data) if rpc.data is not None else False
+        except Exception:  # noqa: BLE001
+            allowed = self._fallback_group_lecture_access(user_id, lecture_id)
+
+        if not allowed:
+            raise LecturePipelineError(
+                "Not allowed to view this lecture.", status_code=403
+            )
+        return row
+
+    def _fallback_group_lecture_access(self, user_id: str, lecture_id: str) -> bool:
+        """If RPC missing (SQL not run yet), walk shared items + access fn."""
+        db = get_supabase_admin()
+        shared = (
+            db.table("group_shared_items")
+            .select("id")
+            .eq("lecture_id", lecture_id)
+            .execute()
+        )
+        for item in shared.data or []:
+            item_id = item.get("id")
+            if not item_id:
+                continue
+            try:
+                access = db.rpc(
+                    "fn_group_item_access",
+                    {"p_user_id": user_id, "p_item_id": item_id},
+                ).execute()
+                if access.data and str(access.data) != "none":
+                    return True
+            except Exception:  # noqa: BLE001
+                continue
+        return False
 
     def _load_lecture_source_text(self, user_id: str, lecture_id: str) -> str:
         """Notes-first source for extras generation."""
@@ -1559,7 +1624,7 @@ class LectureService:
     def _get_extra_json(
         self, user_id: str, lecture_id: str, extra_type: str
     ) -> dict | None:
-        self._assert_lecture_owner(user_id, lecture_id)
+        self._assert_lecture_owner_or_group_member(user_id, lecture_id)
         db = get_supabase_admin()
         row = (
             db.table("extras")

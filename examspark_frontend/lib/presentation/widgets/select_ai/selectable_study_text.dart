@@ -5,20 +5,23 @@ import 'package:flutter/services.dart';
 import 'package:examspark_frontend/core/services/home_ask_bridge.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/utils/dom_selection.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// Study content selection → default **Ask AI** → Home chat (app-wide).
 ///
-/// Visible **Ask AI** bar (Web-safe). Context menu Ask AI as backup.
+/// Group shared / read-only: [enableAskAi] false — select/copy only, no Ask.
 class SelectableStudyText extends StatefulWidget {
   final Widget child;
   final String lectureId;
   final String sourceSurface;
+  final bool enableAskAi;
 
   const SelectableStudyText({
     super.key,
     required this.child,
     required this.lectureId,
     required this.sourceSurface,
+    this.enableAskAi = true,
   });
 
   @override
@@ -32,6 +35,7 @@ class _SelectableStudyTextState extends State<SelectableStudyText> {
   @override
   void initState() {
     super.initState();
+    if (!widget.enableAskAi) return;
     // Web: SelectionArea often won't fire selection callbacks — poll DOM.
     _poll = Timer.periodic(const Duration(milliseconds: 400), (_) {
       final dom = readDomTextSelection();
@@ -51,10 +55,12 @@ class _SelectableStudyTextState extends State<SelectableStudyText> {
   }
 
   Future<void> _askAi(String selected) async {
+    if (!widget.enableAskAi) return;
     final trimmed = selected.trim();
     if (trimmed.isEmpty) {
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(
+        context,
         const SnackBar(
           content: Text('Pehle text select (highlight) karo, phir Ask AI.'),
         ),
@@ -73,6 +79,7 @@ class _SelectableStudyTextState extends State<SelectableStudyText> {
   }
 
   Future<void> _askAiBestEffort() async {
+    if (!widget.enableAskAi) return;
     var text = _selected.trim();
     text = text.isNotEmpty ? text : (readDomTextSelection() ?? '');
     if (text.isEmpty) {
@@ -85,6 +92,10 @@ class _SelectableStudyTextState extends State<SelectableStudyText> {
 
   @override
   Widget build(BuildContext context) {
+    if (!widget.enableAskAi) {
+      return SelectionArea(child: widget.child);
+    }
+
     final hasSelection = _selected.isNotEmpty;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,

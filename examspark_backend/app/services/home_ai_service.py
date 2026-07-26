@@ -20,7 +20,7 @@ from app.constants.ai_response_status import (
     TIMEOUT,
     http_status_to_ai_status,
 )
-from app.constants.ai_speed import brevity_user_line, max_tokens_for_mode
+from app.constants.ai_speed import answer_length_user_line, max_tokens_for_mode
 from app.constants.answer_source import (
     MEDIUM,
     NO_MATCH,
@@ -29,6 +29,7 @@ from app.constants.answer_source import (
     derive_home_ai_source,
 )
 from app.constants.credit_costs import home_ai_cost_for_study_chip
+from app.constants.answer_intelligence import ANSWER_INTELLIGENCE_BLOCK
 from app.constants.language_hint import (
     language_hint_user_line,
     resolve_answer_language,
@@ -375,58 +376,37 @@ LEARNING MODE
 
 Do NOT list "Suggested Study Actions" inside the answer body.
 The ExamSpark app already shows study-action chips under the reply.
-Save tokens for the answer + required <<VISUAL_JSON>> block.
+Save tokens for the answer + required <<VISUAL_JSON>> block when asked.
 
+"""
+    + ANSWER_INTELLIGENCE_BLOCK
+    + """
 ==================================================
-COMPACT FIRST RESPONSE (Phase 4C — HARD)
+COMPACT FIRST RESPONSE (Phase 4C)
 ==================================================
 
 Students expand via chips (Flashcards, Quiz, Mind Map, etc.).
-Your FIRST reply must stay compact — roughly 20–30% of a typical long essay.
+Keep the first reply compact — roughly 20–30% of a long essay — unless
+the student clearly asked for a long/detailed exam answer.
 
-OMIT RULE (HARD): If a section is not genuinely relevant, OMIT it entirely.
-Do NOT include headers with filler ("not applicable", "N/A", "no formula
-applies", "No PYQ found", etc.). A missing section is correct.
+OMIT RULE (HARD): Never invent filler sections or "N/A" headers.
 
-Adaptive shapes:
-• Shape 1 — simple factual: one short Direct Answer block only — NO forced
-  section headers, NO Key Points / Related PYQ / Exam Tip / Source.
-  Still write a COMPLETE mini-answer: 2–4 sentences (fact + brief why/how
-  or one concrete detail). Never a single bare fact-dump line.
-  Example length: "The human heart has four chambers: two atria (upper) and
-  two ventricles (lower). The atria receive blood, while the ventricles pump
-  it out — this separation keeps oxygenated and deoxygenated blood from mixing."
-• Shape 2 — concept AND user message has VERIFIED PYQ MATCHES: Direct Answer
-  + short Related PYQ using ONLY those metadata tags (e.g. Related: NEET 2024).
-  Never invent years or hedge ("similar to a typical NEET question").
-• Shape 3 — deep / exam-prep: Direct Answer + Key Points only if multi-part
-  + Related PYQ only if verified matches present + Exam Tip only if non-generic.
-
-When useful (keep header names when included — chips may parse them):
-1. Direct Answer (2–4 sentences)
-2. Easy Explanation (short paragraph)
-3. Key Points (only if non-redundant)
-4. Important Formula (only if a real formula is required)
-5. Related PYQ (ONLY from verified user-message tags — metadata only)
-6. Source (honest line; OMIT on trivial facts if useless)
-7. Exam Tip (only if genuinely useful)
+When (and only when) a long multi-part answer needs labels, you MAY use:
+Direct Answer · Easy Explanation · Key Points · Important Formula ·
+Related PYQ (verified tags only) · Source · Exam Tip
+Most replies should use NONE of these — natural tutor prose wins.
 
 If user message says VERIFIED PYQ: none — never mention PYQs or official
 exam years; do not write that no PYQ was found.
 
-Do NOT dump every detail or multi-page notes.
-Do NOT add Suggested Study Actions.
-Prefer clarity over length. Chips will deepen later.
+Do NOT dump multi-page notes. Do NOT add Suggested Study Actions.
 
 ==================================================
 RESPONSE STYLE
 ==================================================
 
-Stay compact. Prefer natural structure over a fixed checklist.
-Omit irrelevant sections entirely. Never write "not applicable" under a header.
+Prefer natural structure over a fixed checklist.
 Do not force the same shape on every reply.
-
-Do NOT add a "Suggested Study Actions" section in the answer text.
 
 ==================================================
 LANGUAGE RULE — CHATGPT-STYLE (Qwen3 multilingual)
@@ -602,7 +582,7 @@ def _build_user_message(
     lang_line = language_hint_user_line(
         query, conversation_language=conversation_language
     )
-    speed_line = brevity_user_line(mode)
+    speed_line = answer_length_user_line(query, mode)
     speed_suffix = f"\n{speed_line}" if speed_line else ""
     visual_line = visual_reminder_user_line(query)
     pyq_block = format_verified_pyq_block(pyq_matches)
@@ -932,7 +912,9 @@ async def home_ai(
         web_deferred_no_web=web_deferred_no_web and not used_web_search,
     )
     answer, visual_payload = split_answer_and_visual(raw_answer)
-    if visual_payload is None:
+    if not wants_visual(query):
+        visual_payload = None
+    elif visual_payload is None:
         visual_payload = fallback_visual_payload(query, answer)
     timer.end("llm")
 
@@ -1266,7 +1248,9 @@ async def home_ai_stream(
 
     answer = parser.answer
     visual_payload = parser.visual_payload
-    if visual_payload is None:
+    if not wants_visual(query):
+        visual_payload = None
+    elif visual_payload is None:
         visual_payload = fallback_visual_payload(query, answer)
     if not answer:
         yield {

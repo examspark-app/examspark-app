@@ -23,6 +23,16 @@ class PaymentConfig:
     IDEMPOTENCY_TTL_SECONDS: int = int(os.getenv("PAYMENT_IDEMPOTENCY_TTL", "86400"))
 
     @classmethod
+    def is_testing(cls) -> bool:
+        """Dev-only mock purchases. Never enable in production."""
+        return os.getenv("IS_TESTING", "").strip().lower() in (
+            "1",
+            "true",
+            "yes",
+            "on",
+        )
+
+    @classmethod
     def razorpay_configured(cls) -> bool:
         return bool(cls.RAZORPAY_KEY_ID and cls.RAZORPAY_KEY_SECRET)
 

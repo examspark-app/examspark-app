@@ -28,6 +28,10 @@ from app.services.credit_allocator import CreditAllocator
 from app.services.gateways.google_play_gateway import GooglePlayGateway
 from app.services.gateways.phonepe_gateway import PhonePeGateway
 from app.services.gateways.razorpay_gateway import RazorpayGateway
+from app.services.notification_service import (
+    notify_payment_failed,
+    notify_payment_success,
+)
 from app.services.security import PaymentSecurity
 from app.services.supabase_admin import get_supabase_admin
 
@@ -265,16 +269,32 @@ class PaymentOrchestrator:
                 request.gateway == PaymentGateway.GOOGLE_PLAY
                 and not PaymentConfig.google_play_configured()
             )
+            fail_msg = (
+                "Google Play not configured — set GOOGLE_PLAY_PACKAGE_NAME "
+                "and GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"
+                if not_cfg
+                else "Invalid payment signature / purchase token — not verified"
+            )
+            # Soft notify once per order (metadata flag).
+            try:
+                meta_fail = dict(payment.get("metadata") or {})
+                if not meta_fail.get("notify_fail"):
+                    notify_payment_failed(
+                        user_id=str(user_id),
+                        order_id=request.order_id,
+                        reason=fail_msg,
+                    )
+                    meta_fail["notify_fail"] = True
+                    client.table("payments").update(
+                        {"metadata": meta_fail}
+                    ).eq("id", str(payment["id"])).execute()
+            except Exception as e:  # noqa: BLE001
+                logger.debug("payment fail notify skipped: %s", e)
             response = VerifyPaymentResponse(
                 order_id=request.order_id,
                 status=PaymentStatus.FAILED,
                 credits_allocated=0,
-                message=(
-                    "Google Play not configured — set GOOGLE_PLAY_PACKAGE_NAME "
-                    "and GOOGLE_PLAY_SERVICE_ACCOUNT_JSON"
-                    if not_cfg
-                    else "Invalid payment signature / purchase token — not verified"
-                ),
+                message=fail_msg,
             )
             PaymentSecurity.store_idempotency(
                 request.idempotency_key, response.model_dump(mode="json")
@@ -395,6 +415,22 @@ class PaymentOrchestrator:
             }
         ).execute()
 
+        # In-app + FCM — once per successful fulfill (metadata flag).
+        try:
+            if not meta.get("notify_success"):
+                notify_payment_success(
+                    user_id=str(user_id),
+                    order_id=order_id,
+                    plan_id=str(plan_id) if plan_id else None,
+                    credit_pack_id=str(credit_pack_id) if credit_pack_id else None,
+                )
+                meta["notify_success"] = True
+                client.table("payments").update({"metadata": meta}).eq(
+                    "id", str(payment_uuid)
+                ).execute()
+        except Exception as e:  # noqa: BLE001
+            logger.debug("payment success notify skipped: %s", e)
+
         return VerifyPaymentResponse(
             order_id=order_id,
             status=PaymentStatus.VERIFIED,
@@ -446,10 +482,12 @@ class PaymentOrchestrator:
                 }
             )
             .select("id")
-            .single()
             .execute()
         )
-        sub_id = inserted.data["id"]
+        rows = inserted.data or []
+        if not rows:
+            raise RuntimeError("Subscription insert returned no row")
+        sub_id = rows[0]["id"]
 
         if plan_id == "teacher":
             client.table("teacher_subscriptions").insert(

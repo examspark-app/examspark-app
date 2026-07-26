@@ -5,6 +5,7 @@ import 'dart:typed_data';
 import 'package:http/http.dart' as http;
 
 import 'package:examspark_frontend/core/config/app_config.dart';
+import 'package:examspark_frontend/core/constants/student_copy.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 
 class LectureService {
@@ -239,17 +240,34 @@ class LectureService {
     // Library / Recent only show finished lectures. Draft/error job rows stay
     // in DB for ProcessingScreen retry but must never look like saved files.
     // Sort by last opened (fallback created_at) so "Continue" matches real use.
-    final response = await SupabaseClient.instance.client
-        .from('lectures')
-        .select(
-          'id, title, subject, topic, status, created_at, last_opened_at, duplicate_of_lecture_id',
-        )
-        .eq('user_id', userId)
-        .eq('status', 'done')
-        .isFilter('duplicate_of_lecture_id', null)
-        .order('last_opened_at', ascending: false, nullsFirst: false);
+    try {
+      final response = await SupabaseClient.instance.client
+          .from('lectures')
+          .select(
+            'id, title, subject, topic, status, created_at, last_opened_at, '
+            'duplicate_of_lecture_id, source_type, is_favorite',
+          )
+          .eq('user_id', userId)
+          .eq('status', 'done')
+          .isFilter('duplicate_of_lecture_id', null)
+          .order('last_opened_at', ascending: false, nullsFirst: false);
 
-    return List<Map<String, dynamic>>.from(response as List);
+      return List<Map<String, dynamic>>.from(response as List);
+    } catch (_) {
+      // Column missing until library_favorites_migration.sql — still load Library.
+      final response = await SupabaseClient.instance.client
+          .from('lectures')
+          .select(
+            'id, title, subject, topic, status, created_at, last_opened_at, '
+            'duplicate_of_lecture_id, source_type',
+          )
+          .eq('user_id', userId)
+          .eq('status', 'done')
+          .isFilter('duplicate_of_lecture_id', null)
+          .order('last_opened_at', ascending: false, nullsFirst: false);
+
+      return List<Map<String, dynamic>>.from(response as List);
+    }
   }
 
   /// Bump [last_opened_at] when Study Workspace opens (Library time stamp).
@@ -265,6 +283,23 @@ class LectureService {
           .eq('id', id)
           .eq('user_id', userId);
     } catch (_) {}
+  }
+
+  /// Toggle Library favorite pin. Returns new value, or null on failure.
+  Future<bool?> setLectureFavorite(String lectureId, bool isFavorite) async {
+    final id = lectureId.trim();
+    final userId = SupabaseClient.instance.currentUser?.id;
+    if (id.isEmpty || userId == null) return null;
+    try {
+      await SupabaseClient.instance.client
+          .from('lectures')
+          .update({'is_favorite': isFavorite})
+          .eq('id', id)
+          .eq('user_id', userId);
+      return isFavorite;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Phase 4: Creates metadata rows only — no content stored in Postgres.
@@ -955,6 +990,24 @@ class LectureService {
     }
   }
 
+  /// Warm RAG index before Ask AI (idempotent — no credits). Soft-fail OK.
+  Future<void> warmLectureRagIndex(String lectureId) async {
+    final id = lectureId.trim();
+    if (id.isEmpty || !AppConfig.isApiConfigured) return;
+    try {
+      final accessToken = await _requireAccessToken();
+      final uri = Uri.parse(
+        '${AppConfig.resolvedApiBaseUrl}/api/v1/lectures/$id/index',
+      );
+      await http.post(
+        uri,
+        headers: {'Authorization': 'Bearer $accessToken'},
+      );
+    } catch (_) {
+      // Ask AI will index on first question if this fails.
+    }
+  }
+
   /// Permanent owner delete via FastAPI (R2 folder + DB cascade).
   Future<void> deleteLecture(String lectureId) async {
     final id = lectureId.trim();
@@ -1010,6 +1063,76 @@ class LectureService {
     final uri = Uri.parse(
       '${AppConfig.resolvedApiBaseUrl}/api/v1/home-ai/responses/$responseId/tools/$toolType$suffix',
     );
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  /// Study Workspace chips — statuses for Home-style tools on a recording.
+  Future<Map<String, dynamic>> lectureListStudyTools(String lectureId) async {
+    if (!AppConfig.isApiConfigured) {
+      throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
+    }
+    final accessToken = await _requireAccessToken();
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/lectures/$lectureId/study-tools',
+    );
+    final response = await http.get(
+      uri,
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  /// Free read of a cached study chip (owner or group member with access).
+  Future<Map<String, dynamic>> lectureFetchStudyTool({
+    required String lectureId,
+    required String toolType,
+  }) async {
+    if (!AppConfig.isApiConfigured) {
+      throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
+    }
+    final accessToken = await _requireAccessToken();
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/lectures/$lectureId/study-tools/$toolType',
+    );
+    final response = await http.get(
+      uri,
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  /// Generate or reopen a Home-style chip from lecture notes (paid on first generate).
+  Future<Map<String, dynamic>> lectureGenerateStudyTool({
+    required String lectureId,
+    required String toolType,
+    bool regenerate = false,
+  }) async {
+    if (!AppConfig.isApiConfigured) {
+      throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
+    }
+    final accessToken = await _requireAccessToken();
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/lectures/$lectureId/study-tools/$toolType',
+    ).replace(queryParameters: {
+      if (regenerate) 'regenerate': 'true',
+    });
     final response = await http.post(
       uri,
       headers: {
@@ -1111,10 +1234,7 @@ class LectureService {
       ).timeout(
         const Duration(seconds: 120),
         onTimeout: () {
-          throw Exception(
-            'Home AI timed out after 120s. Restart the FastAPI backend '
-            '(port 8000), then try again.',
-          );
+          throw Exception(StudentCopy.serverBusy);
         },
       );
     } finally {
@@ -1209,7 +1329,8 @@ class LectureService {
         final detail = decoded['detail'];
         if (detail is Map) {
           final message = detail['message']?.toString();
-          final code = detail['code']?.toString() ?? detail['status']?.toString();
+          final code =
+              detail['code']?.toString() ?? detail['status']?.toString();
           if (message != null && message.isNotEmpty) {
             if (code == 'FEATURE_LOCKED') {
               return message.startsWith('🔒') ? message : '🔒 $message';
@@ -1217,16 +1338,23 @@ class LectureService {
             return message;
           }
         }
+        if (detail is List) {
+          return StudentCopy.tryAgain;
+        }
         if (detail is String && detail.isNotEmpty) {
+          final d = detail.toLowerCase();
+          if (d.contains('literal') ||
+              d.contains('validation') ||
+              d.contains('conversation_language') ||
+              d.contains('pydantic')) {
+            return StudentCopy.askFailed;
+          }
           return detail;
         }
-        return detail.toString();
+        return StudentCopy.tryAgain;
       }
     } catch (_) {}
-    final trim = body.trim();
-    return trim.isNotEmpty
-        ? 'Processing failed ($statusCode): $trim'
-        : 'Processing failed ($statusCode).';
+    return StudentCopy.tryAgain;
   }
 
   /// FastAPI HTTPException detail — including Session 5 FEATURE_LOCKED payload

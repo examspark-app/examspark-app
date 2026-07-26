@@ -123,7 +123,9 @@ CREATE TABLE lectures (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- Bumped when student opens Study Workspace (Library / Home Recent sort + time label).
-    last_opened_at TIMESTAMPTZ
+    last_opened_at TIMESTAMPTZ,
+    -- Library Favorites pin (Phase 2 Slice 2 — library_favorites_migration.sql).
+    is_favorite BOOLEAN NOT NULL DEFAULT false
 );
 
 -- Transcript metadata only. Full transcript text + clean transcript live in
@@ -209,6 +211,22 @@ CREATE TABLE teacher_profiles (
     -- primary teacher (most recently joined Group). Display-only —
     -- see fn_teacher_estimated_commission(). CREDIT_ECONOMY.md §Teacher Commission.
     commission_rate NUMERIC NOT NULL DEFAULT 0.30,
+    -- Optional public trust links (student profile; edit on Teacher Dashboard).
+    link_website TEXT,
+    link_youtube TEXT,
+    link_instagram TEXT,
+    link_facebook TEXT,
+    link_linkedin TEXT,
+    link_whatsapp TEXT,
+    link_telegram TEXT,
+    link_x TEXT,
+    verification_score NUMERIC,
+    verification_date TIMESTAMP,
+    -- Teacher choice: show profile certificates to students (default OFF).
+    -- Separate from Get Verified (AI Trusted badge).
+    show_certificates_on_profile BOOLEAN NOT NULL DEFAULT false,
+    -- Teaching language from app dropdown (bounded list — not free-text).
+    language TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -222,6 +240,11 @@ CREATE TABLE student_profiles (
     age INTEGER CHECK (age IS NULL OR (age >= 5 AND age <= 100)),
     education_level TEXT,
     subjects TEXT[] NOT NULL DEFAULT '{}',
+    city TEXT,
+    state TEXT,
+    -- Discovery matching (weighted suggestion scores).
+    exam_target TEXT,
+    preferred_language TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -231,9 +254,13 @@ CREATE TABLE teacher_certificates (
     teacher_id UUID NOT NULL REFERENCES teacher_profiles(id) ON DELETE CASCADE,
     title TEXT NOT NULL,
     file_url TEXT,
-    -- pending = awaiting review; verified/rejected set by the Phase 5 AI
-    -- real/fake document check. Rejected shows "Contact Support" in the UI.
+    -- pending = awaiting review; verified/rejected set by soft AI (v1) or later.
     status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'verified', 'rejected')),
+    certificate_type TEXT,
+    certificate_subject TEXT,
+    certificate_hash TEXT,
+    verification_score NUMERIC,
+    verification_date TIMESTAMP,
     uploaded_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -260,9 +287,16 @@ CREATE TABLE class_folders (
     teacher_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name TEXT NOT NULL,
     subject TEXT NOT NULL,
+    -- Optional Study Group create-form fields (Jul 23, 2026 v1).
+    class_level TEXT,
+    exam TEXT,
+    language TEXT,
     description TEXT,
     join_code TEXT NOT NULL UNIQUE,
     is_public BOOLEAN NOT NULL DEFAULT true,
+    -- auto = instant join; approval = pending requests (Create form v2).
+    join_approval_mode TEXT NOT NULL DEFAULT 'auto'
+        CHECK (join_approval_mode IN ('auto', 'approval')),
     allow_downloads BOOLEAN NOT NULL DEFAULT false,
     -- Access mode applied to members whose subscription has expired
     -- (TEACHER_PLATFORM.md §2 — "Read-only OR Locked, configurable")
@@ -279,6 +313,8 @@ CREATE TABLE class_memberships (
     class_id UUID NOT NULL REFERENCES class_folders(id) ON DELETE CASCADE,
     student_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     joined_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Heartbeat when student opens the group channel (teacher Daily Active).
+    last_active_at TIMESTAMPTZ,
     UNIQUE (class_id, student_id)
 );
 
@@ -382,7 +418,7 @@ INSERT INTO subscription_plans (id, name, tier, monthly_credits, price_inr_paise
     ('plan_199', '₹199', 'entry', 1500, 19900, 'both', 1),
     ('plan_499', '₹499', 'mid', 3500, 49900, 'both', 3),
     ('plan_999', '₹999', 'premium', 8000, 99900, 'both', 6),
-    ('teacher', 'Teacher', 'teacher', 16000, 199900, 'both', -1);
+    ('teacher', 'Teacher', 'teacher', 16000, 299900, 'both', -1);
 
 -- One-time credit packs — a-la-carte top-up, no teacher commission applies.
 -- Founder-locked Jul 13, 2026: per-credit rate always >= cheapest subscription
@@ -885,6 +921,52 @@ GRANT EXECUTE ON FUNCTION fn_trim_group_memberships(UUID) TO service_role;
 GRANT EXECUTE ON FUNCTION fn_group_item_access(UUID, UUID) TO authenticated;
 GRANT EXECUTE ON FUNCTION fn_teacher_estimated_commission(UUID) TO authenticated;
 
+-- Teacher Dashboard Subscribers card — same attribution as commission
+-- (primary teacher = most recent Group join; active paid plan only).
+CREATE OR REPLACE FUNCTION fn_teacher_subscriber_count(p_teacher_id UUID)
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+    v_count INTEGER;
+BEGIN
+    WITH primary_group AS (
+        SELECT
+            cm.student_id,
+            cf.teacher_id,
+            ROW_NUMBER() OVER (
+                PARTITION BY cm.student_id
+                ORDER BY cm.joined_at DESC
+            ) AS rn
+        FROM class_memberships cm
+        JOIN class_folders cf ON cf.id = cm.class_id
+    ),
+    attributed_students AS (
+        SELECT student_id
+        FROM primary_group
+        WHERE rn = 1 AND teacher_id = p_teacher_id
+    ),
+    active_paid_subs AS (
+        SELECT DISTINCT us.user_id
+        FROM user_subscriptions us
+        JOIN subscription_plans sp ON sp.id = us.plan_id
+        WHERE us.status = 'active'
+          AND us.current_period_end >= now()
+          AND sp.price_inr_paise > 0
+    )
+    SELECT COUNT(*)::INTEGER
+    INTO v_count
+    FROM attributed_students a
+    JOIN active_paid_subs aps ON aps.user_id = a.student_id;
+
+    RETURN COALESCE(v_count, 0);
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION fn_teacher_subscriber_count(UUID) TO authenticated;
+
 -- PostgREST roles — RLS policies below still enforce row-level access.
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO service_role;
@@ -969,24 +1051,45 @@ CREATE POLICY "notes_write" ON notes FOR INSERT
 CREATE POLICY "notes_update" ON notes FOR UPDATE
     USING (EXISTS (SELECT 1 FROM lectures l WHERE l.id = notes.lecture_id AND l.user_id = auth.uid()));
 
--- ---- extras (owner only) ----
+-- ---- extras (owner + group members with shared access) ----
 CREATE POLICY "extras_select" ON extras FOR SELECT
-    USING (EXISTS (SELECT 1 FROM lectures l WHERE l.id = extras.lecture_id AND l.user_id = auth.uid()));
+    USING (
+        EXISTS (SELECT 1 FROM lectures l WHERE l.id = extras.lecture_id AND l.user_id = auth.uid())
+        OR EXISTS (
+            SELECT 1 FROM group_shared_items gsi
+            WHERE gsi.lecture_id = extras.lecture_id
+              AND fn_group_item_access(auth.uid(), gsi.id) <> 'none'
+        )
+    );
 CREATE POLICY "extras_write" ON extras FOR INSERT
     WITH CHECK (EXISTS (SELECT 1 FROM lectures l WHERE l.id = extras.lecture_id AND l.user_id = auth.uid()));
 CREATE POLICY "extras_update" ON extras FOR UPDATE
     USING (EXISTS (SELECT 1 FROM lectures l WHERE l.id = extras.lecture_id AND l.user_id = auth.uid()));
 
--- ---- quiz_attempts (own finishes only; Progress Learning Score) ----
+-- ---- quiz_attempts (own finishes; group-shared lecture OK; teacher reads own lectures) ----
 ALTER TABLE quiz_attempts ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "quiz_attempts_select_own" ON quiz_attempts
     FOR SELECT USING (user_id = auth.uid());
+CREATE POLICY "quiz_attempts_select_teacher_owned" ON quiz_attempts
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM lectures l
+            WHERE l.id = quiz_attempts.lecture_id AND l.user_id = auth.uid()
+        )
+    );
 CREATE POLICY "quiz_attempts_insert_own" ON quiz_attempts
     FOR INSERT WITH CHECK (
         user_id = auth.uid()
-        AND EXISTS (
-            SELECT 1 FROM lectures l
-            WHERE l.id = lecture_id AND l.user_id = auth.uid()
+        AND (
+            EXISTS (
+                SELECT 1 FROM lectures l
+                WHERE l.id = lecture_id AND l.user_id = auth.uid()
+            )
+            OR EXISTS (
+                SELECT 1 FROM group_shared_items gsi
+                WHERE gsi.lecture_id = lecture_id
+                  AND fn_group_item_access(auth.uid(), gsi.id) <> 'none'
+            )
         )
     );
 
@@ -1053,6 +1156,9 @@ CREATE POLICY "class_memberships_join" ON class_memberships FOR INSERT
     WITH CHECK (student_id = auth.uid());
 CREATE POLICY "class_memberships_leave" ON class_memberships FOR DELETE
     USING (student_id = auth.uid());
+CREATE POLICY "class_memberships_touch_active" ON class_memberships FOR UPDATE
+    USING (student_id = auth.uid())
+    WITH CHECK (student_id = auth.uid());
 
 -- ---- group_shared_items (feed — teacher writes, members read per access fn) ----
 CREATE POLICY "group_shared_items_select" ON group_shared_items FOR SELECT
@@ -1086,9 +1192,18 @@ CREATE POLICY "teacher_profiles_insert_own" ON teacher_profiles FOR INSERT
 CREATE POLICY "teacher_profiles_update_own" ON teacher_profiles FOR UPDATE
     USING (user_id = auth.uid());
 
--- ---- teacher_certificates (public read, owner write) ----
-CREATE POLICY "teacher_certificates_select_all" ON teacher_certificates FOR SELECT
-    USING (true);
+-- ---- teacher_certificates (owner always; students only if show_certificates_on_profile) ----
+CREATE POLICY "teacher_certificates_select" ON teacher_certificates FOR SELECT
+    USING (
+        EXISTS (
+            SELECT 1 FROM teacher_profiles tp
+            WHERE tp.id = teacher_id
+              AND (
+                  tp.user_id = auth.uid()
+                  OR tp.show_certificates_on_profile = true
+              )
+        )
+    );
 CREATE POLICY "teacher_certificates_write_own" ON teacher_certificates FOR INSERT
     WITH CHECK (EXISTS (SELECT 1 FROM teacher_profiles tp WHERE tp.id = teacher_id AND tp.user_id = auth.uid()));
 CREATE POLICY "teacher_certificates_delete_own" ON teacher_certificates FOR DELETE

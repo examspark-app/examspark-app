@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:examspark_frontend/core/constants/custom_field_option.dart';
 import 'package:examspark_frontend/core/constants/plan_tier_gating.dart';
 import 'package:examspark_frontend/core/constants/subjects.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
@@ -6,6 +7,7 @@ import 'package:examspark_frontend/core/router/app_navigation.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/recording/widgets/audio_level_indicator.dart';
 import 'package:examspark_frontend/presentation/screens/recording/widgets/camera_preview_placeholder.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 class RecordingSetupScreen extends StatefulWidget {
   /// Forwarded to [RecorderScreen] so it can pre-select the matching
@@ -20,12 +22,16 @@ class RecordingSetupScreen extends StatefulWidget {
 }
 
 class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
-  static const _subjects = kSubjectOptions;
-
   final _topicController = TextEditingController();
+  final _customSubjectController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   String? _selectedSubject;
   bool? _audioUnlocked;
+
+  String? get _effectiveSubject => CustomFieldOption.resolve(
+        _selectedSubject,
+        _customSubjectController.text,
+      );
 
   /// This screen used to always look like "starting a recording" (camera +
   /// mic preview, "Start Recording" button) even for a plain PDF/photo/audio
@@ -72,6 +78,7 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
   @override
   void dispose() {
     _topicController.dispose();
+    _customSubjectController.dispose();
     super.dispose();
   }
 
@@ -165,13 +172,47 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
                       const SizedBox(height: 8),
                       DropdownButtonFormField<String>(
                         initialValue: _selectedSubject,
-                        decoration: _inputDecoration(context, hint: 'Select a subject'),
-                        items: _subjects
+                        decoration: _inputDecoration(
+                          context,
+                          hint: 'Select a subject',
+                        ).copyWith(
+                          helperText: 'Not listed? Choose Custom…',
+                        ),
+                        items: kSubjectOptionsWithCustom
                             .map((s) => DropdownMenuItem(value: s, child: Text(s)))
                             .toList(),
                         onChanged: (v) => setState(() => _selectedSubject = v),
-                        validator: (v) => v == null ? 'Please select a subject' : null,
+                        validator: (v) {
+                          if (v == null || v.isEmpty) {
+                            return 'Please select a subject';
+                          }
+                          if (v == CustomFieldOption.label &&
+                              _customSubjectController.text.trim().isEmpty) {
+                            return 'Enter custom subject';
+                          }
+                          return null;
+                        },
                       ),
+                      if (_selectedSubject == CustomFieldOption.label) ...[
+                        const SizedBox(height: 12),
+                        TextFormField(
+                          controller: _customSubjectController,
+                          textCapitalization: TextCapitalization.words,
+                          decoration: _inputDecoration(
+                            context,
+                            hint: 'Custom subject',
+                          ),
+                          validator: (v) {
+                            if (_selectedSubject != CustomFieldOption.label) {
+                              return null;
+                            }
+                            if (v == null || v.trim().isEmpty) {
+                              return 'Enter custom subject';
+                            }
+                            return null;
+                          },
+                        ),
+                      ],
                       const SizedBox(height: AppTheme.elementSpacing),
                       Text('Lecture Topic', style: Theme.of(context).textTheme.bodyLarge),
                       const SizedBox(height: 8),
@@ -250,7 +291,7 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
 
   void _handleStartRecording() {
     if (_needsAudioUnlock && _audioUnlocked == false) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(content: Text(PlanTierGating.lockMessage(GatedFeature.recordLecture))),
       );
       return;
@@ -264,14 +305,14 @@ class _RecordingSetupScreenState extends State<RecordingSetupScreen> {
       nav.pushNamed(
         '/recorder',
         arguments: {
-          'subject': _selectedSubject,
+          'subject': _effectiveSubject,
           'topic': _topicController.text.trim(),
           'initialInputMethod': widget.initialInputMethod,
         },
       );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           SnackBar(
             content: Text('Could not open recorder: $e'),
             backgroundColor: Colors.red[700],

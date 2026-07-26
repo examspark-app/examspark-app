@@ -143,13 +143,16 @@ class SupabaseClient {
   }
 
   Future<Map<String, dynamic>?> getUserProfile(String userId) async {
-    final response = await client
-        .from('users')
-        .select()
-        .eq('id', userId)
-        .single();
-
-    return response;
+    try {
+      final response = await client
+          .from('users')
+          .select()
+          .eq('id', userId)
+          .maybeSingle();
+      return response;
+    } catch (_) {
+      return null;
+    }
   }
 
   /// Legacy direct update — kept only for backward compatibility, not called
@@ -209,6 +212,16 @@ class SupabaseClient {
     return (response as num).toDouble();
   }
 
+  /// Paid students attributed to this teacher (primary Group = most recent
+  /// join). Same base as Est. Commission 30%. Free joins are not counted.
+  Future<int> getTeacherSubscriberCount(String teacherUserId) async {
+    final response = await client.rpc('fn_teacher_subscriber_count', params: {
+      'p_teacher_id': teacherUserId,
+    });
+    if (response == null) return 0;
+    return (response as num).toInt();
+  }
+
   Future<List<Map<String, dynamic>>> getCreditTransactions(
     String userId, {
     int limit = 100,
@@ -238,6 +251,10 @@ class SupabaseClient {
     int? age,
     String? educationLevel,
     List<String> subjects = const [],
+    String? examTarget,
+    String? preferredLanguage,
+    String? city,
+    String? state,
   }) async {
     await client.from('users').update({
       'username': ?username,
@@ -250,13 +267,11 @@ class SupabaseClient {
       'age': age,
       'education_level': educationLevel,
       'subjects': subjects,
+      'exam_target': examTarget,
+      'preferred_language': preferredLanguage,
+      'city': city,
+      'state': state,
     }, onConflict: 'user_id');
-  }
-
-  /// "Skip for now" on the onboarding screen — just flips the gate flag so
-  /// `AuthGate` sends the student straight into the app next time.
-  Future<void> skipStudentOnboarding(String userId) async {
-    await client.from('users').update({'onboarding_completed': true}).eq('id', userId);
   }
 
   /// "I'm a Teacher" on the role-selection screen. Every signup defaults to
@@ -269,6 +284,49 @@ class SupabaseClient {
       'role': 'teacher',
       'onboarding_completed': true,
     }).eq('id', userId);
+  }
+
+  /// Load student profile fields for Edit Profile (users + student_profiles).
+  Future<Map<String, dynamic>> fetchStudentOnboardingBundle(String userId) async {
+    final userRow = await getUserProfile(userId);
+    final sp = await client
+        .from('student_profiles')
+        .select()
+        .eq('user_id', userId)
+        .maybeSingle();
+    return {
+      'users': userRow ?? <String, dynamic>{},
+      'student_profiles': sp,
+    };
+  }
+
+  /// Soft-delete account (Library kept until purge_after ≈ +30 days).
+  Future<Map<String, dynamic>> requestAccountDelete() async {
+    final response = await client.rpc('fn_request_account_delete');
+    if (response is Map<String, dynamic>) return response;
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  /// Cancel soft-delete within the 30-day window.
+  Future<Map<String, dynamic>> recoverAccount() async {
+    final response = await client.rpc('fn_recover_account');
+    if (response is Map<String, dynamic>) return response;
+    return Map<String, dynamic>.from(response as Map);
+  }
+
+  /// True when profile has a non-null [deleted_at].
+  static bool isAccountSoftDeleted(Map<String, dynamic>? profile) {
+    final v = profile?['deleted_at'];
+    if (v == null) return false;
+    if (v is String && v.trim().isEmpty) return false;
+    return true;
+  }
+
+  static DateTime? parsePurgeAfter(Map<String, dynamic>? profile) {
+    final v = profile?['purge_after'];
+    if (v == null) return null;
+    if (v is DateTime) return v;
+    return DateTime.tryParse(v.toString());
   }
 
   Stream<Map<String, dynamic>> userProfileStream(String userId) {

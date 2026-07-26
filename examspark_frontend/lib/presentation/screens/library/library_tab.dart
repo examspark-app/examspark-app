@@ -6,8 +6,9 @@ import 'package:examspark_frontend/presentation/screens/home/home_tab.dart' show
 import 'package:examspark_frontend/presentation/widgets/app_top_bar.dart';
 import 'package:examspark_frontend/presentation/widgets/lecture_card.dart';
 import 'package:examspark_frontend/presentation/widgets/study_workspace/workspace_reading_utils.dart';
+import 'package:examspark_frontend/presentation/screens/search/search_overlay_screen.dart';
 
-/// Library tab: Folders · Search · Recent → tap card → Study Workspace.
+/// Library tab: Folders · Search · Recent · Favorites → Study Workspace.
 /// Uses real `LectureService` data (kept wired per Phase 2 rule) — no
 /// fake placeholder lectures, so the founder always sees true progress.
 class LibraryTab extends StatefulWidget {
@@ -123,6 +124,36 @@ class _LibraryTabState extends State<LibraryTab> {
     widget.onOpenWorkspace(id, lecture['title'] as String? ?? 'Lecture', lecture['subject'] as String?);
   }
 
+  bool _isFavorite(Map<String, dynamic> lecture) => lecture['is_favorite'] == true;
+
+  Future<void> _toggleFavorite(Map<String, dynamic> lecture) async {
+    final id = lecture['id'] as String?;
+    if (id == null) return;
+    final next = !_isFavorite(lecture);
+    setState(() {
+      lecture['is_favorite'] = next;
+      final i = _lectures.indexWhere((l) => l['id'] == id);
+      if (i >= 0) _lectures[i]['is_favorite'] = next;
+    });
+    final saved = await LectureService.instance.setLectureFavorite(id, next);
+    if (!mounted) return;
+    if (saved == null) {
+      setState(() {
+        lecture['is_favorite'] = !next;
+        final i = _lectures.indexWhere((l) => l['id'] == id);
+        if (i >= 0) _lectures[i]['is_favorite'] = !next;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Couldn’t save favorite. Please try again.'),
+        ),
+      );
+    }
+  }
+
+  List<Map<String, dynamic>> _favoritesOf(List<Map<String, dynamic>> list) =>
+      list.where(_isFavorite).toList();
+
   @override
   Widget build(BuildContext context) {
     final filtered = _searchQuery.isEmpty
@@ -130,6 +161,7 @@ class _LibraryTabState extends State<LibraryTab> {
         : _lectures
             .where((l) => (l['title'] as String? ?? '').toLowerCase().contains(_searchQuery.toLowerCase()))
             .toList();
+    final favorites = _favoritesOf(filtered);
     final recent = filtered.take(5).toList();
     final folders = _groupBySubject(filtered);
 
@@ -193,6 +225,8 @@ class _LibraryTabState extends State<LibraryTab> {
                             dateLabel: formatOpenedAtLabel(
                               lecture['last_opened_at'] ?? lecture['created_at'],
                             ),
+                            isFavorite: _isFavorite(lecture),
+                            onFavoriteChanged: (_) => _toggleFavorite(lecture),
                             onTap: () => _openLecture(lecture),
                           ),
                         ),
@@ -206,6 +240,10 @@ class _LibraryTabState extends State<LibraryTab> {
       appBar: AppTopBar(
         title: 'Library',
         creditsBalance: _creditsBalance,
+        onSearchTap: () => showAppSearchOverlay(
+          context,
+          onOpenLecture: widget.onOpenWorkspace,
+        ),
         trailing: [
           IconButton(
             icon: _isRefreshing
@@ -230,6 +268,8 @@ class _LibraryTabState extends State<LibraryTab> {
                   _searchField(context),
                   const SizedBox(height: 20),
                   if (_lectures.isEmpty) _buildEmptyState(context) else ...[
+                    if (favorites.isNotEmpty)
+                      ..._buildSection(context, 'Favorites', favorites),
                     if (recent.isNotEmpty) ..._buildSection(context, 'Recent', recent),
                     const SizedBox(height: 8),
                     Text(
@@ -299,6 +339,8 @@ class _LibraryTabState extends State<LibraryTab> {
             dateLabel: formatOpenedAtLabel(
               lecture['last_opened_at'] ?? lecture['created_at'],
             ),
+            isFavorite: _isFavorite(lecture),
+            onFavoriteChanged: (_) => _toggleFavorite(lecture),
             onTap: () => _openLecture(lecture),
           ),
         ),

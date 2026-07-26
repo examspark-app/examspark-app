@@ -21,9 +21,11 @@ Internal (**backend only**): **1 Credit ≈ ₹0.15 charged-value**
 | ₹199 | ₹199 | 1,500 | ₹0.133 |
 | ₹499 | ₹499 | 3,500 | ₹0.143 |
 | ₹999 | ₹999 | 8,000 | ₹0.124 |
-| Teacher ₹1,999 | ₹1,999 | 16,000 | ₹0.125 |
+| Teacher ₹2,999 | ₹2,999 | 16,000 | ₹0.187 |
 
 Plan IDs: `free` (gating only) · `plan_199` · `plan_499` · `plan_999` · `teacher`
+
+**Jul 23, 2026:** Teacher plan price **₹1,999 → ₹2,999** (credits stay 16,000). Setup gate: [`TEACHER_PLATFORM.md`](TEACHER_PLATFORM.md) §1b.
 
 **Jul 13, 2026 update:** `plan_199` 1,300 → 1,500 credits (Ask AI headroom — see "Fee-Corrected Margin Validation" below) · `teacher` 20,000 → 16,000 (60hr/month max-usage risk-ceiling validation, not a margin change).
 
@@ -169,7 +171,7 @@ Adds the missing **payment gateway fee** line — assumes **worst case: every pa
 **Findings:**
 - **₹199** lands almost exactly at the 50% EBITDA target even in the worst case — it has no audio/recording feature, so real AI cost stays cheap. This is what freed the room to bump its credits 1,300 → 1,500 (see Buy Extra Credits / Plans table above).
 - **₹499 / ₹999** land at ~44–48% EBITDA in the worst case, below 50% — driven by the more expensive recording feature plus the Google Play cut. **This is a flagged watch-item, not yet acted on** — founder decision (Jul 13, 2026) was to leave the 30% commission unchanged this round. If a **blended/actual** fee split is used instead of worst-case (e.g. more users checking out via Web/Razorpay's ~2% fee), EBITDA on these tiers recovers to **~70–75%**. Revisit once real Web-vs-Android payment split data is available, or explicitly ask to solve for exactly 50% here (would need commission ~24% instead of 30%, uniformly across tiers).
-- **Teacher ₹1,999** plan has no commission line item (it's the teacher's own plan, not a commission payout) — EBITDA stays healthy at ~₹1,416 (~71%) even at worst-case fee.
+- **Teacher ₹2,999** plan has no commission line item (it's the teacher's own plan, not a commission payout) — price raised Jul 23, 2026 from ₹1,999; credits unchanged at 16,000. Re-check Play-fee EBITDA when live payment split is known.
 
 ---
 
@@ -196,7 +198,7 @@ Adds the missing **payment gateway fee** line — assumes **worst case: every pa
 | **₹299** (optional re-entry) | Same as ₹199 if reintroduced |
 | **₹499** | **Audio recording/upload unlocked.** Join up to 3 Groups. |
 | **₹999** | Full access — no locks. Join up to 6 Groups. |
-| **Teacher ₹1,999** | Bulk record + PDF export + share links + class dashboard. Unlimited Groups (owns groups, doesn't "join" as a student). |
+| **Teacher ₹2,999** | Bulk record + PDF export + share links + class dashboard. **Create** unlimited own Groups (setup gate). **Cannot join** another teacher’s Group as a student (`max_groups=0` join). Jul 26, 2026. |
 
 **Founder Jul 15, 2026:** Free monthly credits **75 → 50**. Ask/PDF/Photo = Free + credits. **Audio unlock = ₹499+** (Free and ₹199 locked). Home mic / Attach → Audio File show lock **before** starting the flow.
 
@@ -218,6 +220,16 @@ Check order: (1) plan unlock (audio only) → (2) credit balance. Server-side on
 - **Server (source of truth):** trigger `trg_enforce_group_join_limit` / `fn_enforce_group_join_limit` blocks `INSERT` into `class_memberships` when at/above plan `max_groups`. Migration: `group_join_limits_enforce_migration.sql`.
 - **Refund / plan drop / month expiry:** `fn_trim_group_memberships` — Free leaves all; downgrade keeps newest `joined_at` up to new max. Called from `refund_service` **and** DB trigger `trg_trim_groups_on_subscription_change` on `user_subscriptions` status/plan/period change (`subscription_change_trim_groups_migration.sql`).
 - "Copy Code" was removed from the Teacher Dashboard's group card (Jul 12, 2026) — "Share Invite Link" (`examspark.app/join/{joinCode}`) is now the only invite path, matching the format used on the Group Info screen's "Share Group" button.
+
+### Join approval vs plan (founder-locked Jul 23, 2026)
+
+Separate from max_groups counts. Full text: [`TEACHER_PLATFORM.md`](TEACHER_PLATFORM.md) §5 Paid vs Free.
+
+- Teacher Create Group choice: **Auto** or **Approve**
+- **Free** student + Approve group → **Pending** (teacher Accept/Reject)
+- **₹199 / ₹499 / ₹999** student → **always Auto join** (skip Pending even if group is Approve)
+- Institute bulk free join / kick-remove → **future**
+- Does **not** remove max_groups caps above
 
 ---
 
@@ -306,4 +318,6 @@ Students never spend credits to share notes/PDF — content share blocked entire
 | Jul 12, 2026 | Free tier: added PDF Analysis (text-only), 50→75 credits/month; recomputed Margin Validation with real Groq/Qwen pricing; added Non-API Actions (Always Free) list; teacher-credit validation note (20,000 kept unchanged) |
 | Jul 13, 2026 | Added Buy Extra Credits (5 a-la-carte packs, no teacher commission); Fee-Corrected Margin Validation adds worst-case 15% Google Play fee line (was missing); plan_199 1,300→1,500 credits (room found once real no-audio AI cost used, stays ~50% EBITDA); teacher 20,000→16,000 (60hr/month max-usage risk-ceiling validation); free 50→75 code/DB sync fix (doc already said 75 since Jul 12); flagged plan_499/plan_999 at ~44–48% EBITDA worst-case as a watch-item (commission left at 30%, not acted on this round) |
 | Jul 15, 2026 | **v2.2** Free credits 75→**50**/month; only plan lock = **audio record/upload @ ₹199+**; Ask/PDF/Photo/Diagram = Free + credits; audio unlock moved from ₹499→₹199; migration `credit_economy_free50_audio199_migration.sql` |
+| Jul 23, 2026 | **Teacher plan ₹1,999 → ₹2,999** (16,000 credits unchanged). **Teacher Setup Gate** saved — soft profile → buy Teacher → Create Group blocked until City/State/Qualification/Certificate (+ Name/Subject). See [`TEACHER_PLATFORM.md`](TEACHER_PLATFORM.md) §1b. |
+| Jul 23, 2026 | **Join approval:** Free + Approve group → Pending; Paid ₹199/499/999 → always Auto skip Pending. Join caps unchanged. Institute bulk/kick = future. |
 | Jul 15, 2026 | Group join: server trigger + trim on refund; Flutter gate fail-closed (`group_join_limits_enforce_migration.sql`) |

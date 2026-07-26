@@ -1,5 +1,11 @@
-/// Plan-tier feature gating — Free = credits; audio record/upload needs ₹499+.
-/// Founder Jul 15, 2026 (audio lock corrected to ₹499) — see CREDIT_ECONOMY.md
+/// Plan-tier feature gating.
+///
+/// Two **separate** audio rules (founder Jul 25, 2026):
+/// - **Student** Home Record / Upload Audio → ₹499+ (`plan_499`, `plan_999`)
+/// - **Teacher** live Record (Dashboard / teacherRecordOnly) → **Teacher ₹2,999 only**
+///   (`teacher`) — NOT unlocked by student ₹499
+///
+/// See CREDIT_ECONOMY.md · TEACHER_PLATFORM.md
 enum GatedFeature {
   askAi,
   pdfAnalysis,
@@ -26,7 +32,7 @@ class PlanTierGating {
     GatedFeature.revision: 'free',
     GatedFeature.importantQuestions: 'free',
     GatedFeature.mindMap: 'free',
-    // Only plan lock: audio record + audio upload (₹499+).
+    // Student audio only — Teacher live record uses [isTeacherLiveRecordUnlocked].
     GatedFeature.recordLecture: 'plan_499',
   };
 
@@ -47,6 +53,21 @@ class PlanTierGating {
     return _rank(currentPlanId) >= _rank(requiredPlan);
   }
 
+  /// Student path: Record + Upload Audio from Home — ₹499 / ₹999 / Teacher.
+  /// (Teacher plan also ranks above ₹499 so teachers can use Home audio if needed.)
+  static bool isStudentAudioUnlocked(String currentPlanId) {
+    return isFeatureUnlocked(
+      currentPlanId: currentPlanId,
+      feature: GatedFeature.recordLecture,
+    );
+  }
+
+  /// Teacher Dashboard / teacherRecordOnly live Record — **Teacher plan only**.
+  /// Student ₹499 does **not** unlock this path.
+  static bool isTeacherLiveRecordUnlocked(String currentPlanId) {
+    return currentPlanId.trim().toLowerCase() == 'teacher';
+  }
+
   static int _rank(String planId) {
     final i = planRank.indexOf(planId);
     return i < 0 ? 0 : i;
@@ -55,7 +76,6 @@ class PlanTierGating {
   static String lockMessage(GatedFeature feature) {
     switch (feature) {
       case GatedFeature.recordLecture:
-        // Hardcoded ₹499 — do not derive from plan id label (avoids stale ₹199 UI).
         return 'This feature needs the ₹499+ Plan.\n'
             'Audio recording and audio upload unlock from the ₹499 Plan.';
       case GatedFeature.pdfAnalysis:
@@ -69,6 +89,17 @@ class PlanTierGating {
       case GatedFeature.askAi:
         return 'Available on Free and all paid plans (uses credits).';
     }
+  }
+
+  static String teacherLiveRecordLockMessage() {
+    return 'Teacher live Record needs the Teacher plan (₹2,999).\n'
+        'When that month ends: Record + new Create Group + Share workspace '
+        'lock until renew. Existing groups stay. Student ₹499 does not unlock Teacher Record.';
+  }
+
+  static String teacherShareWorkspaceLockMessage() {
+    return 'Sharing Study Workspace to Groups needs active Teacher plan (₹2,999). '
+        'Renew to share lectures, notes, quiz, or announcements.';
   }
 
   static GatedFeature? featureFromAction(String action) {

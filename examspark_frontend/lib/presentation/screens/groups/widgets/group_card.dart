@@ -12,6 +12,10 @@ class GroupCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onJoinToggle;
   final bool isUpdating;
+  /// Unread teacher-post count (WhatsApp-style).
+  final int unreadCount;
+  /// Latest unread preview line under the group name.
+  final String? unreadPreview;
 
   const GroupCard({
     super.key,
@@ -19,6 +23,8 @@ class GroupCard extends StatelessWidget {
     required this.onTap,
     required this.onJoinToggle,
     this.isUpdating = false,
+    this.unreadCount = 0,
+    this.unreadPreview,
   });
 
   @override
@@ -58,6 +64,28 @@ class GroupCard extends StatelessWidget {
                           child: const VerifiedBadge(size: 16),
                         ),
                       ),
+                    if (unreadCount > 0)
+                      Positioned(
+                        right: -4,
+                        top: -4,
+                        child: Container(
+                          constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
+                          padding: const EdgeInsets.symmetric(horizontal: 5),
+                          decoration: BoxDecoration(
+                            color: AppTheme.accentColor,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            unreadCount > 99 ? '99+' : '$unreadCount',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
                   ],
                 ),
                 const SizedBox(width: 14),
@@ -69,12 +97,27 @@ class GroupCard extends StatelessWidget {
                         group.name,
                         style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                           fontSize: 15,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: unreadCount > 0
+                              ? FontWeight.w700
+                              : FontWeight.w600,
                         ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                       const SizedBox(height: 3),
+                      if (unreadCount > 0 &&
+                          (unreadPreview ?? '').isNotEmpty) ...[
+                        Text(
+                          unreadPreview!,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.getSecondaryText(context),
+                            fontWeight: FontWeight.w500,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 3),
+                      ],
                       Text(
                         '${teacher.fullName} · ${teacher.subject}',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(

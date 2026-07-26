@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
+import 'package:examspark_frontend/core/config/app_config.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/payments/payment_service.dart';
 import 'package:examspark_frontend/core/payments/models/payment_result.dart';
 import 'package:examspark_frontend/core/payments/subscription_plans.dart';
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
 import 'package:examspark_frontend/core/constants/credit_usage_display.dart';
+import 'package:examspark_frontend/core/data/groups_repository.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
+import 'package:examspark_frontend/core/services/teacher_setup_gate.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// Subscription Screen & Credit Management — Credits summary, history,
 /// student vs teacher plan cards, INR credit packs (no Extra Hours / USD).
@@ -24,6 +28,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   String _periodLabel = '—';
   bool _paying = false;
   bool _loading = true;
+  bool _isTeacher = false;
   List<Map<String, dynamic>> _transactions = [];
 
   List<SubscriptionPlan> get _studentPlans => SubscriptionPlans.all
@@ -85,6 +90,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         _planMonthlyCredits = planDef.monthlyCredits;
         _periodLabel = periodEnd ?? (planId == 'free' ? 'Free plan' : 'Active');
         _transactions = txs;
+        _isTeacher = (profile?['role'] as String?) == 'teacher' ||
+            planId == 'teacher';
         _loading = false;
       });
     } catch (_) {
@@ -165,36 +172,69 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   children: [
                     _buildCreditsSummary(),
                     const SizedBox(height: 28),
-                    _sectionTitle('Student plans'),
-                    const SizedBox(height: 12),
-                    ..._studentPlans.map(
-                      (plan) => Padding(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        child: PlanCard(
-                          plan: plan,
-                          isCurrentPlan: plan.id == _currentPlanId,
-                          onUpgrade: () =>
-                              _initiatePaymentGatewayCheckout(plan),
+                    if (_isTeacher) ...[
+                      _sectionTitle('Teacher plan'),
+                      const SizedBox(height: 4),
+                      Text(
+                        'For teachers who share lectures with Groups',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.getSecondaryText(context),
+                            ),
+                      ),
+                      const SizedBox(height: 12),
+                      PlanCard(
+                        plan: _teacherPlan,
+                        isCurrentPlan: _teacherPlan.id == _currentPlanId,
+                        onUpgrade: () =>
+                            _initiatePaymentGatewayCheckout(_teacherPlan),
+                        upgradeLabel: 'Get Teacher plan',
+                      ),
+                      const SizedBox(height: 28),
+                      _sectionTitle('Student plans'),
+                      const SizedBox(height: 12),
+                      ..._studentPlans.map(
+                        (plan) => Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: PlanCard(
+                            plan: plan,
+                            isCurrentPlan: plan.id == _currentPlanId,
+                            onUpgrade: () =>
+                                _initiatePaymentGatewayCheckout(plan),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 8),
-                    _sectionTitle('Teacher plan'),
-                    const SizedBox(height: 4),
-                    Text(
-                      'For teachers who share lectures with Groups',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.getSecondaryText(context),
+                    ] else ...[
+                      _sectionTitle('Student plans'),
+                      const SizedBox(height: 12),
+                      ..._studentPlans.map(
+                        (plan) => Padding(
+                          padding: const EdgeInsets.only(bottom: 16),
+                          child: PlanCard(
+                            plan: plan,
+                            isCurrentPlan: plan.id == _currentPlanId,
+                            onUpgrade: () =>
+                                _initiatePaymentGatewayCheckout(plan),
                           ),
-                    ),
-                    const SizedBox(height: 12),
-                    PlanCard(
-                      plan: _teacherPlan,
-                      isCurrentPlan: _teacherPlan.id == _currentPlanId,
-                      onUpgrade: () =>
-                          _initiatePaymentGatewayCheckout(_teacherPlan),
-                      upgradeLabel: 'Get Teacher plan',
-                    ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _sectionTitle('Teacher plan'),
+                      const SizedBox(height: 4),
+                      Text(
+                        'For teachers who share lectures with Groups',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.getSecondaryText(context),
+                            ),
+                      ),
+                      const SizedBox(height: 12),
+                      PlanCard(
+                        plan: _teacherPlan,
+                        isCurrentPlan: _teacherPlan.id == _currentPlanId,
+                        onUpgrade: () =>
+                            _initiatePaymentGatewayCheckout(_teacherPlan),
+                        upgradeLabel: 'Get Teacher plan',
+                      ),
+                    ],
                     const SizedBox(height: 28),
                     _sectionTitle('Buy Extra Credits'),
                     const SizedBox(height: 4),
@@ -622,8 +662,12 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
         ),
         title: const Text('Purchase Credits'),
         content: Text(
-          'Buy ${pack.credits} credits for ₹${pack.priceInr}?\n\n'
-          'If payment is not configured yet, you will see a clear message — nothing is faked as paid.',
+          AppConfig.isTesting
+              ? 'DEV MOCK: no Google Play / Razorpay.\n'
+                  'Continue → +50 credits on your account immediately.'
+              : 'Buy ${pack.credits} credits for ₹${pack.priceInr}?\n\n'
+                  'If payment is not configured yet, you will see a clear '
+                  'message — nothing is faked as paid.',
         ),
         actions: [
           TextButton(
@@ -645,7 +689,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   Future<void> _initiateCreditPackCheckout(CreditPackDef pack) async {
     final userId = SupabaseClient.instance.currentUser?.id;
     if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         const SnackBar(content: Text('Please log in to buy credits')),
       );
       return;
@@ -662,7 +706,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     if (result.status == PaymentResultStatus.verified) {
       await _refreshAll();
       if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         SnackBar(
           content: Text(
             'Credits added: ${result.creditsAllocated ?? pack.credits}',
@@ -671,7 +715,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
       );
       return;
     }
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppToast.showSnackBar(context, 
       SnackBar(content: Text(result.message)),
     );
   }
@@ -679,17 +723,40 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   Future<void> _initiatePaymentGatewayCheckout(SubscriptionPlan plan) async {
     final userId = SupabaseClient.instance.currentUser?.id;
     if (userId == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         const SnackBar(content: Text('Please log in to upgrade')),
       );
       return;
     }
 
     if (plan.id == 'free') {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         const SnackBar(content: Text('Free plan — no payment needed')),
       );
       return;
+    }
+
+    // Teacher plan locked until full profile (founder Jul 25, 2026).
+    if (plan.id == 'teacher') {
+      final profile =
+          await GroupsRepository.instance.fetchOwnTeacherProfile();
+      final gate = await TeacherSetupGate.evaluate(profile);
+      if (!mounted) return;
+      if (!gate.canBuyTeacherPlan) {
+        final msg = !gate.profileGateComplete
+            ? 'Complete full teacher profile first: ${gate.missingProfileLabels.join(', ')}'
+            : !gate.hasVerified
+                ? 'Get Verified (AI Trusted badge) first — then Teacher plan unlocks.'
+                : 'Teacher plan is locked until setup is complete.';
+        AppToast.showSnackBar(
+          context,
+          SnackBar(
+            content: Text(msg),
+            backgroundColor: const Color(0xFFC62828),
+          ),
+        );
+        return;
+      }
     }
 
     final planDef = SubscriptionPlans.byId(plan.id);
@@ -714,14 +781,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     }
 
     if (result.status == PaymentResultStatus.cancelled) {
-      ScaffoldMessenger.of(context).showSnackBar(
+      AppToast.showSnackBar(context, 
         const SnackBar(content: Text('Payment cancelled')),
       );
       return;
     }
 
     // Includes notConfigured — never fake success
-    ScaffoldMessenger.of(context).showSnackBar(
+    AppToast.showSnackBar(context, 
       SnackBar(content: Text(result.message)),
     );
   }

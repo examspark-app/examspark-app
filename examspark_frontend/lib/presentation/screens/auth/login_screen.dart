@@ -4,7 +4,9 @@ import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/auth/email_verification_screen.dart';
 import 'package:examspark_frontend/presentation/screens/auth/reset_password_screen.dart';
+import 'package:examspark_frontend/presentation/widgets/brand_mark.dart';
 import 'package:examspark_frontend/presentation/widgets/google_logo.dart';
+import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 enum _AuthMode { login, signUp }
 
@@ -12,12 +14,19 @@ enum _AuthMode { login, signUp }
 /// switched with a segmented toggle — old users and new users each get an
 /// unambiguous primary action, plus Google sign-in and password reset.
 class LoginScreen extends StatefulWidget {
-  const LoginScreen({super.key, this.startInSignUp = false});
+  const LoginScreen({
+    super.key,
+    this.startInSignUp = false,
+    this.inviteJoinHint = false,
+  });
 
   /// Opens straight on the "Sign Up" tab — used when pushed from
   /// [GuestHomeScreen]'s "Create Free Account" prompt so the user doesn't
   /// have to tap the toggle themselves.
   final bool startInSignUp;
+
+  /// Invite deep link: show “create account to open group” under the title.
+  final bool inviteJoinHint;
 
   @override
   State<LoginScreen> createState() => _LoginScreenState();
@@ -84,7 +93,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           SnackBar(content: Text('Login failed: ${e.toString()}')),
         );
       }
@@ -123,7 +132,7 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           SnackBar(content: Text('Sign up failed: ${e.toString()}')),
         );
       }
@@ -142,7 +151,7 @@ class _LoginScreenState extends State<LoginScreen> {
       // Web: browser redirects to Google then back — AuthGate handles the rest.
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
+        AppToast.showSnackBar(context, 
           SnackBar(content: Text('Google sign-in failed: ${e.toString()}')),
         );
       }
@@ -178,40 +187,25 @@ class _LoginScreenState extends State<LoginScreen> {
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
                     const SizedBox(height: 32),
-                    Center(
-                      child: Semantics(
-                        label: 'ExamSpark app logo',
-                        child: Container(
-                          width: 64,
-                          height: 64,
-                          decoration: BoxDecoration(
-                            color: AppTheme.accentColor,
-                            borderRadius: BorderRadius.circular(16),
-                          ),
-                          alignment: Alignment.center,
-                          child: const Text(
-                            'E',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Text(
-                      'ExamSpark',
-                      style: Theme.of(context).textTheme.displayLarge?.copyWith(fontSize: 26),
-                      textAlign: TextAlign.center,
-                    ),
+                    const BrandHero(),
                     const SizedBox(height: 6),
                     Text(
                       isLogin ? 'Welcome back' : 'Create your account',
                       style: Theme.of(context).textTheme.bodySmall,
                       textAlign: TextAlign.center,
                     ),
+                    if (widget.inviteJoinHint) ...[
+                      const SizedBox(height: 8),
+                      Text(
+                        isLogin
+                            ? 'Sign in to open your teacher’s group'
+                            : 'Create a free account to open your teacher’s group',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.getSecondaryText(context),
+                            ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                     const SizedBox(height: 28),
 
                     // Login / Sign Up segmented toggle — makes the two
