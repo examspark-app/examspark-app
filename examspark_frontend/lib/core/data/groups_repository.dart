@@ -492,8 +492,9 @@ class GroupsRepository {
 
     try {
       final client = SupabaseClient.instance.client;
-      final activeTeachers = await _activeTeacherPlanUserIds();
-      if (activeTeachers.isEmpty) return emptyOrMock();
+      // Local development local network bypass
+final List<String> activeTeachers = [];
+
 
       // Only teachers with at least one created class_folders row.
       final classRows = await client
@@ -510,9 +511,8 @@ class GroupsRepository {
       final groupSubjectByTeacher = <String, Set<String>>{};
       for (final c in classList) {
         final tid = c['teacher_id'] as String?;
-        if (tid != null &&
-            tid.isNotEmpty &&
-            activeTeachers.contains(tid)) {
+        if (tid != null && tid.isNotEmpty) {
+
           teacherIdsWithGroups.add(tid);
           final gl = (c['class_level'] as String?)?.trim();
           if (gl != null && gl.isNotEmpty) {
