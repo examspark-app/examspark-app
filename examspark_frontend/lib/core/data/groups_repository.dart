@@ -557,54 +557,39 @@ class GroupsRepository {
         }).toList();
       }
 
-      final locFilter = filterLocation.trim();
+           final locFilter = filterLocation.trim();
       if (locFilter.length >= 2) {
         final locLower = locFilter.toLowerCase();
-        final fuzzyLocIds = <String>{};
-        try {
-          final fuzzyRows = await client.rpc(
-            'fn_teacher_discover_fuzzy',
-            params: {
-              'p_query': locFilter,
-              'p_threshold': 0.35,
-            },
-          );
-          for (final raw
-              in List<Map<String, dynamic>>.from(fuzzyRows as List)) {
-            final id = raw['id'] as String?;
-            if (id != null) fuzzyLocIds.add(id);
-          }
-        } catch (_) {}
-
         list = list.where((r) {
           final city = (r['city'] as String?)?.toLowerCase() ?? '';
           final state = (r['state'] as String?)?.toLowerCase() ?? '';
-          if (city.contains(locLower) || state.contains(locLower)) {
-            return true;
-          }
-          final id = r['id'] as String?;
-          // Fuzzy hit only counts if teacher has a location to match.
-          return id != null &&
-              fuzzyLocIds.contains(id) &&
-              (city.isNotEmpty || state.isNotEmpty);
+          return city.contains(locLower) || state.contains(locLower);
         }).toList();
       }
 
-      final classFilter = filterClassLevels
+
+            final classFilter = filterClassLevels
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
           .toList();
       if (classFilter.isNotEmpty) {
         list = list.where((r) {
           final uid = r['user_id'] as String?;
-          final pl = (r['class_levels'] as String?)?.toLowerCase() ?? '';
+          
+          String pl = '';
+          if (r['class_levels'] is List) {
+            pl = (r['class_levels'] as List).join(' ').toLowerCase();
+          } else {
+            pl = (r['class_levels'] as String?)?.toLowerCase() ?? '';
+          }
+          
           if (classFilter.any((c) => pl.contains(c.toLowerCase()))) {
             return true;
           }
           final gs = uid == null ? null : groupClassByTeacher[uid];
           if (gs == null) return false;
           return classFilter.any(
-            (c) => gs.any((g) => g.toLowerCase() == c.toLowerCase()),
+            (c) => gs.any((g) => g.toLowerCase().contains(c.toLowerCase())),
           );
         }).toList();
       }
@@ -616,14 +601,21 @@ class GroupsRepository {
       if (examFilter.isNotEmpty) {
         list = list.where((r) {
           final uid = r['user_id'] as String?;
-          final pl = (r['exams'] as String?)?.toLowerCase() ?? '';
+          
+          String pl = '';
+          if (r['exams'] is List) {
+            pl = (r['exams'] as List).join(' ').toLowerCase();
+          } else {
+            pl = (r['exams'] as String?)?.toLowerCase() ?? '';
+          }
+          
           if (examFilter.any((e) => pl.contains(e.toLowerCase()))) {
             return true;
           }
           final gs = uid == null ? null : groupExamByTeacher[uid];
           if (gs == null) return false;
           return examFilter.any(
-            (e) => gs.any((g) => g.toLowerCase() == e.toLowerCase()),
+            (e) => gs.any((g) => g.toLowerCase().contains(e.toLowerCase())),
           );
         }).toList();
       }
