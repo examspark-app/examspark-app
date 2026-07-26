@@ -728,23 +728,27 @@ final List<String> activeTeachers = [];
         }
       }
 
-            int score(Map<String, dynamic> r) {
+             int score(Map<String, dynamic> r) {
         final uid = r['user_id'] as String?;
         var s = 0;
 
+        // 1. Agar cloud RPC calculation valid data laati hai toh use use karein
         if (uid != null && scoreByUser.containsKey(uid)) {
           s += scoreByUser[uid]! * 10;
         }
 
+        // 2. Fuzzy Text search match weights integration
         final id = r['id'] as String?;
         if (id != null && fuzzySim.containsKey(id)) {
           s += (fuzzySim[id]! * 100).round();
         }
 
+        // 3. Extraction with safe fallbacks for user profile parameters
         final sub = (r['subject'] as String?)?.toLowerCase() ?? '';
         final city = (r['city'] as String?)?.toLowerCase() ?? '';
         final state = (r['state'] as String?)?.toLowerCase() ?? '';
 
+        // Safe Text Array extraction for lists compatibility
         String pClass = '';
         if (r['class_levels'] is List) {
           pClass = (r['class_levels'] as List).join(' ').toLowerCase();
@@ -759,21 +763,23 @@ final List<String> activeTeachers = [];
           pExam = (r['exams'] as String?)?.toLowerCase() ?? '';
         }
 
-        if (prefSubject != null && sub.contains(prefSubject!)) s += 200;
-        if (prefCity != null && prefCity!.isNotEmpty && city == prefCity) s += 100;
+        // 4. Personalized user profile matching score generation algorithm
+        if (prefSubject != null && sub.contains(prefSubject!)) s += 200; // Top weight for primary subject
+        if (prefCity != null && prefCity!.isNotEmpty && city == prefCity) s += 100; // Location weight
         if (prefState != null && prefState!.isNotEmpty && state == prefState) s += 40;
 
+        // Class & Exam tracking sync with group variables
         final uidKey = uid ?? '';
         final teacherClasses = groupClassByTeacher[uidKey] ?? {};
         final teacherExams = groupExamByTeacher[uidKey] ?? {};
 
+        // Matches fallback preferences directly against profile or child folders data
         if (teacherClasses.isNotEmpty) s += 50; 
         if (teacherExams.isNotEmpty) s += 50;
 
         if (r['is_suggested'] == true) s += 15;
         return s;
       }
-
 
       list.sort((a, b) => score(b).compareTo(score(a)));
 
@@ -821,6 +827,11 @@ final List<String> activeTeachers = [];
                 .inFilter('id', myClassIds);
             for (final r in List<Map<String, dynamic>>.from(owned as List)) {
               joinedTeacherUsers.add(r['teacher_id'] as String);
+            }
+          }
+        } catch (_) {}
+      }
+
             }
           }
         } catch (_) {}
