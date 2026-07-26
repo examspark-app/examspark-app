@@ -1,29 +1,48 @@
 {
-    "project_info": {
-      "project_number": "905851321647",
-      "project_id": "sonia-ai-8141d",
-      "storage_bucket": "sonia-ai-8141d.firebasestorage.app"
-    },
-    "client": [
-      {
-        "client_info": {
-          "mobilesdk_app_id": "1:905851321647:android:dd818dccd172bf1c7d75da",
-          "android_client_info": {
-            "package_name": "com.sonialabs.sonaxia"
-          }
-        },
-        "oauth_client": [],
-        "api_key": [
-          {
-            "current_key": "AIzaSyCQAEDBQm8rMrhgQvK64i-ToVjaLPFvA74"
-          }
-        ],
-        "services": {
-          "appinvite_service": {
-            "other_platform_oauth_client": []
-          }
+  "project_info": {
+    "project_number": "905851321647",
+    "project_id": "sonia-ai-8141d",
+    "storage_bucket": "sonia-ai-8141d.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:905851321647:android:dd818dccd172bf1c7d75da",
+        "android_client_info": {
+          "package_name": "com.sonia.sonialabs"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQAEDBQm8rMrhgQvK64i-ToVjaLPFvA74"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
         }
       }
-    ],
-    "configuration_version": "1"
-  }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:905851321647:android:f2a06fc754f9e4907d75da",
+        "android_client_info": {
+          "package_name": "com.sonialabs.sonaxia"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCQAEDBQm8rMrhgQvK64i-ToVjaLPFvA74"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

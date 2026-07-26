@@ -492,8 +492,9 @@ class GroupsRepository {
 
     try {
       final client = SupabaseClient.instance.client;
-      final activeTeachers = await _activeTeacherPlanUserIds();
-      if (activeTeachers.isEmpty) return emptyOrMock();
+      // Local development local network bypass
+final List<String> activeTeachers = [];
+
 
       // Only teachers with at least one created class_folders row.
       final classRows = await client
@@ -510,9 +511,8 @@ class GroupsRepository {
       final groupSubjectByTeacher = <String, Set<String>>{};
       for (final c in classList) {
         final tid = c['teacher_id'] as String?;
-        if (tid != null &&
-            tid.isNotEmpty &&
-            activeTeachers.contains(tid)) {
+        if (tid != null && tid.isNotEmpty) {
+
           teacherIdsWithGroups.add(tid);
           final gl = (c['class_level'] as String?)?.trim();
           if (gl != null && gl.isNotEmpty) {
@@ -557,54 +557,39 @@ class GroupsRepository {
         }).toList();
       }
 
-      final locFilter = filterLocation.trim();
+           final locFilter = filterLocation.trim();
       if (locFilter.length >= 2) {
         final locLower = locFilter.toLowerCase();
-        final fuzzyLocIds = <String>{};
-        try {
-          final fuzzyRows = await client.rpc(
-            'fn_teacher_discover_fuzzy',
-            params: {
-              'p_query': locFilter,
-              'p_threshold': 0.35,
-            },
-          );
-          for (final raw
-              in List<Map<String, dynamic>>.from(fuzzyRows as List)) {
-            final id = raw['id'] as String?;
-            if (id != null) fuzzyLocIds.add(id);
-          }
-        } catch (_) {}
-
         list = list.where((r) {
           final city = (r['city'] as String?)?.toLowerCase() ?? '';
           final state = (r['state'] as String?)?.toLowerCase() ?? '';
-          if (city.contains(locLower) || state.contains(locLower)) {
-            return true;
-          }
-          final id = r['id'] as String?;
-          // Fuzzy hit only counts if teacher has a location to match.
-          return id != null &&
-              fuzzyLocIds.contains(id) &&
-              (city.isNotEmpty || state.isNotEmpty);
+          return city.contains(locLower) || state.contains(locLower);
         }).toList();
       }
 
-      final classFilter = filterClassLevels
+
+            final classFilter = filterClassLevels
           .map((s) => s.trim())
           .where((s) => s.isNotEmpty)
           .toList();
       if (classFilter.isNotEmpty) {
         list = list.where((r) {
           final uid = r['user_id'] as String?;
-          final pl = (r['class_levels'] as String?)?.toLowerCase() ?? '';
+          
+          String pl = '';
+          if (r['class_levels'] is List) {
+            pl = (r['class_levels'] as List).join(' ').toLowerCase();
+          } else {
+            pl = (r['class_levels'] as String?)?.toLowerCase() ?? '';
+          }
+          
           if (classFilter.any((c) => pl.contains(c.toLowerCase()))) {
             return true;
           }
           final gs = uid == null ? null : groupClassByTeacher[uid];
           if (gs == null) return false;
           return classFilter.any(
-            (c) => gs.any((g) => g.toLowerCase() == c.toLowerCase()),
+            (c) => gs.any((g) => g.toLowerCase().contains(c.toLowerCase())),
           );
         }).toList();
       }
@@ -616,14 +601,21 @@ class GroupsRepository {
       if (examFilter.isNotEmpty) {
         list = list.where((r) {
           final uid = r['user_id'] as String?;
-          final pl = (r['exams'] as String?)?.toLowerCase() ?? '';
+          
+          String pl = '';
+          if (r['exams'] is List) {
+            pl = (r['exams'] as List).join(' ').toLowerCase();
+          } else {
+            pl = (r['exams'] as String?)?.toLowerCase() ?? '';
+          }
+          
           if (examFilter.any((e) => pl.contains(e.toLowerCase()))) {
             return true;
           }
           final gs = uid == null ? null : groupExamByTeacher[uid];
           if (gs == null) return false;
           return examFilter.any(
-            (e) => gs.any((g) => g.toLowerCase() == e.toLowerCase()),
+            (e) => gs.any((g) => g.toLowerCase().contains(e.toLowerCase())),
           );
         }).toList();
       }
@@ -736,35 +728,52 @@ class GroupsRepository {
         }
       }
 
-      int score(Map<String, dynamic> r) {
+            int score(Map<String, dynamic> r) {
         final uid = r['user_id'] as String?;
-        if (uid != null && scoreByUser.containsKey(uid)) {
-          // Primary: personalized 0–100. Tie-break with search similarity.
-          var s = scoreByUser[uid]! * 10;
-          final id = r['id'] as String?;
-          if (id != null && fuzzySim.containsKey(id)) {
-            s += (fuzzySim[id]! * 20).round();
-          }
-          if (r['is_suggested'] == true) s += 5;
-          return s;
-        }
-        // Guest / no RPC: light legacy prefs.
         var s = 0;
+
+        if (uid != null && scoreByUser.containsKey(uid)) {
+          s += scoreByUser[uid]! * 10;
+        }
+
         final id = r['id'] as String?;
         if (id != null && fuzzySim.containsKey(id)) {
-          s += (fuzzySim[id]! * 200).round();
+          s += (fuzzySim[id]! * 100).round();
         }
+
         final sub = (r['subject'] as String?)?.toLowerCase() ?? '';
         final city = (r['city'] as String?)?.toLowerCase() ?? '';
         final state = (r['state'] as String?)?.toLowerCase() ?? '';
-        if (prefSubject != null && sub.contains(prefSubject)) s += 100;
-        if (prefCity != null && prefCity.isNotEmpty && city == prefCity) s += 40;
-        if (prefState != null && prefState.isNotEmpty && state == prefState) {
-          s += 20;
+
+        String pClass = '';
+        if (r['class_levels'] is List) {
+          pClass = (r['class_levels'] as List).join(' ').toLowerCase();
+        } else {
+          pClass = (r['class_levels'] as String?)?.toLowerCase() ?? '';
         }
-        if (r['is_suggested'] == true) s += 10;
+
+        String pExam = '';
+        if (r['exams'] is List) {
+          pExam = (r['exams'] as List).join(' ').toLowerCase();
+        } else {
+          pExam = (r['exams'] as String?)?.toLowerCase() ?? '';
+        }
+
+        if (prefSubject != null && sub.contains(prefSubject!)) s += 200;
+        if (prefCity != null && prefCity!.isNotEmpty && city == prefCity) s += 100;
+        if (prefState != null && prefState!.isNotEmpty && state == prefState) s += 40;
+
+        final uidKey = uid ?? '';
+        final teacherClasses = groupClassByTeacher[uidKey] ?? {};
+        final teacherExams = groupExamByTeacher[uidKey] ?? {};
+
+        if (teacherClasses.isNotEmpty) s += 50; 
+        if (teacherExams.isNotEmpty) s += 50;
+
+        if (r['is_suggested'] == true) s += 15;
         return s;
       }
+
 
       list.sort((a, b) => score(b).compareTo(score(a)));
 

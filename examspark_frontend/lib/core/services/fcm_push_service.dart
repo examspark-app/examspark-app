@@ -11,12 +11,18 @@ import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
 import 'package:examspark_frontend/core/router/app_navigation.dart';
 import 'package:examspark_frontend/core/services/notification_service.dart';
 
+// firebase_options.dart ko sahi relative path se import kiya gaya hai
+import '../../../firebase_options.dart';
+
 @pragma('vm:entry-point')
 Future<void> examsparkFirebaseMessagingBackgroundHandler(
   RemoteMessage message,
 ) async {
   try {
-    await Firebase.initializeApp();
+    // Web aur isolates ke crash se bachne ke liye options pass kiye gye hain
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
   } catch (_) {}
   debugPrint('FCM background: ${message.messageId} ${message.data}');
 }
@@ -35,7 +41,10 @@ class FcmPushService {
   Future<void> start() async {
     if (_started) return;
     try {
-      await Firebase.initializeApp();
+      // Bina options wala method badal kar platform responsive kiya gaya hai
+      await Firebase.initializeApp(
+        options: DefaultFirebaseOptions.currentPlatform,
+      );
     } catch (e) {
       debugPrint('FCM: Firebase.initializeApp skipped ($e). '
           'Add google-services.json — see FOUNDER_FCM_SETUP.md');
@@ -88,15 +97,31 @@ class FcmPushService {
   Future<void> registerTokenWithBackend() async {
     if (!_firebaseReady) return;
     try {
-      final token = await FirebaseMessaging.instance.getToken();
-      if (token == null || token.isEmpty) return;
+      String? token;
+      
+      if (kIsWeb) {
+        // 🔑 BAS IS EK JAGAH APNI REAL KEY PASTE KAREIN DOUBLE QUOTES KE ANDAR
+        token = await FirebaseMessaging.instance.getToken(
+          vapidKey: "BN41vaeiUiY_sY_D2sMYhqi7wb7JKM47Xo1ekqmss2dDqOHLR9V5U4gVX36sPmE5xkiF89tiscr6Ey-I435Mor8", 
+        );
+      } else {
+        token = await FirebaseMessaging.instance.getToken();
+      }
+
+      if (token == null || token.isEmpty) {
+        debugPrint('FCM Error: Generated token is empty or null');
+        return;
+      }
+      
+      debugPrint('FCM Token generated successfully: $token');
+
       await NotificationService.instance.registerDeviceToken(
         token,
         platform: NotificationService.defaultPlatform(),
       );
       debugPrint('FCM: token registered with backend');
     } catch (e) {
-      debugPrint('FCM register token: $e');
+      debugPrint('FCM register token error: $e');
     }
   }
 
