@@ -1,9 +1,11 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:examspark_frontend/core/constants/legal_urls.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/auth/email_verification_screen.dart';
 import 'package:examspark_frontend/presentation/screens/auth/reset_password_screen.dart';
+import 'package:examspark_frontend/presentation/screens/legal/legal_webview_screen.dart';
 import 'package:examspark_frontend/presentation/widgets/brand_mark.dart';
 import 'package:examspark_frontend/presentation/widgets/google_logo.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
@@ -42,6 +44,10 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   late final TapGestureRecognizer _switchModeRecognizer;
+  // Task 1 — Signup Consent: tap recognizers for the "Terms & Conditions"
+  // and "Privacy Policy" links shown below the Create Account button.
+  late final TapGestureRecognizer _termsRecognizer;
+  late final TapGestureRecognizer _privacyRecognizer;
 
   @override
   void initState() {
@@ -49,6 +55,10 @@ class _LoginScreenState extends State<LoginScreen> {
     _mode = widget.startInSignUp ? _AuthMode.signUp : _AuthMode.login;
     _switchModeRecognizer = TapGestureRecognizer()
       ..onTap = () => _switchMode(_mode == _AuthMode.login ? _AuthMode.signUp : _AuthMode.login);
+    _termsRecognizer = TapGestureRecognizer()
+      ..onTap = () => _openLegalDoc('Terms & Conditions', LegalUrls.termsAndConditions);
+    _privacyRecognizer = TapGestureRecognizer()
+      ..onTap = () => _openLegalDoc('Privacy Policy', LegalUrls.privacyPolicy);
   }
 
   /// When this screen was pushed on top of something else (e.g.
@@ -68,12 +78,25 @@ class _LoginScreenState extends State<LoginScreen> {
     _emailFocusNode.dispose();
     _passwordFocusNode.dispose();
     _switchModeRecognizer.dispose();
+    _termsRecognizer.dispose();
+    _privacyRecognizer.dispose();
     super.dispose();
   }
 
   void _switchMode(_AuthMode mode) {
     if (_mode == mode || _isLoading) return;
     setState(() => _mode = mode);
+  }
+
+  // Task 1 — opens Terms & Conditions / Privacy Policy inside the in-app
+  // WebView (Task 4). Never opens an external browser, except on Web
+  // platform, where `LegalWebViewScreen` itself opens a new tab.
+  void _openLegalDoc(String title, String url) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => LegalWebViewScreen(title: title, url: url),
+      ),
+    );
   }
 
   Future<void> _handleLogin() async {
@@ -309,6 +332,48 @@ class _LoginScreenState extends State<LoginScreen> {
                             )
                           : Text(isLogin ? 'Sign In' : 'Create Account'),
                     ),
+
+                    // ===== TASK 1 — Signup Consent =====
+                    // Shown only in Sign Up mode, directly below the
+                    // "Create Account" button. Terms & Conditions / Privacy
+                    // Policy each open inside the in-app WebView (Task 4) —
+                    // never an external browser (except on Web platform).
+                    if (!isLogin) ...[
+                      const SizedBox(height: 16),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        child: RichText(
+                          textAlign: TextAlign.center,
+                          text: TextSpan(
+                            style: Theme.of(context).textTheme.bodySmall,
+                            children: [
+                              const TextSpan(
+                                text: 'By creating an account, you agree to our ',
+                              ),
+                              TextSpan(
+                                text: 'Terms & Conditions',
+                                style: const TextStyle(
+                                  color: AppTheme.accentColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                recognizer: _termsRecognizer,
+                              ),
+                              const TextSpan(text: ' and '),
+                              TextSpan(
+                                text: 'Privacy Policy',
+                                style: const TextStyle(
+                                  color: AppTheme.accentColor,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                                recognizer: _privacyRecognizer,
+                              ),
+                              const TextSpan(text: '.'),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 20),
                     Row(
                       children: [

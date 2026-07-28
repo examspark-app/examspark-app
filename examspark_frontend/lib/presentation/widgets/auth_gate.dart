@@ -10,12 +10,14 @@ import 'package:examspark_frontend/core/services/pending_invite_store.dart';
 import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/presentation/screens/auth/update_password_screen.dart';
 import 'package:examspark_frontend/presentation/screens/home/guest_home_screen.dart';
+import 'package:examspark_frontend/presentation/screens/legal/legal_consent_screen.dart';
 import 'package:examspark_frontend/presentation/screens/onboarding/role_selection_screen.dart';
 import 'package:examspark_frontend/presentation/screens/onboarding/student_onboarding_screen.dart';
 import 'package:examspark_frontend/presentation/screens/profile/account_recovery_screen.dart';
 import 'package:examspark_frontend/presentation/shell/app_shell.dart';
 
-/// Routes guest / login / onboarding / AppShell from Supabase session.
+/// Routes guest / login / legal consent / onboarding / AppShell from
+/// Supabase session.
 ///
 /// Important: ignore [AuthChangeEvent.tokenRefreshed] for UI rebuilds.
 /// On Chrome minimize/tab-switch Supabase refreshes the JWT often — rebuilding
@@ -35,6 +37,10 @@ class _AuthGateState extends State<AuthGate> {
   String? _cachedUserId;
   Future<Map<String, dynamic>?>? _profileFuture;
   bool _onboardingHandledLocally = false;
+  // Legal Consent (Task 2) — same "handled this session" pattern as
+  // `_onboardingHandledLocally`, so accepting doesn't require refetching
+  // the profile row to unblock AppShell.
+  bool _legalHandledLocally = false;
   bool _roleChosenAsStudent = false;
   /// Snapshot used for build — not replaced on token refresh.
   bool _hasSession = false;
@@ -83,6 +89,7 @@ class _AuthGateState extends State<AuthGate> {
             _shellReady = false;
             _cachedUserId = null;
             _onboardingHandledLocally = false;
+            _legalHandledLocally = false;
             _roleChosenAsStudent = false;
             _profileFuture = null;
           });
@@ -108,6 +115,7 @@ class _AuthGateState extends State<AuthGate> {
         if (userChanged) {
           _cachedUserId = userId;
           _onboardingHandledLocally = false;
+          _legalHandledLocally = false;
           _roleChosenAsStudent = false;
           _profileFuture = SupabaseClient.instance.getUserProfile(userId);
         }
@@ -136,6 +144,7 @@ class _AuthGateState extends State<AuthGate> {
       _shellReady = false;
       _cachedUserId = null;
       _onboardingHandledLocally = false;
+      _legalHandledLocally = false;
       _roleChosenAsStudent = false;
       _profileFuture = null;
     });
@@ -180,7 +189,10 @@ class _AuthGateState extends State<AuthGate> {
       return const GuestHomeScreen();
     }
 
-    if (_onboardingHandledLocally) {
+    // Fast path once both gates are cleared this session — skips rebuilding
+    // the FutureBuilder below (same shortcut the codebase already used for
+    // onboarding alone; extended to also require legal consent).
+    if (_onboardingHandledLocally && _legalHandledLocally) {
       _shellReady = true;
       _routePendingInviteIfNeeded();
       return AppShell(key: ValueKey('shell-$userId'));
@@ -230,6 +242,7 @@ class _AuthGateState extends State<AuthGate> {
                 _cachedUserId = null;
                 _profileFuture = null;
                 _onboardingHandledLocally = false;
+                _legalHandledLocally = false;
                 _roleChosenAsStudent = false;
               });
               SessionLiveSync.instance.stop();
@@ -237,8 +250,26 @@ class _AuthGateState extends State<AuthGate> {
           );
         }
 
-        final onboardingCompleted =
-            profile?['onboarding_completed'] as bool? ?? true;
+        // `|| _legalHandledLocally` / `|| _onboardingHandledLocally`: once a
+        // gate is accepted this session, trust the local flag immediately
+        // instead of the (possibly stale, not-yet-refetched) cached profile
+        // future — otherwise accepting one gate while the other is still
+        // pending would re-show a screen the user just cleared.
+        final legalAccepted = _legalHandledLocally ||
+            (profile?['legal_accepted'] as bool? ?? false);
+        final onboardingCompleted = _onboardingHandledLocally ||
+            (profile?['onboarding_completed'] as bool? ?? true);
+
+        // ===== TASK 2 — First Login Consent Screen =====
+        // Runs before onboarding: new signups see this immediately after
+        // Create Account, before role selection / Home. Existing users who
+        // already accepted (`legal_accepted = true`) skip straight past.
+        if (!legalAccepted && !_shellReady) {
+          return LegalConsentScreen(
+            userId: userId,
+            onDone: () => setState(() => _legalHandledLocally = true),
+          );
+        }
 
         if (!onboardingCompleted && !_shellReady) {
           if (_roleChosenAsStudent) {

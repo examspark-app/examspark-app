@@ -6,7 +6,9 @@ import 'package:supabase_flutter/supabase_flutter.dart'
 import 'package:examspark_frontend/core/constants/class_levels.dart';
 import 'package:examspark_frontend/core/constants/custom_field_option.dart';
 import 'package:examspark_frontend/core/constants/exam_boards.dart';
+import 'package:examspark_frontend/core/constants/teaching_languages.dart';
 import 'package:examspark_frontend/core/constants/subjects.dart';
+import 'package:examspark_frontend/core/models/group_model.dart';
 import 'package:examspark_frontend/core/data/groups_repository.dart';
 import 'package:examspark_frontend/core/models/suggested_teacher_model.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
@@ -15,8 +17,7 @@ import 'package:examspark_frontend/presentation/widgets/buy_plan_sheet.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// WhatsApp-style teacher discovery — search + filters + match-score ranking.
-/// Filters (Option A): City · Subject · Class · Board. Realtime refresh when
-/// teacher profiles / groups change (if Realtime enabled in Supabase).
+/// Filters: City · Subject · Class · Board. Displays teacher profiles along with their active groups/batches.
 class TeacherDiscoveryScreen extends StatefulWidget {
   const TeacherDiscoveryScreen({super.key, this.embedded = false});
 
@@ -33,6 +34,7 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
   final Set<String> _filterSubjects = {};
   final Set<String> _filterClasses = {};
   final Set<String> _filterExams = {};
+  final Set<String> _filterLanguages = {};
   String? _customSubject;
   List<SuggestedTeacherModel> _teachers = [];
   bool _loading = true;
@@ -40,6 +42,7 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
   String? _joiningId;
   RealtimeChannel? _channel;
   Timer? _realtimeDebounce;
+  Timer? _searchDebounce;
 
   @override
   void initState() {
@@ -51,6 +54,7 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
   @override
   void dispose() {
     _realtimeDebounce?.cancel();
+    _searchDebounce?.cancel();
     final ch = _channel;
     if (ch != null) {
       unawaited(SupabaseClient.instance.client.removeChannel(ch));
@@ -80,7 +84,7 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
           .subscribe();
       _channel = channel;
     } catch (_) {
-      // Realtime optional — Apply / pull still works.
+      // Realtime optional — manual search / pull still works.
     }
   }
 
@@ -91,11 +95,19 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
     });
   }
 
+  void _onSearchChanged(String query) {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+      if (mounted) _load();
+    });
+  }
+
   bool get _hasActiveFilters =>
       _filterSubjects.isNotEmpty ||
       _locationFilter.text.trim().isNotEmpty ||
       _filterClasses.isNotEmpty ||
-      _filterExams.isNotEmpty;
+      _filterExams.isNotEmpty ||
+      _filterLanguages.isNotEmpty;
 
   String get _subjectChipLabel {
     if (_filterSubjects.isEmpty) return 'Subject';
@@ -126,7 +138,13 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
     }
     return 'Board: ${_filterExams.length} selected';
   }
-
+String get _languageChipLabel {
+    if (_filterLanguages.isEmpty) return 'Language';
+    if (_filterLanguages.length == 1) {
+      return 'Language: ${_filterLanguages.first}';
+    }
+    return 'Language: ${_filterLanguages.length} selected';
+  }
   Future<void> _load({bool silent = false}) async {
     if (!silent) {
       setState(() {
@@ -148,6 +166,7 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
       filterLocation: _locationFilter.text.trim(),
       filterClassLevels: _filterClasses.toList(),
       filterExams: _filterExams.toList(),
+      filterLanguages: _filterLanguages.toList(),
     );
     if (!mounted) return;
     setState(() {
@@ -163,6 +182,7 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
       _locationFilter.clear();
       _filterClasses.clear();
       _filterExams.clear();
+      _filterLanguages.clear();
     });
     _load();
   }
@@ -170,14 +190,138 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
   Future<void> _pickSubjects() async {
     final draft = Set<String>.from(_filterSubjects);
     final customCtrl = TextEditingController(text: _customSubject ?? '');
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setModal) {
-            return Container(
+    try {
+      final ok = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) {
+          return StatefulBuilder(
+            builder: (ctx, setModal) {
+              return Container(
+                padding: EdgeInsets.fromLTRB(
+                  20,
+                  12,
+                  20,
+                  20 + MediaQuery.paddingOf(ctx).bottom,
+                ),
+                decoration: BoxDecoration(
+                  color: Theme.of(ctx).scaffoldBackgroundColor,
+                  borderRadius:
+                      const BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Filter by subject',
+                      style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Multi-select — teacher matches if they teach any selected.',
+                      style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.getSecondaryText(ctx),
+                          ),
+                    ),
+                    const SizedBox(height: 12),
+                    ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.sizeOf(ctx).height * 0.45,
+                      ),
+                      child: ListView(
+                        shrinkWrap: true,
+                        children: [
+                          for (final s in [
+                            ...kDiscoverSubjectOptions,
+                            CustomFieldOption.label,
+                          ])
+                            CheckboxListTile(
+                              contentPadding: EdgeInsets.zero,
+                              dense: true,
+                              value: draft.contains(s),
+                              title: Text(s),
+                              onChanged: (v) {
+                                setModal(() {
+                                  if (v == true) {
+                                    draft.add(s);
+                                  } else {
+                                    draft.remove(s);
+                                  }
+                                });
+                              },
+                            ),
+                          if (draft.contains(CustomFieldOption.label))
+                            TextField(
+                              controller: customCtrl,
+                              decoration: const InputDecoration(
+                                labelText: 'Custom subject',
+                                hintText: 'e.g. Accountancy, Botany',
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            draft.clear();
+                            customCtrl.clear();
+                            Navigator.pop(ctx, true);
+                          },
+                          child: const Text('Clear'),
+                        ),
+                        const Spacer(),
+                        ElevatedButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('Apply'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
+          );
+        },
+      );
+      if (ok == true && mounted) {
+        setState(() {
+          _filterSubjects
+            ..clear()
+            ..addAll(draft);
+          if (draft.contains(CustomFieldOption.label)) {
+            final t = customCtrl.text.trim();
+            _customSubject = t.isEmpty ? null : t;
+          } else {
+            _customSubject = null;
+          }
+        });
+        await _load();
+      }
+    } finally {
+      customCtrl.dispose();
+    }
+  }
+
+  Future<void> _pickLocation() async {
+    final ctrl = TextEditingController(text: _locationFilter.text);
+    try {
+      final ok = await showModalBottomSheet<bool>(
+        context: context,
+        isScrollControlled: true,
+        backgroundColor: Colors.transparent,
+        builder: (ctx) {
+          return Padding(
+            padding: EdgeInsets.only(
+              bottom: MediaQuery.viewInsetsOf(ctx).bottom,
+            ),
+            child: Container(
               padding: EdgeInsets.fromLTRB(
                 20,
                 12,
@@ -194,54 +338,27 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Filter by subject',
+                    'Filter by city / state',
                     style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
                           fontWeight: FontWeight.bold,
                         ),
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    'Multi-select — teacher matches if they teach any selected.',
+                    'Typos OK (fuzzy match) — e.g. kolkta → Kolkata',
                     style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
                           color: AppTheme.getSecondaryText(ctx),
                         ),
                   ),
                   const SizedBox(height: 12),
-                  ConstrainedBox(
-                    constraints: BoxConstraints(
-                      maxHeight: MediaQuery.sizeOf(ctx).height * 0.45,
-                    ),
-                    child: ListView(
-                      shrinkWrap: true,
-                      children: [
-                        for (final s in [
-                          ...kDiscoverSubjectOptions,
-                          CustomFieldOption.label,
-                        ])
-                          CheckboxListTile(
-                            contentPadding: EdgeInsets.zero,
-                            dense: true,
-                            value: draft.contains(s),
-                            title: Text(s),
-                            onChanged: (v) {
-                              setModal(() {
-                                if (v == true) {
-                                  draft.add(s);
-                                } else {
-                                  draft.remove(s);
-                                }
-                              });
-                            },
-                          ),
-                        if (draft.contains(CustomFieldOption.label))
-                          TextField(
-                            controller: customCtrl,
-                            decoration: const InputDecoration(
-                              labelText: 'Custom subject',
-                              hintText: 'e.g. Accountancy, Botany',
-                            ),
-                          ),
-                      ],
+                  TextField(
+                    controller: ctrl,
+                    autofocus: true,
+                    textInputAction: TextInputAction.done,
+                    onSubmitted: (_) => Navigator.pop(ctx, true),
+                    decoration: const InputDecoration(
+                      hintText: 'City or state',
+                      prefixIcon: Icon(Icons.location_on_outlined),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -249,8 +366,7 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
                     children: [
                       TextButton(
                         onPressed: () {
-                          draft.clear();
-                          customCtrl.clear();
+                          ctrl.clear();
                           Navigator.pop(ctx, true);
                         },
                         child: const Text('Clear'),
@@ -264,109 +380,15 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
                   ),
                 ],
               ),
-            );
-          },
-        );
-      },
-    );
-    if (ok == true && mounted) {
-      setState(() {
-        _filterSubjects
-          ..clear()
-          ..addAll(draft);
-        if (draft.contains(CustomFieldOption.label)) {
-          final t = customCtrl.text.trim();
-          _customSubject = t.isEmpty ? null : t;
-        } else {
-          _customSubject = null;
-        }
-      });
-      customCtrl.dispose();
-      await _load();
-    } else {
-      customCtrl.dispose();
-    }
-  }
-
-  Future<void> _pickLocation() async {
-    final ctrl = TextEditingController(text: _locationFilter.text);
-    final ok = await showModalBottomSheet<bool>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) {
-        return Padding(
-          padding: EdgeInsets.only(
-            bottom: MediaQuery.viewInsetsOf(ctx).bottom,
-          ),
-          child: Container(
-            padding: EdgeInsets.fromLTRB(
-              20,
-              12,
-              20,
-              20 + MediaQuery.paddingOf(ctx).bottom,
             ),
-            decoration: BoxDecoration(
-              color: Theme.of(ctx).scaffoldBackgroundColor,
-              borderRadius:
-                  const BorderRadius.vertical(top: Radius.circular(16)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Filter by city / state',
-                  style: Theme.of(ctx).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Typos OK (fuzzy match) — e.g. kolkta → Kolkata',
-                  style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                        color: AppTheme.getSecondaryText(ctx),
-                      ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: ctrl,
-                  autofocus: true,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => Navigator.pop(ctx, true),
-                  decoration: const InputDecoration(
-                    hintText: 'City or state',
-                    prefixIcon: Icon(Icons.location_on_outlined),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    TextButton(
-                      onPressed: () {
-                        ctrl.clear();
-                        Navigator.pop(ctx, true);
-                      },
-                      child: const Text('Clear'),
-                    ),
-                    const Spacer(),
-                    ElevatedButton(
-                      onPressed: () => Navigator.pop(ctx, true),
-                      child: const Text('Apply'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-    if (ok == true && mounted) {
-      setState(() => _locationFilter.text = ctrl.text.trim());
-      ctrl.dispose();
-      await _load();
-    } else {
+          );
+        },
+      );
+      if (ok == true && mounted) {
+        setState(() => _locationFilter.text = ctrl.text.trim());
+        await _load();
+      }
+    } finally {
       ctrl.dispose();
     }
   }
@@ -554,7 +576,89 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
       await _load();
     }
   }
-
+Future<void> _pickLanguage() async {
+    final draft = Set<String>.from(_filterLanguages);
+    final ok = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModal) {
+            return Container(
+              padding: EdgeInsets.fromLTRB(
+                20, 12, 20, 20 + MediaQuery.paddingOf(ctx).bottom,
+              ),
+              decoration: BoxDecoration(
+                color: Theme.of(ctx).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Filter by language',
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(ctx).height * 0.45),
+                    child: ListView(
+                      shrinkWrap: true,
+                      children: [
+                        for (final l in TeachingLanguages.all)
+                          CheckboxListTile(
+                            contentPadding: EdgeInsets.zero,
+                            dense: true,
+                            value: draft.contains(l),
+                            title: Text(l),
+                            onChanged: (v) {
+                              setModal(() {
+                                if (v == true) {
+                                  draft.add(l);
+                                } else {
+                                  draft.remove(l);
+                                }
+                              });
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      TextButton(
+                        onPressed: () {
+                          draft.clear();
+                          Navigator.pop(ctx, true);
+                        },
+                        child: const Text('Clear'),
+                      ),
+                      const Spacer(),
+                      ElevatedButton(
+                        onPressed: () => Navigator.pop(ctx, true),
+                        child: const Text('Apply'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (ok == true && mounted) {
+      setState(() {
+        _filterLanguages
+          ..clear()
+          ..addAll(draft);
+      });
+      await _load();
+    }
+  }
   Future<void> _openTeacherGroup(SuggestedTeacherModel t) async {
     final uid = t.userId;
     if (uid == null || uid.isEmpty) {
@@ -585,7 +689,154 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
       arguments: {'groupId': groupId},
     );
   }
+Future<void> _openTeacherProfile(SuggestedTeacherModel t) async {
+    final uid = t.userId;
+    if (uid == null || uid.isEmpty) return;
 
+    var groups = await GroupsRepository.instance.fetchGroupsForTeacher(uid);
+    if (!mounted) return;
+
+    if (groups.isEmpty) {
+      AppToast.showSnackBar(
+        context,
+        const SnackBar(content: Text('Teacher ne abhi group create nahi kiya.')),
+      );
+      return;
+    }
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setModal) {
+            return Container(
+              padding: EdgeInsets.fromLTRB(
+                20, 16, 20, 20 + MediaQuery.paddingOf(ctx).bottom,
+              ),
+              constraints: BoxConstraints(
+                maxHeight: MediaQuery.sizeOf(ctx).height * 0.7,
+              ),
+              decoration: BoxDecoration(
+                color: Theme.of(ctx).scaffoldBackgroundColor,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${t.name} — Select a group to join',
+                    style: Theme.of(ctx).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  Flexible(
+                    child: ListView.separated(
+                      shrinkWrap: true,
+                      itemCount: groups.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 8),
+                      itemBuilder: (_, i) {
+                        final g = groups[i];
+                        return Container(
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            border: Border.all(color: AppTheme.getCardBorder(ctx)),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(g.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+                                    const SizedBox(height: 2),
+                                    Text(
+                                      '${g.studentsCount} students',
+                                      style: TextStyle(
+                                        color: AppTheme.getSecondaryText(ctx),
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              if (g.isJoined)
+                                TextButton(
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    Navigator.pushNamed(
+                                      context, '/group_info',
+                                      arguments: {'groupId': g.id},
+                                    );
+                                  },
+                                  child: const Text('Open'),
+                                )
+                              else
+                                ElevatedButton(
+                                  onPressed: () async {
+                                    Navigator.pop(ctx);
+                                    await _joinSpecificGroup(g, t);
+                                  },
+                                  child: const Text('Join'),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _joinSpecificGroup(GroupModel group, SuggestedTeacherModel t) async {
+    if (_joiningId != null) return;
+    setState(() => _joiningId = t.id);
+
+    final eligibility = await GroupsRepository.instance.canJoinAnotherGroup();
+    if (!eligibility.allowed) {
+      if (!mounted) return;
+      setState(() => _joiningId = null);
+      showBuyPlanSheet(context, eligibility);
+      return;
+    }
+
+    try {
+      final updated = await GroupsRepository.instance.toggleMembership(group);
+      if (!mounted) return;
+      setState(() {
+        _joiningId = null;
+        _teachers = _teachers
+            .map((x) => x.id == t.id ? x.copyWith(isJoined: true) : x)
+            .toList();
+      });
+      Navigator.pushNamed(
+        context, '/group_info',
+        arguments: {'groupId': updated.id},
+      );
+    } on GroupMembershipException catch (e) {
+      if (!mounted) return;
+      setState(() => _joiningId = null);
+      if (e.isJoinLimit) {
+        final el = await GroupsRepository.instance.canJoinAnotherGroup();
+        if (!mounted) return;
+        showBuyPlanSheet(context, el);
+        return;
+      }
+      AppToast.showSnackBar(context, SnackBar(content: Text(e.message)));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _joiningId = null);
+      AppToast.showSnackBar(context, SnackBar(content: Text('$e')));
+    }
+  }
   Future<void> _join(SuggestedTeacherModel t) async {
     if (_joiningId != null) return;
     setState(() => _joiningId = t.id);
@@ -678,6 +929,7 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
           child: TextField(
             controller: _search,
+            onChanged: _onSearchChanged,
             onSubmitted: (_) => _load(),
             decoration: InputDecoration(
               hintText: 'Search teachers, subject, city, state (typos OK)',
@@ -741,6 +993,15 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
                   _load();
                 },
               ),
+              _filterChip(
+                label: _languageChipLabel,
+                active: _filterLanguages.isNotEmpty,
+                onTap: _pickLanguage,
+                onClear: () {
+                  setState(() => _filterLanguages.clear());
+                  _load();
+                },
+              ),
               if (_hasActiveFilters)
                 Padding(
                   padding: const EdgeInsets.only(right: 8),
@@ -794,9 +1055,9 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
                           return _TeacherDiscoverCard(
                             teacher: t,
                             joining: _joiningId == t.id,
-                            onJoin: t.isJoined ? null : () => _join(t),
+                            onJoin: t.isJoined ? null : () => _openTeacherProfile(t),
                             onOpen: t.isJoined
-                                ? () => _openTeacherGroup(t)
+                                ? () => _openTeacherProfile(t)
                                 : null,
                           );
                         },
@@ -809,7 +1070,7 @@ class _TeacherDiscoveryScreenState extends State<TeacherDiscoveryScreen> {
     if (widget.embedded) return body;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Discover Teachers')),
+      appBar: AppBar(title: const Text('Discover Teachers & Batches')),
       body: body,
     );
   }
@@ -835,7 +1096,10 @@ class _TeacherDiscoverCard extends StatelessWidget {
       if ((teacher.state ?? '').isNotEmpty) teacher.state!,
     ].join(', ');
 
-    final row = Container(
+    // Extract groups/classes list if available in teacher model
+    final groupsList = (teacher.groups ?? const []);
+
+    return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: AppTheme.getCardBackground(context),
@@ -843,21 +1107,48 @@ class _TeacherDiscoverCard extends StatelessWidget {
         border: Border.all(color: AppTheme.getCardBorder(context)),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            radius: 26,
-            backgroundColor: AppTheme.getAccentTint(context),
-            backgroundImage: teacher.photoUrl != null
-                ? NetworkImage(teacher.photoUrl!)
-                : null,
-            child: teacher.photoUrl == null
-                ? Text(
-                    teacher.name.isNotEmpty
-                        ? teacher.name[0].toUpperCase()
-                        : '?',
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  )
-                : null,
+          Stack(
+            clipBehavior: Clip.none,
+            children: [
+              CircleAvatar(
+                radius: 26,
+                backgroundColor: AppTheme.getAccentTint(context),
+                backgroundImage: teacher.photoUrl != null
+                    ? NetworkImage(teacher.photoUrl!)
+                    : null,
+                child: teacher.photoUrl == null
+                    ? Text(
+                        teacher.name.isNotEmpty
+                            ? teacher.name[0].toUpperCase()
+                            : '?',
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      )
+                    : null,
+              ),
+              // Match Score Badge if available
+              if (teacher.matchScore != null)
+                Positioned(
+                  left: -4,
+                  top: -4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade600,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      '${teacher.matchScore}%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
+            ],
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -889,6 +1180,47 @@ class _TeacherDiscoverCard extends StatelessWidget {
                     ),
                   ),
                 ],
+                // Display Teacher's Groups / Batches from class_folders
+                if (groupsList.isNotEmpty) ...[
+                  const SizedBox(height: 6),
+                 Wrap(
+                    spacing: 4,
+                    runSpacing: 4,
+                    children: groupsList.map((g) {
+                      String groupName = 'Group';
+                      String? groupSub;
+                      if (g is Map) {
+                        groupName =
+                            (g['name'] ?? g['subject'] ?? 'Group').toString();
+                        final cl = g['class_level']?.toString();
+                        if (cl != null && cl.trim().isNotEmpty) {
+                          groupSub = cl.trim();
+                        }
+                      } else if (g is String) {
+                        groupName = g;
+                      }
+                      final label =
+                          groupSub != null ? '$groupName · $groupSub' : groupName;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).colorScheme.surfaceVariant.withOpacity(0.5),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: AppTheme.getCardBorder(context)),
+                        ),
+                        child: Text(
+                          label,
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w500,
+                            color: AppTheme.getSecondaryText(context),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  
+                ],
                 if (teacher.matchesLabel.isNotEmpty) ...[
                   const SizedBox(height: 6),
                   Container(
@@ -909,7 +1241,7 @@ class _TeacherDiscoverCard extends StatelessWidget {
                   ),
                 ],
                 if (teacher.studentCount != null) ...[
-                  const SizedBox(height: 2),
+                  const SizedBox(height: 4),
                   Text(
                     '${teacher.studentCount} students',
                     style: TextStyle(
@@ -922,39 +1254,39 @@ class _TeacherDiscoverCard extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 8),
-          if (teacher.isJoined)
-            Text(
-              'Open',
-              style: TextStyle(
-                color: AppTheme.accentColor,
-                fontWeight: FontWeight.w600,
-              ),
-            )
-          else
-            ElevatedButton(
-              onPressed: joining ? null : onJoin,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.accentColor,
-                foregroundColor: Colors.white,
-                minimumSize: const Size(72, 36),
-              ),
-              child: joining
-                  ? const SizedBox(
-                      width: 16,
-                      height: 16,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Text('Join'),
-            ),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              if (teacher.isJoined)
+                TextButton(
+                  onPressed: onOpen,
+                  child: Text(
+                    'Open',
+                    style: TextStyle(
+                      color: AppTheme.accentColor,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                )
+              else
+                ElevatedButton(
+                  onPressed: joining ? null : onJoin,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                    minimumSize: const Size(60, 36),
+                  ),
+                  child: joining
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Join'),
+                ),
+            ],
+          ),
         ],
       ),
-    );
-
-    if (onOpen == null) return row;
-    return InkWell(
-      onTap: onOpen,
-      borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-      child: row,
     );
   }
 }

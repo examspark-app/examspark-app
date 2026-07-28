@@ -2127,4 +2127,36 @@ class StudyWorkspaceSidePanel extends StatelessWidget {
           : null,
     );
   }
+  }/// Opens [StudyWorkspace] as a FULL SCREEN page (not a popup sheet) —
+/// used from Group Info so students get a proper dedicated study screen.
+Future<void> showStudyWorkspaceFullScreen(
+  BuildContext context, {
+  required String lectureId,
+  required String title,
+  String? subject,
+  int? initialTabIndex,
+  bool readOnly = false,
+  List<String>? allowedChips,
+}) {
+  return Navigator.of(context).push(
+    MaterialPageRoute(
+      builder: (routeContext) {
+        return Scaffold(
+          body: SafeArea(
+            child: StudyWorkspace(
+              key: ValueKey(lectureId),
+              lectureId: lectureId,
+              title: title,
+              subject: subject,
+              initialTabIndex: initialTabIndex,
+              readOnly: readOnly,
+              allowedChips: allowedChips,
+              onClose: () => Navigator.of(routeContext).pop(),
+            ),
+          ),
+        );
+      },
+    ),
+  );
 }
+

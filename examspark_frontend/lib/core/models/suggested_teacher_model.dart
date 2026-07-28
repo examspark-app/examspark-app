@@ -1,82 +1,85 @@
-/// Lightweight teacher card shown in discovery / suggested rows.
 class SuggestedTeacherModel {
   final String id;
-  final String? userId;
   final String name;
-  final String? photoUrl;
   final String subject;
   final String? city;
   final String? state;
-  final int? studentCount;
-  final bool isVerified;
-  final bool isJoined;
-  /// Personalized match 0–100 (redistributed weights). Null if unscored.
+  final String? photoUrl;
   final int? matchScore;
-  /// e.g. Subject, Exam, City — why this teacher was suggested.
-  final List<String> matchedFactors;
+  final String matchesLabel;
+  final int? studentCount;
+  final bool isJoined;
+  final String? userId;
+  final List<dynamic> groups;
+  final bool isVerified;
 
   const SuggestedTeacherModel({
     required this.id,
-    this.userId,
     required this.name,
-    this.photoUrl,
-    required this.subject,
+    this.subject = '',
     this.city,
     this.state,
-    this.studentCount,
-    this.isVerified = false,
-    this.isJoined = false,
+    this.photoUrl,
     this.matchScore,
-    this.matchedFactors = const [],
+    this.matchesLabel = '',
+    this.studentCount,
+    this.isJoined = false,
+    this.userId,
+    this.groups = const [],
+    this.isVerified = false,
   });
 
-  String get matchesLabel {
-    if (matchedFactors.isEmpty) return '';
-    return 'Matches: ${matchedFactors.join(', ')}';
-  }
-
-  factory SuggestedTeacherModel.fromMap(
-    Map<String, dynamic> map, {
-    bool isJoined = false,
-    int? studentCount,
-    int? matchScore,
-    List<String>? matchedFactors,
-  }) {
+  factory SuggestedTeacherModel.fromJson(Map<String, dynamic> json) {
     return SuggestedTeacherModel(
-      id: map['id'] as String,
-      userId: map['user_id'] as String?,
-      name: map['full_name'] as String? ?? 'Teacher',
-      photoUrl: map['photo_url'] as String?,
-      subject: map['subject'] as String? ?? '',
-      city: map['city'] as String?,
-      state: map['state'] as String?,
-      studentCount: studentCount,
-      isVerified: map['verification_status'] == 'verified',
-      isJoined: isJoined,
-      matchScore: matchScore,
-      matchedFactors: matchedFactors ?? const [],
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      subject: json['subject']?.toString() ?? '',
+      city: json['city']?.toString(),
+      state: json['state']?.toString(),
+      photoUrl: json['photo_url']?.toString() ?? json['photoUrl']?.toString(),
+      matchScore: json['match_score'] ?? json['matchScore'],
+      matchesLabel: json['matches_label']?.toString() ?? json['matchesLabel']?.toString() ?? '',
+      studentCount: json['student_count'] ?? json['studentCount'],
+      isJoined: json['is_joined'] ?? json['isJoined'] ?? false,
+      userId: json['user_id']?.toString() ?? json['userId']?.toString(),
+      groups: json['groups'] ?? json['class_folders'] ?? [],
+      isVerified: json['is_verified'] ?? json['isVerified'] ?? false,
     );
   }
 
+  factory SuggestedTeacherModel.fromMap(Map<String, dynamic> map) {
+    return SuggestedTeacherModel.fromJson(map);
+  }
+
   SuggestedTeacherModel copyWith({
-    bool? isJoined,
-    int? studentCount,
+    String? id,
+    String? name,
+    String? subject,
+    String? city,
+    String? state,
+    String? photoUrl,
     int? matchScore,
-    List<String>? matchedFactors,
+    String? matchesLabel,
+    int? studentCount,
+    bool? isJoined,
+    String? userId,
+    List<dynamic>? groups,
+    bool? isVerified,
   }) {
     return SuggestedTeacherModel(
-      id: id,
-      userId: userId,
-      name: name,
-      photoUrl: photoUrl,
-      subject: subject,
-      city: city,
-      state: state,
-      studentCount: studentCount ?? this.studentCount,
-      isVerified: isVerified,
-      isJoined: isJoined ?? this.isJoined,
+      id: id ?? this.id,
+      name: name ?? this.name,
+      subject: subject ?? this.subject,
+      city: city ?? this.city,
+      state: state ?? this.state,
+      photoUrl: photoUrl ?? this.photoUrl,
       matchScore: matchScore ?? this.matchScore,
-      matchedFactors: matchedFactors ?? this.matchedFactors,
+      matchesLabel: matchesLabel ?? this.matchesLabel,
+      studentCount: studentCount ?? this.studentCount,
+      isJoined: isJoined ?? this.isJoined,
+      userId: userId ?? this.userId,
+      groups: groups ?? this.groups,
+      isVerified: isVerified ?? this.isVerified,
     );
   }
 }

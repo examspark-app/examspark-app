@@ -6,6 +6,7 @@ import 'package:examspark_frontend/core/services/notification_inbox_controller.d
 import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/core/services/web_browser_notify.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/screens/legal/legal_center_screen.dart';
 import 'package:examspark_frontend/presentation/widgets/app_top_bar.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 import 'package:examspark_frontend/presentation/widgets/auth_gate.dart';
@@ -245,6 +246,39 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     trailing: Icon(
                       Icons.brightness_auto,
                       color: AppTheme.getSecondaryText(context),
+                    ),
+                  ),
+                ]),
+                const SizedBox(height: 24),
+                // ===== TASK 3 — Settings → Legal =====
+                Text(
+                  'Legal',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Privacy, Terms, and every other Sonaxia policy in one place.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+                const SizedBox(height: 12),
+                _card([
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(
+                      Icons.gavel_outlined,
+                      color: AppTheme.getSecondaryText(context),
+                    ),
+                    title: const Text('Legal Center'),
+                    subtitle: const Text('Policies, Contact Us, About Sonaxia'),
+                    trailing: Icon(
+                      Icons.arrow_forward_ios,
+                      size: 16,
+                      color: AppTheme.getSecondaryText(context),
+                    ),
+                    onTap: () => Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const LegalCenterScreen()),
                     ),
                   ),
                 ]),

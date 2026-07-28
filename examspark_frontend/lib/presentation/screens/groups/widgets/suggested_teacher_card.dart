@@ -22,7 +22,7 @@ class SuggestedTeacherCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       width: 148,
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: AppTheme.getCardBackground(context),
         borderRadius: BorderRadius.circular(AppTheme.borderRadius),
@@ -47,9 +47,30 @@ class SuggestedTeacherCard extends StatelessWidget {
                     child: const VerifiedBadge(size: 15),
                   ),
                 ),
+              // Match Score Badge on top-left if available
+              if (teacher.matchScore != null)
+                Positioned(
+                  left: -6,
+                  top: -6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: Colors.green.shade600,
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text(
+                      '${teacher.matchScore}%',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 8),
           Text(
             teacher.name,
             textAlign: TextAlign.center,
@@ -69,31 +90,32 @@ class SuggestedTeacherCard extends StatelessWidget {
             ),
           ),
           if (teacher.matchesLabel.isNotEmpty) ...[
-            const SizedBox(height: 6),
+            const SizedBox(height: 4),
             Text(
               teacher.matchesLabel,
               textAlign: TextAlign.center,
-              maxLines: 2,
+              maxLines: 1,
               overflow: TextOverflow.ellipsis,
               style: TextStyle(
                 color: AppTheme.accentColor,
-                fontSize: 10,
+                fontSize: 9,
                 fontWeight: FontWeight.w600,
               ),
             ),
           ],
-          const SizedBox(height: 10),
+          const Spacer(),
+          const SizedBox(height: 8),
           SizedBox(
             width: double.infinity,
             child: OutlinedButton(
               onPressed: isUpdating ? null : onJoinToggle,
               style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(32),
+                minimumSize: const Size.fromHeight(30),
                 padding: EdgeInsets.zero,
-                textStyle: const TextStyle(fontSize: 12),
+                textStyle: const TextStyle(fontSize: 11),
               ),
               child: isUpdating
-                  ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const SizedBox(width: 12, height: 12, child: CircularProgressIndicator(strokeWidth: 2))
                   : Text(teacher.isJoined ? 'Joined' : 'Join'),
             ),
           ),

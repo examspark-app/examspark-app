@@ -286,6 +286,18 @@ class SupabaseClient {
     }).eq('id', userId);
   }
 
+  /// Legal Consent (Task 2) — marks the First Login Legal Consent screen
+  /// as completed. Same update-then-flag pattern as [chooseTeacherRole] /
+  /// [completeStudentOnboarding]; `AuthGate` reads `legal_accepted` the
+  /// same way it reads `onboarding_completed`, and never shows the
+  /// consent screen again once this is set.
+  Future<void> acceptLegalPolicies(String userId) async {
+    await client.from('users').update({
+      'legal_accepted': true,
+      'legal_accepted_at': DateTime.now().toUtc().toIso8601String(),
+    }).eq('id', userId);
+  }
+
   /// Load student profile fields for Edit Profile (users + student_profiles).
   Future<Map<String, dynamic>> fetchStudentOnboardingBundle(String userId) async {
     final userRow = await getUserProfile(userId);

@@ -235,7 +235,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
         );
         if (open != true || !mounted) return;
       }
-      await showStudyWorkspaceSheet(
+      await showStudyWorkspaceFullScreen(
         context,
         lectureId: lectureId,
         title: item.title,
@@ -827,29 +827,29 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             _buildInfoCard(context, group),
             const SizedBox(height: 28),
 
-            // ---- Teacher Achievements (only if uploaded) ----
-            TeacherAchievementsSection(
-              certificates: teacher.certificatesForStudents,
-              achievements: teacher.achievements,
-            ),
-            if (teacher.hasAchievements) const SizedBox(height: 28),
+          
 
             // ---- Leave (students only — teacher owns the group) ----
             if (group.isJoined && !_isGroupTeacher) ...[
-              SizedBox(
-                width: double.infinity,
+              Align(
+                alignment: Alignment.centerRight,
                 child: OutlinedButton.icon(
                   onPressed: _isJoinUpdating ? null : _toggleJoin,
-                  icon: const Icon(Icons.exit_to_app, size: 18),
-                  label: Text(_isJoinUpdating ? 'Updating...' : 'Leave Group'),
+                  icon: const Icon(Icons.exit_to_app, size: 15),
+                  label: Text(
+                    _isJoinUpdating ? 'Updating...' : 'Leave Group',
+                    style: const TextStyle(fontSize: 12),
+                  ),
                   style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(48),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     foregroundColor: Colors.red,
                     side: const BorderSide(color: Colors.red),
                   ),
                 ),
               ),
-              const SizedBox(height: 28),
+              const SizedBox(height: 24),
             ],
 
             // ---- Suggested Teachers ----

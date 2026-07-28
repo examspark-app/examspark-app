@@ -9,6 +9,8 @@ import 'package:examspark_frontend/presentation/screens/groups/group_dashboard_s
 import 'package:examspark_frontend/presentation/screens/groups/group_info_screen.dart';
 import 'package:examspark_frontend/presentation/screens/groups/groups_list_screen.dart';
 import 'package:examspark_frontend/presentation/screens/groups/join_invite_screen.dart';
+import 'package:examspark_frontend/presentation/screens/legal/legal_center_screen.dart';
+import 'package:examspark_frontend/presentation/screens/legal/legal_webview_screen.dart';
 import 'package:examspark_frontend/presentation/screens/recording/notes_result_screen.dart';
 import 'package:examspark_frontend/presentation/screens/recording/recorder_screen.dart';
 import 'package:examspark_frontend/presentation/screens/recording/processing_screen.dart';
@@ -129,6 +131,20 @@ class AppRouter {
       case '/help':
         return MaterialPageRoute(
           builder: (_) => const HelpScreen(),
+          settings: settings,
+        );
+      // ===== Legal Consent & Legal Center =====
+      case '/legal-center':
+        return MaterialPageRoute(
+          builder: (_) => const LegalCenterScreen(),
+          settings: settings,
+        );
+      case '/legal-viewer':
+        return MaterialPageRoute(
+          builder: (_) => LegalWebViewScreen(
+            title: args?['title'] as String? ?? 'Legal',
+            url: args?['url'] as String? ?? '',
+          ),
           settings: settings,
         );
       case '/teacher':
