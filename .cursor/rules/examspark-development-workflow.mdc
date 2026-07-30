@@ -1,0 +1,44 @@
+---
+description: ExamSpark permanent development workflow — phases 1A-6, models, founder rules
+alwaysApply: true
+---
+
+# ExamSpark Development Workflow (OFFICIAL)
+
+Full spec: [`DEVELOPMENT_WORKFLOW.md`](DEVELOPMENT_WORKFLOW.md)
+
+**Permanent unless founder says "Update Development Workflow".**
+
+## Current Status
+
+| Phase | Status |
+|-------|--------|
+| **1A** Product Foundation | 🔒 LOCKED |
+| **1B** Low-fi Wireframes | 🔵 NEXT |
+| **2** Flutter UI | Blocked until 1B approved |
+| **3–6** | Pending |
+
+## Model per Phase
+
+| Phase | Model |
+|-------|-------|
+| 1A, 1B, 2, 4, 5 | Sonnet 5 High |
+| 3, 6 | GPT-5.5 Medium |
+
+**Never use Sonnet for small fixes** — use GPT-5.5 Medium.
+
+## Hard Gates
+
+- **UI Rule:** Wireframes (1B) before Flutter (2)
+- **Auth Rule:** Never rewrite Supabase auth — UI restyle only
+- **Phase Rule:** Never auto-start next phase — audit + wait for founder
+- **Manual Rule:** Every code task ends with Manual Setup + .env checklists
+- **Cleanup:** Never auto-delete files
+
+## Sonnet Budget
+
+1A 15% · 1B 10% · 2 35% · 4 20% · 5 20%
+
+## Founder
+
+Non-developer — simple language, copy-paste commands, never assume SQL/Flutter/Git knowledge.

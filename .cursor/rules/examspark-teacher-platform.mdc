@@ -1,0 +1,46 @@
+---
+description: Teacher business dashboard, student access logic, R2 storage rules
+alwaysApply: true
+---
+
+# ExamSpark Teacher Platform Rule
+
+Full spec: [`TEACHER_PLATFORM.md`](TEACHER_PLATFORM.md)
+
+## Teacher Dashboard
+
+Not just upload — **business dashboard** with:
+- Student metrics (active, new, expired, renewal due)
+- Group analytics (completion, study time, AI questions)
+- Student list (plan, joined, expires, last active, credits, progress)
+- Business metrics (revenue, subscribers, renewal/churn rate, top lecture/batch)
+
+## Student Access Logic (server-side)
+
+1. Teacher shares lecture → already-joined students: **immediate access**
+2. New student joins later → access from **subscription period only**
+3. Active subscriber → full access until expiry
+4. After expiry → **read-only or locked** (configurable)
+
+## R2 Storage
+
+**Store:** Transcript, Clean Transcript, Notes, Summary, all generated extras, PDF, Images, Teacher Files, Exports
+
+**Never store (default):** Raw Audio — delete after Whisper → save Transcript
+
+Flow: Audio → Whisper → Transcript → delete audio → R2 → Notes → R2
+
+## Groups & Sharing (Strict)
+
+- Teacher owns group; students **cannot** upload, message, or edit
+- **Only teacher** shares content (notes, PDF, quiz, etc.)
+- Students: **Group Invite Link only** — never content (future: 100 credits configurable)
+- Watermark shared assets: `Shared by: {Teacher} • {Group}` + `lecture_id` traceability
+
+Core rules: [`PROJECT_CORE_RULES.md`](PROJECT_CORE_RULES.md)
+
+## Do Not Build Yet Without Founder OK
+
+- Full dashboard UI implementation
+- Revenue/commission live wiring
+- Optional "Save Original Audio" feature

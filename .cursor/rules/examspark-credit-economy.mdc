@@ -1,0 +1,90 @@
+---
+description: ExamSpark Credit Economy v2 — session-based costs + plan-tier gating
+alwaysApply: true
+---
+
+# ExamSpark Credit Economy Rule (v2)
+
+Full spec: [`CREDIT_ECONOMY.md`](CREDIT_ECONOMY.md)
+
+## Core Principle
+
+- Users see **Credits only** — never rupee amounts for AI actions
+- Internal (backend only): **1 Credit ≈ ₹0.15** charged-value — never in UI
+- Most features are **session/feature-based**. **Exception:** Record + Audio Upload = **per-minute** (1/min, round up, max 180); YouTube stays banded
+
+## Locked Credit Costs (v2)
+
+| Feature | Credits |
+|---------|---------|
+| **Recording / Audio Upload** | **1 credit per minute** (actual length, max 180) |
+| Summary | Included with recording |
+| Ask AI (Normal) | 5 |
+| Ask AI (Deep) | 12 |
+| Ask AI + live web (Tavily, current events only) | 10 |
+| Ask AI Deep + live web | 20 |
+| Select AI (Explain / Simplify / Translate / Memory / Exam / Ask) | 2 |
+| Select AI (Quiz from selection, 5 MCQ) | 3 |
+| Select AI (Flashcards from selection, 5) | 3 |
+| Home chips after Ask (from Knowledge Object) | 0 (Regenerate paid) |
+| Flashcards | 5 |
+| Quiz (20 MCQ) | 5 |
+| Important Questions | 20 |
+| Revision Notes | 5 |
+| 5 Minute Revision | 5 |
+| Formula Sheet | 15 |
+| Mind Map | 30 |
+| Diagram/Image | 25 |
+| Home AI Camera / Upload Image | 10 |
+| PDF Analysis | 20 |
+| OCR Image | 15 |
+| Translate | 8 |
+| Voice Read | 5 |
+| YouTube Link → Notes ≤30 min | 10 |
+| YouTube Link → Notes 30–60 min | 20 |
+| YouTube Link → Notes 60–90 min | 40 |
+
+## Plans (v2.2 — Jul 15, 2026)
+
+| Plan | Credits/mo | Unlocks |
+|------|------------|---------|
+| Guest (no account) | 1 free Ask only | No credits ledger |
+| Free | 50 | Ask AI, PDF, Photo/Diagram (credits). Audio locked. Groups = 0 |
+| ₹199 | 1,500 | More credits. Join 1 Group. Audio still locked |
+| ₹499 | 3,500 | + Audio recording/upload. Join 3 Groups |
+| ₹999 | 8,000 | Full access. Join 6 Groups |
+| Teacher ₹2999 | 16,000 | Bulk record + B2B tools. Create Group: paid Teacher + setup gate |
+
+Paid plans get **their** monthly credits only — Free’s 50 is **not** added on top.
+
+## Buy Extra Credits (a-la-carte, no teacher commission)
+
+| Pack | Credits | Price |
+|------|---------|-------|
+| pack_100 | 100 | ₹25 |
+| pack_500 | 500 | ₹110 |
+| pack_1000 | 1,000 | ₹200 |
+| pack_5000 | 5,000 | ₹850 |
+| pack_10000 | 10,000 | ₹1,500 |
+
+## Dashboard UX
+
+- Show **one primary translated stat** + raw credit balance (e.g. "≈ 15 Lecture Sessions")
+- If multiple estimates shown, include shared-pool disclaimer
+
+## Server-Side Check Order
+
+1. Plan tier unlocks feature? → if no: 🔒 locked modal
+2. Enough credits? → if no: insufficient credits modal
+3. Deduct credits server-side only
+
+## Group Join Caps
+
+Free=0 · ₹199=1 · ₹499=3 · ₹999=6 · Teacher=unlimited. Client fail-closed + DB trigger; refund/plan drop → `fn_trim_group_memberships`.
+
+## Code
+
+- [`credit_costs.dart`](examspark_frontend/lib/core/constants/credit_costs.dart)
+- [`credit_usage_display.dart`](examspark_frontend/lib/core/constants/credit_usage_display.dart)
+- [`plan_tier_gating.dart`](examspark_frontend/lib/core/constants/plan_tier_gating.dart)
+- [`subscription_plans.dart`](examspark_frontend/lib/core/payments/subscription_plans.dart)

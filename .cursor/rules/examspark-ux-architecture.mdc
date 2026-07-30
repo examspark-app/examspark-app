@@ -1,0 +1,87 @@
+---
+description: ExamSpark UX architecture — Home chat, Study Workspace, 5-tab nav, Groups broadcast
+alwaysApply: true
+---
+
+# ExamSpark UX Architecture Rule
+
+Full spec: [`UX_ARCHITECTURE.md`](UX_ARCHITECTURE.md) · [`PRD.md`](PRD.md)
+
+## Design Process (Mandatory Order)
+
+1. Information Architecture → 2. Navigation Flow → 3. Screen Hierarchy → 4. UI last
+
+Never mock UI before IA is locked.
+
+## UX Goals
+
+- User understands app in **30 seconds**
+- **Reduce taps** — workspace tabs, not page stacks
+- **Every feature** has one logical primary place
+- **No unnecessary screens** — overlays over routes
+- Premium AI SaaS feel — not traditional edu-app
+
+## Navigation — 5 Tabs Only
+
+`Home` · `Library` · `Groups` · `Progress` · `Profile` — **nothing more**.
+
+Teacher Dashboard via Profile. Subscription via Profile. Settings via Profile.
+
+## Profile Screen
+
+Rows: Subscription · Credits · Storage · Library Size · Settings · Help · Logout
+Teacher only: Teacher Dashboard row
+
+Credits also on Home top bar pill.
+
+## Home = Chat Screen
+
+**Top bar ONLY:** Logo · Search · Credits · Notification · Profile
+
+**Bottom sticky:** Attachment · Record · Text · Send
+
+**After lecture:** Stay in conversation — NO navigate to new screen. Embed Study Tabs + AI Actions below AI response.
+
+## Core Differentiator — Study Workspace
+
+**ChatGPT = conversation only. ExamSpark = conversation + Study Workspace.**
+
+When a lecture opens:
+- **Desktop:** tabs on **right panel** (split pane with conversation)
+- **Mobile:** tabs in **bottom sheet** (swipe up)
+
+Canonical tabs: Notes · Summary · Transcript · Flashcards · Quiz · Revision · Ask AI
+
+One lecture = all study inside — no page hopping. Same `StudyWorkspace` widget everywhere.
+
+Do not build ChatGPT clone. Build conversation + education workspace.
+
+## Library
+
+Separate tab. Folders · Search · Recent · Favorites → tap card → Study Workspace.
+
+## Groups
+
+WhatsApp **feel**, NOT chat. Teacher broadcast only. Students: read · quiz · Ask AI — no message · no upload.
+
+## Teacher Dashboard
+
+Cards only — Students · Subscribers · Revenue · Credits · Storage · Groups · Analytics. No spreadsheet tables.
+
+## Design
+
+White · black · minimal · premium · fast. Not colorful edu-app. Not ChatGPT clone — Study Workspace is the differentiator.
+
+## Build Order
+
+1. ✅ IA + Screen Hierarchy (`IA_SCREEN_HIERARCHY.md`)
+2. Flutter UI (Phase 2 — ask founder) → 3. Polish → 4. DB → 5. Backend
+
+## Code Targets (when implementing)
+
+- `AppShell` — 5-tab bottom nav
+- `HomeScreen` — conversation + `BottomInputBar` + `LectureResultCard`
+- `StudyWorkspace` — shared widget (replace standalone `NotesResultScreen` pattern)
+- `LibraryScreen` · `GroupsScreen` · `TeacherDashboardScreen`
+
+Do not scatter feature buttons on Home. Do not add routes per study tab.

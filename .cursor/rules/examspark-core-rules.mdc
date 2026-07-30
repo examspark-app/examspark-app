@@ -1,0 +1,47 @@
+---
+description: ExamSpark project core rules — storage, sharing, RAG, PYQ, security (MUST FOLLOW)
+alwaysApply: true
+---
+
+# ExamSpark Core Rules (MUST FOLLOW)
+
+Full spec: [`PROJECT_CORE_RULES.md`](PROJECT_CORE_RULES.md)
+
+## Storage
+
+**Locked policy:** [`DATA_STORAGE_POLICY.md`](DATA_STORAGE_POLICY.md) (Jul 16, 2026)
+
+- **Temp (delete after processing):** Raw audio (never permanent), temp AI/OCR, upload cache
+- **R2 permanent:** Large files — full notes `.md`, clean transcript, original PDF/image, OCR output, exports, backups
+- **R2 temp only:** Raw audio staging during transcription/chunking
+- **Supabase:** Structured JSON (Flashcards, Quiz, Mind Map, Revision), short notes fields, metadata, chat, analytics, pgvector
+- **Not R2:** Flashcards/Quiz/Mind Map/Revision **JSON** — Supabase; R2 only for PDF/image **exports**
+- **Vectors:** Clean Transcript chunks + AI Notes + Teacher Shared Notes only
+- **Search:** Supabase/pgvector/metadata — never search R2 directly
+
+## Groups
+
+- Teacher owns group; students **cannot** upload, message, or edit
+- Teacher photo + name visible; description; pinned on top
+
+## Sharing (Strict)
+
+- **Only teacher** shares content (notes, PDF, quiz, etc.)
+- Students **cannot** share/export/forward/download protected content
+- Students **may only** share **Group Invite Link** (future: 100 credits configurable)
+- Watermark shared content: `Shared by: {Teacher} • {Group}` + `lecture_id` traceability
+
+## RAG Priority (never skip order)
+
+1. User Notes → 2. Transcript (clean chunks) → 3. Teacher Shared → 4. Web Search
+
+## PYQ
+
+- Mapping only — exam reference tags (NEET 2024, etc.)
+- **Never** show original Q/options/answer key/explanation
+
+## Cost & Security
+
+- No duplicate vectors/notes; reuse RAG; minimize storage
+- Students isolated; groups isolated; permission check every AI request
+- Modular adapters — models, storage, payments replaceable

@@ -1,0 +1,33 @@
+# ==========================
+# Flutter / Dart
+# ==========================
+.dart_tool/
+.packages
+.pub/
+build/
+# Flutter generated files
+.flutter-plugins
+.flutter-plugins-dependencies
+# Coverage
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets & Credentials — NEVER commit these
+examspark_backend/secrets/
+*.json.key
+firebase-service-account*.json
+google-services-account*.json
+*serviceAccount*.json
