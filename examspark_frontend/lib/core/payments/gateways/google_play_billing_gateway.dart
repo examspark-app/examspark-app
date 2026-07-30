@@ -12,6 +12,7 @@ import 'package:in_app_purchase/in_app_purchase.dart';
 /// Web must not use this gateway (Play policy).
 class GooglePlayBillingGateway implements PaymentGatewayInterface {
   final InAppPurchase _iap = InAppPurchase.instance;
+  static final Map<String, PurchaseDetails> _pendingPurchases = {};
 
   @override
   PaymentGateway get gateway => PaymentGateway.googlePlay;
@@ -124,6 +125,10 @@ class GooglePlayBillingGateway implements PaymentGatewayInterface {
           if (purchase.status == PurchaseStatus.purchased ||
               purchase.status == PurchaseStatus.restored) {
             final token = purchase.verificationData.serverVerificationData;
+
+            // Store purchase reference to complete AFTER backend verification succeeds
+            _pendingPurchases[token] = purchase;
+
             if (!completer.isCompleted) {
               completer.complete(
                 PaymentResult(
@@ -134,9 +139,6 @@ class GooglePlayBillingGateway implements PaymentGatewayInterface {
                   gatewayPaymentId: token,
                 ),
               );
-            }
-            if (purchase.pendingCompletePurchase) {
-              await _iap.completePurchase(purchase);
             }
             await sub.cancel();
             return;
@@ -188,12 +190,16 @@ class GooglePlayBillingGateway implements PaymentGatewayInterface {
         gatewayPayload?['product_id'] as String?;
     final token = gatewayPaymentId ??
         gatewayPayload?['purchase_token'] as String?;
+
     if (productId == null || token == null || token.isEmpty) {
       return PaymentResult.failed(
         'Missing purchase token or product id',
         orderId: order.orderId,
       );
     }
+
+    final isSubscription = PlayProducts.isSubscriptionProduct(productId);
+
     try {
       final data = await PaymentRepository.instance.verifyPayment(
         orderId: order.orderId,
@@ -203,8 +209,10 @@ class GooglePlayBillingGateway implements PaymentGatewayInterface {
         gatewayPayload: {
           'purchase_token': token,
           'product_id': productId,
+          'is_subscription': isSubscription,
         },
       );
+
       final status = '${data['status']}'.toLowerCase();
       if (status != 'verified') {
         return PaymentResult.failed(
@@ -212,6 +220,13 @@ class GooglePlayBillingGateway implements PaymentGatewayInterface {
           orderId: order.orderId,
         );
       }
+
+      // Complete purchase in Flutter ONLY AFTER server verification succeeds
+      final purchase = _pendingPurchases.remove(token);
+      if (purchase != null && purchase.pendingCompletePurchase) {
+        await _iap.completePurchase(purchase);
+      }
+
       final credits = data['credits_allocated'];
       return PaymentResult(
         status: PaymentResultStatus.verified,

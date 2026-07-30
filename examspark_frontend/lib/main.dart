@@ -13,8 +13,15 @@ import 'package:examspark_frontend/core/services/pending_invite_store.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/services/fcm_push_service.dart';
 import 'package:examspark_frontend/presentation/widgets/auth_gate.dart';
+
+// 👇 YEH NAYA IMPORT ADD KIYA HAI 👇
+import 'package:examspark_frontend/core/payments/payment_service.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // 👇 YEH LINE NAYI ADD KI HAI (Background Payments Listen karne ke liye) 👇
+  PaymentService.instance.initialize();
 
   try {
     await dotenv.load(fileName: '.env');
@@ -46,7 +53,7 @@ class ExamSparkApp extends StatefulWidget {
 
 class _ExamSparkAppState extends State<ExamSparkApp> {
   bool _inviteDeepLinkHandled = false;
-StreamSubscription? _mediaStream;
+  StreamSubscription? _mediaStream;
 
   @override
   void initState() {
@@ -60,16 +67,16 @@ StreamSubscription? _mediaStream;
       });
 
       ReceiveSharingIntent.instance
-    .getInitialMedia()
-    .then((files) {
-  for (final file in files) {
-    debugPrint("Initial Path: ${file.path}");
-    debugPrint("Initial Type: ${file.type}");
-    debugPrint("Initial Message: ${file.message}");
-  }
+          .getInitialMedia()
+          .then((files) {
+        for (final file in files) {
+          debugPrint("Initial Path: ${file.path}");
+          debugPrint("Initial Type: ${file.type}");
+          debugPrint("Initial Message: ${file.message}");
+        }
 
-  ReceiveSharingIntent.instance.reset();
-});
+        ReceiveSharingIntent.instance.reset();
+      });
     }
 
     // `home: AuthGate` ignores URL hash — open /join/CODE after first frame.
@@ -93,12 +100,13 @@ StreamSubscription? _mediaStream;
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
   }
+
   @override
-void dispose() {
-  _mediaStream?.cancel();
-  
-  super.dispose();
-}
+  void dispose() {
+    _mediaStream?.cancel();
+    super.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return MaterialApp(

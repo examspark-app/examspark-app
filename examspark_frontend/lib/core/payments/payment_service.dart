@@ -1,6 +1,10 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/material.dart' show debugPrint;
+import 'package:in_app_purchase/in_app_purchase.dart'; // Naya import
+
 import 'package:examspark_frontend/core/config/app_config.dart';
 import 'package:examspark_frontend/core/payments/gateways/google_play_billing_gateway.dart';
 import 'package:examspark_frontend/core/payments/gateways/phonepe_gateway.dart';
@@ -25,6 +29,64 @@ class PaymentService {
   final RazorpayGateway _razorpay = RazorpayGateway();
   final PhonePeGateway _phonepe = PhonePeGateway();
   final GooglePlayBillingGateway _googlePlay = GooglePlayBillingGateway();
+
+  // Background listener variable
+  StreamSubscription<List<PurchaseDetails>>? _iapStreamSubscription;
+
+  // App start hone par background purchases sunne ke liye
+  void initialize() {
+    if (!kIsWeb) {
+      final Stream<List<PurchaseDetails>> purchaseUpdated =
+          InAppPurchase.instance.purchaseStream;
+      
+      _iapStreamSubscription = purchaseUpdated.listen((purchases) {
+        _handleBackgroundPurchases(purchases);
+      }, onDone: () {
+        _iapStreamSubscription?.cancel();
+      }, onError: (Object error) {
+        debugPrint('Global IAP Error: $error');
+      });
+    }
+  }
+
+  // Pending/Background purchases ko verify karne ke liye
+  Future<void> _handleBackgroundPurchases(List<PurchaseDetails> purchases) async {
+    for (var purchase in purchases) {
+      if (purchase.status == PurchaseStatus.purchased || 
+          purchase.status == PurchaseStatus.restored) {
+        
+        if (purchase.pendingCompletePurchase) {
+          final token = purchase.verificationData.serverVerificationData;
+          final productId = purchase.productID;
+          
+          try {
+            final data = await PaymentRepository.instance.verifyPayment(
+              orderId: 'recovered_${DateTime.now().millisecondsSinceEpoch}',
+              gateway: PaymentGateway.googlePlay,
+              idempotencyKey: 'recovery_$token',
+              gatewayPaymentId: token,
+              gatewayPayload: {
+                'purchase_token': token,
+                'product_id': productId,
+                'is_subscription': PlayProducts.isSubscriptionProduct(productId),
+              },
+            );
+
+            final status = '${data['status']}'.toLowerCase();
+            if (status == 'verified') {
+              await InAppPurchase.instance.completePurchase(purchase);
+            }
+          } catch (e) {
+            debugPrint('Background verification failed: $e');
+          }
+        }
+      }
+    }
+  }
+
+  void dispose() {
+    _iapStreamSubscription?.cancel();
+  }
 
   PaymentGatewayInterface get _activeGateway {
     if (kIsWeb) {

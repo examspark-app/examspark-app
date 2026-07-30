@@ -1,5 +1,9 @@
 """Google Play Billing — Android subscriptions + one-time packs."""
+import asyncio
 from typing import Any
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 from app.config import PaymentConfig
 from app.constants.payment_catalog import play_product_id_for
@@ -10,7 +14,99 @@ from app.models.payment import (
     PaymentStatus,
 )
 from app.services.gateways.base import PaymentGatewayBase
-from app.services.play_billing_verify import verify_play_purchase
+
+
+def _verify_and_acknowledge_sync(
+    product_id: str,
+    purchase_token: str,
+    is_subscription: bool = False,
+) -> bool:
+    """Synchronous internal helper that calls Google Play Publisher API."""
+    if not PaymentConfig.google_play_configured():
+        return False
+
+    package_name = getattr(PaymentConfig, "GOOGLE_PLAY_PACKAGE_NAME", "")
+    service_account_path = getattr(
+        PaymentConfig, "GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH", ""
+    )
+
+    if not package_name or not service_account_path:
+        return False
+
+    try:
+        credentials = service_account.Credentials.from_service_account_file(
+            service_account_path,
+            scopes=["https://www.googleapis.com/auth/androidpublisher"],
+        )
+        service = build("androidpublisher", "v3", credentials=credentials)
+
+        if is_subscription:
+            sub = (
+                service.purchases()
+                .subscriptions()
+                .get(
+                    packageName=package_name,
+                    subscriptionId=product_id,
+                    token=purchase_token,
+                )
+                .execute()
+            )
+
+            # paymentState 1 = Payment Successful
+            if sub.get("paymentState") == 1:
+                # Auto-acknowledge if not done yet
+                if sub.get("acknowledgementState") == 0:
+                    service.purchases().subscriptions().acknowledge(
+                        packageName=package_name,
+                        subscriptionId=product_id,
+                        token=purchase_token,
+                    ).execute()
+                return True
+            return False
+
+        else:
+            prod = (
+                service.purchases()
+                .products()
+                .get(
+                    packageName=package_name,
+                    productId=product_id,
+                    token=purchase_token,
+                )
+                .execute()
+            )
+
+            # purchaseState 0 = Purchased
+            if prod.get("purchaseState") == 0:
+                # Auto-acknowledge if not done yet
+                if prod.get("acknowledgementState") == 0:
+                    service.purchases().products().acknowledge(
+                        packageName=package_name,
+                        productId=product_id,
+                        token=purchase_token,
+                        body={},
+                    ).execute()
+                return True
+            return False
+
+    except HttpError:
+        return False
+    except Exception:
+        return False
+
+
+async def verify_play_purchase(
+    product_id: str,
+    purchase_token: str,
+    is_subscription: bool = False,
+) -> bool:
+    """Non-blocking async wrapper to prevent blocking the FastAPI event loop."""
+    return await asyncio.to_thread(
+        _verify_and_acknowledge_sync,
+        product_id=product_id,
+        purchase_token=purchase_token,
+        is_subscription=is_subscription,
+    )
 
 
 class GooglePlayGateway(PaymentGatewayBase):
@@ -26,7 +122,6 @@ class GooglePlayGateway(PaymentGatewayBase):
         platform: PaymentPlatform,
         metadata: dict[str, Any],
     ) -> CreateOrderResponse:
-        # Client launches BillingClient; server records pending + product_id.
         credit_pack_id = metadata.get("credit_pack_id")
         try:
             product_id = play_product_id_for(
@@ -80,11 +175,20 @@ class GooglePlayGateway(PaymentGatewayBase):
             or payload.get("productId")
             or payload.get("gateway_order_id")
         )
+        is_subscription = bool(
+            payload.get("is_subscription")
+            or payload.get("isSubscription")
+            or False
+        )
+
         if not purchase_token or not product_id:
             return False
+
         if not PaymentConfig.google_play_configured():
             return False
-        return verify_play_purchase(
+
+        return await verify_play_purchase(
             product_id=str(product_id),
             purchase_token=str(purchase_token),
+            is_subscription=is_subscription,
         )
