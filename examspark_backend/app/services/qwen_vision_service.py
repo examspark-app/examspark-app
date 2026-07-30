@@ -38,7 +38,9 @@ _VISION_SYSTEM_PROMPT = (
     '- "importantTerms": array of {"term","definition"}\n'
     '- "visualPayload": optional object; use {} or omit if not needed\n'
     + STUDY_CONTENT_LANGUAGE_RULE
-    + "\nKeep cleanNotes compact enough to finish. Raw JSON only — no markdown fences."
+    + "\nWrite like a sharp, professional tutor — clear and specific, never "
+    "generic filler. "
+    "Keep cleanNotes compact enough to finish. Raw JSON only — no markdown fences."
 )
 
 _MIN_NOTES_CHARS = 40

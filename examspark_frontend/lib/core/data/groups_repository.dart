@@ -491,9 +491,7 @@ class GroupsRepository {
 
       final filtered = list.where((row) {
         final uid = row['user_id'] as String?;
-        return uid != null &&
-            (groupsByTeacher[uid]?.isNotEmpty ?? false) &&
-            activeTeacherIds.contains(uid);
+        return uid != null && (groupsByTeacher[uid]?.isNotEmpty ?? false);
       }).toList();
 
       return filtered.map((row) {
@@ -815,7 +813,14 @@ class GroupsRepository {
       return certificates;
     }
   }
+/// Single teacher's full profile (bio, achievements, certificates) for
+  /// the student-facing "View Profile" screen from Discovery.
+  Future<TeacherProfileModel?> fetchTeacherProfileByUserId(String userId) async {
+    final map = await _fetchTeacherProfilesByUserIds([userId]);
+    return map[userId];
+  }
 
+  
   Future<Map<String, TeacherProfileModel>> _fetchTeacherProfilesByUserIds(List<String> userIds) async {
     if (userIds.isEmpty) return {};
     final client = SupabaseClient.instance.client;

@@ -243,6 +243,22 @@ def resolve_answer_language(
     return detected or "MATCH_QUESTION"
 
 
+# Shared closing note appended to every language-hint line — this is the
+# ChatGPT/Claude-style "advanced" behavior the product wants: the detected
+# language below is a SIGNAL, not a rigid box. The model should use its own
+# multilingual understanding to mirror exactly how the student writes —
+# including natural Hindi+English code-mixing — rather than forcing an
+# artificially "pure" single language when the student themselves mixed.
+_NATURAL_MIRROR_NOTE = (
+    " This detected language is a guide, not a rigid rule — use your own "
+    "multilingual understanding like a bilingual human tutor would. If the "
+    "student's message itself blends languages (e.g. Hindi words inside an "
+    "English sentence, or vice versa), mirror that SAME natural blend in your "
+    "reply rather than forcing artificial purity. Match their real chat style, "
+    "turn by turn."
+)
+
+
 def language_hint_user_line(
     query: str,
     *,
@@ -269,16 +285,19 @@ def language_hint_user_line(
             "Even if lecture notes / transcript / RAG are Hindi, Hinglish, "
             "Bengali, or any other language — TRANSLATE the grounded facts "
             "into English. NEVER reply in Hindi for an English question."
+            + _NATURAL_MIRROR_NOTE
         )
     if lang == "HINDI":
         return (
             f"Detected answer language: HINDI.{lock_note} "
             "Write the ENTIRE answer in Hindi only — including section titles."
+            + _NATURAL_MIRROR_NOTE
         )
     if lang == "BENGALI":
         return (
             f"Detected answer language: BENGALI.{lock_note} "
             "Write the ENTIRE answer in Bengali (Bangla) only — including section titles."
+            + _NATURAL_MIRROR_NOTE
         )
     if lang == "MATCH_QUESTION":
         return (
@@ -291,6 +310,7 @@ def language_hint_user_line(
             "ANTI-LEAK: ignore the language of lecture notes / transcript / RAG. "
             "If the student wrote Latin English or Hinglish, NEVER reply in Khmer, "
             "Thai, Chinese, or any other script just because the notes use that script."
+            + _NATURAL_MIRROR_NOTE
         )
     # HINGLISH
     return (
@@ -299,6 +319,7 @@ def language_hint_user_line(
         "section titles can be English or Hinglish. Do not switch to pure English or pure Hindi "
         "unless the student asks. "
         "ANTI-LEAK: do NOT copy notes language (Khmer/Hindi/English/etc.) — follow the student."
+        + _NATURAL_MIRROR_NOTE
     )
 
 
@@ -309,17 +330,17 @@ TYPO / INTENT RULE — HARD CONSTRAINTS
 ====================================================
 Students often mistype. ALWAYS interpret the intended meaning and answer that question.
 
-• Fix common typos silently: missing/extra letters, swapped letters, wrong vowels,
+- Fix common typos silently: missing/extra letters, swapped letters, wrong vowels,
   Hinglish mistypes, keyboard-adjacent errors, OCR-like glitches
   (e.g. "cradit econocmy" → credit economy; "fotosynthesis" → photosynthesis).
-• Prefer the most likely education / ExamSpark meaning in context
+- Prefer the most likely education / ExamSpark meaning in context
   (product terms like credits, lecture, notes, quiz; and subject concepts).
-• Answer the CORRECTED intent in the resolved conversation language (LANGUAGE RULE).
-• Do NOT refuse or say "I don't understand" only because spelling is wrong.
-• Do NOT lecture on spelling unless the student explicitly asks how to spell a word.
-• If two real topics are equally plausible after correcting typos, ask ONE short
+- Answer the CORRECTED intent in the resolved conversation language (LANGUAGE RULE).
+- Do NOT refuse or say "I don't understand" only because spelling is wrong.
+- Do NOT lecture on spelling unless the student explicitly asks how to spell a word.
+- If two real topics are equally plausible after correcting typos, ask ONE short
   clarifying question — do not guess wildly.
-• Never invent facts: after resolving intent, still follow RAG / grounding rules
+- Never invent facts: after resolving intent, still follow RAG / grounding rules
   (no match → same NOT_FOUND / knowledge behavior as today).
 """
 
@@ -331,17 +352,17 @@ LANGUAGE RULE — CHATGPT-STYLE (Qwen3 multilingual)
 ====================================================
 Primary signal = STUDENT QUESTION / conversation lock — NEVER notes/RAG language.
 
-• Always answer in the SAME language / chat style as the student (India or world).
+- Always answer in the SAME language / chat style as the student (India or world).
   Example: English notes + student asks in Hinglish → answer in Hinglish.
   Example: English notes + student asks in Marathi → answer in Marathi.
-• Conversation lock: keep that language across turns in this workspace/session
+- Conversation lock: keep that language across turns in this workspace/session
   until an explicit switch (like ChatGPT memory for the chat).
-• Explicit switch wins: "I want Hinglish" / "answer in English" / "Hindi mein batao" /
+- Explicit switch wins: "I want Hinglish" / "answer in English" / "Hindi mein batao" /
   "Marathi mein" / "answer in Bengali|Tamil|Spanish|French|Arabic|…" → switch.
-• Devanagari → Hindi (or match Marathi if the question is Marathi). Bengali script → Bengali.
-• Latin Hinglish markers → HINGLISH. Clear English Latin (explain/what/the…) → ENGLISH.
-• Any other script or Latin-script language (Spanish, French, Turkish, Japanese…) → match that language.
-• Explicit: "English main baat karo" / "Bengali mein" / "answer in Japanese" → switch now.
+- Devanagari → Hindi (or match Marathi if the question is Marathi). Bengali script → Bengali.
+- Latin Hinglish markers → HINGLISH. Clear English Latin (explain/what/the…) → ENGLISH.
+- Any other script or Latin-script language (Spanish, French, Turkish, Japanese…) → match that language.
+- Explicit: "English main baat karo" / "Bengali mein" / "answer in Japanese" → switch now.
 
 ANTI-LEAK (critical): never copy the language of lecture notes / transcript / RAG.
 If notes are wrong-language or Khmer/Thai/etc., still answer in the student's language.

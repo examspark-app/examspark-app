@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:examspark_frontend/core/brand/app_brand.dart';
 import 'package:examspark_frontend/core/config/app_config.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
@@ -10,7 +13,6 @@ import 'package:examspark_frontend/core/services/pending_invite_store.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/services/fcm_push_service.dart';
 import 'package:examspark_frontend/presentation/widgets/auth_gate.dart';
-
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -44,10 +46,32 @@ class ExamSparkApp extends StatefulWidget {
 
 class _ExamSparkAppState extends State<ExamSparkApp> {
   bool _inviteDeepLinkHandled = false;
+StreamSubscription? _mediaStream;
 
   @override
   void initState() {
     super.initState();
+
+    if (!kIsWeb) {
+      _mediaStream = ReceiveSharingIntent.instance
+          .getMediaStream()
+          .listen((files) {
+        debugPrint("Shared Media: $files");
+      });
+
+      ReceiveSharingIntent.instance
+    .getInitialMedia()
+    .then((files) {
+  for (final file in files) {
+    debugPrint("Initial Path: ${file.path}");
+    debugPrint("Initial Type: ${file.type}");
+    debugPrint("Initial Message: ${file.message}");
+  }
+
+  ReceiveSharingIntent.instance.reset();
+});
+    }
+
     // `home: AuthGate` ignores URL hash — open /join/CODE after first frame.
     WidgetsBinding.instance.addPostFrameCallback((_) => _openInviteDeepLink());
   }
@@ -69,7 +93,12 @@ class _ExamSparkAppState extends State<ExamSparkApp> {
       await Future<void>.delayed(const Duration(milliseconds: 50));
     }
   }
-
+  @override
+void dispose() {
+  _mediaStream?.cancel();
+  
+  super.dispose();
+}
   @override
   Widget build(BuildContext context) {
     return MaterialApp(

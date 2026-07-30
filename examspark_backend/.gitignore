@@ -1,0 +1,24 @@
+# Environment variables
+.env
+.env.*
+
+# Dependencies
+node_modules/
+
+# Logs and Debug files
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+logs/
+*.log
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Credentials, Secrets & JSON files
+config/
+secrets/
+*.json
+*.pem
+*.key

@@ -157,6 +157,7 @@ class _MCQQuizViewState extends State<MCQQuizView> {
               horizontal: AppTheme.screenPadding,
             ),
             child: Column(
+              key: ValueKey(_currentQuestionIndex),
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 const SizedBox(height: 8),

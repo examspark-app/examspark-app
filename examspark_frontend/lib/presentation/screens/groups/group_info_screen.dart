@@ -166,6 +166,34 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     });
   }
 
+  /// Tapping a Suggested Teacher card (not the Join button) — opens that
+  /// teacher's own group/channel, same as opening any other group. Uses
+  /// the first id in `teacher.groups` since that's the only group
+  /// reference the suggestion carries; shows a friendly message instead
+  /// of navigating nowhere if that teacher has no group yet.
+  void _openSuggestedTeacher(SuggestedTeacherModel teacher) {
+    final groups = teacher.groups;
+    if (groups.isEmpty) {
+      AppToast.showSnackBar(
+        context,
+        SnackBar(content: Text('${teacher.name.isEmpty ? "This teacher" : teacher.name} has no group yet.')),
+      );
+      return;
+    }
+    final firstGroup = groups.first;
+    final groupId = firstGroup is Map
+        ? (firstGroup['id']?.toString() ?? firstGroup['class_id']?.toString())
+        : firstGroup?.toString();
+    if (groupId == null || groupId.isEmpty) {
+      AppToast.showSnackBar(
+        context,
+        const SnackBar(content: Text('Could not open this teacher\'s group.')),
+      );
+      return;
+    }
+    Navigator.pushNamed(context, '/group_info', arguments: {'groupId': groupId});
+  }
+
   /// Opens shared feed item: real Study Workspace for notes/lecture, real quiz
   /// from lecture extras for quiz shares. Viewing is free (teacher paid gen).
   Future<void> _openSharedItem(GroupSharedItem item) async {
@@ -786,7 +814,63 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
             ),
             const SizedBox(height: 28),
 
-            // ---- Channel feed first (list rhythm, not chat) ----
+            // ---- Group Information (moved up, above the feed) ----
+            _buildSectionHeader('GROUP INFORMATION'),
+            const SizedBox(height: 12),
+            _buildInfoCard(context, group),
+            const SizedBox(height: 24),
+
+            // ---- Suggested Teachers (right below Group Info) ----
+            if (_suggestedTeachers.isNotEmpty) ...[
+              _buildSectionHeader('SUGGESTED TEACHERS'),
+              const SizedBox(height: 12),
+              SizedBox(
+                height: 190,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _suggestedTeachers.length,
+                  separatorBuilder: (_, _) => const SizedBox(width: 12),
+                  itemBuilder: (context, index) {
+                    final t = _suggestedTeachers[index];
+                    return SuggestedTeacherCard(
+                      teacher: t,
+                      onJoinToggle: () => _toggleSuggested(t),
+                      isUpdating: _updatingSuggestedId == t.id,
+                      onOpen: () => _openSuggestedTeacher(t),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // ---- Leave (students only — teacher owns the group) ----
+            if (group.isJoined && !_isGroupTeacher) ...[
+              Align(
+                alignment: Alignment.centerRight,
+                child: OutlinedButton.icon(
+                  onPressed: _isJoinUpdating ? null : _toggleJoin,
+                  icon: const Icon(Icons.logout_rounded, size: 14),
+                  label: Text(
+                    _isJoinUpdating ? 'Updating...' : 'Leave Group',
+                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    minimumSize: Size.zero,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    foregroundColor: const Color(0xFFE53935),
+                    side: const BorderSide(color: Color(0xFFE53935), width: 1.1),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+
+            // ---- Channel feed (lectures/posts) — now at the very bottom ----
             if (group.recentSharedItems.isNotEmpty || _isGroupTeacher) ...[
               _buildSectionHeader('CHANNEL FEED'),
               const SizedBox(height: 4),
@@ -812,66 +896,13 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                   ),
                 )
               else
-                for (final item in GroupSharedItem.sortedForFeed(group.recentSharedItems))
+                for (final (i, item) in GroupSharedItem.sortedForFeed(group.recentSharedItems).indexed)
                   PinnedContentTile(
                     item: item,
+                    isNewest: i == 0,
                     onTap: () => _openSharedItem(item),
                     onTogglePin: _isGroupTeacher ? () => _togglePin(item) : null,
                   ),
-              const SizedBox(height: 28),
-            ],
-
-            // ---- Group Information ----
-            _buildSectionHeader('GROUP INFORMATION'),
-            const SizedBox(height: 12),
-            _buildInfoCard(context, group),
-            const SizedBox(height: 28),
-
-          
-
-            // ---- Leave (students only — teacher owns the group) ----
-            if (group.isJoined && !_isGroupTeacher) ...[
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
-                  onPressed: _isJoinUpdating ? null : _toggleJoin,
-                  icon: const Icon(Icons.exit_to_app, size: 15),
-                  label: Text(
-                    _isJoinUpdating ? 'Updating...' : 'Leave Group',
-                    style: const TextStyle(fontSize: 12),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    foregroundColor: Colors.red,
-                    side: const BorderSide(color: Colors.red),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
-
-            // ---- Suggested Teachers ----
-            if (_suggestedTeachers.isNotEmpty) ...[
-              _buildSectionHeader('SUGGESTED TEACHERS'),
-              const SizedBox(height: 12),
-              SizedBox(
-                height: 168,
-                child: ListView.separated(
-                  scrollDirection: Axis.horizontal,
-                  itemCount: _suggestedTeachers.length,
-                  separatorBuilder: (_, _) => const SizedBox(width: 12),
-                  itemBuilder: (context, index) {
-                    final t = _suggestedTeachers[index];
-                    return SuggestedTeacherCard(
-                      teacher: t,
-                      onJoinToggle: () => _toggleSuggested(t),
-                      isUpdating: _updatingSuggestedId == t.id,
-                    );
-                  },
-                ),
-              ),
             ],
           ],
         ),
@@ -888,32 +919,56 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
 
   Widget _buildInfoCard(BuildContext context, GroupModel group) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppTheme.getCardBackground(context),
         borderRadius: BorderRadius.circular(AppTheme.borderRadius),
         border: Border.all(color: AppTheme.getCardBorder(context)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.03),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(group.description, style: Theme.of(context).textTheme.bodyMedium),
-          const SizedBox(height: 16),
-          Row(
+          if (group.description.trim().isNotEmpty) ...[
+            Text(
+              group.description,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.45),
+            ),
+            const SizedBox(height: 16),
+          ],
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
             children: [
-              _StatItem(icon: Icons.people_outline, label: '${group.studentsCount} students'),
-              const SizedBox(width: 20),
-              _StatItem(icon: Icons.menu_book_outlined, label: '${group.sharedLecturesCount} lectures'),
+              _StatPill(
+                icon: Icons.people_alt_rounded,
+                value: '${group.studentsCount}',
+                label: 'Students',
+              ),
+              _StatPill(
+                icon: Icons.menu_book_rounded,
+                value: '${group.sharedLecturesCount}',
+                label: 'Lectures',
+              ),
             ],
           ),
-          const SizedBox(height: 8),
+          const SizedBox(height: 14),
           Row(
             children: [
-              Icon(Icons.calendar_today_outlined, size: 14, color: AppTheme.getSecondaryText(context)),
+              Icon(Icons.calendar_today_rounded, size: 13, color: AppTheme.getSecondaryText(context)),
               const SizedBox(width: 6),
               Text(
                 'Created ${_formatDate(group.createdAt)}',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.getSecondaryText(context)),
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.getSecondaryText(context),
+                      fontSize: 12,
+                    ),
               ),
             ],
           ),
@@ -964,20 +1019,44 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   String _formatDate(DateTime date) => '${date.day}/${date.month}/${date.year}';
 }
 
-class _StatItem extends StatelessWidget {
+class _StatPill extends StatelessWidget {
   final IconData icon;
+  final String value;
   final String label;
 
-  const _StatItem({required this.icon, required this.label});
+  const _StatPill({required this.icon, required this.value, required this.label});
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 14, color: AppTheme.getSecondaryText(context)),
-        const SizedBox(width: 6),
-        Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppTheme.getSecondaryText(context))),
-      ],
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppTheme.getAccentTint(context),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: AppTheme.accentColor),
+          const SizedBox(width: 7),
+          Text(
+            value,
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+              color: AppTheme.getPrimaryText(context),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              color: AppTheme.getSecondaryText(context),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

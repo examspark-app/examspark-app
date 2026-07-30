@@ -65,10 +65,15 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
 
   @override
   Widget build(BuildContext context) {
+    // Professional / ChatGPT-style reading typography: 16px size for legibility,
+    // generous 1.625 line-height for long paragraphs, and zero letter-spacing
+    // to rely on the font's native tracking for a clean, premium look.
     final textStyle = TextStyle(
       color: AppTheme.getPrimaryText(context),
-      height: 1.45,
-      fontSize: 15,
+      fontSize: 15.5,
+height: 1.7,
+letterSpacing: -0.1,
+fontWeight: FontWeight.w400,
     );
 
     final body = widget.animate && !_revealDone
@@ -80,7 +85,10 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
         : SelectableText(widget.text, style: textStyle);
 
     final maxW = MediaQuery.sizeOf(context).width;
-    final cardMax = maxW < 600 ? maxW - 32 : maxW * 0.72;
+    // Match ChatGPT Web's optimal reading width (~768px max for text blocks)
+    // while keeping comfortable margins on mobile devices.
+    final cardMax = maxW < 768 ? maxW - 20 : 760.0;
+    final isLight = Theme.of(context).brightness == Brightness.light;
 
     return Align(
       alignment: Alignment.centerLeft,
@@ -91,30 +99,37 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
           children: [
             Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
               decoration: BoxDecoration(
                 color: AppTheme.getCardBackground(context),
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppTheme.getCardBorder(context)),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isLight ? const Color(0xFFECECEC) : const Color(0xFF383838),
+                  width: 1,
+                ),
               ),
               child: body,
             ),
             if (_hasVisual && _revealDone) ...[
-              const SizedBox(height: 10),
+              const SizedBox(height: 16),
               HomeAiVisualCard(visualPayload: widget.visualPayload!),
             ],
             if (widget.trustLine != null && _revealDone) ...[
-              const SizedBox(height: 8),
-              Text(
-                widget.trustLine!,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: AppTheme.getSecondaryText(context),
+              const SizedBox(height: 12),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Text(
+                  widget.trustLine!,
+                  style: TextStyle(
+                    fontSize: 12,
+                    height: 1.4,
+                    color: AppTheme.getSecondaryText(context),
+                  ),
                 ),
               ),
             ],
             if (widget.trailing != null && _revealDone) ...[
-              const SizedBox(height: 12),
+              const SizedBox(height: 16),
               widget.trailing!,
             ],
           ],

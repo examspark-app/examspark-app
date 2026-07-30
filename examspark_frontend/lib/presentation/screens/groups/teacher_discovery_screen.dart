@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'
     hide SupabaseClient;
+import 'package:examspark_frontend/presentation/screens/groups/teacher_profile_view_screen.dart';
 import 'package:examspark_frontend/core/constants/class_levels.dart';
 import 'package:examspark_frontend/core/constants/custom_field_option.dart';
 import 'package:examspark_frontend/core/constants/exam_boards.dart';
@@ -689,6 +690,16 @@ Future<void> _pickLanguage() async {
       arguments: {'groupId': groupId},
     );
   }
+  void _openProfilePage(SuggestedTeacherModel t) {
+    final uid = t.userId;
+    if (uid == null || uid.isEmpty) return;
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TeacherProfileViewScreen(teacherUserId: uid),
+      ),
+    );
+  }
 Future<void> _openTeacherProfile(SuggestedTeacherModel t) async {
     final uid = t.userId;
     if (uid == null || uid.isEmpty) return;
@@ -1055,10 +1066,8 @@ Future<void> _openTeacherProfile(SuggestedTeacherModel t) async {
                           return _TeacherDiscoverCard(
                             teacher: t,
                             joining: _joiningId == t.id,
-                            onJoin: t.isJoined ? null : () => _openTeacherProfile(t),
-                            onOpen: t.isJoined
-                                ? () => _openTeacherProfile(t)
-                                : null,
+                            onJoin: t.isJoined ? null : () => _openProfilePage(t),
+                            onOpen: () => _openProfilePage(t),
                           );
                         },
                       ),
@@ -1272,16 +1281,22 @@ class _TeacherDiscoverCard extends StatelessWidget {
                 ElevatedButton(
                   onPressed: joining ? null : onJoin,
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    minimumSize: const Size(60, 36),
+                    backgroundColor: Colors.black87,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                    minimumSize: const Size(64, 38),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(19),
+                    ),
                   ),
                   child: joining
                       ? const SizedBox(
                           width: 16,
                           height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                         )
-                      : const Text('Join'),
+                      : const Text('Join', style: TextStyle(fontWeight: FontWeight.w600)),
                 ),
             ],
           ),

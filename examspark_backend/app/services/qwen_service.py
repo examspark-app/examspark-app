@@ -22,6 +22,16 @@ from app.models.visual_payload import parse_visual_payload
 
 _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+# Shared quality/tone rule — added to every content-generation prompt below.
+# Pure guidance text only; does not touch JSON schema, keys, or app logic.
+_QUALITY_TONE_RULE = (
+    "\nQUALITY BAR: Sound like Sonaxia's sharpest senior tutor — smart, "
+    "professional, and genuinely engaging (Gen-Z-friendly, never childish). "
+    "Never write generic filler ('this is an important topic', restating the "
+    "question, vague summaries). Every point must teach something specific and "
+    "exam-useful. Prefer concrete, memorable phrasing over textbook-flat prose.\n"
+)
+
 _NOTES_JSON_KEYS = (
     "You are an expert educational content processor — an intelligent teacher, not a chatbot. "
     "Process the lecture content and return ONLY a JSON object with these exact keys:\n"
@@ -31,6 +41,7 @@ _NOTES_JSON_KEYS = (
     '- "shortSummary": a 2-3 sentence summary\n'
     '- "importantTerms": array of objects, each with "term" and "definition"\n'
     '- "visualPayload": structured visual aids object (see schema below)\n'
+    + _QUALITY_TONE_RULE
 )
 
 _NOTES_SYSTEM_PROMPT = (
@@ -224,6 +235,7 @@ async def generate_notes(
 _FLASHCARDS_SYSTEM = (
     STUDY_CONTENT_LANGUAGE_RULE
     + CHIP_CONTENT_INTENT_RULE
+    + _QUALITY_TONE_RULE
     + "\nGenerate study flashcards from the lecture content. Return ONLY JSON:\n"
     '{ "cards": [ { "front": "question or term", "back": "answer or definition" } ] }\n'
     "Create 10-15 cards covering the main concepts. Raw JSON only."
@@ -232,6 +244,7 @@ _FLASHCARDS_SYSTEM = (
 _QUIZ_SYSTEM = (
     STUDY_CONTENT_LANGUAGE_RULE
     + CHIP_CONTENT_INTENT_RULE
+    + _QUALITY_TONE_RULE
     + "\nGenerate exactly 20 multiple-choice questions from the lecture content. "
     "Return ONLY JSON:\n"
     '{ "questions": [ { "question": "...", "options": ["opt A text", "opt B", "opt C", "opt D"], '
@@ -246,6 +259,7 @@ _QUIZ_SYSTEM = (
 _REVISION_SYSTEM = (
     STUDY_CONTENT_LANGUAGE_RULE
     + CHIP_CONTENT_INTENT_RULE
+    + _QUALITY_TONE_RULE
     + "\nGenerate a comprehensive exam-focused revision sheet from the lecture content. "
     "Return ONLY JSON:\n"
     '{ "revisionSheet": "markdown with ## headings, bullet points, key formulas (LaTeX $$...$$), and summary", '
@@ -257,6 +271,7 @@ _REVISION_SYSTEM = (
 _FIVE_MIN_REVISION_SYSTEM = (
     STUDY_CONTENT_LANGUAGE_RULE
     + CHIP_CONTENT_INTENT_RULE
+    + _QUALITY_TONE_RULE
     + "\nGenerate a SHORT 5-minute revision recap from the lecture content — "
     "something a student can skim in about five minutes before an exam. "
     "Return ONLY JSON:\n"
@@ -270,6 +285,7 @@ _FIVE_MIN_REVISION_SYSTEM = (
 _IMPORTANT_QUESTIONS_SYSTEM = (
     STUDY_CONTENT_LANGUAGE_RULE
     + CHIP_CONTENT_INTENT_RULE
+    + _QUALITY_TONE_RULE
     + "\nGenerate important exam-style questions from the study content. Return ONLY JSON:\n"
     '{ "questions": [ { "question": "...", "type": "short_answer|long_answer|numerical", '
     '"marks": 2, "hint": "brief study hint without giving the full answer" } ] }\n'
@@ -284,6 +300,7 @@ _IMPORTANT_QUESTIONS_SYSTEM = (
 _MIND_MAP_SYSTEM = (
     STUDY_CONTENT_LANGUAGE_RULE
     + CHIP_CONTENT_INTENT_RULE
+    + _QUALITY_TONE_RULE
     + "\nGenerate a hierarchical mind map from the lecture content. Return ONLY JSON:\n"
     '{ "title": "topic title", "root": { "label": "central concept", "children": [ '
     '{ "label": "branch", "children": [ { "label": "leaf detail", "children": [] } ] } ] } }\n'

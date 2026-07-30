@@ -138,24 +138,33 @@ class _SearchOverlayScreenState extends State<SearchOverlayScreen> {
                   ),
                   Expanded(
                     child: Container(
+                      constraints: const BoxConstraints(minHeight: 60),
                       decoration: BoxDecoration(
                         color: AppTheme.getCardBackground(context),
                         borderRadius: BorderRadius.circular(24),
                         border: Border.all(color: AppTheme.getCardBorder(context)),
                       ),
                       child: TextField(
+                        style: const TextStyle(
+                          fontSize: 18,
+                          height: 1.6,
+                        ),
                         controller: _controller,
                         focusNode: _focus,
                         onChanged: (v) => setState(() => _query = v),
                         textInputAction: TextInputAction.search,
                         decoration: InputDecoration(
                           hintText: 'Search lectures & groups…',
+                          hintStyle: const TextStyle(
+                            fontSize: 18,
+                            height: 1.6,
+                          ),
                           prefixIcon: Icon(
                             Icons.search,
                             color: AppTheme.getSecondaryText(context),
                           ),
                           border: InputBorder.none,
-                          contentPadding: const EdgeInsets.symmetric(vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
                         ),
                       ),
                     ),

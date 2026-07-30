@@ -328,24 +328,29 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
             NavigationRail(
               selectedIndex: _selectedIndex,
               onDestinationSelected: _goToTab,
-              labelType: NavigationRailLabelType.all,
+              labelType: NavigationRailLabelType.none,
+              minWidth: 80, // ChatGPT style spacious sidebar
               backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               indicatorColor: AppTheme.getAccentTint(context),
+              indicatorShape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12), // Softer borders
+              ),
               leading: Padding(
-                padding: const EdgeInsets.symmetric(vertical: 12),
+                padding: const EdgeInsets.only(top: 24, bottom: 16),
                 child: Container(
-                  width: 32,
-                  height: 32,
+                  width: 40,
+                  height: 40, // Larger touch target
                   decoration: BoxDecoration(
-                    color: AppTheme.accentColor,
-                    borderRadius: BorderRadius.circular(8),
+                    color: AppTheme.getPrimaryText(context), // Monochrome contrast
+                    borderRadius: BorderRadius.circular(12),
                   ),
                   alignment: Alignment.center,
-                  child: const Text(
+                  child: Text(
                     'E',
                     style: TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
+                      color: Theme.of(context).scaffoldBackgroundColor,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w600,
                     ),
                   ),
                 ),
@@ -353,16 +358,31 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               destinations: [
                 for (final d in _destinations)
                   NavigationRailDestination(
-                    icon: Icon(d.icon),
-                    selectedIcon: Icon(
-                      d.selectedIcon,
-                      color: AppTheme.accentColor,
+                    icon: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Icon(
+                        d.icon,
+                        color: AppTheme.getSecondaryText(context),
+                        size: 26,
+                      ),
+                    ),
+                    selectedIcon: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 4),
+                      child: Icon(
+                        d.selectedIcon,
+                        color: AppTheme.getPrimaryText(context),
+                        size: 26,
+                      ),
                     ),
                     label: Text(d.label),
                   ),
               ],
             ),
-            VerticalDivider(width: 1, color: AppTheme.getCardBorder(context)),
+            VerticalDivider(
+              width: 1, 
+              thickness: 1, 
+              color: AppTheme.getCardBorder(context),
+            ),
             Expanded(child: mainContent),
             if (showSidePanel)
               StudyWorkspaceSidePanel(
@@ -383,11 +403,24 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         onDestinationSelected: _goToTab,
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
         indicatorColor: AppTheme.getAccentTint(context),
+        indicatorShape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12), // Softer touch target
+        ),
+        height: 80, // Comfortable spacing
+        elevation: 0,
         destinations: [
           for (final d in _destinations)
             NavigationDestination(
-              icon: Icon(d.icon),
-              selectedIcon: Icon(d.selectedIcon, color: AppTheme.accentColor),
+              icon: Icon(
+                d.icon,
+                color: AppTheme.getSecondaryText(context),
+                size: 26,
+              ),
+              selectedIcon: Icon(
+                d.selectedIcon,
+                color: AppTheme.getPrimaryText(context),
+                size: 26,
+              ),
               label: d.label,
             ),
         ],

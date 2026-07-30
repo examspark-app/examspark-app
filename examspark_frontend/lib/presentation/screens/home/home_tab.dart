@@ -18,6 +18,7 @@ import 'package:examspark_frontend/core/services/notification_service.dart';
 import 'package:examspark_frontend/core/services/notification_inbox_controller.dart';
 import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/core/services/ui_session_store.dart';
+import 'package:examspark_frontend/core/theme/responsive.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/widgets/ai/ai_assistant_message.dart';
 import 'package:examspark_frontend/presentation/widgets/ai/ai_thinking_bubble.dart';
@@ -136,11 +137,33 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   /// Live SSE tokens while waiting (null = still thinking).
   String? _liveStreamText;
   Timer? _persistDebounce;
+  
   bool _restoredDisk = false;
-
+  bool _notificationsSheetOpen = false;
   bool get _audioUnlocked => _isTeacher
       ? PlanTierGating.isTeacherLiveRecordUnlocked(_planTier)
       : PlanTierGating.isStudentAudioUnlocked(_planTier);
+
+  /// User chat bubble color — black/charcoal instead of the app's green
+  /// accent, so the sent message reads as "professional AI chat" (black
+  /// bubble) rather than a brand-colored pill. Adapts for dark mode so the
+  /// bubble still stands out against the near-black dark background.
+  Color _userBubbleColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.light
+        ? const Color(0xFF0D0D0D)
+        : const Color(0xFF262626);
+  }
+
+  /// First name only, for the greeting banner — "Priya" not
+  /// "priya.sharma@email.com" or "Priya Sharma".
+  String get _greetingName {
+    final raw = _userName.trim();
+    if (raw.isEmpty || raw == 'User') return '';
+    final beforeAt = raw.split('@').first;
+    final firstWord = beforeAt.trim().split(RegExp(r'\s+')).first;
+    if (firstWord.isEmpty) return '';
+    return firstWord[0].toUpperCase() + firstWord.substring(1);
+  }
 
   @override
   void initState() {
@@ -1146,10 +1169,12 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         showLogo: true,
         creditsBalance: _creditsBalance,
         userName: _userName,
-        onSearchTap: () => showAppSearchOverlay(
-          context,
-          onOpenLecture: widget.onOpenWorkspace,
-        ),
+        onSearchTap: Responsive.isMobile(context)
+            ? null
+            : () => showAppSearchOverlay(
+                  context,
+                  onOpenLecture: widget.onOpenWorkspace,
+                ),
         onNotificationTap: _openNotifications,
         notificationUnreadCount:
             NotificationInboxController.instance.unreadCount,
@@ -1158,7 +1183,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         trailing: [
           if (_isTeacher)
             IconButton(
-              icon: const Icon(Icons.school_outlined),
+              icon: const Icon(Icons.school_rounded),
               tooltip: 'Teacher Dashboard',
               onPressed: () => Navigator.pushNamed(context, '/teacher'),
             ),
@@ -1168,31 +1193,35 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
             onPressed: _isSending ? null : _openStudyHistory,
           ),
           IconButton(
-            icon: const Icon(Icons.add_comment_outlined),
+            icon: const Icon(Icons.add_comment_rounded),
             tooltip: 'New chat',
             onPressed: _isSending ? null : _startNewChat,
           ),
-          IconButton(
-            icon: _isRefreshing
-                ? const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.refresh_rounded),
-            tooltip: 'Refresh library',
-            onPressed: _isRefreshing
-                ? null
-                : () => _loadUserData(showSpinner: true),
-          ),
+          if (!Responsive.isMobile(context))
+            IconButton(
+              icon: _isRefreshing
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh_rounded),
+              tooltip: 'Refresh library',
+              onPressed: _isRefreshing
+                  ? null
+                  : () => _loadUserData(showSpinner: true),
+            ),
         ],
       ),
       body: Column(
         children: [
           Expanded(
-            child: _messages.isEmpty && !_isSending
-                ? _buildWelcome(context)
-                : _buildConversation(context),
+            child: RefreshIndicator(
+              onRefresh: () => _loadUserData(showSpinner: false),
+              child: _messages.isEmpty && !_isSending
+                  ? _buildWelcome(context)
+                  : _buildConversation(context),
+            ),
           ),
           BottomInputBar(
             onSend: _handleSend,
@@ -1207,10 +1236,13 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   }
 
   Widget _buildWelcome(BuildContext context) {
+    final name = _greetingName;
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppTheme.screenPadding),
       child: Column(
         children: [
+          const SizedBox(height: 12),
+          if (name.isNotEmpty) _buildGreetingBanner(context, name),
           const SizedBox(height: 24),
           AnimatedContainer(
             duration: const Duration(milliseconds: 400),
@@ -1261,6 +1293,62 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                 ),
               ),
           ],
+        ],
+      ),
+    );
+  }
+
+  /// Welcome banner/card — "Hi, {name}" greeting shown once above the
+  /// empty-chat Home screen (not in the top app bar).
+  Widget _buildGreetingBanner(BuildContext context, String name) {
+    final hour = DateTime.now().hour;
+    final timeGreeting = hour < 12
+        ? 'Good morning'
+        : hour < 17
+            ? 'Good afternoon'
+            : 'Good evening';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: AppTheme.getCardBackground(context),
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        border: Border.all(color: AppTheme.getCardBorder(context)),
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 22,
+            backgroundColor: _userBubbleColor(context),
+            child: Text(
+              name.isNotEmpty ? name[0].toUpperCase() : '?',
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w700,
+                fontSize: 18,
+              ),
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$timeGreeting, $name 👋',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Welcome back to Sonaxia',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1471,22 +1559,24 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                     constraints: BoxConstraints(
                       maxWidth: MediaQuery.sizeOf(context).width * 0.85,
                     ),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 12,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppTheme.accentColor,
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          if (bubble.imageBytes != null &&
-                              bubble.imageBytes!.isNotEmpty) ...[
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        if (bubble.imageBytes != null &&
+                            bubble.imageBytes!.isNotEmpty) ...[
+                          Container(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.12),
+                                  blurRadius: 14,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(18),
                               child: ConstrainedBox(
                                 constraints: const BoxConstraints(
                                   maxWidth: 260,
@@ -1499,17 +1589,29 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                                 ),
                               ),
                             ),
-                            const SizedBox(height: 8),
-                          ],
-                          SelectableText(
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 12,
+                          ),
+                          decoration: BoxDecoration(
+                            color: _userBubbleColor(context),
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                          child: SelectableText(
                             bubble.text,
                             style: const TextStyle(
                               color: Colors.white,
-                              height: 1.4,
+                              fontSize: 15.5,
+                              height: 1.5,
+                              letterSpacing: 0.1,
                             ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
                 )
@@ -1625,13 +1727,16 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   }
 
   Future<void> _openNotifications() async {
-    await NotificationInboxController.instance.refresh(showDesktopIfHidden: false);
-    final items = await NotificationService.instance.listNotifications();
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      builder: (ctx) {
+    if (_notificationsSheetOpen) return;
+    _notificationsSheetOpen = true;
+    try {
+      await NotificationInboxController.instance.refresh(showDesktopIfHidden: false);
+      final items = await NotificationService.instance.listNotifications();
+      if (!mounted) return;
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        builder: (ctx) {
         return SafeArea(
           child: SizedBox(
             height: MediaQuery.of(ctx).size.height * 0.65,
@@ -1750,8 +1855,11 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       },
     );
     if (mounted) {
-      await NotificationInboxController.instance
-          .refresh(showDesktopIfHidden: false);
+        await NotificationInboxController.instance
+            .refresh(showDesktopIfHidden: false);
+      }
+    } finally {
+      _notificationsSheetOpen = false;
     }
   }
 
