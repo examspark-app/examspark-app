@@ -53,6 +53,7 @@ class GroupChannelRow extends StatelessWidget {
     final teacher = group.teacher;
     final hasUnread = unreadCount > 0;
     final secondary = AppTheme.getSecondaryText(context);
+    final infoChips = group.quickInfoChips;
 
     return InkWell(
       onTap: onTap,
@@ -165,10 +166,52 @@ class GroupChannelRow extends StatelessWidget {
                       ],
                     ],
                   ),
+                  // NAYA ADDED CODE — Subject/Class/Board Tags
+                  // (Discover screen wale GroupCard jaisa hi behaviour,
+                  // WhatsApp-row ke andar fit hone layak chhote size mein)
+                  if (infoChips.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 5,
+                      runSpacing: 5,
+                      children: [
+                        for (final label in infoChips)
+                          _MiniInfoChip(label: label),
+                      ],
+                    ),
+                  ],
                 ],
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Chhota pill/badge — GroupChannelRow (My Groups list) ke liye,
+/// group_card.dart ke _QuickInfoChip jaisa hi, bas compact size mein
+/// taaki WhatsApp-style row ke andar sahi se fit ho jaaye.
+class _MiniInfoChip extends StatelessWidget {
+  final String label;
+
+  const _MiniInfoChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+      decoration: BoxDecoration(
+        color: AppTheme.getAccentTint(context),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 10,
+          fontWeight: FontWeight.w600,
+          color: AppTheme.accentColor,
         ),
       ),
     );

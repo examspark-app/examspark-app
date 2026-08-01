@@ -1,7 +1,9 @@
 import 'dart:async';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
 import 'package:examspark_frontend/core/constants/custom_field_option.dart';
 import 'package:examspark_frontend/core/constants/plan_tier_gating.dart';
@@ -11,6 +13,7 @@ import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/services/recording_alert_sound.dart';
 import 'package:examspark_frontend/core/services/recording_service.dart';
+import 'package:examspark_frontend/core/services/share_receiver_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
@@ -21,6 +24,11 @@ import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 /// errors, network problems) and call-interruption auto-save below apply
 /// to both automatically since they're the same screen.
 /// Transcription quality is automatic on the server (no student model choice).
+///
+/// Also opened when a photo/PDF/audio file is shared into the app from
+/// outside (Gallery, WhatsApp, Gmail, etc) — see [_sharedFile]. That path
+/// reuses the exact same credit/plan check as every other upload, so no
+/// separate gating logic was written for it.
 class RecorderScreen extends StatefulWidget {
   final String? subject;
   final String? topic;
@@ -28,7 +36,8 @@ class RecorderScreen extends StatefulWidget {
   /// Pre-selects the Record/Upload Audio/Upload Document tab on screen 2 —
   /// set when opened from Home's attach sheet (e.g. "Image / Photo" should
   /// land straight on Upload Document/Photo, not the default Record tab).
-  /// Matches [InputMethod].name ('record' / 'uploadAudio' / 'uploadDocument').
+  /// Matches [InputMethod].name ('record' / 'uploadAudio' / 'uploadDocument'),
+  /// or 'shared' when opened from an external share (see [_sharedFile]).
   final String? initialInputMethod;
 
   /// Teachers: live Record only (no audio upload) — authentic group content.
@@ -57,6 +66,14 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
   bool? _audioUnlocked;
   /// Teachers cannot upload audio into the lecture pipeline (live record only).
   bool _teacherRecordOnly = false;
+
+  /// Set when this screen was opened because a photo/PDF/audio file was
+  /// shared into the app from outside (Gallery, WhatsApp, Gmail, etc).
+  /// When set, tapping Continue on the setup screen skips the manual file
+  /// picker and processes this file directly — through the same
+  /// _startProcessingWithAudio() + _ensureFeatureUnlockedForSource() path
+  /// as every other upload, so credit/plan checks are identical.
+  SharedMediaFile? _sharedFile;
 
   /// Planned duration bucket in minutes, chosen on the Setup screen —
   /// founder rule: warn (sound + banner) once this is reached, never
@@ -111,11 +128,22 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    if (widget.initialInputMethod != null) {
+    if (widget.initialInputMethod != null && widget.initialInputMethod != 'shared') {
       _selectedInputMethod = InputMethod.values.firstWhere(
         (m) => m.name == widget.initialInputMethod,
         orElse: () => InputMethod.record,
       );
+    }
+    // Opened via external share (Gallery/WhatsApp/Gmail) — pick up the file
+    // ShareReceiverService already validated (image/pdf/audio, video rejected).
+    if (widget.initialInputMethod == 'shared' &&
+        ShareReceiverService.instance.pendingFiles.isNotEmpty) {
+      _sharedFile = ShareReceiverService.instance.pendingFiles.first;
+      ShareReceiverService.instance.clearPending();
+      _selectedInputMethod =
+          _sharedFile!.type == SharedMediaType.image || !_isAudioFile(_sharedFile!)
+              ? InputMethod.uploadDocument
+              : InputMethod.uploadAudio;
     }
     final incomingSubject = widget.subject?.trim();
     if (incomingSubject != null && incomingSubject.isNotEmpty) {
@@ -132,6 +160,18 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
     }
     _loadAudioUnlock();
     _loadTeacherRecordOnly();
+  }
+
+  /// Pdf and audio both arrive as [SharedMediaType.file] from the share
+  /// plugin — this is how we tell them apart (mirrors ShareReceiverService).
+  bool _isAudioFile(SharedMediaFile file) {
+    final mime = file.mimeType?.toLowerCase() ?? '';
+    final path = file.path.toLowerCase();
+    return mime.startsWith('audio/') ||
+        path.endsWith('.mp3') ||
+        path.endsWith('.m4a') ||
+        path.endsWith('.wav') ||
+        path.endsWith('.aac');
   }
 
   Future<void> _loadTeacherRecordOnly() async {
@@ -370,7 +410,9 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
           ),
           const SizedBox(height: 8),
           Text(
-              'Add subject and topic, then choose planned duration before recording.',
+              _sharedFile != null
+                  ? 'Add subject and topic — the file you shared will be processed automatically.'
+                  : 'Add subject and topic, then choose planned duration before recording.',
             style: TextStyle(
               fontSize: 14,
               color: Colors.grey[600],
@@ -461,6 +503,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                 return null;
               },
             ),
+            if (_sharedFile == null) ...[
             const SizedBox(height: 28),
             const Text(
               'Planned Duration',
@@ -537,14 +580,21 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               ],
             ),
           ),
+          ],
           const SizedBox(height: 32),
           
           // Continue Button
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-                onPressed: () {
+                onPressed: _isProcessing
+                    ? null
+                    : () {
                   if (!(_setupFormKey.currentState?.validate() ?? false)) {
+                    return;
+                  }
+                  if (_sharedFile != null) {
+                    _processSharedFile();
                     return;
                   }
                   setState(() => _currentScreen = 2);
@@ -557,8 +607,17 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                   borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              child: const Text(
-                'Continue',
+              child: _isProcessing
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Text(
+                      _sharedFile != null ? 'Continue & Process' : 'Continue',
                 style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w600,
@@ -1133,6 +1192,40 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
       }
       _tickDuration();
     });
+  }
+
+  /// Entry point for a file shared into the app from outside (Gallery,
+  /// WhatsApp, Gmail, etc). Reads the bytes ShareReceiverService already
+  /// validated, then hands off to the exact same _startProcessingWithAudio()
+  /// used by manual Upload Audio / Upload Document — so the credit/plan
+  /// check, lecture creation, and /processing navigation are all identical
+  /// to the normal flow.
+  Future<void> _processSharedFile() async {
+    final shared = _sharedFile;
+    if (shared == null) return;
+    setState(() => _isProcessing = true);
+    try {
+      final bytes = await File(shared.path).readAsBytes();
+      if (bytes.isEmpty) {
+        throw StateError('Shared file was empty or could not be read.');
+      }
+      final isImage = shared.type == SharedMediaType.image;
+      final isAudio = !isImage && _isAudioFile(shared);
+      await _startProcessingWithAudio(
+        bytes,
+        filename: shared.path.split('/').last,
+        apiSourceTypeOverride:
+            isImage ? 'image_upload' : (isAudio ? 'audio_upload' : 'pdf_upload'),
+      );
+    } catch (e) {
+      if (mounted) {
+        _playWarningSound();
+        AppToast.showSnackBar(context, 
+          SnackBar(content: Text(lectureUserMessage(e))),
+        );
+        setState(() => _isProcessing = false);
+      }
+    }
   }
 
   Future<void> _startProcessingWithAudio(

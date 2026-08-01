@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/data/groups_repository.dart';
 import 'package:examspark_frontend/core/models/group_model.dart';
+import 'package:examspark_frontend/core/models/teacher_certificate_model.dart';
 import 'package:examspark_frontend/core/models/teacher_profile_model.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
-import 'package:examspark_frontend/presentation/screens/groups/widgets/teacher_achievements_section.dart';
 import 'package:examspark_frontend/presentation/screens/groups/widgets/teacher_profile_header.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 /// Full teacher profile page — opened from Discovery card tap.
-/// Shows bio/achievements (via TeacherProfileHeader) + all of that
+/// Shows bio (via TeacherProfileHeader) + all of that
 /// teacher's groups with Join/Open buttons.
 class TeacherProfileViewScreen extends StatefulWidget {
   final String teacherUserId;
@@ -24,12 +24,6 @@ class _TeacherProfileViewScreenState extends State<TeacherProfileViewScreen> {
   List<GroupModel> _groups = [];
   bool _loading = true;
   String? _joiningGroupId;
-
-  static const _bg = Color(0xFF000000);
-  static const _card = Color(0xFF121212);
-  static const _textPrimary = Colors.white;
-  static const _textSecondary = Color(0xFFA8A8A8);
-  static const _borderSubtle = Color(0x1FFFFFFF);
 
   @override
   void initState() {
@@ -72,11 +66,59 @@ class _TeacherProfileViewScreenState extends State<TeacherProfileViewScreen> {
     Navigator.pushNamed(context, '/group_info', arguments: {'groupId': group.id});
   }
 
+  /// Opens the certificate badge — shows exactly what the teacher chose to
+  /// share on their profile (title + review status per certificate).
+  void _showCertificatesSheet() {
+    final profile = _profile;
+    if (profile == null) return;
+    final certs = profile.certificatesForStudents;
+    if (certs.isEmpty) return;
+
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      builder: (sheetContext) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Certificates',
+                  style: Theme.of(sheetContext).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${certs.length} shared by this teacher',
+                  style: Theme.of(sheetContext).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.getSecondaryText(sheetContext),
+                      ),
+                ),
+                const SizedBox(height: 16),
+                Flexible(
+                  child: ListView.separated(
+                    shrinkWrap: true,
+                    itemCount: certs.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (_, i) => _CertificateTile(certificate: certs[i]),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_loading) {
       return const Scaffold(
-        backgroundColor: _bg,
         body: Center(child: CircularProgressIndicator()),
       );
     }
@@ -84,26 +126,20 @@ class _TeacherProfileViewScreenState extends State<TeacherProfileViewScreen> {
     final profile = _profile;
     if (profile == null) {
       return Scaffold(
-        backgroundColor: _bg,
         appBar: AppBar(
-          backgroundColor: _bg,
-          foregroundColor: _textPrimary,
           leading: IconButton(
             icon: const Icon(Icons.arrow_back),
             onPressed: () => Navigator.pop(context),
           ),
         ),
         body: const Center(
-          child: Text('Profile not found', style: TextStyle(color: _textPrimary)),
+          child: Text('Profile not found'),
         ),
       );
     }
 
     return Scaffold(
-      backgroundColor: _bg,
       appBar: AppBar(
-        backgroundColor: _bg,
-        foregroundColor: _textPrimary,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -115,29 +151,30 @@ class _TeacherProfileViewScreenState extends State<TeacherProfileViewScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            TeacherProfileHeader(teacher: profile),
-            const SizedBox(height: 24),
-            TeacherAchievementsSection(
-              certificates: profile.certificatesForStudents,
-              achievements: profile.achievements,
+            TeacherProfileHeader(
+              teacher: profile,
+              onTapCertificates: _showCertificatesSheet,
             ),
-            if (profile.hasAchievements) const SizedBox(height: 24),
+            const SizedBox(height: 24),
 
-            const Text(
+            Text(
               'GROUPS',
               style: TextStyle(
                 fontSize: 12,
                 fontWeight: FontWeight.bold,
-                color: _textSecondary,
+                color: AppTheme.getSecondaryText(context),
                 letterSpacing: 1.1,
               ),
             ),
             const SizedBox(height: 12),
 
             if (_groups.isEmpty)
-              const Text(
+              Text(
                 'This teacher has no groups yet.',
-                style: TextStyle(color: _textSecondary, fontSize: 13),
+                style: TextStyle(
+                  color: AppTheme.getSecondaryText(context),
+                  fontSize: 13,
+                ),
               )
             else
               for (final g in _groups)
@@ -146,9 +183,9 @@ class _TeacherProfileViewScreenState extends State<TeacherProfileViewScreen> {
                   child: Container(
                     padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: _card,
+                      color: AppTheme.getCardBackground(context),
                       borderRadius: BorderRadius.circular(18),
-                      border: Border.all(color: _borderSubtle),
+                      border: Border.all(color: AppTheme.getCardBorder(context)),
                     ),
                     child: Row(
                       children: [
@@ -158,8 +195,8 @@ class _TeacherProfileViewScreenState extends State<TeacherProfileViewScreen> {
                             children: [
                               Text(
                                 g.name,
-                                style: const TextStyle(
-                                  color: _textPrimary,
+                                style: TextStyle(
+                                  color: AppTheme.getPrimaryText(context),
                                   fontWeight: FontWeight.w700,
                                   fontSize: 15,
                                 ),
@@ -167,8 +204,39 @@ class _TeacherProfileViewScreenState extends State<TeacherProfileViewScreen> {
                               const SizedBox(height: 4),
                               Text(
                                 '${g.studentsCount} students · ${g.sharedLecturesCount} lectures',
-                                style: const TextStyle(color: _textSecondary, fontSize: 12),
+                                style: TextStyle(
+                                  color: AppTheme.getSecondaryText(context),
+                                  fontSize: 12,
+                                ),
                               ),
+                              if (g.quickInfoChips.isNotEmpty) ...[
+                                const SizedBox(height: 8),
+                                Wrap(
+                                  spacing: 6,
+                                  runSpacing: 6,
+                                  children: [
+                                    for (final label in g.quickInfoChips)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                          vertical: 3,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: AppTheme.getAccentTint(context),
+                                          borderRadius: BorderRadius.circular(8),
+                                        ),
+                                        child: Text(
+                                          label,
+                                          style: TextStyle(
+                                            fontSize: 11,
+                                            fontWeight: FontWeight.w600,
+                                            color: AppTheme.accentColor,
+                                          ),
+                                        ),
+                                      ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
                         ),
@@ -177,8 +245,8 @@ class _TeacherProfileViewScreenState extends State<TeacherProfileViewScreen> {
                           OutlinedButton(
                             onPressed: () => _openGroup(g),
                             style: OutlinedButton.styleFrom(
-                              foregroundColor: _textPrimary,
-                              side: const BorderSide(color: _borderSubtle),
+                              foregroundColor: AppTheme.getPrimaryText(context),
+                              side: BorderSide(color: AppTheme.getCardBorder(context)),
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(18),
                               ),
@@ -209,6 +277,90 @@ class _TeacherProfileViewScreenState extends State<TeacherProfileViewScreen> {
                 ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// One row inside the certificates bottom sheet — title + review status.
+class _CertificateTile extends StatelessWidget {
+  final TeacherCertificateModel certificate;
+
+  const _CertificateTile({required this.certificate});
+
+  Color _statusColor(BuildContext context) {
+    switch (certificate.status) {
+      case CertificateStatus.verified:
+        return const Color(0xFF2E7D32);
+      case CertificateStatus.pending:
+        return AppTheme.getSecondaryText(context);
+      case CertificateStatus.rejected:
+        return const Color(0xFFB71C1C);
+    }
+  }
+
+  String _statusLabel() {
+    switch (certificate.status) {
+      case CertificateStatus.verified:
+        return 'Verified';
+      case CertificateStatus.pending:
+        return 'Pending review';
+      case CertificateStatus.rejected:
+        return 'Rejected';
+    }
+  }
+
+  IconData _statusIcon() {
+    switch (certificate.status) {
+      case CertificateStatus.verified:
+        return Icons.verified_rounded;
+      case CertificateStatus.pending:
+        return Icons.hourglass_top_rounded;
+      case CertificateStatus.rejected:
+        return Icons.error_outline_rounded;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _statusColor(context);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.getCardBackground(context),
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        border: Border.all(color: AppTheme.getCardBorder(context)),
+      ),
+      child: Row(
+        children: [
+          Icon(_statusIcon(), size: 20, color: color),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              certificate.title,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                  ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(
+              _statusLabel(),
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+                color: color,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

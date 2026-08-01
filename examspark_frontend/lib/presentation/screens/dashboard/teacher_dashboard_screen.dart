@@ -27,8 +27,8 @@ import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 /// Teacher business dashboard — full spec: TEACHER_PLATFORM.md (founder saved Jul 2026).
 ///
 /// Live cards: Students · Active today · Subscribers (paid, primary teacher) ·
-/// Est. Commission (30%) · Credits · Groups.
-/// Upcoming placeholders: Revenue · Analytics (Storage removed — account delete).
+/// Credits · Groups.
+/// Upcoming placeholders: Est. Commission · Revenue · Analytics (Storage removed — account delete).
 class TeacherDashboardScreen extends StatefulWidget {
   const TeacherDashboardScreen({super.key, this.openEditOnLoad = false});
 
@@ -47,7 +47,6 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
   List<ClassFolder> _classFolders = [];
   int _totalStudents = 0;
   bool _loadingClasses = true;
-  double? _estimatedCommission;
   int? _subscriberCount;
   List<Map<String, dynamic>> _students = [];
   bool _loadingStudents = true;
@@ -60,7 +59,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     _loadTeacherProfile();
     _loadClasses();
     _loadCredits();
-    _loadCommissionAndSubscribers();
+    _loadSubscribers();
     _loadStudents();
   }
 
@@ -162,6 +161,9 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                 pendingCount: pending[r['id'] as String] ?? 0,
                 joinApprovalMode:
                     (r['join_approval_mode'] as String?) ?? 'auto',
+                classLevel: r['class_level'] as String?,
+                exam: r['exam'] as String?,
+                language: r['language'] as String?,
               ),
             )
             .toList();
@@ -186,15 +188,12 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     }
   }
 
-  /// Display-only estimate — 30% recurring on attributed paid students
-  /// (CREDIT_ECONOMY.md §Teacher Commission). Subscribers = same base count.
-  /// No real payout — Revenue card stays Upcoming.
-  Future<void> _loadCommissionAndSubscribers() async {
-    final commission = await GroupsRepository.instance.fetchEstimatedCommission();
+  /// Subscribers count only — Est. Commission moved to "Upcoming" placeholder
+  /// (no payout/commission system live yet).
+  Future<void> _loadSubscribers() async {
     final subscribers = await GroupsRepository.instance.fetchSubscriberCount();
     if (!mounted) return;
     setState(() {
-      _estimatedCommission = commission;
       _subscriberCount = subscribers;
     });
   }
@@ -209,7 +208,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
       _loadTeacherProfile(),
       _loadClasses(),
       _loadCredits(),
-      _loadCommissionAndSubscribers(),
+      _loadSubscribers(),
       _loadStudents(),
       _refreshSetupGate(),
     ]);
@@ -270,7 +269,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
     setState(() => _teacherProfile = saved);
     await _refreshSetupGate();
     if (!mounted) return;
-    AppToast.showSnackBar(context, 
+    AppToast.showSnackBar(context,
       const SnackBar(content: Text('Social links saved — students see them on your profile')),
     );
   }
@@ -347,6 +346,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final hasTeacherPlan = _setupGate?.hasTeacherPlan == true;
+
     return Scaffold(
       appBar: AppBar(
         title: const Text(
@@ -362,11 +363,8 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
             onPressed: _loadingClasses ? null : _refreshDashboard,
             tooltip: 'Refresh dashboard',
           ),
-          IconButton(
-            icon: const Icon(Icons.add),
-            onPressed: _showCreateStudyGroup,
-            tooltip: 'Create Study Group',
-          ),
+          // Duplicate "Create Group" trigger removed — the floating
+          // action button below is the single entry point for this action.
         ],
       ),
       floatingActionButton: FloatingActionButton.extended(
@@ -430,14 +428,19 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                 label: const Text('Record lecture'),
               ),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Record + Create Group + Share workspace need active Teacher ₹2,999. '
-              'Existing groups stay if the plan month ends.',
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.getSecondaryText(context),
-                  ),
-            ),
+            // Only show the Teacher-plan requirement note when the plan is
+            // NOT active — an active teacher shouldn't see a "locked" style
+            // message next to a feature they already have full access to.
+            if (!hasTeacherPlan) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Record + Create Group + Share workspace need active Teacher ₹2,999. '
+                'Existing groups stay if the plan month ends.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.getSecondaryText(context),
+                    ),
+              ),
+            ],
             const SizedBox(height: 20),
 
             // Business metric cards — placeholder data (Phase 4/5 wiring)
@@ -495,6 +498,7 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
                       ),
                       onGenerateCoupon: () => _generateCoupon(folder),
                       onOpenPending: () => _showPendingRequests(folder),
+                      onDelete: () => _confirmDeleteGroup(folder),
                     ),
                   );
                 },
@@ -605,17 +609,14 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
         value: _subscriberCount == null ? '…' : '$_subscriberCount',
         tooltip:
             'Paid-plan students whose primary Group is yours (most recent join). '
-            'Same base as Est. Commission 30%. Free joins are not counted.',
+            'Free joins are not counted.',
       ),
       _MetricCard(
         icon: Icons.handshake_outlined,
         label: 'Est. Commission',
-        value: _estimatedCommission == null
-            ? '—'
-            : '₹${_estimatedCommission!.toStringAsFixed(0)}',
-        tooltip:
-            '30% of active paid-plan students attributed to you — recurring '
-            'monthly, display-only estimate (no payout yet).',
+        value: '—',
+        isPlaceholder: true,
+        tooltip: 'Upcoming — commission payout system not live yet.',
       ),
       _MetricCard(
         icon: Icons.bolt,
@@ -822,6 +823,9 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
           joinCode: folder.joinCode,
           subject: folder.subject,
           joinApprovalMode: folder.joinApprovalMode,
+          classLevel: folder.classLevel,
+          exam: folder.exam,
+          language: folder.language,
         ),
       ),
     ).then((_) {
@@ -869,11 +873,14 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
       studentCount: 0,
       joinCode: created.joinCode,
       joinApprovalMode: created.joinApprovalMode,
+      classLevel: created.classLevel,
+      exam: created.exam,
+      language: created.language,
     );
     setState(() {
       _classFolders.insert(0, folder);
     });
-    AppToast.showSnackBar(context, 
+    AppToast.showSnackBar(context,
       SnackBar(
         content: Text('Study Group "${created.name}" ready · code ${created.joinCode}'),
         duration: const Duration(seconds: 2),
@@ -888,6 +895,9 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
           joinCode: folder.joinCode,
           subject: folder.subject,
           joinApprovalMode: folder.joinApprovalMode,
+          classLevel: folder.classLevel,
+          exam: folder.exam,
+          language: folder.language,
         ),
       ),
     );
@@ -934,8 +944,73 @@ class _TeacherDashboardScreenState extends State<TeacherDashboardScreen> {
       );
     } catch (e) {
       if (!mounted) return;
-      AppToast.showSnackBar(context, 
+      AppToast.showSnackBar(context,
         SnackBar(content: Text('Coupon failed: $e')),
+      );
+    }
+  }
+
+  Future<void> _confirmDeleteGroup(ClassFolder folder) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete this group?'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              folder.name,
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+            const SizedBox(height: 8),
+            if (folder.subject.isNotEmpty) Text('Subject: ${folder.subject}'),
+            if (folder.classLevel != null && folder.classLevel!.isNotEmpty)
+              Text('Class: ${folder.classLevel}'),
+            if (folder.exam != null && folder.exam!.isNotEmpty)
+              Text('Board/Exam: ${folder.exam}'),
+            if (folder.language != null && folder.language!.isNotEmpty)
+              Text('Language: ${folder.language}'),
+            Text('Students: ${folder.studentCount}'),
+            Text('Join code: ${folder.joinCode}'),
+            const SizedBox(height: 12),
+            const Text(
+              'This permanently removes the group, its students, pending '
+              'requests, and shared lecture links. This cannot be undone.',
+              style: TextStyle(color: Color(0xFFC62828), fontSize: 13),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: const Color(0xFFC62828)),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+
+    try {
+      await ClassService.instance.deleteClass(folder.id);
+      if (!mounted) return;
+      setState(() {
+        _classFolders.removeWhere((f) => f.id == folder.id);
+      });
+      AppToast.showSnackBar(
+        context,
+        SnackBar(content: Text('"${folder.name}" deleted')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.showSnackBar(
+        context,
+        SnackBar(content: Text('Delete failed: $e')),
       );
     }
   }
@@ -1001,6 +1076,23 @@ class _MetricCard extends StatelessWidget {
   }
 }
 
+Widget _buildTag(BuildContext context, String label) {
+  return Container(
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: AppTheme.getAccentTint(context),
+      borderRadius: BorderRadius.circular(99),
+    ),
+    child: Text(
+      label,
+      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+            fontSize: 11,
+            fontWeight: FontWeight.w500,
+          ),
+    ),
+  );
+}
+
 // ==================== CLASS FOLDER CARD ====================
 
 class _ClassFolderCard extends StatelessWidget {
@@ -1010,6 +1102,7 @@ class _ClassFolderCard extends StatelessWidget {
   final VoidCallback onShowQr;
   final VoidCallback onGenerateCoupon;
   final VoidCallback onOpenPending;
+  final VoidCallback onDelete;
 
   const _ClassFolderCard({
     required this.folder,
@@ -1018,6 +1111,7 @@ class _ClassFolderCard extends StatelessWidget {
     required this.onShowQr,
     required this.onGenerateCoupon,
     required this.onOpenPending,
+    required this.onDelete,
   });
 
   @override
@@ -1090,6 +1184,25 @@ class _ClassFolderCard extends StatelessWidget {
                           ],
                         ],
                       ),
+                      if (folder.subject.isNotEmpty ||
+                          (folder.classLevel != null && folder.classLevel!.isNotEmpty) ||
+                          (folder.exam != null && folder.exam!.isNotEmpty) ||
+                          (folder.language != null && folder.language!.isNotEmpty)) ...[
+                        const SizedBox(height: 6),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 4,
+                          children: [
+                            if (folder.subject.isNotEmpty) _buildTag(context, folder.subject),
+                            if (folder.classLevel != null && folder.classLevel!.isNotEmpty)
+                              _buildTag(context, folder.classLevel!),
+                            if (folder.exam != null && folder.exam!.isNotEmpty)
+                              _buildTag(context, folder.exam!),
+                            if (folder.language != null && folder.language!.isNotEmpty)
+                              _buildTag(context, folder.language!),
+                          ],
+                        ),
+                      ],
                       Text(
                         'Tap for group dashboard',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
@@ -1124,6 +1237,20 @@ class _ClassFolderCard extends StatelessWidget {
               style: OutlinedButton.styleFrom(
                 minimumSize: const Size.fromHeight(36),
                 foregroundColor: AppTheme.accentColor,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: onDelete,
+              icon: const Icon(Icons.delete_outline, size: 16),
+              label: const Text('Delete group'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(36),
+                foregroundColor: const Color(0xFFC62828),
+                side: const BorderSide(color: Color(0xFFC62828)),
               ),
             ),
           ),
@@ -1192,7 +1319,6 @@ class _ClassFolderCard extends StatelessWidget {
       ),
     );
   }
-
 }
 
 // ==================== STUDENT PERFORMANCE TILE ====================
@@ -1340,6 +1466,9 @@ class ClassFolder {
   final String joinCode;
   final int pendingCount;
   final String joinApprovalMode;
+  final String? classLevel;
+  final String? exam;
+  final String? language;
 
   ClassFolder({
     required this.id,
@@ -1349,6 +1478,9 @@ class ClassFolder {
     required this.joinCode,
     this.pendingCount = 0,
     this.joinApprovalMode = 'auto',
+    this.classLevel,
+    this.exam,
+    this.language,
   });
 }
 
@@ -1406,7 +1538,7 @@ class _SimpleJoinDialogState extends State<SimpleJoinDialog> {
 
       if (mounted) {
         Navigator.pop(context, true);
-        AppToast.showSnackBar(context, 
+        AppToast.showSnackBar(context,
           SnackBar(
             content: Text(
               status == 'pending'
@@ -1566,7 +1698,7 @@ class _RedeemCouponDialogState extends State<_RedeemCouponDialog> {
       if (!mounted) return;
       Navigator.pop(context, true);
       final classId = result['class_id'] as String?;
-      AppToast.showSnackBar(context, 
+      AppToast.showSnackBar(context,
         SnackBar(
           content: Text(
             result['message'] as String? ??

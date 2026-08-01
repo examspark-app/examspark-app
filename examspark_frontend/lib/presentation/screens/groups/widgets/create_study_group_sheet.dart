@@ -17,6 +17,9 @@ class CreatedStudyGroup {
   final String joinCode;
   final bool isPublic;
   final String joinApprovalMode;
+  final String? classLevel;
+  final String? exam;
+  final String? language;
 
   const CreatedStudyGroup({
     required this.id,
@@ -25,6 +28,9 @@ class CreatedStudyGroup {
     required this.joinCode,
     required this.isPublic,
     this.joinApprovalMode = 'auto',
+    this.classLevel,
+    this.exam,
+    this.language,
   });
 
   String get shareLink => AppBrand.inviteJoinUrl(joinCode);
@@ -180,6 +186,11 @@ class _CreateStudyGroupSheetState extends State<_CreateStudyGroupSheet> {
         isPublic: row['is_public'] as bool? ?? _isPublic,
         joinApprovalMode:
             (row['join_approval_mode'] as String?) ?? _joinApprovalMode,
+        classLevel: (row['class_level'] as String?) ??
+            (_classLevel.isEmpty ? null : _classLevel),
+        exam: (row['exam'] as String?) ?? (_exam.isEmpty ? null : _exam),
+        language: (row['language'] as String?) ??
+            (_language.isEmpty ? null : _language),
       );
       setState(() {
         _created = created;

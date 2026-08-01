@@ -1,8 +1,8 @@
-package com.sonia.sonialabs
+package com.sonialabs.sonaxia
 
 import android.content.Intent
 import android.os.Bundle
-package com.sonia.sonialabs
+package com.sonialabs.sonaxia
 
 import io.flutter.embedding.android.FlutterActivity
 

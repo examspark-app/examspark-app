@@ -42,11 +42,6 @@ class AppConfig {
 
   static bool get isApiConfigured => resolvedApiBaseUrl.isNotEmpty;
 
-  /// Dev-only mock purchases (must match backend `IS_TESTING=true`).
-  /// Never ship production builds with this enabled.
-  static bool get isTesting {
-    final fromDefine = const String.fromEnvironment('IS_TESTING', defaultValue: '');
-    final raw = (dotenv.maybeGet('IS_TESTING') ?? fromDefine).trim().toLowerCase();
-    return raw == '1' || raw == 'true' || raw == 'yes' || raw == 'on';
-  }
+  /// Dev-only mock purchases disabled permanently for production.
+  static bool get isTesting => false;
 }

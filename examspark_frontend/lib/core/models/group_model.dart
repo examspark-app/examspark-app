@@ -113,6 +113,12 @@ class GroupModel {
   final TeacherProfileModel teacher;
   /// Owner auth user id from `class_folders.teacher_id` (source of truth).
   final String teacherUserId;
+  /// Single-select fields chosen from the teacher's profile when creating
+  /// this group (Create Study Group form — Option A, Jul 26 2026).
+  final String? subject;
+  final String? classLevel;
+  final String? exam;
+  final String? language;
   final int studentsCount;
   final int sharedLecturesCount;
   final DateTime createdAt;
@@ -130,6 +136,10 @@ class GroupModel {
     required this.description,
     required this.teacher,
     this.teacherUserId = '',
+    this.subject,
+    this.classLevel,
+    this.exam,
+    this.language,
     this.studentsCount = 0,
     this.sharedLecturesCount = 0,
     required this.createdAt,
@@ -148,6 +158,22 @@ class GroupModel {
     if (teacherUserId.isNotEmpty) return teacherUserId == userId;
     return teacher.userId == userId;
   }
+
+  static String? _opt(Map<String, dynamic> map, String key) {
+    final v = map[key];
+    if (v == null) return null;
+    final s = v.toString().trim();
+    return s.isEmpty ? null : s;
+  }
+
+  /// Chips a student should see at a glance — subject, class, board, language
+  /// — skipping any that weren't filled (single-select, so no duplicates).
+  List<String> get quickInfoChips => [
+        if ((subject ?? '').trim().isNotEmpty) subject!.trim(),
+        if ((classLevel ?? '').trim().isNotEmpty) classLevel!.trim(),
+        if ((exam ?? '').trim().isNotEmpty) exam!.trim(),
+        if ((language ?? '').trim().isNotEmpty) language!.trim(),
+      ];
 
   /// [map] comes from the `class_folders` table. `teacher`, counts, and feed
   /// items are resolved via separate queries (teacher_profiles,
@@ -169,6 +195,10 @@ class GroupModel {
       description: map['description'] as String? ?? '',
       teacher: teacher,
       teacherUserId: tid,
+      subject: _opt(map, 'subject'),
+      classLevel: _opt(map, 'class_level'),
+      exam: _opt(map, 'exam'),
+      language: _opt(map, 'language'),
       studentsCount: studentsCount,
       sharedLecturesCount: sharedLecturesCount,
       createdAt: map['created_at'] != null
@@ -194,6 +224,10 @@ class GroupModel {
       description: description,
       teacher: teacher,
       teacherUserId: teacherUserId,
+      subject: subject,
+      classLevel: classLevel,
+      exam: exam,
+      language: language,
       studentsCount: studentsCount,
       sharedLecturesCount: sharedLecturesCount,
       createdAt: createdAt,

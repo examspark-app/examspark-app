@@ -10,10 +10,11 @@ import 'package:examspark_frontend/core/router/app_navigation.dart';
 import 'package:examspark_frontend/core/router/app_router.dart';
 import 'package:examspark_frontend/core/router/invite_deep_link.dart';
 import 'package:examspark_frontend/core/services/pending_invite_store.dart';
+import 'package:examspark_frontend/core/services/share_receiver_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/services/fcm_push_service.dart';
 import 'package:examspark_frontend/presentation/widgets/auth_gate.dart';
-
+import 'package:app_links/app_links.dart';
 // 👇 YEH NAYA IMPORT ADD KIYA HAI 👇
 import 'package:examspark_frontend/core/payments/payment_service.dart';
 
@@ -53,34 +54,68 @@ class ExamSparkApp extends StatefulWidget {
 
 class _ExamSparkAppState extends State<ExamSparkApp> {
   bool _inviteDeepLinkHandled = false;
-  StreamSubscription? _mediaStream;
+  final AppLinks _appLinks = AppLinks();
+  StreamSubscription<Uri>? _nativeLinkSub;
 
   @override
   void initState() {
     super.initState();
-
-    if (!kIsWeb) {
-      _mediaStream = ReceiveSharingIntent.instance
-          .getMediaStream()
-          .listen((files) {
-        debugPrint("Shared Media: $files");
-      });
-
-      ReceiveSharingIntent.instance
-          .getInitialMedia()
-          .then((files) {
-        for (final file in files) {
-          debugPrint("Initial Path: ${file.path}");
-          debugPrint("Initial Type: ${file.type}");
-          debugPrint("Initial Message: ${file.message}");
-        }
-
-        ReceiveSharingIntent.instance.reset();
-      });
-    }
-
     // `home: AuthGate` ignores URL hash — open /join/CODE after first frame.
     WidgetsBinding.instance.addPostFrameCallback((_) => _openInviteDeepLink());
+    if (!kIsWeb) {
+      _listenNativeDeepLinks();
+      _listenSharedFiles();
+    }
+  }
+
+  /// Android/iOS App Links (https://sonaxia.com/#/join/CODE opened from
+  /// outside the app) — Uri.base only works on Flutter Web, so native
+  /// platforms need this separate listener.
+  void _listenNativeDeepLinks() {
+    _appLinks.getInitialLink().then((uri) {
+      if (uri != null) _handleNativeUri(uri);
+    }).catchError((_) {});
+    _nativeLinkSub = _appLinks.uriLinkStream.listen(
+      _handleNativeUri,
+      onError: (_) {},
+    );
+  }
+
+  Future<void> _handleNativeUri(Uri uri) async {
+    final code = InviteDeepLink.joinCodeFromUri(uri);
+    if (code == null) return;
+    await PendingInviteStore.save(code);
+    for (var i = 0; i < 20; i++) {
+      final nav = AppNavigation.key.currentState;
+      if (nav != null) {
+        nav.pushNamed('/join/$code');
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+  }
+
+  /// Photo / PDF / audio shared into the app from Gallery, WhatsApp,
+  /// Gmail, Files app, etc. Video is rejected inside ShareReceiverService.
+  /// Files land on RecorderScreen — the same screen normal recording uses,
+  /// so the existing subscription/credit check there applies automatically;
+  /// no separate credit-check logic is written here.
+  void _listenSharedFiles() {
+    ShareReceiverService.instance.onFilesReceived = _handleSharedFiles;
+    ShareReceiverService.instance.start();
+  }
+
+  Future<void> _handleSharedFiles(List<SharedMediaFile> files) async {
+    for (var i = 0; i < 20; i++) {
+      final nav = AppNavigation.key.currentState;
+      if (nav != null) {
+        nav.pushNamed('/recorder', arguments: {
+          'initialInputMethod': 'shared',
+        });
+        return;
+      }
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
   }
 
   Future<void> _openInviteDeepLink() async {
@@ -103,7 +138,8 @@ class _ExamSparkAppState extends State<ExamSparkApp> {
 
   @override
   void dispose() {
-    _mediaStream?.cancel();
+    _nativeLinkSub?.cancel();
+    ShareReceiverService.instance.dispose();
     super.dispose();
   }
 

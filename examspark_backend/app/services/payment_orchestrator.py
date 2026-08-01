@@ -37,6 +37,10 @@ from app.services.supabase_admin import get_supabase_admin
 
 logger = logging.getLogger(__name__)
 
+# Teacher accounts may only hold the 'teacher' plan. Student-tier plans are
+# blocked server-side even if a bad/duplicate client request reaches here.
+_STUDENT_ONLY_PLANS = frozenset({"plan_199", "plan_499", "plan_999"})
+
 
 class PaymentOrchestrator:
     """
@@ -105,6 +109,81 @@ class PaymentOrchestrator:
                 gateway=request.gateway,
                 message="plan_id or credit_pack_id required",
             )
+
+        # --- Role-based plan restriction (server-enforced) ---
+        if request.plan_id:
+            try:
+                client = get_supabase_admin()
+                user_row = (
+                    client.table("users")
+                    .select("role")
+                    .eq("id", str(user_id))
+                    .limit(1)
+                    .execute()
+                )
+                user_role = (user_row.data or [{"role": "student"}])[0].get(
+                    "role", "student"
+                )
+            except Exception as e:  # noqa: BLE001
+                logger.warning("role lookup failed for %s: %s", user_id, e)
+                user_role = "student"
+
+            if user_role == "teacher" and request.plan_id in _STUDENT_ONLY_PLANS:
+                return CreateOrderResponse(
+                    order_id="",
+                    status=PaymentStatus.FAILED,
+                    amount_paise=0,
+                    gateway=request.gateway,
+                    message=(
+                        "Teacher accounts can only purchase the Teacher plan "
+                        f"(₹2,999), not '{request.plan_id}'."
+                    ),
+                )
+            if user_role == "student" and request.plan_id == "teacher":
+                return CreateOrderResponse(
+                    order_id="",
+                    status=PaymentStatus.FAILED,
+                    amount_paise=0,
+                    gateway=request.gateway,
+                    message="Student accounts cannot purchase the Teacher plan.",
+                )
+
+               
+
+            # --- NAYA CHECK: One active plan per user, ever — no switching
+            # mid-cycle. Credit packs are exempt (checked separately above,
+            # this block only runs when request.plan_id is set).
+            try:
+                existing_active = (
+                    client.table("user_subscriptions")
+                    .select("id, plan_id, current_period_end")
+                    .eq("user_id", str(user_id))
+                    .eq("status", "active")
+                    .gte("current_period_end", datetime.now(timezone.utc).isoformat())
+                    .limit(1)
+                    .execute()
+                )
+                if existing_active.data:
+                    active_row = existing_active.data[0]
+                    return CreateOrderResponse(
+                        order_id="",
+                        status=PaymentStatus.FAILED,
+                        amount_paise=0,
+                        gateway=request.gateway,
+                        message=(
+                            f"You already have an active plan "
+                            f"('{active_row['plan_id']}') until "
+                            f"{active_row['current_period_end']}. "
+                            "You can buy a credit pack anytime, but a new "
+                            "subscription plan can only be purchased after "
+                            "your current plan expires or is cancelled."
+                        ),
+                    )
+            except Exception as e:  # noqa: BLE001
+                logger.warning("active-subscription check failed: %s", e)
+            # --- end one-plan-per-cycle check ---
+        # --- end role check ---
+        
 
         try:
             amount = resolve_amount_paise(request.plan_id, request.credit_pack_id)
@@ -452,6 +531,31 @@ class PaymentOrchestrator:
         gateway: PaymentGateway,
     ) -> dict[str, Any]:
         client = get_supabase_admin()
+
+        # --- Role-based plan restriction (server-enforced, second gate) ---
+        # Belt-and-braces: even if create_order's check was somehow bypassed
+        # (e.g. an old pending order from before this fix), never activate a
+        # mismatched plan.
+        user_row = (
+            client.table("users")
+            .select("role")
+            .eq("id", str(user_id))
+            .limit(1)
+            .execute()
+        )
+        user_role = (user_row.data or [{"role": "student"}])[0].get("role", "student")
+
+        if user_role == "teacher" and plan_id in _STUDENT_ONLY_PLANS:
+            raise RuntimeError(
+                f"Teacher accounts can only subscribe to the Teacher plan "
+                f"(₹2,999), not '{plan_id}'. Activation blocked server-side."
+            )
+        if user_role == "student" and plan_id == "teacher":
+            raise RuntimeError(
+                "Student accounts cannot activate the Teacher plan."
+            )
+        # --- end role check ---
+
         now = datetime.now(timezone.utc)
         expires = now + timedelta(days=30)
 

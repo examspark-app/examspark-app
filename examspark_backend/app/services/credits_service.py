@@ -44,7 +44,8 @@ def grant_credits(
     description: str,
     action: str = "payment_grant",
 ) -> int:
-    """Add credits after verified payment. Returns new balance.
+    """Add credits on top of the existing balance (e.g. credit pack top-up).
+    Returns new balance.
 
     Uses `fn_grant_credits` (sets app.allow_credit_change) so the protect
     trigger allows the balance update. FastAPI / service-role only.
@@ -62,5 +63,35 @@ def grant_credits(
         ).execute()
     except Exception as e:  # noqa: BLE001
         raise RuntimeError(f"Credit grant failed: {e}") from e
+
+    return response.data
+
+
+def set_credits(
+    user_id: str,
+    amount: int,
+    description: str,
+    action: str = "plan_reset",
+) -> int:
+    """Reset the balance to a fixed amount — no carry-over from any
+    previous plan/pack. Used when a NEW subscription plan is activated,
+    so leftover credits from an old plan don't mix in. Returns new balance.
+
+    Uses `fn_set_credits` (sets app.allow_credit_change) so the protect
+    trigger allows the balance update. FastAPI / service-role only.
+    """
+    client = get_supabase_admin()
+    try:
+        response = client.rpc(
+            "fn_set_credits",
+            {
+                "p_user_id": user_id,
+                "p_amount": amount,
+                "p_description": description,
+                "p_action": action,
+            },
+        ).execute()
+    except Exception as e:  # noqa: BLE001
+        raise RuntimeError(f"Credit set failed: {e}") from e
 
     return response.data

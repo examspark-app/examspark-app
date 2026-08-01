@@ -912,7 +912,35 @@ class ClassService {
     if (list.isEmpty) throw StateError('Announce insert failed');
     return list.first;
   }
+  Future<void> deleteClass(String classId) async {
+    final userId = SupabaseClient.instance.currentUser?.id;
+    if (userId == null) throw StateError('Must be logged in');
 
+    final client = SupabaseClient.instance.client;
+
+    final owned = await client
+        .from('class_folders')
+        .select('id')
+        .eq('id', classId)
+        .eq('teacher_id', userId)
+        .maybeSingle();
+    if (owned == null) {
+      throw StateError('Group not found or not yours to delete');
+    }
+
+    await client.from('class_memberships').delete().eq('class_id', classId);
+    await client.from('group_join_requests').delete().eq('class_id', classId);
+    await client.from('group_shared_items').delete().eq('class_id', classId);
+    try {
+      await client.from('coupons').delete().eq('class_id', classId);
+    } catch (_) {}
+
+    await client
+        .from('class_folders')
+        .delete()
+        .eq('id', classId)
+        .eq('teacher_id', userId);
+  }
   String _generateJoinCode() {
     final code = DateTime.now().millisecondsSinceEpoch % 1000000;
     return code.toString().padLeft(6, '0');

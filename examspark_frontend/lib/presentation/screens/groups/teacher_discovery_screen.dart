@@ -14,8 +14,24 @@ import 'package:examspark_frontend/core/data/groups_repository.dart';
 import 'package:examspark_frontend/core/models/suggested_teacher_model.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/screens/groups/widgets/verified_badge.dart';
 import 'package:examspark_frontend/presentation/widgets/buy_plan_sheet.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
+
+/// Strips Postgres text-array wrapping (e.g. `{College}` → `College`,
+/// `{"College","Class 12"}` → `College, Class 12`) so raw array formatting
+/// never leaks into the UI when a column comes back as array text.
+String? cleanPgArrayText(String? raw) {
+  if (raw == null) return null;
+  var s = raw.trim();
+  if (s.isEmpty) return null;
+  if (s.startsWith('{') && s.endsWith('}')) {
+    s = s.substring(1, s.length - 1);
+  }
+  s = s.replaceAll('"', '');
+  s = s.split(',').map((p) => p.trim()).where((p) => p.isNotEmpty).join(', ');
+  return s.isEmpty ? null : s;
+}
 
 /// WhatsApp-style teacher discovery — search + filters + match-score ranking.
 /// Filters: City · Subject · Class · Board. Displays teacher profiles along with their active groups/batches.
@@ -1164,12 +1180,24 @@ class _TeacherDiscoverCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  teacher.name,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 15,
-                  ),
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        teacher.name.isNotEmpty ? teacher.name : 'Teacher',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    if (teacher.isVerified) ...[
+                      const SizedBox(width: 4),
+                      const VerifiedBadge(size: 15),
+                    ],
+                  ],
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -1189,6 +1217,41 @@ class _TeacherDiscoverCard extends StatelessWidget {
                     ),
                   ),
                 ],
+                if ((teacher.qualification ?? '').isNotEmpty ||
+                    teacher.experienceYears > 0) ...[
+                  const SizedBox(height: 4),
+                  Row(
+                    children: [
+                      if ((teacher.qualification ?? '').isNotEmpty) ...[
+                        Icon(Icons.school_outlined,
+                            size: 12, color: AppTheme.getSecondaryText(context)),
+                        const SizedBox(width: 3),
+                        Flexible(
+                          child: Text(
+                            teacher.qualification!,
+                            style: TextStyle(
+                              color: AppTheme.getSecondaryText(context),
+                              fontSize: 11,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                      if ((teacher.qualification ?? '').isNotEmpty &&
+                          teacher.experienceYears > 0)
+                        const Text(' · ', style: TextStyle(fontSize: 11)),
+                      if (teacher.experienceYears > 0)
+                        Text(
+                          '${teacher.experienceYears}+ yrs exp',
+                          style: TextStyle(
+                            color: AppTheme.getSecondaryText(context),
+                            fontSize: 11,
+                          ),
+                        ),
+                    ],
+                  ),
+                ],
                 // Display Teacher's Groups / Batches from class_folders
                 if (groupsList.isNotEmpty) ...[
                   const SizedBox(height: 6),
@@ -1201,12 +1264,12 @@ class _TeacherDiscoverCard extends StatelessWidget {
                       if (g is Map) {
                         groupName =
                             (g['name'] ?? g['subject'] ?? 'Group').toString();
-                        final cl = g['class_level']?.toString();
-                        if (cl != null && cl.trim().isNotEmpty) {
-                          groupSub = cl.trim();
+                        final cl = cleanPgArrayText(g['class_level']?.toString());
+                        if (cl != null && cl.isNotEmpty) {
+                          groupSub = cl;
                         }
                       } else if (g is String) {
-                        groupName = g;
+                        groupName = cleanPgArrayText(g) ?? g;
                       }
                       final label =
                           groupSub != null ? '$groupName · $groupSub' : groupName;

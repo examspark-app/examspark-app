@@ -15,6 +15,12 @@ class GroupDashboardScreen extends StatefulWidget {
   final String joinCode;
   final String subject;
   final String joinApprovalMode;
+  // ADDED — teacher_dashboard_screen.dart passes these in (Class/Board/
+  // Language chips), but this widget previously had nowhere to receive
+  // them, causing "No named parameter" build errors.
+  final String? classLevel;
+  final String? exam;
+  final String? language;
 
   const GroupDashboardScreen({
     super.key,
@@ -23,6 +29,9 @@ class GroupDashboardScreen extends StatefulWidget {
     required this.joinCode,
     this.subject = '',
     this.joinApprovalMode = 'auto',
+    this.classLevel,
+    this.exam,
+    this.language,
   });
 
   @override
@@ -42,6 +51,11 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
   late String _joinApprovalMode;
   late String _name;
   late String _subject;
+  // ADDED — local editable copies, same pattern as _name/_subject, so
+  // Edit Group can update these later without changing widget.* directly.
+  String? _classLevel;
+  String? _exam;
+  String? _language;
 
   @override
   void initState() {
@@ -49,6 +63,9 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
     _joinApprovalMode = widget.joinApprovalMode;
     _name = widget.name;
     _subject = widget.subject;
+    _classLevel = widget.classLevel;
+    _exam = widget.exam;
+    _language = widget.language;
     _load();
   }
 
@@ -293,6 +310,27 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                           color: secondary,
                         ),
                   ),
+                  // ADDED — Class/Board/Language tags, same small-pill style
+                  // used elsewhere (teacher_dashboard_screen's _buildTag,
+                  // group_card's _QuickInfoChip) so this screen shows what
+                  // was passed in instead of silently dropping it.
+                  if ((_classLevel != null && _classLevel!.isNotEmpty) ||
+                      (_exam != null && _exam!.isNotEmpty) ||
+                      (_language != null && _language!.isNotEmpty)) ...[
+                    const SizedBox(height: 6),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      children: [
+                        if (_classLevel != null && _classLevel!.isNotEmpty)
+                          _infoTag(context, _classLevel!),
+                        if (_exam != null && _exam!.isNotEmpty)
+                          _infoTag(context, _exam!),
+                        if (_language != null && _language!.isNotEmpty)
+                          _infoTag(context, _language!),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 4),
                   Text(
                     _joinApprovalMode == 'approval'
@@ -377,6 +415,24 @@ class _GroupDashboardScreenState extends State<GroupDashboardScreen> {
                 ],
               ),
             ),
+    );
+  }
+
+  // ADDED — small helper for the Class/Board/Language pills above.
+  Widget _infoTag(BuildContext context, String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppTheme.getAccentTint(context),
+        borderRadius: BorderRadius.circular(99),
+      ),
+      child: Text(
+        label,
+        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+              fontSize: 11,
+              fontWeight: FontWeight.w500,
+            ),
+      ),
     );
   }
 

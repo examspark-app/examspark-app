@@ -65,15 +65,16 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
 
   @override
   Widget build(BuildContext context) {
-    // Professional / ChatGPT-style reading typography: 16px size for legibility,
-    // generous 1.625 line-height for long paragraphs, and zero letter-spacing
-    // to rely on the font's native tracking for a clean, premium look.
+    // Standard chat-app reading typography — same body text size WhatsApp /
+    // Telegram / ChatGPT mobile use (15px), with a comfortable 1.5 line
+    // height for paragraphs and neutral letter-spacing (no artificial
+    // tightening/loosening).
     final textStyle = TextStyle(
       color: AppTheme.getPrimaryText(context),
-      fontSize: 15.5,
-height: 1.7,
-letterSpacing: -0.1,
-fontWeight: FontWeight.w400,
+      fontSize: 15,
+      height: 1.5,
+      letterSpacing: 0,
+      fontWeight: FontWeight.w400,
     );
 
     final body = widget.animate && !_revealDone

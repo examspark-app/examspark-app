@@ -1,9 +1,14 @@
-"""Credit allocation after verified payment — plan package or pack only."""
+"""Credit allocation after verified payment — plan package or pack only.
+
+Plans RESET the balance to the plan's fresh monthly amount (no carry-over
+from a previous plan/pack). Credit packs (top-ups) still ADD on top of
+the existing balance.
+"""
 from uuid import UUID
 
 from app.constants.payment_catalog import credits_for_pack, credits_for_plan
 from app.models.payment import AllocateCreditsRequest
-from app.services.credits_service import grant_credits
+from app.services.credits_service import grant_credits, set_credits
 from app.services.supabase_admin import get_supabase_admin
 
 
@@ -20,13 +25,13 @@ class CreditAllocator:
         amount = credits_for_plan(plan_id)
         if amount <= 0:
             return 0
-        return await self._grant_once(
+        return await self._reset_once(
             user_id=user_id,
             amount=amount,
             source="subscription_monthly",
             payment_id=payment_id,
             idempotency_key=idempotency_key,
-            description=f"Plan {plan_id} monthly credits",
+            description=f"Plan {plan_id} — fresh monthly credits (reset)",
             action="subscription_monthly",
         )
 
@@ -63,6 +68,7 @@ class CreditAllocator:
         description: str,
         action: str,
     ) -> int:
+        """ADD on top of existing balance — used for credit packs (top-ups)."""
         client = get_supabase_admin()
         existing = (
             client.table("credit_history")
@@ -75,6 +81,49 @@ class CreditAllocator:
             return int(existing.data[0].get("delta") or amount)
 
         balance_after = grant_credits(
+            user_id=str(user_id),
+            amount=amount,
+            description=description,
+            action=action,
+        )
+
+        row = {
+            "user_id": str(user_id),
+            "delta": amount,
+            "balance_after": balance_after,
+            "source": source,
+            "payment_id": str(payment_id) if payment_id else None,
+            "idempotency_key": idempotency_key,
+            "description": description,
+        }
+        client.table("credit_history").insert(row).execute()
+        return amount
+
+    async def _reset_once(
+        self,
+        *,
+        user_id: UUID,
+        amount: int,
+        source: str,
+        payment_id: UUID | None,
+        idempotency_key: str,
+        description: str,
+        action: str,
+    ) -> int:
+        """SET balance to a fresh fixed amount — used for subscription plans
+        (old leftover credits from a previous plan/pack are discarded)."""
+        client = get_supabase_admin()
+        existing = (
+            client.table("credit_history")
+            .select("delta, balance_after")
+            .eq("idempotency_key", idempotency_key)
+            .limit(1)
+            .execute()
+        )
+        if existing.data:
+            return int(existing.data[0].get("delta") or amount)
+
+        balance_after = set_credits(
             user_id=str(user_id),
             amount=amount,
             description=description,

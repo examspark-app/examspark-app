@@ -71,6 +71,32 @@ class TeacherSocialLinksRow extends StatelessWidget {
     };
   }
 
+  /// Brand-recognizable color per platform — helps students spot the
+  /// right icon at a glance instead of every link looking identical.
+  Color _brandColor(BuildContext context, TeacherSocialKind kind) {
+    switch (kind) {
+      case TeacherSocialKind.youtube:
+        return const Color(0xFFFF0000);
+      case TeacherSocialKind.instagram:
+        return const Color(0xFFE1306C);
+      case TeacherSocialKind.facebook:
+        return const Color(0xFF1877F2);
+      case TeacherSocialKind.linkedin:
+        return const Color(0xFF0A66C2);
+      case TeacherSocialKind.whatsapp:
+        return const Color(0xFF25D366);
+      case TeacherSocialKind.telegram:
+        return const Color(0xFF229ED9);
+      case TeacherSocialKind.x:
+        // X's brand color is black/white — flip for dark mode so it stays visible.
+        return Theme.of(context).brightness == Brightness.dark
+            ? Colors.white
+            : Colors.black;
+      case TeacherSocialKind.website:
+        return AppTheme.accentColor;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final links = profile.filledSocialLinks;
@@ -95,26 +121,31 @@ class TeacherSocialLinksRow extends StatelessWidget {
           runSpacing: 8,
           children: [
             for (final entry in links)
-              Tooltip(
-                message: entry.$1.label,
-                child: InkWell(
-                  onTap: () => _open(context, entry.$1, entry.$2),
-                  borderRadius: BorderRadius.circular(24),
-                  child: Container(
-                    width: compact ? 36 : 40,
-                    height: compact ? 36 : 40,
-                    decoration: BoxDecoration(
-                      color: AppTheme.getAccentTint(context),
-                      shape: BoxShape.circle,
-                      border: Border.all(color: AppTheme.getCardBorder(context)),
+              Builder(
+                builder: (context) {
+                  final color = _brandColor(context, entry.$1);
+                  return Tooltip(
+                    message: entry.$1.label,
+                    child: InkWell(
+                      onTap: () => _open(context, entry.$1, entry.$2),
+                      borderRadius: BorderRadius.circular(24),
+                      child: Container(
+                        width: compact ? 36 : 40,
+                        height: compact ? 36 : 40,
+                        decoration: BoxDecoration(
+                          color: color.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppTheme.getCardBorder(context)),
+                        ),
+                        child: Icon(
+                          _icon(entry.$1),
+                          size: compact ? 18 : 20,
+                          color: color,
+                        ),
+                      ),
                     ),
-                    child: Icon(
-                      _icon(entry.$1),
-                      size: compact ? 18 : 20,
-                      color: AppTheme.accentColor,
-                    ),
-                  ),
-                ),
+                  );
+                },
               ),
           ],
         ),

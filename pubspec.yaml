@@ -2,7 +2,8 @@ name: examspark_frontend
 description: "A new Flutter project."
 publish_to: 'none'
 
-version: 1.0.0+1
+# Version update karna zaroori tha Play Console ke liye (2 se 3 kar diya hai)
+version: 1.0.0+3
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
@@ -17,6 +18,8 @@ dependencies:
   google_fonts: ^6.2.1
   url_launcher: ^6.3.1
   receive_sharing_intent: ^1.9.0
+  # Play Console Subscriptions ke liye library add ho gayi hai 👇
+  in_app_purchase: ^3.2.0
 
 dev_dependencies:
   flutter_test:

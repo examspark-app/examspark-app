@@ -12,6 +12,8 @@ class SuggestedTeacherModel {
   final String? userId;
   final List<dynamic> groups;
   final bool isVerified;
+  final String? qualification;
+  final int experienceYears;
 
   const SuggestedTeacherModel({
     required this.id,
@@ -27,12 +29,15 @@ class SuggestedTeacherModel {
     this.userId,
     this.groups = const [],
     this.isVerified = false,
+    this.qualification,
+    this.experienceYears = 0,
   });
 
   factory SuggestedTeacherModel.fromJson(Map<String, dynamic> json) {
     return SuggestedTeacherModel(
       id: json['id']?.toString() ?? '',
-      name: json['name']?.toString() ?? '',
+      // teacher_profiles column is `full_name` — fall back to it if `name` is absent.
+      name: (json['name'] ?? json['full_name'])?.toString() ?? '',
       subject: json['subject']?.toString() ?? '',
       city: json['city']?.toString(),
       state: json['state']?.toString(),
@@ -43,7 +48,16 @@ class SuggestedTeacherModel {
       isJoined: json['is_joined'] ?? json['isJoined'] ?? false,
       userId: json['user_id']?.toString() ?? json['userId']?.toString(),
       groups: json['groups'] ?? json['class_folders'] ?? [],
-      isVerified: json['is_verified'] ?? json['isVerified'] ?? false,
+      // teacher_profiles stores `verification_status` (verified/pending/unverified),
+      // not a plain boolean — derive from it when the boolean isn't present.
+      isVerified: json['is_verified'] ??
+          json['isVerified'] ??
+          (json['verification_status']?.toString() == 'verified'),
+      qualification: json['qualification']?.toString(),
+      experienceYears: ((json['experience_years'] ?? json['experienceYears'])
+                  as num?)
+              ?.toInt() ??
+          0,
     );
   }
 
@@ -65,6 +79,8 @@ class SuggestedTeacherModel {
     String? userId,
     List<dynamic>? groups,
     bool? isVerified,
+    String? qualification,
+    int? experienceYears,
   }) {
     return SuggestedTeacherModel(
       id: id ?? this.id,
@@ -80,6 +96,8 @@ class SuggestedTeacherModel {
       userId: userId ?? this.userId,
       groups: groups ?? this.groups,
       isVerified: isVerified ?? this.isVerified,
+      qualification: qualification ?? this.qualification,
+      experienceYears: experienceYears ?? this.experienceYears,
     );
   }
 }

@@ -148,10 +148,29 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   /// accent, so the sent message reads as "professional AI chat" (black
   /// bubble) rather than a brand-colored pill. Adapts for dark mode so the
   /// bubble still stands out against the near-black dark background.
+  /// Chat message bubble color — light grey (Claude.ai style) instead of
+  /// solid black, so sent messages read as calm/neutral rather than a
+  /// heavy black pill. Adapts for dark mode.
   Color _userBubbleColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.light
+        ? const Color(0xFFECECEC)
+        : const Color(0xFF2F2F2F);
+  }
+
+  /// Avatar circle stays dark/solid (unaffected by the bubble color change)
+  /// so the white initial letter inside it stays readable.
+  Color _avatarBgColor(BuildContext context) {
     return Theme.of(context).brightness == Brightness.light
         ? const Color(0xFF0D0D0D)
         : const Color(0xFF262626);
+  }
+
+  /// Bubble text color — must stay readable against the new light-grey
+  /// bubble (was hardcoded white for the old black bubble).
+  Color _userBubbleTextColor(BuildContext context) {
+    return Theme.of(context).brightness == Brightness.light
+        ? const Color(0xFF1A1A1A)
+        : Colors.white;
   }
 
   /// First name only, for the greeting banner — "Priya" not
@@ -1244,22 +1263,18 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
           const SizedBox(height: 12),
           if (name.isNotEmpty) _buildGreetingBanner(context, name),
           const SizedBox(height: 24),
-          AnimatedContainer(
-            duration: const Duration(milliseconds: 400),
-            curve: Curves.easeOut,
-            child: Icon(
-              Icons.auto_awesome,
-              size: 56,
-              color: AppTheme.accentColor,
-            ),
-          ),
-          const SizedBox(height: 16),
           Text(
-            'Ask an education question (5 credits) or record a lecture',
+            'Stuck on a doubt? Let\'s fix that in one message. 🧠',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
                 ),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Ask anything from your syllabus (5 credits) — or record a lecture and let me take the notes.',
+            style: Theme.of(context).textTheme.bodySmall,
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 6),
@@ -1319,7 +1334,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         children: [
           CircleAvatar(
             radius: 22,
-            backgroundColor: _userBubbleColor(context),
+            backgroundColor: _avatarBgColor(context),
             child: Text(
               name.isNotEmpty ? name[0].toUpperCase() : '?',
               style: const TextStyle(
@@ -1603,8 +1618,8 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                           ),
                           child: SelectableText(
                             bubble.text,
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: _userBubbleTextColor(context),
                               fontSize: 15.5,
                               height: 1.5,
                               letterSpacing: 0.1,

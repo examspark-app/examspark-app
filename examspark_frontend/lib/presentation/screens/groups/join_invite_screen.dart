@@ -76,6 +76,31 @@ class _JoinInviteScreenState extends State<JoinInviteScreen> {
       }
     }
 
+    // Sign Up can finish before Legal Consent / Student Onboarding are done —
+    // AuthGate requires both before AppShell. This screen sits ON TOP of
+    // AuthGate in the navigator, so those mandatory screens would be hidden
+    // behind it. Hand control back by popping — PendingInviteStore still has
+    // the code, so AuthGate's own pending-invite routing brings the user
+    // right back here once onboarding + legal consent are actually done.
+    final uidForGate = SupabaseClient.instance.currentUser?.id;
+    if (uidForGate != null) {
+      try {
+        final profile =
+            await SupabaseClient.instance.getUserProfile(uidForGate);
+        final legalAccepted = profile?['legal_accepted'] as bool? ?? false;
+        final onboardingDone =
+            profile?['onboarding_completed'] as bool? ?? true;
+        if (!legalAccepted || !onboardingDone) {
+          if (!mounted) return;
+          Navigator.of(context).pop();
+          return;
+        }
+      } catch (_) {
+        // Soft-fail: if this check errors, fall through to the join attempt
+        // as before rather than blocking the user entirely.
+      }
+    }
+
     try {
       setState(() {
         _busy = true;

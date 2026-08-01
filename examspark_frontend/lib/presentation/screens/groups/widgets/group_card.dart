@@ -30,6 +30,7 @@ class GroupCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final teacher = group.teacher;
+    final infoChips = group.quickInfoChips;
 
     return InkWell(
       onTap: onTap,
@@ -126,6 +127,17 @@ class GroupCard extends StatelessWidget {
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
+                      if (infoChips.isNotEmpty) ...[
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          children: [
+                            for (final label in infoChips)
+                              _QuickInfoChip(label: label),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 8),
                       Row(
                         children: [
@@ -147,29 +159,46 @@ class GroupCard extends StatelessWidget {
                     ],
                   ),
                 ),
+                if (group.isJoined)
+                  PopupMenuButton<String>(
+                    tooltip: 'More options',
+                    icon: Icon(
+                      Icons.more_vert,
+                      size: 20,
+                      color: AppTheme.getSecondaryText(context),
+                    ),
+                    padding: EdgeInsets.zero,
+                    onSelected: (value) {
+                      if (value == 'leave') onJoinToggle();
+                    },
+                    itemBuilder: (context) => [
+                      PopupMenuItem<String>(
+                        value: 'leave',
+                        child: Row(
+                          children: [
+                            const Icon(Icons.logout, size: 18, color: Color(0xFFB71C1C)),
+                            const SizedBox(width: 10),
+                            const Text(
+                              'Leave group',
+                              style: TextStyle(color: Color(0xFFB71C1C)),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
               ],
             ),
             const SizedBox(height: 14),
             SizedBox(
               width: double.infinity,
               child: group.isJoined
-                  ? Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            onPressed: onTap,
-                            style: ElevatedButton.styleFrom(
-                              minimumSize: const Size.fromHeight(36),
-                            ),
-                            child: const Text('Open group'),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        TextButton(
-                          onPressed: isUpdating ? null : onJoinToggle,
-                          child: isUpdating ? _spinner() : const Text('Leave'),
-                        ),
-                      ],
+                  ? ElevatedButton(
+                      onPressed: onTap,
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(36),
+                      ),
+                      child: isUpdating ? _spinner() : const Text('Open group'),
                     )
                   : ElevatedButton(
                       onPressed: isUpdating ? null : onJoinToggle,
@@ -192,6 +221,33 @@ class GroupCard extends StatelessWidget {
       width: 16,
       height: 16,
       child: CircularProgressIndicator(strokeWidth: 2),
+    );
+  }
+}
+
+/// Small pill for a group's quick-glance field (subject / class / board /
+/// language) — only rendered for fields the teacher actually filled in.
+class _QuickInfoChip extends StatelessWidget {
+  final String label;
+
+  const _QuickInfoChip({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: AppTheme.getAccentTint(context),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+          color: AppTheme.accentColor,
+        ),
+      ),
     );
   }
 }

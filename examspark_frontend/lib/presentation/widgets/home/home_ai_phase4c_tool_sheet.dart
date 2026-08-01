@@ -6,6 +6,12 @@ import 'package:examspark_frontend/presentation/screens/recording/widgets/extra_
 import 'package:examspark_frontend/presentation/widgets/smart_educational_content.dart';
 
 /// Phase 4C — open a study tool from response_id (no full-answer paste).
+///
+/// All 11 Home AI study chips (Important Qs, Quiz, Memory, Mind Map,
+/// Flashcards, Revision Sheet, Cheat Sheet, Teacher Tips, Exam Booster,
+/// etc.) call this one function — so opening it full-page instead of as
+/// a popup sheet fixes all of them at once. Name and parameters are
+/// unchanged, so no call site needs to change.
 Future<void> showHomeAiPhase4cToolSheet(
   BuildContext context, {
   required String responseId,
@@ -16,55 +22,42 @@ Future<void> showHomeAiPhase4cToolSheet(
   VoidCallback? onGenerated,
 }) async {
   if (!context.mounted) return;
-  await showModalBottomSheet<void>(
-    context: context,
-    isScrollControlled: true,
-    builder: (sheetContext) {
-      return DraggableScrollableSheet(
-        expand: false,
-        initialChildSize: 0.8,
-        minChildSize: 0.45,
-        maxChildSize: 0.95,
-        builder: (_, scrollController) {
-          return _Phase4cToolBody(
-            responseId: responseId,
-            toolType: toolType,
-            title: title,
-            regenerate: regenerate,
-            scrollController: scrollController,
-            onCreditsUpdated: onCreditsUpdated,
-            onGenerated: onGenerated,
-          );
-        },
-      );
-    },
+  await Navigator.of(context).push(
+    MaterialPageRoute<void>(
+      builder: (_) => _Phase4cToolPage(
+        responseId: responseId,
+        toolType: toolType,
+        title: title,
+        regenerate: regenerate,
+        onCreditsUpdated: onCreditsUpdated,
+        onGenerated: onGenerated,
+      ),
+    ),
   );
 }
 
-class _Phase4cToolBody extends StatefulWidget {
+class _Phase4cToolPage extends StatefulWidget {
   final String responseId;
   final String toolType;
   final String title;
   final bool regenerate;
-  final ScrollController scrollController;
   final void Function(int newBalance)? onCreditsUpdated;
   final VoidCallback? onGenerated;
 
-  const _Phase4cToolBody({
+  const _Phase4cToolPage({
     required this.responseId,
     required this.toolType,
     required this.title,
     required this.regenerate,
-    required this.scrollController,
     required this.onCreditsUpdated,
     required this.onGenerated,
   });
 
   @override
-  State<_Phase4cToolBody> createState() => _Phase4cToolBodyState();
+  State<_Phase4cToolPage> createState() => _Phase4cToolPageState();
 }
 
-class _Phase4cToolBodyState extends State<_Phase4cToolBody> {
+class _Phase4cToolPageState extends State<_Phase4cToolPage> {
   bool _loading = true;
   String? _error;
   Map<String, dynamic>? _result;
@@ -134,77 +127,72 @@ class _Phase4cToolBodyState extends State<_Phase4cToolBody> {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 8, 0),
-          child: Row(
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(widget.title, style: const TextStyle(fontSize: 17)),
+        actions: [
+          if (!_loading && _error == null)
+            TextButton(
+              onPressed: () => _run(regenerate: true),
+              child: const Text(StudyToolCopy.regenerateButton),
+            ),
+          const SizedBox(width: 4),
+        ],
+      ),
+      body: SafeArea(
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  StudyToolCopy.freeDbVsRegenerateAi,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.getSecondaryText(context),
+                        height: 1.35,
+                      ),
+                ),
+              ),
+            ),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.all(16),
+                children: [
+                  if (_error != null)
+                    Text(_error!, style: TextStyle(color: Colors.red.shade700))
+                  else if (_loading)
+                    const Padding(
+                      padding: EdgeInsets.only(top: 40),
+                      child: Center(child: CircularProgressIndicator()),
+                    )
+                  else
+                    _buildPayload(context, _payload ?? const {}),
+                ],
+              ),
+            ),
+            if (!_loading && _error == null)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                child: Row(
                   children: [
-                    Text(widget.title, style: Theme.of(context).textTheme.titleMedium),
-                    const SizedBox(height: 4),
-                    Text(
-                      StudyToolCopy.freeDbVsRegenerateAi,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.getSecondaryText(context),
-                            height: 1.35,
-                          ),
-                    ),
+                    const Spacer(),
+                    if (_result?['credits_charged'] is int)
+                      Text(
+                        StudyToolCopy.creditsFooter(
+                          fromDatabase: _cached || _result?['derived'] == true,
+                          charged: _result!['credits_charged'] as int?,
+                        ),
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.getSecondaryText(context),
+                            ),
+                      ),
                   ],
                 ),
               ),
-              if (!_loading && _error == null)
-                TextButton(
-                  onPressed: () => _run(regenerate: true),
-                  child: const Text(StudyToolCopy.regenerateButton),
-                ),
-              IconButton(
-                onPressed: () => Navigator.pop(context),
-                icon: const Icon(Icons.close),
-              ),
-            ],
-          ),
+          ],
         ),
-        Expanded(
-          child: ListView(
-            controller: widget.scrollController,
-            padding: const EdgeInsets.all(16),
-            children: [
-              if (_error != null)
-                Text(_error!, style: TextStyle(color: Colors.red.shade700))
-              else if (_loading)
-                const Padding(
-                  padding: EdgeInsets.only(top: 40),
-                  child: Center(child: CircularProgressIndicator()),
-                )
-              else
-                _buildPayload(context, _payload ?? const {}),
-            ],
-          ),
-        ),
-        if (!_loading && _error == null)
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-            child: Row(
-              children: [
-                const Spacer(),
-                if (_result?['credits_charged'] is int)
-                  Text(
-                    StudyToolCopy.creditsFooter(
-                      fromDatabase: _cached || _result?['derived'] == true,
-                      charged: _result!['credits_charged'] as int?,
-                    ),
-                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppTheme.getSecondaryText(context),
-                        ),
-                  ),
-              ],
-            ),
-          ),
-      ],
+      ),
     );
   }
 
