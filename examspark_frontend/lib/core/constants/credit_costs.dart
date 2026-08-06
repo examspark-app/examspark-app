@@ -9,7 +9,7 @@ class CreditCosts {
   static const double internalRupeePerCredit = 0.15;
 
   // Recording / Audio Upload — per-minute (actual length)
-  static const int recordCreditsPerMinute = 1;
+  static const int recordCreditsPerMinute = 2;
   /// Hard max for Record / audio upload (3 hours).
   static const int recordMaxMinutes = 180;
   // Legacy band constants (pre–per-minute) — reference / old imports only.
@@ -84,7 +84,7 @@ class CreditCosts {
   static const int mindMapGeneration = mindMap;
   static const int qwen3Text = askAiNormal;
 
-  /// Recording / Audio Upload: 1 credit per minute (clamp 1–180).
+  /// Recording / Audio Upload: 2 credits per minute (clamp 1–180).
   static int recordCreditsForDurationMinutes(int minutes) {
     final clamped = minutes.clamp(1, recordMaxMinutes);
     return clamped * recordCreditsPerMinute;

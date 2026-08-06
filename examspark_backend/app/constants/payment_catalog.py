@@ -7,19 +7,17 @@ Paid plan credits are that plan's package only — never Free 50 stacked.
 
 PLAN_PRICES_PAISE: dict[str, int] = {
     "plan_199": 19_900,
-    "plan_299": 29_900,  # optional re-entry tier
     "plan_499": 49_900,
     "plan_999": 99_900,
-    "teacher": 199_900,
+    "teacher": 299_900,
 }
 
 PLAN_MONTHLY_CREDITS: dict[str, int] = {
     "free": 50,
-    "plan_199": 1500,
-    "plan_299": 1500,
-    "plan_499": 3500,
-    "plan_999": 8000,
-    "teacher": 16000,
+    "plan_199": 400,
+    "plan_499": 1000,
+    "plan_999": 2000,
+    "teacher": 10000,
 }
 
 PACK_PRICES_PAISE: dict[str, int] = {
@@ -65,7 +63,6 @@ def credits_for_pack(pack_id: str) -> int:
 # Subscriptions for plans; one-time in-app products for credit packs.
 PLAN_TO_PLAY_PRODUCT: dict[str, str] = {
     "plan_199": "examspark_plan_199",
-    "plan_299": "examspark_plan_299",
     "plan_499": "examspark_plan_499",
     "plan_999": "examspark_plan_999",
     "teacher": "examspark_plan_teacher",

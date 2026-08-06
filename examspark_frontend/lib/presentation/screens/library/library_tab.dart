@@ -15,11 +15,13 @@ class LibraryTab extends StatefulWidget {
   final OpenWorkspace onOpenWorkspace;
   /// When this tab becomes visible again (IndexedStack), reload history.
   final bool isActive;
+  final VoidCallback? onOpenDrawer;
 
   const LibraryTab({
     super.key,
     required this.onOpenWorkspace,
     this.isActive = true,
+    this.onOpenDrawer,
   });
 
   @override
@@ -240,6 +242,11 @@ class _LibraryTabState extends State<LibraryTab> {
       appBar: AppTopBar(
         title: 'Library',
         creditsBalance: _creditsBalance,
+        leading: IconButton(
+          icon: const Icon(Icons.menu_rounded),
+          tooltip: 'Menu',
+          onPressed: widget.onOpenDrawer,
+        ),
         onSearchTap: () => showAppSearchOverlay(
           context,
           onOpenLecture: widget.onOpenWorkspace,

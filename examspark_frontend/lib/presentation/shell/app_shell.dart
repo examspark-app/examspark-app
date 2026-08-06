@@ -12,6 +12,9 @@ import 'package:examspark_frontend/presentation/screens/library/library_tab.dart
 import 'package:examspark_frontend/presentation/screens/profile/profile_tab.dart';
 import 'package:examspark_frontend/presentation/screens/progress/progress_tab.dart';
 import 'package:examspark_frontend/presentation/widgets/study_workspace.dart';
+import 'package:examspark_frontend/core/services/home_session_bridge.dart';
+import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/presentation/widgets/brand_mark.dart';
 
 /// The 5-tab app shell — single navigation root after login.
 /// Home · Library · Groups · Progress · Profile — nothing more.
@@ -51,6 +54,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
   late int _selectedIndex;
   _WorkspaceRequest? _openWorkspace;
   bool _restoredFromDisk = false;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+  bool _isTeacher = false;
+  List<Map<String, dynamic>>? _recentSessions;
+  bool _loadingSessions = false;
 
   static const _destinations = [
     (
@@ -89,7 +96,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     final userId = SupabaseClient.instance.currentUser?.id;
     if (userId != null) {
       SessionLiveSync.instance.start(userId);
+      _loadTeacherFlag(userId);
     }
+    _loadRecentSessions();
     HomeAskBridge.instance.addListener(_onHomeAskFromAnywhere);
     OpenWorkspaceBridge.instance.addListener(_onOpenWorkspaceFromBridge);
     WidgetsBinding.instance.addPostFrameCallback((_) => _restoreFromDisk());
@@ -137,6 +146,232 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         }
       }
     }
+  }
+
+  Future<void> _loadTeacherFlag(String userId) async {
+    try {
+      final profile = await SupabaseClient.instance.getUserProfile(userId);
+      if (!mounted) return;
+      setState(() => _isTeacher = profile?['role'] == 'teacher');
+    } catch (_) {}
+  }
+
+  Future<void> _loadRecentSessions() async {
+    if (_loadingSessions) return;
+    setState(() => _loadingSessions = true);
+    try {
+      final sessions = await LectureService.instance.homeAiListSessions(limit: 15);
+      if (!mounted) return;
+      setState(() {
+        _recentSessions = sessions;
+        _loadingSessions = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingSessions = false);
+    }
+  }
+
+  Widget _buildAppDrawer(BuildContext context) {
+    final iconColor = AppTheme.getPrimaryText(context);
+    return Drawer(
+      width: 260,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 16),
+              child: BrandMark(tileSize: 30, fontSize: 15),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _goToTab(0);
+                    HomeSessionBridge.instance.requestNewChat();
+                  },
+                  icon: const Icon(Icons.add_comment_rounded, size: 16),
+                  label: const Text('New chat', style: TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                children: [
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    leading: Icon(Icons.home_outlined, size: 20, color: iconColor),
+                    title: const Text('Home', style: TextStyle(fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _goToTab(0);
+                    },
+                  ),
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    leading: Icon(Icons.folder_outlined, size: 20, color: iconColor),
+                    title: const Text('Library', style: TextStyle(fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _goToTab(1);
+                    },
+                  ),
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    leading: Icon(Icons.groups_outlined, size: 20, color: iconColor),
+                    title: const Text('Groups', style: TextStyle(fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _goToTab(2);
+                    },
+                  ),
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    leading: Icon(Icons.trending_up_rounded, size: 20, color: iconColor),
+                    title: const Text('Progress', style: TextStyle(fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _goToTab(3);
+                    },
+                  ),
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    leading: Icon(Icons.person_outline, size: 20, color: iconColor),
+                    title: const Text('Profile', style: TextStyle(fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _goToTab(4);
+                    },
+                  ),
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    leading: Icon(Icons.bolt_outlined, size: 20, color: iconColor),
+                    title: Text(
+                      'Credits — ${SessionLiveSync.instance.creditsBalance}',
+                      style: const TextStyle(fontSize: 14),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/credits/history');
+                    },
+                  ),
+                  if (_isTeacher)
+                    ListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      leading: Icon(Icons.school_rounded, size: 20, color: iconColor),
+                      title: const Text('Teacher Dashboard', style: TextStyle(fontSize: 14)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, '/teacher');
+                      },
+                    ),
+                  const Divider(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
+                    child: Text(
+                      'RECENT CHATS',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.getSecondaryText(context),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                    ),
+                  ),
+                  if (_loadingSessions)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    )
+                  else if (_recentSessions == null || _recentSessions!.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Text(
+                        'No chats yet',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.getSecondaryText(context),
+                            ),
+                      ),
+                    )
+                  else
+                    for (final s in _recentSessions!)
+                      ListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        leading: Icon(Icons.chat_bubble_outline, size: 18, color: iconColor),
+                        title: Text(
+                          (s['title'] as String?)?.trim().isNotEmpty == true
+                              ? s['title'] as String
+                              : 'Untitled chat',
+                          style: const TextStyle(fontSize: 13.5),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: IconButton(
+                          icon: Icon(Icons.close_rounded, size: 16, color: AppTheme.getSecondaryText(context)),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                          onPressed: () async {
+                            final id = s['id']?.toString();
+                            if (id == null || id.isEmpty) return;
+                            setState(() => _recentSessions!.remove(s));
+                            try {
+                              await LectureService.instance.homeAiDeleteSession(id);
+                            } catch (_) {}
+                          },
+                        ),
+                        onTap: () {
+                          Navigator.pop(context);
+                          _goToTab(0);
+                          final id = s['id']?.toString();
+                          if (id != null && id.isNotEmpty) {
+                            HomeSessionBridge.instance.requestRestoreSession(id);
+                          }
+                        },
+                      ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 10),
+              child: Text(
+                'Sonaxia can make mistakes. Check important info.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.getSecondaryText(context),
+                      fontSize: 10.5,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _persistUiSession() async {
@@ -277,32 +512,48 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
         onGoToTab: _goToTab,
         isActive: _selectedIndex == 0,
         openLectureId: _openWorkspace?.lectureId,
+        onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
       ),
       LibraryTab(
         key: const ValueKey('tab-library'),
         onOpenWorkspace: (id, title, subject) =>
             _openStudyWorkspace(id, title, subject, fullPage: true),
         isActive: _selectedIndex == 1,
+        onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
       ),
       GroupsTab(
         key: const ValueKey('tab-groups'),
         onGoToTab: _goToTab,
         isActive: _selectedIndex == 2,
+        onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
       ),
       ProgressTab(
         key: const ValueKey('tab-progress'),
         isActive: _selectedIndex == 3,
+        onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
       ),
       ProfileTab(
         key: const ValueKey('tab-profile'),
         onGoToTab: _goToTab,
         isActive: _selectedIndex == 4,
+        onOpenDrawer: () => _scaffoldKey.currentState?.openDrawer(),
       ),
     ];
   }
 
   @override
   Widget build(BuildContext context) {
+    return PopScope(
+      canPop: _selectedIndex == 0,
+      onPopInvoked: (didPop) {
+        if (didPop) return;
+        _goToTab(0);
+      },
+      child: _buildBody(context),
+    );
+  }
+
+  Widget _buildBody(BuildContext context) {
     final tabs = _buildTabs();
     final stack = IndexedStack(index: _selectedIndex, children: tabs);
     final ws = _openWorkspace;
@@ -323,55 +574,47 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
 
     if (Responsive.useSideNav(context)) {
       return Scaffold(
+        key: _scaffoldKey,
+        drawer: _buildAppDrawer(context),
         body: Row(
           children: [
             NavigationRail(
               selectedIndex: _selectedIndex,
               onDestinationSelected: _goToTab,
               labelType: NavigationRailLabelType.none,
-              minWidth: 80, // ChatGPT style spacious sidebar
+              minWidth: 80,
               backgroundColor: Theme.of(context).scaffoldBackgroundColor,
               indicatorColor: AppTheme.getAccentTint(context),
               indicatorShape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12), // Softer borders
+                borderRadius: BorderRadius.circular(12),
               ),
-              leading: Padding(
-                padding: const EdgeInsets.only(top: 24, bottom: 16),
-                child: Container(
-                  width: 40,
-                  height: 40, // Larger touch target
-                  decoration: BoxDecoration(
-                    color: AppTheme.getPrimaryText(context), // Monochrome contrast
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  alignment: Alignment.center,
-                  child: Text(
-                    'E',
-                    style: TextStyle(
-                      color: Theme.of(context).scaffoldBackgroundColor,
-                      fontSize: 20,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
+              leading: const Padding(
+                padding: EdgeInsets.only(top: 24, bottom: 16),
+                child: BrandMark(tileSize: 40, fontSize: 20),
               ),
               destinations: [
                 for (final d in _destinations)
                   NavigationRailDestination(
-                    icon: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Icon(
-                        d.icon,
-                        color: AppTheme.getSecondaryText(context),
-                        size: 26,
+                    icon: Tooltip(
+                      message: d.label,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Icon(
+                          d.icon,
+                          color: AppTheme.getSecondaryText(context),
+                          size: 26,
+                        ),
                       ),
                     ),
-                    selectedIcon: Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 4),
-                      child: Icon(
-                        d.selectedIcon,
-                        color: AppTheme.getPrimaryText(context),
-                        size: 26,
+                    selectedIcon: Tooltip(
+                      message: d.label,
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 4),
+                        child: Icon(
+                          d.selectedIcon,
+                          color: AppTheme.getPrimaryText(context),
+                          size: 26,
+                        ),
                       ),
                     ),
                     label: Text(d.label),
@@ -379,8 +622,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               ],
             ),
             VerticalDivider(
-              width: 1, 
-              thickness: 1, 
+              width: 1,
+              thickness: 1,
               color: AppTheme.getCardBorder(context),
             ),
             Expanded(child: mainContent),
@@ -396,35 +639,11 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       );
     }
 
+    // Mobile — drawer-only navigation (ChatGPT style). No bottom tab bar.
     return Scaffold(
+      key: _scaffoldKey,
+      drawer: _buildAppDrawer(context),
       body: stack,
-      bottomNavigationBar: NavigationBar(
-        selectedIndex: _selectedIndex,
-        onDestinationSelected: _goToTab,
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-        indicatorColor: AppTheme.getAccentTint(context),
-        indicatorShape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12), // Softer touch target
-        ),
-        height: 80, // Comfortable spacing
-        elevation: 0,
-        destinations: [
-          for (final d in _destinations)
-            NavigationDestination(
-              icon: Icon(
-                d.icon,
-                color: AppTheme.getSecondaryText(context),
-                size: 26,
-              ),
-              selectedIcon: Icon(
-                d.selectedIcon,
-                color: AppTheme.getPrimaryText(context),
-                size: 26,
-              ),
-              label: d.label,
-            ),
-        ],
-      ),
     );
   }
 }

@@ -14,6 +14,7 @@ import 'package:examspark_frontend/core/errors/lecture_user_message.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/home_ask_bridge.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/services/home_session_bridge.dart';
 import 'package:examspark_frontend/core/services/notification_service.dart';
 import 'package:examspark_frontend/core/services/notification_inbox_controller.dart';
 import 'package:examspark_frontend/core/services/session_live_sync.dart';
@@ -43,6 +44,7 @@ typedef OpenWorkspace = void Function(String lectureId, String title, String? su
 class HomeTab extends StatefulWidget {
   final OpenWorkspace onOpenWorkspace;
   final ValueChanged<int> onGoToTab;
+  final VoidCallback? onOpenDrawer;
   /// When Home becomes visible again (IndexedStack), reload recent history.
   final bool isActive;
   /// Open Study Workspace lecture — passed to Home AI as Priority 1 RAG.
@@ -54,6 +56,7 @@ class HomeTab extends StatefulWidget {
     required this.onGoToTab,
     this.isActive = true,
     this.openLectureId,
+    this.onOpenDrawer,
   });
 
   @override
@@ -84,6 +87,9 @@ class _ChatBubble {
   final bool isError;
   /// Text query to resend (Retry).
   final String? retryQuery;
+  /// AI-suggested follow-up questions (sequential reveal chips).
+  final List<String> suggestedQuestions;
+  final String? practiceQuestion;
   /// In-memory photo for this session's user bubble (not persisted to disk).
   final Uint8List? imageBytes;
   final String? imageFilename;
@@ -105,13 +111,16 @@ class _ChatBubble {
     List<String>? recommendedTools,
     this.isError = false,
     this.retryQuery,
-    this.imageBytes,
+    List<String>? suggestedQuestions,
+    this.practiceQuestion,
+    this.imageBytes, 
     this.imageFilename,
     this.retryVisionBytes,
     this.retryVisionFilename,
   })  : id = id ?? UniqueKey().toString(),
         toolStates = toolStates ?? {},
         recommendedTools = recommendedTools ?? [],
+        suggestedQuestions = suggestedQuestions ?? const [],
         activeToolType = null;
 }
 
@@ -194,6 +203,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       _homeAiSessionId = _sessionHomeAiId;
     }
     SessionLiveSync.instance.addListener(_onSessionLive);
+    HomeSessionBridge.instance.addListener(_onHomeSessionBridge);
     HomeAskBridge.instance.addListener(_onHomeAskBridge);
     NotificationInboxController.instance.addListener(_onInboxChanged);
     unawaited(NotificationInboxController.instance.start());
@@ -342,6 +352,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     WidgetsBinding.instance.removeObserver(this);
     HomeAskBridge.instance.removeListener(_onHomeAskBridge);
     SessionLiveSync.instance.removeListener(_onSessionLive);
+    HomeSessionBridge.instance.removeListener(_onHomeSessionBridge);
     NotificationInboxController.instance.removeListener(_onInboxChanged);
     _scrollController.dispose();
     super.dispose();
@@ -355,7 +366,16 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       SessionLiveSync.instance.refreshAll();
     }
   }
-
+void _onHomeSessionBridge() {
+    if (!mounted) return;
+    if (HomeSessionBridge.instance.takePendingNewChat()) {
+      _startNewChat();
+    }
+    final id = HomeSessionBridge.instance.takePendingRestoreSessionId();
+    if (id != null && id.isNotEmpty) {
+      _restoreStudySession(id);
+    }
+  }
   void _onSessionLive() {
     if (!mounted) return;
     _applySessionLive();
@@ -622,6 +642,14 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       return;
     }
 
+    final suggestedQuestions = (result['suggested_questions'] as List?)
+            ?.map((e) => e.toString())
+            .where((q) => q.trim().isNotEmpty)
+            .toList() ??
+        const <String>[];
+        final practiceQuestion =
+        (result['practice_question'] as String?)?.trim();
+
     setState(() {
       if (convLang != null && convLang.isNotEmpty) {
         _conversationLanguage = convLang;
@@ -635,6 +663,10 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         false,
         showStudyActions: true,
         trustLine: trust,
+        suggestedQuestions: suggestedQuestions,
+        practiceQuestion: (practiceQuestion?.isNotEmpty ?? false)
+            ? practiceQuestion
+            : null,
         // Stream path already showed tokens live — never re-animate on scroll.
         animateReveal: animateReveal,
         revealComplete: !animateReveal,
@@ -897,6 +929,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       final result = await LectureService.instance.homeAiVision(
         imageBytes: bytes,
         filename: filename,
+        sessionId: _homeAiSessionId,
       );
       if (!mounted) return;
       _applyHomeAiSuccess(result, animateReveal: true);
@@ -1186,51 +1219,24 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     return Scaffold(
       appBar: AppTopBar(
         showLogo: true,
-        creditsBalance: _creditsBalance,
         userName: _userName,
+        leading: Responsive.isMobile(context)
+            ? IconButton(
+                icon: const Icon(Icons.menu_rounded),
+                tooltip: 'Menu',
+                onPressed: widget.onOpenDrawer,
+              )
+            : null,
         onSearchTap: Responsive.isMobile(context)
             ? null
             : () => showAppSearchOverlay(
                   context,
                   onOpenLecture: widget.onOpenWorkspace,
                 ),
+        onNewChatTap: _startNewChat,
         onNotificationTap: _openNotifications,
         notificationUnreadCount:
             NotificationInboxController.instance.unreadCount,
-        onCreditsTap: () => Navigator.pushNamed(context, '/credits/history'),
-        onProfileTap: () => widget.onGoToTab(4),
-        trailing: [
-          if (_isTeacher)
-            IconButton(
-              icon: const Icon(Icons.school_rounded),
-              tooltip: 'Teacher Dashboard',
-              onPressed: () => Navigator.pushNamed(context, '/teacher'),
-            ),
-          IconButton(
-            icon: const Icon(Icons.history_rounded),
-            tooltip: 'Study History',
-            onPressed: _isSending ? null : _openStudyHistory,
-          ),
-          IconButton(
-            icon: const Icon(Icons.add_comment_rounded),
-            tooltip: 'New chat',
-            onPressed: _isSending ? null : _startNewChat,
-          ),
-          if (!Responsive.isMobile(context))
-            IconButton(
-              icon: _isRefreshing
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.refresh_rounded),
-              tooltip: 'Refresh library',
-              onPressed: _isRefreshing
-                  ? null
-                  : () => _loadUserData(showSpinner: true),
-            ),
-        ],
       ),
       body: Column(
         children: [
@@ -1607,25 +1613,11 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                           ),
                           const SizedBox(height: 8),
                         ],
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            color: _userBubbleColor(context),
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: SelectableText(
-                            bubble.text,
-                            style: TextStyle(
-                              color: _userBubbleTextColor(context),
-                              fontSize: 15.5,
-                              height: 1.5,
-                              letterSpacing: 0.1,
-                            ),
-                          ),
-                        ),
+                        _CollapsibleUserText(
+                         text: bubble.text,
+                         textColor: _userBubbleTextColor(context),
+                        bubbleColor: _userBubbleColor(context),
+                       ),
                       ],
                     ),
                   ),
@@ -1636,6 +1628,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                       key: ValueKey('ai-${bubble.id}'),
                       text: bubble.text,
                       trustLine: bubble.trustLine,
+                      onSelectAi: _onHomeSelectAi,
                       animate: bubble.animateReveal && !bubble.revealComplete,
                       visualPayload: bubble.visualPayload,
                       onRevealComplete: () {
@@ -1646,34 +1639,71 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
                         });
                         _scrollToBottom();
                       },
-                      trailing: bubble.showStudyActions
-                          ? (bubble.responseId != null &&
-                                  bubble.responseId!.isNotEmpty
-                              ? HomeStudyChipBar(
-                                  toolStates: bubble.toolStates,
-                                  activeToolType: bubble.activeToolType,
-                                  recommended: bubble.recommendedTools,
-                                  onTap: (chip) =>
-                                      _onPhase4cChip(chip, bubble),
-                                )
-                              : Wrap(
-                                  spacing: 6,
-                                  runSpacing: 6,
-                                  children: [
-                                    for (final label
-                                        in _studyActionsFor(bubble))
-                                      ActionChip(
-                                        label: Text(
-                                          label,
-                                          style: const TextStyle(fontSize: 12),
-                                        ),
-                                        onPressed: () {
-                                          _onStudyAction(label, bubble);
-                                        },
-                                        visualDensity: VisualDensity.compact,
-                                      ),
-                                  ],
-                                ))
+                      trailing: (bubble.showStudyActions ||
+                              bubble.suggestedQuestions.isNotEmpty)
+                          ? Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                if (bubble.showStudyActions)
+                                  (bubble.responseId != null &&
+                                          bubble.responseId!.isNotEmpty
+                                      ? HomeStudyChipBar(
+                                          toolStates: bubble.toolStates,
+                                          activeToolType: bubble.activeToolType,
+                                          recommended: bubble.recommendedTools,
+                                          onTap: (chip) =>
+                                              _onPhase4cChip(chip, bubble),
+                                        )
+                                      : Wrap(
+                                          spacing: 6,
+                                          runSpacing: 6,
+                                          children: [
+                                            for (final label
+                                                in _studyActionsFor(bubble))
+                                              ActionChip(
+                                                label: Text(
+                                                  label,
+                                                  style: const TextStyle(
+                                                      fontSize: 12),
+                                                ),
+                                                onPressed: () {
+                                                  _onStudyAction(label, bubble);
+                                                },
+                                                visualDensity:
+                                                    VisualDensity.compact,
+                                              ),
+                                          ],
+                                        )),
+                                // Pehle add kiya tha (Column ke andar):
+                                if (bubble.suggestedQuestions.isNotEmpty) ...[
+                                  const SizedBox(height: 10),
+                                  _SuggestedQuestionsRow(
+                                    questions: bubble.suggestedQuestions,
+                                    onTap: (q) => _handleSend(q),
+                                  ),
+                                ],
+
+// Iske turant baad, usi Column ke andar add karo:
+                                if (bubble.practiceQuestion != null) ...[
+                                  const SizedBox(height: 10),
+                                  _PracticeQuestionBox(
+                                    question: bubble.practiceQuestion!,
+                                    onSubmit: (studentAnswer) {
+                                      final wrapped =
+                                          'PRACTICE ANSWER CHECK — you asked '
+                                          'this practice question: "${bubble.practiceQuestion}" '
+                                          '(based on your explanation: '
+                                          '"${bubble.text.length > 600 ? bubble.text.substring(0, 600) : bubble.text}"). '
+                                          'The student answered: "$studentAnswer". '
+                                          'Judge it like a teacher per the '
+                                          'JUDGING MODE rules.';
+                                      _handleSend(wrapped);
+                                    },
+                                  ),
+                                ],
+                              ],
+                            )
                           : null,
                     ),
         );
@@ -1877,7 +1907,347 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       _notificationsSheetOpen = false;
     }
   }
+ Widget _buildAppDrawer(BuildContext context) {
+    return Drawer(
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'S',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Sonaxia',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 15,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                children: [
+                  ListTile(
+                    leading: const Icon(Icons.bolt_outlined),
+                    title: Text('Credits — $_creditsBalance'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/credits/history');
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.history_rounded),
+                    title: const Text('Recent chats'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _openStudyHistory();
+                    },
+                  ),
+                  if (_isTeacher)
+                    ListTile(
+                      leading: const Icon(Icons.school_rounded),
+                      title: const Text('Teacher Dashboard'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, '/teacher');
+                      },
+                    ),
+                  ListTile(
+                    leading: const Icon(Icons.person_outline),
+                    title: const Text('Profile'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.onGoToTab(4);
+                    },
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isSending
+                      ? null
+                      : () {
+                          Navigator.pop(context);
+                          _startNewChat();
+                        },
+                  icon: const Icon(Icons.add_comment_rounded, size: 18),
+                  label: const Text('New chat'),
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+              child: Text(
+                'Sonaxia can make mistakes. Check important info.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.getSecondaryText(context),
+                      fontSize: 11,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  List<Map<String, dynamic>>? _recentSessions;
+  bool _loadingSessions = false;
 
+  Future<void> _loadRecentSessionsForDrawer() async {
+    if (_loadingSessions) return;
+    setState(() => _loadingSessions = true);
+    try {
+      final sessions = await LectureService.instance.homeAiListSessions(limit: 15);
+      if (!mounted) return;
+      setState(() {
+        _recentSessions = sessions;
+        _loadingSessions = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _loadingSessions = false);
+    }
+  }
+
+  Widget _buildMobileDrawer(BuildContext context) {
+    if (_recentSessions == null && !_loadingSessions) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _loadRecentSessionsForDrawer();
+      });
+    }
+    final iconColor = AppTheme.getPrimaryText(context);
+
+    return Drawer(
+      width: 260,
+      child: SafeArea(
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentColor,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'S',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Text(
+                    'Sonaxia',
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 14,
+                        ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 12),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  onPressed: _isSending
+                      ? null
+                      : () {
+                          Navigator.pop(context);
+                          _startNewChat();
+                        },
+                  icon: const Icon(Icons.add_comment_rounded, size: 16),
+                  label: const Text('New chat', style: TextStyle(fontSize: 13)),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 10),
+            const Divider(height: 1),
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 6),
+                children: [
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    leading: Icon(Icons.folder_outlined, size: 20, color: iconColor),
+                    title: const Text('Library', style: TextStyle(fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.onGoToTab(1);
+                    },
+                  ),
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    leading: Icon(Icons.groups_outlined, size: 20, color: iconColor),
+                    title: const Text('Groups', style: TextStyle(fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.onGoToTab(2);
+                    },
+                  ),
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    leading: Icon(Icons.trending_up_rounded, size: 20, color: iconColor),
+                    title: const Text('Progress', style: TextStyle(fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.onGoToTab(3);
+                    },
+                  ),
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    leading: Icon(Icons.person_outline, size: 20, color: iconColor),
+                    title: const Text('Profile', style: TextStyle(fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      widget.onGoToTab(4);
+                    },
+                  ),
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    leading: Icon(Icons.bolt_outlined, size: 20, color: iconColor),
+                    title: Text('Credits — $_creditsBalance', style: const TextStyle(fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/credits/history');
+                    },
+                  ),
+                  if (_isTeacher)
+                    ListTile(
+                      dense: true,
+                      visualDensity: VisualDensity.compact,
+                      leading: Icon(Icons.school_rounded, size: 20, color: iconColor),
+                      title: const Text('Teacher Dashboard', style: TextStyle(fontSize: 14)),
+                      onTap: () {
+                        Navigator.pop(context);
+                        Navigator.pushNamed(context, '/teacher');
+                      },
+                    ),
+                  const Divider(height: 20),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
+                    child: Text(
+                      'RECENT CHATS',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.getSecondaryText(context),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.5,
+                          ),
+                    ),
+                  ),
+                  if (_loadingSessions)
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 16),
+                      child: Center(
+                        child: SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      ),
+                    )
+                  else if (_recentSessions == null || _recentSessions!.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      child: Text(
+                        'No chats yet',
+                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                              color: AppTheme.getSecondaryText(context),
+                            ),
+                      ),
+                    )
+                  else
+                    for (final s in _recentSessions!)
+                      ListTile(
+                        dense: true,
+                        visualDensity: VisualDensity.compact,
+                        leading: Icon(Icons.chat_bubble_outline, size: 18, color: iconColor),
+                        title: Text(
+                          (s['title'] as String?)?.trim().isNotEmpty == true
+                              ? s['title'] as String
+                              : 'Untitled chat',
+                          style: const TextStyle(fontSize: 13.5),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        onTap: () async {
+                          Navigator.pop(context);
+                          final id = s['id']?.toString();
+                          if (id != null && id.isNotEmpty) {
+                            await _restoreStudySession(id);
+                          }
+                        },
+                      ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Padding(
+              padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 10),
+              child: Text(
+                'Sonaxia can make mistakes. Check important info.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.getSecondaryText(context),
+                      fontSize: 10.5,
+                    ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
   void _showComingSoon(String feature) {
     AppToast.showSnackBar(context, 
       SnackBar(content: Text('$feature — coming soon')),
@@ -1995,18 +2365,8 @@ class _UploadOptionsSheet extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
       dense: true,
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: AppTheme.getAccentTint(context),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        alignment: Alignment.center,
-        child: Icon(icon, color: AppTheme.accentColor, size: 20),
-      ),
-      title: Text(label),
-      subtitle: Text(subtitle, style: const TextStyle(fontSize: 12)),
+      leading: Icon(icon, color: AppTheme.getPrimaryText(context), size: 20),
+      title: Text(label, style: const TextStyle(fontSize: 15)),
       onTap: onTap,
     );
   }
@@ -2023,22 +2383,8 @@ class _UploadOptionsSheet extends StatelessWidget {
       contentPadding: EdgeInsets.zero,
       visualDensity: VisualDensity.compact,
       dense: true,
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: AppTheme.getAccentTint(context),
-          borderRadius: BorderRadius.circular(10),
-        ),
-        alignment: Alignment.center,
-        child: Icon(icon, color: AppTheme.accentColor, size: 20),
-      ),
-      title: Text(label),
-      subtitle: locked
-          ? const Text('₹499+ Plan', style: TextStyle(fontSize: 12))
-          : (subtitle != null
-              ? Text(subtitle, style: const TextStyle(fontSize: 12))
-              : null),
+      leading: Icon(icon, color: AppTheme.getPrimaryText(context), size: 20),
+      title: Text(label, style: const TextStyle(fontSize: 15)),
       trailing: locked ? const Icon(Icons.lock_outline, size: 18) : null,
       onTap: () {
         if (locked) {
@@ -2047,6 +2393,271 @@ class _UploadOptionsSheet extends StatelessWidget {
         }
         onOptionSelected(inputMethod);
       },
+    );
+  }
+ }
+  /// User's long question collapses to 2 lines with a "more" toggle —
+/// keeps long pasted questions from pushing the chat down (Claude-style).
+class _CollapsibleUserText extends StatefulWidget {
+  final String text;
+  final Color textColor;
+  final Color bubbleColor;
+
+  const _CollapsibleUserText({
+    required this.text,
+    required this.textColor,
+    required this.bubbleColor,
+  });
+
+  @override
+  State<_CollapsibleUserText> createState() => _CollapsibleUserTextState();
+}
+
+class _CollapsibleUserTextState extends State<_CollapsibleUserText> {
+  bool _expanded = false;
+  static const int _collapsedLines = 2;
+
+  @override
+  Widget build(BuildContext context) {
+    final style = TextStyle(
+      color: widget.textColor,
+      fontSize: 15.5,
+      height: 1.5,
+      letterSpacing: 0.1,
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final span = TextSpan(text: widget.text, style: style);
+        final tp = TextPainter(
+          text: span,
+          maxLines: _collapsedLines,
+          textDirection: TextDirection.ltr,
+        )..layout(maxWidth: constraints.maxWidth - 32);
+        final isOverflowing = tp.didExceedMaxLines;
+
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: widget.bubbleColor,
+            borderRadius: BorderRadius.circular(18),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SelectableText(
+                widget.text,
+                style: style,
+                maxLines: _expanded ? null : _collapsedLines,
+              ),
+              if (isOverflowing) ...[
+                const SizedBox(height: 4),
+                GestureDetector(
+                  onTap: () => setState(() => _expanded = !_expanded),
+                  child: Text(
+                    _expanded ? 'Show less' : 'Show more',
+                    style: TextStyle(
+                      color: widget.textColor.withValues(alpha: 0.75),
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        );
+      },
+    );
+  }
+ }
+/// AI-suggested follow-up question chips — reveal one at a time
+/// (teacher-style "ek baat, phir agli"), not all at once.
+class _SuggestedQuestionsRow extends StatefulWidget {
+  final List<String> questions;
+  final ValueChanged<String> onTap;
+
+  const _SuggestedQuestionsRow({
+    required this.questions,
+    required this.onTap,
+  });
+
+  @override
+  State<_SuggestedQuestionsRow> createState() =>
+      _SuggestedQuestionsRowState();
+}
+
+class _SuggestedQuestionsRowState extends State<_SuggestedQuestionsRow> {
+  int _visibleCount = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _revealNext();
+  }
+
+  void _revealNext() {
+    if (!mounted || _visibleCount >= widget.questions.length) return;
+    Future.delayed(
+      Duration(milliseconds: _visibleCount == 0 ? 200 : 350),
+      () {
+        if (!mounted) return;
+        setState(() => _visibleCount++);
+        _revealNext();
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < _visibleCount; i++)
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 250),
+            opacity: 1,
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: InkWell(
+                borderRadius: BorderRadius.circular(10),
+                onTap: () => widget.onTap(widget.questions[i]),
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
+                  decoration: BoxDecoration(
+                    border: Border.all(color: AppTheme.getCardBorder(context)),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          widget.questions[i],
+                          style: const TextStyle(fontSize: 13.5),
+                        ),
+                      ),
+                      Icon(
+                        Icons.arrow_forward_rounded,
+                        size: 16,
+                        color: AppTheme.getSecondaryText(context),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+/// Teacher-style practice check — question + answer box + submit.
+class _PracticeQuestionBox extends StatefulWidget {
+  final String question;
+  final ValueChanged<String> onSubmit;
+
+  const _PracticeQuestionBox({
+    required this.question,
+    required this.onSubmit,
+  });
+
+  @override
+  State<_PracticeQuestionBox> createState() => _PracticeQuestionBoxState();
+}
+
+class _PracticeQuestionBoxState extends State<_PracticeQuestionBox> {
+  final TextEditingController _controller = TextEditingController();
+  bool _submitted = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final text = _controller.text.trim();
+    if (text.isEmpty || _submitted) return;
+    setState(() => _submitted = true);
+    widget.onSubmit(text);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.getAccentTint(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppTheme.accentColor.withOpacity(0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.school_outlined, size: 16, color: AppTheme.accentColor),
+              const SizedBox(width: 6),
+              Text(
+                'Quick check',
+                style: TextStyle(
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.5,
+                  color: AppTheme.accentColor,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            widget.question,
+            style: const TextStyle(fontSize: 13.5, height: 1.4),
+          ),
+          const SizedBox(height: 10),
+          if (!_submitted)
+            TextField(
+              controller: _controller,
+              minLines: 1,
+              maxLines: 3,
+              style: const TextStyle(fontSize: 13.5),
+              decoration: InputDecoration(
+                hintText: 'Type your answer…',
+                isDense: true,
+                filled: true,
+                fillColor: AppTheme.getCardBackground(context),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(10),
+                  borderSide: BorderSide.none,
+                ),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.arrow_upward_rounded, size: 18),
+                  onPressed: _submit,
+                ),
+              ),
+              onSubmitted: (_) => _submit(),
+            )
+          else
+            Text(
+              'Answer sent — check the reply below.',
+              style: TextStyle(
+                fontSize: 12,
+                color: AppTheme.getSecondaryText(context),
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+        ],
+      ),
     );
   }
 }

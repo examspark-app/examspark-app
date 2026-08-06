@@ -236,10 +236,22 @@ class _Phase4cToolPageState extends State<_Phase4cToolPage> {
           .toList();
       return SizedBox(height: 320, child: FlashcardStackView(flashcards: parsed));
     }
+    // FIX: this used to be TWO separate `if (data['root'] is Map)` blocks —
+    // the first (unreachable-in-intent) one returned MindMapView with no
+    // height constraint directly inside a ListView, which is why the Mind
+    // Map chip rendered completely blank. Dart always ran that broken first
+    // block since it matched first; the second block (with the correct
+    // SizedBox(height: 500) wrapper) was unreachable dead code. Merged into
+    // one correct block below.
     if (data['root'] is Map) {
-      return MindMapView(
-        title: (data['title'] as String?) ?? 'Mind Map',
-        root: MindMapNodeData.fromJson(Map<String, dynamic>.from(data['root'] as Map)),
+      return SizedBox(
+        height: 500,
+        child: MindMapView(
+          title: (data['title'] as String?) ?? 'Mind Map',
+          root: MindMapNodeData.fromJson(
+            Map<String, dynamic>.from(data['root'] as Map),
+          ),
+        ),
       );
     }
     final md = (data['markdown'] as String?) ??

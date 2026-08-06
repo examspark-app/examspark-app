@@ -9,7 +9,7 @@ round up, max 180). YouTube stays banded (10/20/40).
 """
 
 # Record / Audio Upload — per-minute (founder-approved Jul 22, 2026).
-RECORD_CREDITS_PER_MINUTE = 1
+RECORD_CREDITS_PER_MINUTE = 2
 # Hard max for Record / audio upload (3 hours). YouTube stays at 90.
 RECORD_MAX_MINUTES = 180
 # Legacy band constants (pre–per-minute) — kept for reference / old imports only.
@@ -89,7 +89,7 @@ YOUTUBE_40_TO_60_MIN = YOUTUBE_60_TO_90_MIN
 
 
 def record_credits_for_duration_minutes(minutes: int) -> int:
-    """1 credit per minute (round up already done by caller). Clamp 1–180."""
+    """2 credits per minute (round up already done by caller). Clamp 1–180."""
     clamped = max(1, min(RECORD_MAX_MINUTES, int(minutes)))
     return clamped * RECORD_CREDITS_PER_MINUTE
 

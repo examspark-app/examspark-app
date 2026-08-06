@@ -21,6 +21,7 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   final int notificationUnreadCount;
   final VoidCallback? onCreditsTap;
   final VoidCallback? onProfileTap;
+  final VoidCallback? onNewChatTap;
   final List<Widget>? trailing;
   /// Optional back / close control (e.g. Library folder drill-in).
   final Widget? leading;
@@ -37,25 +38,25 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
     this.notificationUnreadCount = 0,
     this.onCreditsTap,
     this.onProfileTap,
+    this.onNewChatTap,
     this.trailing,
     this.leading,
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(60);
+  Size get preferredSize => const Size.fromHeight(48);
 
   @override
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16),
-      decoration: BoxDecoration(
-        color: Theme.of(context).scaffoldBackgroundColor,
-        border: Border(bottom: BorderSide(color: AppTheme.getCardBorder(context))),
+      decoration: const BoxDecoration(
+        color: Colors.transparent,
       ),
       child: SafeArea(
         bottom: false,
         child: SizedBox(
-          height: 60,
+          height: 48,
           child: Row(
             children: [
               if (leading != null) ...[
@@ -78,6 +79,12 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
                   icon: const Icon(Icons.search),
                   onPressed: onSearchTap,
                   tooltip: 'Search',
+                ),
+              if (onNewChatTap != null)
+                IconButton(
+                  icon: const Icon(Icons.add_comment_outlined),
+                  onPressed: onNewChatTap,
+                  tooltip: 'New chat',
                 ),
               if (onNotificationTap != null)
                 IconButton(

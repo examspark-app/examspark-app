@@ -9,12 +9,25 @@ import re
 
 _VISUAL_WORDS = re.compile(
     r"\b("
+    # Direct visual requests (any subject)
     r"graph|diagram|parabola|timeline|flowchart|mind\s*map|"
-    r"process\s*flow|draw|plot|visual|figure|sketch|"
+    r"process\s*flow|draw|plot|visual|figure|sketch|chart|"
     r"show\s+(me\s+)?(a\s+)?(diagram|graph|figure|flowchart)|"
     r"make\s+(a\s+)?(diagram|graph|figure)|"
     r"diagram\s+(do|bana|banao)|"
-    r"graph\s+(do|bana|banao)"
+    r"graph\s+(do|bana|banao)|"
+    # Universal "shape" words — question patterns that benefit from a
+    # visual regardless of subject (math/physics/chemistry/biology/
+    # history/geography/economics/CS all ask questions shaped like this)
+    r"process|cycle|mechanism|structure|steps?\s+of|stages?\s+of|"
+    r"how\s+does|how\s+do|how\s+is|working\s+of|"
+    r"types?\s+of|classification|hierarchy|"
+    r"compare|comparison|difference\s+between|vs\.?|versus|"
+    r"causes?\s+of|effects?\s+of|leads?\s+to|results?\s+in|"
+    r"relationship\s+between|connection\s+between|"
+    r"flow\s+of|sequence\s+of|order\s+of|"
+    r"equation|formula|function|solve|"
+    r"circuit|reaction|pathway|lifecycle|life\s+cycle"
     r")\b",
     re.IGNORECASE,
 )

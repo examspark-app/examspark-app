@@ -358,7 +358,9 @@ class LectureService {
       ..fields['duration_minutes'] = (durationMinutes ?? 60).toString()
       ..files.add(http.MultipartFile.fromBytes('file', fileBytes, filename: filename));
 
-    final streamed = await request.send();
+    final streamed = await request.send().timeout(
+     const Duration(minutes: 30),
+   );
     final response = await http.Response.fromStream(streamed);
 
     if (response.statusCode != 200) {
@@ -838,6 +840,7 @@ class LectureService {
     required Uint8List imageBytes,
     required String filename,
     String? query,
+    String? sessionId,
   }) async {
     if (!AppConfig.isApiConfigured) {
       throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
@@ -855,6 +858,9 @@ class LectureService {
           filename: filename,
         ),
       );
+    if (sessionId != null && sessionId.isNotEmpty) {
+      request.fields['session_id'] = sessionId;
+    }
 
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);

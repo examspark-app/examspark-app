@@ -9,24 +9,24 @@ class AppBrand {
   /// User-facing app name (Home, Login, launcher).
   static const String name = 'Sonaxia';
 
-  /// Mark letter inside the brand tile.
+  /// Mark letter (fallback if image is not available)
   static const String markLetter = 'S';
+
+  /// Path for image placed in `examspark_frontend/web/images/sonaxia_logo.png`
+  static const String logoPath = 'images/sonaxia_logo.png';
 
   /// MaterialApp / system title.
   static const String materialTitle = name;
 
-  /// Public web host for invite / QR links (Cloudflare Pages + your domain).
-  /// Not Railway — Railway hosts FastAPI only (e.g. api.sonaxia.com later).
+  /// Public web host for invite / QR links.
   static const String publicWebHost = 'sonaxia.com';
 
   /// Invite URL → opens app on `/#/join/{code}` → teacher Group page.
-  /// Local Chrome: uses current origin so link lands in this app immediately.
   static String inviteJoinUrl(String joinCode) {
     final code = joinCode.trim().toUpperCase();
     if (kIsWeb) {
       final origin = Uri.base.origin;
       if (origin.isNotEmpty && !origin.contains('sonaxia.com')) {
-        // Dev / localhost / preview: land in this running app.
         return '$origin/#/join/$code';
       }
     }

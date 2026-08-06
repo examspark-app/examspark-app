@@ -46,6 +46,7 @@ class _BottomInputBarState extends State<BottomInputBar> {
     final text = _controller.text.trim();
     if (text.isEmpty) return;
 
+    FocusScope.of(context).unfocus();
     widget.onSend(text);
     _controller.clear();
   }
@@ -71,46 +72,30 @@ class _BottomInputBarState extends State<BottomInputBar> {
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
+        padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
         color: Theme.of(context).scaffoldBackgroundColor,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
-          children: [
-            IconButton(
-              icon: const Icon(Icons.add_rounded, size: 28),
-              color: AppTheme.getSecondaryText(context),
-              onPressed: widget.onAttach,
+        child: Container(
+          padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+          decoration: BoxDecoration(
+            color: isLight ? Colors.white : const Color(0xFF1A1A1A),
+            borderRadius: BorderRadius.circular(26),
+            border: Border.all(
+              color: isLight
+                  ? const Color(0xFFD9D9D9)
+                  : const Color(0xFF333333),
+              width: 1.2,
             ),
-
-            Expanded(
-              child: Container(
-                constraints: const BoxConstraints(
-                  minHeight: 52,
-                  maxHeight: 200,
-                ),
-                decoration: BoxDecoration(
-  color: isLight
-      ? const Color(0xFFF7F7F8)
-      : const Color(0xFF111111),
-  borderRadius: BorderRadius.circular(30),
-  border: Border.all(
-    color: isLight
-        ? const Color(0xFFE5E5E5)
-        : const Color(0xFF2A2A2A),
-    width: 1,
-  ),
-  boxShadow: [
-    BoxShadow(
-      color: Colors.black.withOpacity(0.18),
-      blurRadius: 16,
-      offset: const Offset(0, 6),
-    ),
-  ],
-),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Text field row — no border, sits inside the outer box.
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 160),
                 child: TextField(
                   controller: _controller,
                   minLines: 1,
-                  maxLines: 8,
+                  maxLines: 6,
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _handleSend(),
                   style: TextStyle(
@@ -118,70 +103,78 @@ class _BottomInputBarState extends State<BottomInputBar> {
                     color: AppTheme.getPrimaryText(context),
                   ),
                   decoration: InputDecoration(
-                    hintText: "Ask sonaxia ...",
+                    hintText: 'Ask sonaxia ...',
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 22,
-                      vertical: 18,
-                    ),
+                    isDense: true,
+                    contentPadding: const EdgeInsets.only(bottom: 10),
                     hintStyle: TextStyle(
-  color: isLight
-      ? Colors.grey.shade600
-      : Colors.grey.shade500,
-  fontSize: 16,
-),
-                    suffixIconConstraints: const BoxConstraints(
-                      minWidth: 130,
-                    ),
-
-                    suffixIcon: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-
-                        if (widget.onYoutube != null)
-                          IconButton(
-                            icon: const Icon(
-                              Icons.smart_display_rounded,
-                              color: Color(0xFFEA4335),
-                              size: 22,
-                            ),
-                            onPressed: widget.onYoutube,
-                          ),
-
-                        IconButton(
-                          icon: Icon(
-                            widget.recordLocked
-                                ? Icons.lock_outline_rounded
-                                : Icons.mic_none_rounded,
-                            color: AppTheme.getSecondaryText(context),
-                            size: 22,
-                          ),
-                          onPressed: widget.onRecord,
-                        ),
-
-                        Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: CircleAvatar(
-                            radius: 18,
-                            backgroundColor: actionColor,
-                            child: IconButton(
-                              padding: EdgeInsets.zero,
-                              icon: Icon(
-                                Icons.arrow_upward_rounded,
-                                color: actionIconColor,
-                                size: 18,
-                              ),
-                              onPressed: _hasText ? _handleSend : null,
-                            ),
-                          ),
-                        ),
-                      ],
+                      color: isLight
+                          ? Colors.grey.shade600
+                          : Colors.grey.shade500,
+                      fontSize: 16,
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+              // Bottom icon row — "+" on the left, actions on the right,
+              // all inside the same rounded box (Claude-style).
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.add_rounded, size: 26),
+                    color: AppTheme.getSecondaryText(context),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    onPressed: widget.onAttach,
+                  ),
+                  const Spacer(),
+                  if (widget.onYoutube != null)
+                    Padding(
+                      padding: const EdgeInsets.only(right: 4),
+                      child: IconButton(
+                        icon: const Icon(
+                          Icons.smart_display_rounded,
+                          color: Color(0xFFEA4335),
+                          size: 22,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(),
+                        onPressed: widget.onYoutube,
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 4),
+                    child: IconButton(
+                      icon: Icon(
+                        widget.recordLocked
+                            ? Icons.lock_outline_rounded
+                            : Icons.mic_none_rounded,
+                        color: AppTheme.getSecondaryText(context),
+                        size: 22,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      onPressed: widget.onRecord,
+                    ),
+                  ),
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: actionColor,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      icon: Icon(
+                        Icons.arrow_upward_rounded,
+                        color: actionIconColor,
+                        size: 16,
+                      ),
+                      onPressed: _hasText ? _handleSend : null,
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

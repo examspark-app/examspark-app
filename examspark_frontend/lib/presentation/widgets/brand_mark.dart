@@ -19,6 +19,7 @@ class BrandMark extends StatelessWidget {
   Widget build(BuildContext context) {
     final letterSize = tileSize >= 48 ? tileSize * 0.5 : 16.0;
     final radius = tileSize >= 48 ? 16.0 : 8.0;
+
     return Semantics(
       label: '${AppBrand.name} app logo',
       child: Row(
@@ -31,6 +32,7 @@ class BrandMark extends StatelessWidget {
               color: AppTheme.accentColor,
               borderRadius: BorderRadius.circular(radius),
             ),
+            
             alignment: Alignment.center,
             child: Text(
               AppBrand.markLetter,

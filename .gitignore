@@ -31,3 +31,8 @@ examspark_backend/secrets/
 firebase-service-account*.json
 google-services-account*.json
 *serviceAccount*.json
+
+# Keystore & passwords ignore
+*.jks
+*.keystore
+key.properties

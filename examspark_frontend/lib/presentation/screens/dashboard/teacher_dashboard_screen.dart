@@ -1214,10 +1214,20 @@ class _ClassFolderCard extends StatelessWidget {
                   ),
                 ),
                 IconButton(
-                  icon: const Icon(Icons.share_outlined),
-                  onPressed: onShareInvite,
-                  tooltip: 'Share Invite Link',
-                ),
+  icon: const Icon(Icons.share_outlined, size: 19),
+  onPressed: onShareInvite,
+  tooltip: 'Share Invite Link',
+  visualDensity: VisualDensity.compact,
+  constraints: const BoxConstraints(),
+),
+const SizedBox(width: 2),
+IconButton(
+  icon: const Icon(Icons.delete_outline, size: 19, color: Color(0xFFC62828)),
+  onPressed: onDelete,
+  tooltip: 'Delete group',
+  visualDensity: VisualDensity.compact,
+  constraints: const BoxConstraints(),
+),
               ],
             ),
           ),
@@ -1229,31 +1239,17 @@ class _ClassFolderCard extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: onOpenDashboard,
-              icon: const Icon(Icons.dashboard_outlined, size: 16),
-              label: const Text('Open group dashboard'),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(36),
-                foregroundColor: AppTheme.accentColor,
-              ),
-            ),
-          ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: onDelete,
-              icon: const Icon(Icons.delete_outline, size: 16),
-              label: const Text('Delete group'),
-              style: OutlinedButton.styleFrom(
-                minimumSize: const Size.fromHeight(36),
-                foregroundColor: const Color(0xFFC62828),
-                side: const BorderSide(color: Color(0xFFC62828)),
-              ),
-            ),
-          ),
+  width: double.infinity,
+  height: 32,
+  child: ElevatedButton.icon(
+    onPressed: onOpenDashboard,
+    icon: const Icon(Icons.dashboard_outlined, size: 15),
+    label: const Text('Open group dashboard', style: TextStyle(fontSize: 12.5)),
+    style: ElevatedButton.styleFrom(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+    ),
+  ),
+),
           const SizedBox(height: 8),
           if (folder.joinApprovalMode == 'approval' || folder.pendingCount > 0) ...[
             SizedBox(
@@ -1277,44 +1273,53 @@ class _ClassFolderCard extends StatelessWidget {
             const SizedBox(height: 8),
           ],
           Row(
-            children: [
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onShareInvite,
-                  icon: const Icon(Icons.link, size: 16),
-                  label: const Text('Share link'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(36),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton.icon(
-                  onPressed: onShowQr,
-                  icon: const Icon(Icons.qr_code_2, size: 16),
-                  label: const Text('QR'),
-                  style: OutlinedButton.styleFrom(
-                    minimumSize: const Size.fromHeight(36),
-                  ),
-                ),
-              ),
-            ],
+  children: [
+    Expanded(
+      child: SizedBox(
+        height: 32,
+        child: OutlinedButton.icon(
+          onPressed: onShareInvite,
+          icon: const Icon(Icons.link, size: 15),
+          label: const Text('Link', style: TextStyle(fontSize: 12.5)),
+          style: OutlinedButton.styleFrom(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: onGenerateCoupon,
-              icon: const Icon(Icons.confirmation_number_outlined, size: 16),
-              label: const Text('Generate Coupon (100 students)'),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppTheme.accentColor,
-                foregroundColor: Colors.white,
-                minimumSize: const Size.fromHeight(36),
-              ),
-            ),
+        ),
+      ),
+    ),
+    const SizedBox(width: 6),
+    Expanded(
+      child: SizedBox(
+        height: 32,
+        child: OutlinedButton.icon(
+          onPressed: onShowQr,
+          icon: const Icon(Icons.qr_code_2, size: 15),
+          label: const Text('QR', style: TextStyle(fontSize: 12.5)),
+          style: OutlinedButton.styleFrom(
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
+        ),
+      ),
+    ),
+    const SizedBox(width: 6),
+    Expanded(
+      flex: 2,
+      child: SizedBox(
+        height: 32,
+        child: OutlinedButton.icon(
+          onPressed: onGenerateCoupon,
+          icon: const Icon(Icons.confirmation_number_outlined, size: 15),
+          label: const Text('Coupon', style: TextStyle(fontSize: 12.5)),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppTheme.accentColor,
+            side: BorderSide(color: AppTheme.accentColor.withValues(alpha: 0.4)),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        ),
+      ),
+    ),
+  ],
+),
         ],
       ),
     );

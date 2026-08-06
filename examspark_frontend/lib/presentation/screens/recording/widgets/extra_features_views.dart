@@ -134,111 +134,140 @@ class _MCQQuizViewState extends State<MCQQuizView> {
     final selectedAnswer = _selectedAnswers[_currentQuestionIndex];
     final isCorrect = selectedAnswer == currentQuestion.correctAnswer;
     final total = widget.questions.length;
+    const cardBg = Color(0xFF12162B);
+    const cardBg2 = Color(0xFF181C33);
+    const accent = Color(0xFF7C9CFF);
 
     return Column(
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(
-            AppTheme.screenPadding,
-            AppTheme.screenPadding,
-            AppTheme.screenPadding,
-            8,
-          ),
-          child: WorkspaceProgressBar(
-            current: _currentQuestionIndex + 1,
-            total: total,
-            label: 'Question',
-            remainingSuffix: 'questions remaining',
-          ),
-        ),
         Expanded(
           child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(
-              horizontal: AppTheme.screenPadding,
-            ),
-            child: Column(
+            padding: const EdgeInsets.all(16),
+            child: Container(
               key: ValueKey(_currentQuestionIndex),
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const SizedBox(height: 8),
-                Text(
-                  currentQuestion.question,
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+              decoration: BoxDecoration(
+                color: cardBg,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 5,
                       ),
-                ),
-                const SizedBox(height: 24),
-                ...currentQuestion.options.asMap().entries.map((entry) {
-                  final index = entry.key;
-                  final option = entry.value;
-                  final optionLetter = String.fromCharCode(65 + index);
-                  final isSelected = selectedAnswer == optionLetter;
-                  final isCorrectOption =
-                      optionLetter == currentQuestion.correctAnswer;
-
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: _OptionButton(
-                      letter: optionLetter,
-                      text: option,
-                      isSelected: isSelected,
-                      isAnswered: isSubmitted,
-                      isCorrectOption: isCorrectOption,
-                      onTap: isSubmitted
-                          ? null
-                          : () => setState(
-                                () => _selectedAnswers[_currentQuestionIndex] =
-                                    optionLetter,
-                              ),
-                    ),
-                  );
-                }),
-                if (isSubmitted) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: isCorrect
-                          ? AppTheme.getAccentTint(context)
-                          : Colors.red.withOpacity(0.06),
-                      borderRadius:
-                          BorderRadius.circular(AppTheme.borderRadius),
-                      border: Border.all(
-                        color: isCorrect
-                            ? AppTheme.accentColor.withOpacity(0.35)
-                            : Colors.red.withOpacity(0.35),
+                      decoration: BoxDecoration(
+                        color: accent.withOpacity(0.15),
+                        borderRadius: BorderRadius.circular(20),
                       ),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          isCorrect
-                              ? Icons.check_circle_outline
-                              : Icons.cancel_outlined,
-                          color: isCorrect ? AppTheme.accentColor : Colors.red,
-                          size: 20,
+                      child: Text(
+                        'Q${_currentQuestionIndex + 1}/$total',
+                        style: const TextStyle(
+                          color: accent,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 12.5,
                         ),
-                        const SizedBox(width: 10),
-                        Text(
-                          isCorrect ? 'Correct' : 'Incorrect',
-                          style:
-                              Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: isCorrect
-                                        ? AppTheme.accentColor
-                                        : Colors.red,
-                                  ),
-                        ),
-                      ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  _buildExplanation(context, currentQuestion),
+                  const SizedBox(height: 16),
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: cardBg2,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Text(
+                      currentQuestion.question,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        height: 1.4,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  GridView.count(
+                    crossAxisCount: 2,
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    mainAxisSpacing: 10,
+                    crossAxisSpacing: 10,
+                    childAspectRatio: 2.6,
+                    children: currentQuestion.options.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final option = entry.value;
+                      final optionLetter = String.fromCharCode(65 + index);
+                      final isSelected = selectedAnswer == optionLetter;
+                      final isCorrectOption =
+                          optionLetter == currentQuestion.correctAnswer;
+                      return _DarkOptionButton(
+                        letter: optionLetter,
+                        text: option,
+                        isSelected: isSelected,
+                        isAnswered: isSubmitted,
+                        isCorrectOption: isCorrectOption,
+                        onTap: isSubmitted
+                            ? null
+                            : () => setState(
+                                  () => _selectedAnswers[
+                                      _currentQuestionIndex] = optionLetter,
+                                ),
+                      );
+                    }).toList(),
+                  ),
+                  if (isSubmitted) ...[
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: isCorrect
+                            ? Colors.greenAccent.withOpacity(0.08)
+                            : Colors.redAccent.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: isCorrect
+                              ? Colors.greenAccent.withOpacity(0.3)
+                              : Colors.redAccent.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            isCorrect
+                                ? Icons.check_circle_outline
+                                : Icons.cancel_outlined,
+                            color: isCorrect
+                                ? Colors.greenAccent
+                                : Colors.redAccent,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 10),
+                          Text(
+                            isCorrect ? 'Correct' : 'Incorrect',
+                            style: TextStyle(
+                              fontWeight: FontWeight.w600,
+                              color: isCorrect
+                                  ? Colors.greenAccent
+                                  : Colors.redAccent,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    _buildExplanationDark(currentQuestion),
+                  ],
                 ],
-                const SizedBox(height: 16),
-              ],
+              ),
             ),
           ),
         ),
@@ -270,6 +299,45 @@ class _MCQQuizViewState extends State<MCQQuizView> {
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildExplanationDark(MCQQuestion q) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFF181C33),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: const [
+              Icon(Icons.info_outline, size: 16, color: Color(0xFF7C9CFF)),
+              SizedBox(width: 8),
+              Text(
+                'Explanation',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF7C9CFF),
+                  fontSize: 13,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            q.explanation ?? 'No explanation provided',
+            style: const TextStyle(
+              color: Colors.white70,
+              height: 1.45,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -437,7 +505,85 @@ class _MCQQuizViewState extends State<MCQQuizView> {
     );
   }
 }
+class _DarkOptionButton extends StatelessWidget {
+  final String letter;
+  final String text;
+  final bool isSelected;
+  final bool isAnswered;
+  final bool isCorrectOption;
+  final VoidCallback? onTap;
 
+  const _DarkOptionButton({
+    required this.letter,
+    required this.text,
+    required this.isSelected,
+    required this.isAnswered,
+    required this.isCorrectOption,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    const accent = Color(0xFF7C9CFF);
+    const baseBg = Color(0xFF20264A);
+    Color bg = baseBg;
+    Color border = Colors.transparent;
+
+    if (isAnswered) {
+      if (isCorrectOption) {
+        bg = Colors.greenAccent.withOpacity(0.12);
+        border = Colors.greenAccent.withOpacity(0.5);
+      } else if (isSelected && !isCorrectOption) {
+        bg = Colors.redAccent.withOpacity(0.12);
+        border = Colors.redAccent.withOpacity(0.5);
+      }
+    } else if (isSelected) {
+      bg = accent.withOpacity(0.18);
+      border = accent.withOpacity(0.6);
+    }
+
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: bg,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: border, width: 1.2),
+        ),
+        child: Row(
+          children: [
+            CircleAvatar(
+              radius: 13,
+              backgroundColor: Colors.white.withOpacity(0.08),
+              child: Text(
+                letter,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                text,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 13.5,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 class _OptionButton extends StatelessWidget {
   final String letter;
   final String text;

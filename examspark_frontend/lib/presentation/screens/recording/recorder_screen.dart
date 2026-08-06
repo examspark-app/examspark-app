@@ -268,9 +268,14 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
     } catch (_) {
       // Best-effort — nothing more we can do if stop() itself fails
       // mid-interruption; the recovery dialog will surface that on resume.
+    } finally {
+      // Same cleanup as the normal stop path in _toggleRecording() —
+      // clear the silence listener so it doesn't stay registered against
+      // a recording that's already stopped.
+      _recordingService.setSilenceWarningListener(null);
     }
     if (mounted) setState(() => _isRecording = false);
-  }
+}
 
   void _showAutoSaveRecoveryDialog() {
     if (!mounted || !_autoSavedFromInterruption) return;
@@ -384,7 +389,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => setState(() => _currentScreen = 1),
               )
-            : null,
+            : null, // <-- 3. YAHAN ': null' LAGA ZAROORI HAI (Isse Screen 1 par automatically Hamburger Icon ban jayega)
       ),
       backgroundColor: Colors.grey[50],
       body: _currentScreen == 1 ? _buildSetupScreen() : _buildRecordingScreen(),

@@ -17,11 +17,13 @@ import 'package:examspark_frontend/presentation/widgets/auth_gate.dart';
 class ProfileTab extends StatefulWidget {
   final ValueChanged<int> onGoToTab;
   final bool isActive;
+  final VoidCallback? onOpenDrawer;
 
   const ProfileTab({
     super.key,
     required this.onGoToTab,
     this.isActive = true,
+    this.onOpenDrawer,
   });
 
   @override
@@ -279,7 +281,14 @@ class _ProfileTabState extends State<ProfileTab> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const AppTopBar(title: 'Profile'),
+      appBar: AppTopBar(
+        title: 'Profile',
+        leading: IconButton(
+          icon: const Icon(Icons.menu_rounded),
+          tooltip: 'Menu',
+          onPressed: widget.onOpenDrawer,
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(AppTheme.screenPadding),
         children: [

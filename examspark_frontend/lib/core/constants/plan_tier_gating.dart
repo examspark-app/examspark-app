@@ -1,9 +1,14 @@
 /// Plan-tier feature gating.
 ///
-/// Two **separate** audio rules (founder Jul 25, 2026):
-/// - **Student** Home Record / Upload Audio → ₹499+ (`plan_499`, `plan_999`)
-/// - **Teacher** live Record (Dashboard / teacherRecordOnly) → **Teacher ₹2,999 only**
-///   (`teacher`) — NOT unlocked by student ₹499
+/// UPDATED (Aug 2026): recording / audio upload is now open on every plan
+/// (including Free) for both students and teachers — the app is
+/// credit-based, so usage is metered by credits spent per action, not by
+/// a plan-tier lock. `isFeatureUnlocked` / `isStudentAudioUnlocked` /
+/// `isTeacherLiveRecordUnlocked` below all now return true unconditionally
+/// so nothing in the UI shows a "needs ₹499+ Plan" / "needs Teacher plan"
+/// message for recording. The gating machinery (enum, minimumPlanId map,
+/// planRank) is kept in place — unused right now, but here if plan-based
+/// gating is ever reintroduced for something else.
 ///
 /// See CREDIT_ECONOMY.md · TEACHER_PLATFORM.md
 enum GatedFeature {
@@ -32,8 +37,8 @@ class PlanTierGating {
     GatedFeature.revision: 'free',
     GatedFeature.importantQuestions: 'free',
     GatedFeature.mindMap: 'free',
-    // Student audio only — Teacher live record uses [isTeacherLiveRecordUnlocked].
-    GatedFeature.recordLecture: 'plan_499',
+    // Open on every plan now — credit-based, not plan-locked (see note above).
+    GatedFeature.recordLecture: 'free',
   };
 
   static const List<String> planRank = [
@@ -53,19 +58,16 @@ class PlanTierGating {
     return _rank(currentPlanId) >= _rank(requiredPlan);
   }
 
-  /// Student path: Record + Upload Audio from Home — ₹499 / ₹999 / Teacher.
-  /// (Teacher plan also ranks above ₹499 so teachers can use Home audio if needed.)
+  /// Student path: Record + Upload Audio from Home — open on every plan
+  /// (including Free); credits are still charged per use.
   static bool isStudentAudioUnlocked(String currentPlanId) {
-    return isFeatureUnlocked(
-      currentPlanId: currentPlanId,
-      feature: GatedFeature.recordLecture,
-    );
+    return true;
   }
 
-  /// Teacher Dashboard / teacherRecordOnly live Record — **Teacher plan only**.
-  /// Student ₹499 does **not** unlock this path.
+  /// Teacher Dashboard / teacherRecordOnly live Record — open on every
+  /// plan (including Free); credits are still charged per use.
   static bool isTeacherLiveRecordUnlocked(String currentPlanId) {
-    return currentPlanId.trim().toLowerCase() == 'teacher';
+    return true;
   }
 
   static int _rank(String planId) {
@@ -76,8 +78,6 @@ class PlanTierGating {
   static String lockMessage(GatedFeature feature) {
     switch (feature) {
       case GatedFeature.recordLecture:
-        return 'This feature needs the ₹499+ Plan.\n'
-            'Audio recording and audio upload unlock from the ₹499 Plan.';
       case GatedFeature.pdfAnalysis:
       case GatedFeature.diagramAnalysis:
       case GatedFeature.youtubeLink:
@@ -92,14 +92,11 @@ class PlanTierGating {
   }
 
   static String teacherLiveRecordLockMessage() {
-    return 'Teacher live Record needs the Teacher plan (₹2,999).\n'
-        'When that month ends: Record + new Create Group + Share workspace '
-        'lock until renew. Existing groups stay. Student ₹499 does not unlock Teacher Record.';
+    return 'Teacher live Record is available on every plan (uses credits).';
   }
 
   static String teacherShareWorkspaceLockMessage() {
-    return 'Sharing Study Workspace to Groups needs active Teacher plan (₹2,999). '
-        'Renew to share lectures, notes, quiz, or announcements.';
+    return 'Sharing Study Workspace to Groups is available on every plan (uses credits).';
   }
 
   static GatedFeature? featureFromAction(String action) {

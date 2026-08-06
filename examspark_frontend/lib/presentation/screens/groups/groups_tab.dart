@@ -16,11 +16,13 @@ import 'package:examspark_frontend/presentation/screens/search/search_overlay_sc
 class GroupsTab extends StatefulWidget {
   final ValueChanged<int> onGoToTab;
   final bool isActive;
+  final VoidCallback? onOpenDrawer;
 
   const GroupsTab({
     super.key,
     required this.onGoToTab,
     this.isActive = true,
+    this.onOpenDrawer,
   });
 
   @override
@@ -107,6 +109,11 @@ class _GroupsTabState extends State<GroupsTab>
     return Scaffold(
       appBar: AppTopBar(
         title: 'Groups',
+        leading: IconButton(
+          icon: const Icon(Icons.menu_rounded),
+          tooltip: 'Menu',
+          onPressed: widget.onOpenDrawer,
+        ),
         onSearchTap: () => showAppSearchOverlay(
           context,
           onOpenLecture: (id, title, subject) {

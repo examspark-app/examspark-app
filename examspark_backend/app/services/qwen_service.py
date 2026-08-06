@@ -412,6 +412,7 @@ async def generate_important_questions(source_text: str) -> dict:
 async def generate_mind_map(source_text: str) -> dict:
     """Returns {title, root: {label, children: [...]}}."""
     parsed = await _chat_json(_MIND_MAP_SYSTEM, source_text, max_tokens=4096)
+    
     title = (parsed.get("title") or "").strip()
     root = parsed.get("root")
     if not isinstance(root, dict) or _count_mind_map_nodes(root) < 4:

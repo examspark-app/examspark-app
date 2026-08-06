@@ -415,69 +415,138 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
 
   Widget _buildInrPackGrid() {
     final packs = SubscriptionPlans.creditPacks;
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 2.2,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
+    if (packs.isEmpty) return const SizedBox.shrink();
+
+    // Best per-credit rate → honest "Best Value" badge (real math, no fake claim).
+    final bestId = packs
+        .reduce((a, b) =>
+            a.effectiveRupeePerCredit <= b.effectiveRupeePerCredit ? a : b)
+        .id;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: AppTheme.getAccentTint(context).withValues(alpha: 0.35),
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius + 4),
+        border: Border.all(
+          color: AppTheme.accentColor.withValues(alpha: 0.18),
+        ),
       ),
-      itemCount: packs.length,
-      itemBuilder: (context, index) {
-        final pack = packs[index];
-        return InkWell(
-          onTap: _paying ? null : () => _confirmPackPurchase(pack),
-          borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: AppTheme.getCardBorder(context)),
-              borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-              color: AppTheme.getCardBackground(context),
-            ),
-            child: Row(
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 1.55,
+          crossAxisSpacing: 10,
+          mainAxisSpacing: 10,
+        ),
+        itemCount: packs.length,
+        itemBuilder: (context, index) {
+          final pack = packs[index];
+          final isBest = pack.id == bestId;
+          final rate = pack.effectiveRupeePerCredit;
+
+          return InkWell(
+            onTap: _paying ? null : () => _confirmPackPurchase(pack),
+            borderRadius: BorderRadius.circular(14),
+            child: Stack(
+              clipBehavior: Clip.none,
               children: [
-                Expanded(
+                Container(
+                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
+                  decoration: BoxDecoration(
+                    color: isBest
+                        ? AppTheme.accentColor
+                        : AppTheme.getCardBackground(context),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: isBest
+                          ? AppTheme.accentColor
+                          : AppTheme.getCardBorder(context),
+                      width: isBest ? 1.4 : 1,
+                    ),
+                  ),
                   child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
                     crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
                         '${pack.credits}',
-                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
+                        style: TextStyle(
+                          fontSize: 19,
+                          fontWeight: FontWeight.w800,
+                          color: isBest
+                              ? Colors.white
+                              : AppTheme.getPrimaryText(context),
+                        ),
                       ),
                       Text(
                         'credits',
-                        style: Theme.of(context).textTheme.bodySmall,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: isBest
+                              ? Colors.white.withValues(alpha: 0.85)
+                              : AppTheme.getSecondaryText(context),
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            '₹${pack.priceInr}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.bold,
+                              color: isBest
+                                  ? Colors.white
+                                  : AppTheme.accentColor,
+                            ),
+                          ),
+                          Text(
+                            '₹${rate.toStringAsFixed(2)}/credit',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              color: isBest
+                                  ? Colors.white.withValues(alpha: 0.75)
+                                  : AppTheme.getSecondaryText(context),
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
                 ),
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: AppTheme.getAccentTint(context),
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                  child: Text(
-                    '₹${pack.priceInr}',
-                    style: TextStyle(
-                      color: AppTheme.accentColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 12,
+                if (isBest)
+                  Positioned(
+                    top: -8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AppTheme.accentColor),
+                      ),
+                      child: Text(
+                        'Best Value',
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.bold,
+                          color: AppTheme.accentColor,
+                        ),
+                      ),
                     ),
                   ),
-                ),
               ],
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -956,16 +1025,24 @@ class PlanCard extends StatelessWidget {
           const SizedBox(height: 10),
           ...plan.features.map(
             (feature) => Padding(
-              padding: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.only(bottom: 10),
               child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  Icon(
-                    Icons.check_circle_outline,
-                    size: 16,
-                    color: AppTheme.accentColor,
+                  Container(
+                    width: 20,
+                    height: 20,
+                    decoration: BoxDecoration(
+                      color: AppTheme.accentColor.withValues(alpha: 0.12),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.check,
+                      size: 13,
+                      color: AppTheme.accentColor,
+                    ),
                   ),
-                  const SizedBox(width: 8),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: Text(
                       feature,

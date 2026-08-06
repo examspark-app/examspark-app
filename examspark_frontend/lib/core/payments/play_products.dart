@@ -4,7 +4,7 @@ class PlayProducts {
 
   static const Map<String, String> planToProduct = {
     'plan_199': 'examspark_plan_199',
-    'plan_299': 'examspark_plan_299',
+    // plan_299 yahan se hata diya gaya hai
     'plan_499': 'examspark_plan_499',
     'plan_999': 'examspark_plan_999',
     'teacher': 'examspark_plan_teacher',

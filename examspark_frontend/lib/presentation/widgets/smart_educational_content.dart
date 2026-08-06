@@ -76,9 +76,21 @@ class VisualPayloadData {
     return const [];
   }
 
+  // FIX: Ye function ab `[...]` string brackets ko hata kar proper list banayega
   static List<String> _stringList(dynamic raw) {
-    if (raw is! List) return const [];
-    return raw.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+    if (raw == null) return const [];
+    if (raw is List) {
+      return raw.map((e) => e.toString()).where((s) => s.isNotEmpty).toList();
+    }
+    if (raw is String) {
+      String cleaned = raw.trim();
+      if (cleaned.startsWith('[') && cleaned.endsWith(']')) {
+        cleaned = cleaned.substring(1, cleaned.length - 1);
+        return cleaned.split(',').map((e) => e.trim()).where((s) => s.isNotEmpty).toList();
+      }
+      if (cleaned.isNotEmpty) return [cleaned];
+    }
+    return const [];
   }
 }
 
@@ -117,9 +129,13 @@ class TextDiagramData {
   TextDiagramData({this.title, required this.content});
 
   factory TextDiagramData.fromJson(Map<String, dynamic> json) {
+    String rawContent = json['content']?.toString() ?? '';
+    // Strip markdown code blocks just in case AI wraps text diagram in backticks
+    rawContent = rawContent.replaceAll(RegExp(r'^```[\s\S]*?\n'), '').replaceAll(RegExp(r'```$'), '').trim();
+    
     return TextDiagramData(
       title: json['title']?.toString(),
-      content: json['content']?.toString() ?? '',
+      content: rawContent,
     );
   }
 }
@@ -232,15 +248,26 @@ class _MarkdownLatexBody extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final parts = _splitLatex(text);
+    final accent = AppTheme.accentColor;
+    final primary = AppTheme.getPrimaryText(context);
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: parts.map((part) {
         if (part.isLatex) {
+          // FIX: Added Horizontal Scroll + Math Rendering for robust Math UI
           return Padding(
             padding: const EdgeInsets.symmetric(vertical: 8),
-            child: Math.tex(
-              part.content,
-              textStyle: Theme.of(context).textTheme.bodyMedium,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              physics: const BouncingScrollPhysics(),
+              child: Math.tex(
+                part.content.trim(),
+                textStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontSize: 16,
+                  color: primary,
+                ),
+              ),
             ),
           );
         }
@@ -249,24 +276,62 @@ class _MarkdownLatexBody extends StatelessWidget {
           data: part.content,
           selectable: selectable,
           styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-            p: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
+            p: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  height: 1.6,
+                  color: primary,
+                ),
+            strong: TextStyle(
+              fontWeight: FontWeight.w700,
+              color: accent,
+            ),
+            h1: TextStyle(
+              fontSize: 21,
+              fontWeight: FontWeight.w800,
+              color: accent,
+              height: 1.5,
+            ),
+            h2: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
+              color: accent,
+              height: 1.5,
+            ),
+            h3: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: accent,
+              height: 1.5,
+            ),
+            h1Padding: const EdgeInsets.only(top: 12, bottom: 6),
+            h2Padding: const EdgeInsets.only(top: 12, bottom: 4),
+            h3Padding: const EdgeInsets.only(top: 10, bottom: 4),
+            listBullet: TextStyle(color: primary),
+            blockquoteDecoration: BoxDecoration(
+              color: AppTheme.getAccentTint(context),
+              borderRadius: BorderRadius.circular(8),
+              border: Border(left: BorderSide(color: accent, width: 3)),
+            ),
           ),
         );
       }).toList(),
     );
   }
 
+  // FIX: Updated Regex to handle both $$...$$ (Block) and $...$ (Inline) math formulas
   static List<_TextPart> _splitLatex(String input) {
-    final regex = RegExp(r'\$\$(.+?)\$\$', dotAll: true);
+    final regex = RegExp(r'\$\$(.+?)\$\$|\$(.+?)\$', dotAll: true);
     final parts = <_TextPart>[];
     var start = 0;
+    
     for (final match in regex.allMatches(input)) {
       if (match.start > start) {
         parts.add(_TextPart(input.substring(start, match.start), false));
       }
-      parts.add(_TextPart(match.group(1) ?? '', true));
+      final latexContent = match.group(1) ?? match.group(2) ?? '';
+      parts.add(_TextPart(latexContent, true));
       start = match.end;
     }
+    
     if (start < input.length) {
       parts.add(_TextPart(input.substring(start), false));
     }
@@ -318,15 +383,15 @@ class _VisualBlocks extends StatelessWidget {
           const SizedBox(height: 8),
         ],
         if (payload.memoryTricks.isNotEmpty) ...[
-          _BulletSection(title: '💡 Memory Tricks', items: payload.memoryTricks),
+          _BulletSection(title: 'Memory Tricks', icon: Icons.psychology, items: payload.memoryTricks),
           const SizedBox(height: 8),
         ],
         if (payload.examTips.isNotEmpty) ...[
-          _BulletSection(title: '⚠ Exam Tips', items: payload.examTips),
+          _BulletSection(title: 'Exam Tips', icon: Icons.lightbulb_outline, items: payload.examTips),
           const SizedBox(height: 8),
         ],
         if (payload.examples.isNotEmpty) ...[
-          _BulletSection(title: '📝 Examples', items: payload.examples),
+          _BulletSection(title: 'Examples', icon: Icons.edit_note, items: payload.examples),
           const SizedBox(height: 8),
         ],
         if (payload.cheatSheet != null && payload.cheatSheet!.trim().isNotEmpty) ...[
@@ -451,7 +516,6 @@ class _GraphChart extends StatelessWidget {
       expression = expression.substring(2);
     }
 
-    // Accept common AI notation such as 5x, 2(x+1), x(x-1), and )x.
     expression = expression.replaceAllMapped(
       RegExp(r'(\d|\))(?=x|\()'),
       (match) => '${match.group(1)}*',
@@ -472,41 +536,70 @@ class _TextDiagramCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final accent = AppTheme.accentColor;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppTheme.getCardBackground(context),
-        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-        border: Border.all(color: AppTheme.getCardBorder(context)),
+        color: const Color(0xFF0D0D0D),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFF2A2A2A)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (diagram.title != null && diagram.title!.isNotEmpty)
-            Text(
-              diagram.title!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
-            )
-          else if (label != null)
-            Text(
-              label!,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    fontWeight: FontWeight.w600,
-                  ),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: const BoxDecoration(
+              color: Color(0xFF1A1A1A),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(14)),
             ),
-          const SizedBox(height: 8),
-          SelectableText(
-            diagram.content,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontFamily: 'monospace',
-                  height: 1.5,
+            child: Row(
+              children: [
+                _dot(const Color(0xFFFF5F56)),
+                const SizedBox(width: 6),
+                _dot(const Color(0xFFFFBD2E)),
+                const SizedBox(width: 6),
+                _dot(const Color(0xFF27C93F)),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    (diagram.title != null && diagram.title!.isNotEmpty)
+                        ? diagram.title!
+                        : (label ?? 'Diagram'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: accent.withValues(alpha: 0.9),
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
+              ],
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: SelectableText(
+              diagram.content,
+              style: const TextStyle(
+                fontFamily: 'monospace',
+                color: Color(0xFFE5E5E5),
+                fontSize: 13,
+                height: 1.6,
+              ),
+            ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _dot(Color color) {
+    return Container(
+      width: 10,
+      height: 10,
+      decoration: BoxDecoration(color: color, shape: BoxShape.circle),
     );
   }
 }
@@ -586,27 +679,61 @@ class _HighlightCard extends StatelessWidget {
   }
 }
 
+// FIX: Pura _BulletSection ek clean aur professional Card Layout mein convert kar diya
 class _BulletSection extends StatelessWidget {
   final String title;
+  final IconData icon;
   final List<String> items;
 
-  const _BulletSection({required this.title, required this.items});
+  const _BulletSection({
+    required this.title, 
+    required this.icon, 
+    required this.items
+  });
 
   @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(title, style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
+        Padding(
+          padding: const EdgeInsets.only(bottom: 6, top: 4),
+          child: Row(
+            children: [
+              Icon(icon, size: 18, color: AppTheme.accentColor),
+              const SizedBox(width: 6),
+              Text(
+                title, 
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  color: AppTheme.accentColor,
+                )
+              ),
+            ],
+          ),
+        ),
         for (final item in items)
-          Padding(
-            padding: const EdgeInsets.only(bottom: 4),
+          Container(
+            margin: const EdgeInsets.only(bottom: 8),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.getCardBackground(context),
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: AppTheme.accentColor.withValues(alpha: 0.3)),
+            ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('• '),
-                Expanded(child: Text(item)),
+                const Padding(
+                  padding: EdgeInsets.only(top: 4, right: 8),
+                  child: Icon(Icons.circle, size: 6, color: Colors.grey),
+                ),
+                Expanded(
+                  child: Text(
+                    item,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.4),
+                  ),
+                ),
               ],
             ),
           ),

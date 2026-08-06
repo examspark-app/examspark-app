@@ -41,7 +41,6 @@ class _HomeScreenState extends State<HomeScreen> {
     return Scaffold(
       body: Row(
         children: [
-          // Historical Sidebar
           _isSidebarOpen
               ? Container(
                   width: 280,
@@ -51,7 +50,6 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                   child: Column(
                     children: [
-                      // Sidebar Header
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -86,7 +84,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                       ),
-                      // New Lecture Button
                       Padding(
                         padding: const EdgeInsets.all(16),
                         child: ElevatedButton.icon(
@@ -98,7 +95,6 @@ class _HomeScreenState extends State<HomeScreen> {
                           ),
                         ),
                       ),
-                      // Lecture History
                       Expanded(
                         child: ListView.builder(
                           itemCount: _lectureHistory.length,
@@ -116,14 +112,11 @@ class _HomeScreenState extends State<HomeScreen> {
                                 style: const TextStyle(fontSize: 12),
                               ),
                               trailing: const Icon(Icons.chevron_right),
-                              onTap: () {
-                                // Navigate to lecture details
-                              },
+                              onTap: () {},
                             );
                           },
                         ),
                       ),
-                      // Sidebar Footer
                       Container(
                         padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
@@ -140,11 +133,9 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 )
               : const SizedBox.shrink(),
-          // Main Content Area
           Expanded(
             child: Column(
               children: [
-                // Top Bar
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   decoration: BoxDecoration(
@@ -175,7 +166,6 @@ class _HomeScreenState extends State<HomeScreen> {
                     ],
                   ),
                 ),
-                // Welcome Content
                 Expanded(
                   child: Center(
                     child: Column(

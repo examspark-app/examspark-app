@@ -14,7 +14,8 @@ class AiAssistantMessage extends StatefulWidget {
   final VoidCallback? onRevealComplete;
   final Widget? trailing;
   final Map<String, dynamic>? visualPayload;
-  /// Deprecated — kept for call-site compat; ignored (no select chips).
+  /// Called with the selected text when the user taps "Ask AI" from the
+  /// text-selection toolbar.
   final Future<void> Function(String actionId, String selectedText)? onSelectAi;
 
   const AiAssistantMessage({
@@ -83,7 +84,34 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
             style: textStyle,
             onComplete: _onTypewriterComplete,
           )
-        : SelectableText(widget.text, style: textStyle);
+        : SelectableText(
+            widget.text,
+            style: textStyle,
+            contextMenuBuilder: (context, editableTextState) {
+              final selectedText = editableTextState.textEditingValue.selection
+                  .textInside(editableTextState.textEditingValue.text)
+                  .trim();
+              final items = List<ContextMenuButtonItem>.from(
+                editableTextState.contextMenuButtonItems,
+              );
+              if (selectedText.isNotEmpty && widget.onSelectAi != null) {
+                items.insert(
+                  0,
+                  ContextMenuButtonItem(
+                    label: 'Ask AI',
+                    onPressed: () {
+                      ContextMenuController.removeAny();
+                      widget.onSelectAi!('ask', selectedText);
+                    },
+                  ),
+                );
+              }
+              return AdaptiveTextSelectionToolbar.buttonItems(
+                anchors: editableTextState.contextMenuAnchors,
+                buttonItems: items,
+              );
+            },
+          );
 
     final maxW = MediaQuery.sizeOf(context).width;
     // Match ChatGPT Web's optimal reading width (~768px max for text blocks)

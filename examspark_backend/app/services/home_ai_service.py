@@ -9,7 +9,8 @@ Phase 1 perf: smart route, caches, timing (SSE already live).
 from __future__ import annotations
 
 import asyncio
-
+import json
+import re
 import httpx
 
 from app.config import AIConfig
@@ -196,7 +197,45 @@ def _finalize_home_result(
 
 _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
+_SUGGESTED_Q_RE = re.compile(
+    r"<<SUGGESTED_QUESTIONS>>\s*(\[.*?\])\s*<<END_SUGGESTED_QUESTIONS>>",
+    re.DOTALL,
+)
 
+
+def _extract_suggested_questions(raw_answer: str) -> tuple[str, list[str]]:
+    """Pulls the <<SUGGESTED_QUESTIONS>> marker block out of the raw answer.
+    Returns (cleaned_answer, questions_list)."""
+    match = _SUGGESTED_Q_RE.search(raw_answer)
+    if not match:
+        return raw_answer, []
+    cleaned = raw_answer[: match.start()] + raw_answer[match.end():]
+    try:
+        parsed = json.loads(match.group(1))
+        questions = [str(q).strip() for q in parsed if str(q).strip()][:3]
+    except Exception:
+        questions = []
+    return cleaned.strip(), questions
+
+_PRACTICE_Q_RE = re.compile(
+    r"<<PRACTICE_QUESTION>>\s*(\".*?\")\s*<<END_PRACTICE_QUESTION>>",
+    re.DOTALL,
+)
+
+
+def _extract_practice_question(raw_answer: str) -> tuple[str, str | None]:
+    """Pulls the <<PRACTICE_QUESTION>> marker block out of the raw answer.
+    Returns (cleaned_answer, question_or_none)."""
+    match = _PRACTICE_Q_RE.search(raw_answer)
+    if not match:
+        return raw_answer, None
+    cleaned = raw_answer[: match.start()] + raw_answer[match.end():]
+    try:
+        parsed = json.loads(match.group(1))
+        question = str(parsed).strip() or None
+    except Exception:
+        question = None
+    return cleaned.strip(), question
 class HomeAiError(Exception):
     def __init__(
         self,
@@ -391,10 +430,23 @@ the student clearly asked for a long/detailed exam answer.
 
 OMIT RULE (HARD): Never invent filler sections or "N/A" headers.
 
-When (and only when) a long multi-part answer needs labels, you MAY use:
-Direct Answer · Easy Explanation · Key Points · Important Formula ·
-Related PYQ (verified tags only) · Source · Exam Tip
-Most replies should use NONE of these — natural tutor prose wins.
+FORMATTING FOR READABILITY (do this by default, not as an exception):
+When an answer has more than one distinct part (e.g. a formula with
+several components, multiple causes, multiple steps), structure it with:
+- A short "## " header per distinct part (e.g. "## Key components",
+  "## How it works") — use whatever header names fit the actual content.
+- A bulleted or numbered list for the components/steps, each starting
+  with the term in **bold** followed by a short explanation.
+- **Bold** the 2–4 most important terms/numbers per answer.
+This is the DEFAULT for any answer with multiple parts — not an
+exception case. A single-sentence factual answer does not need this;
+a multi-part explanation (like breaking down a formula, listing causes,
+or describing a process) always benefits from this structure.
+
+Fixed section labels (Direct Answer · Easy Explanation · Key Points ·
+Important Formula · Related PYQ · Source · Exam Tip) are for
+long/detailed exam-style answers only — use headers that match the
+actual content instead for normal explanatory answers.
 
 If user message says VERIFIED PYQ: none — never mention PYQs or official
 exam years; do not write that no PYQ was found.
@@ -408,6 +460,90 @@ RESPONSE STYLE
 Prefer natural structure over a fixed checklist.
 Do not force the same shape on every reply.
 
+==================================================
+FRIENDLY CHECK-IN (when explaining a concept)
+==================================================
+
+If the student's question was an "explain" / "samjhao" / "why does this
+work" type doubt (not a quick factual lookup, not a chip-generated
+flashcards/quiz), end your answer with ONE short, warm check-in question —
+like a good teacher would — asking if it made sense or if they want it
+explained a different way.
+
+CRITICAL — vary the wording every time. Never reuse the same sentence
+twice in a row for the same student. Generate a fresh, natural check-in
+each time — do not copy any example below verbatim.
+
+Match the CURRENT conversation language exactly (the same language you
+just answered in — English, Hindi, Hinglish, Bengali, or whichever
+language is locked for this conversation). If the answer was in Bengali,
+the check-in must also be in Bengali — not English, not Hindi.
+
+Style references only (do NOT copy these words — write your own each time):
+- casual check on understanding
+- offer a different angle / simpler example
+- occasionally ask which specific part felt unclear
+
+Skip this check-in for quick factual answers, definitions, or chip-generated
+content — only use it for real explanatory doubts.
+
+==================================================
+SUGGESTED FOLLOW-UP QUESTIONS (machine-readable)
+==================================================
+
+After your answer (and after the check-in line, if you added one), output
+2-3 short natural follow-up questions the student might want to ask next
+about THIS topic. Wrap them EXACTLY like this, nothing else inside the
+markers:
+
+<<SUGGESTED_QUESTIONS>>
+["question one", "question two", "question three"]
+<<END_SUGGESTED_QUESTIONS>>
+
+Rules:
+- Include this block for every answer (except the "topic not allowed"
+  refusal message).
+- Questions in the SAME language as your answer.
+- Each question under 12 words.
+- Must be valid JSON array syntax — nothing else inside the markers.
+# NAYA — yeh naya section iske turant baad add karo:
+==================================================
+PRACTICE CHECK QUESTION (teacher-style, machine-readable)
+==================================================
+
+If your answer was an EXPLANATION of a concept (not a quick fact, not a
+judging/grading turn, not chip-generated content), also output ONE short
+practice question that tests whether the student understood what you just
+explained — like a teacher checking understanding. Wrap it EXACTLY like
+this:
+
+<<PRACTICE_QUESTION>>
+"one short question testing the concept just explained"
+<<END_PRACTICE_QUESTION>>
+
+Rules:
+- Only include this for genuine concept explanations — skip it for quick
+  facts, definitions, chip-generated content, or when you are judging a
+  student's practice answer (see JUDGING MODE below).
+- Same language as your answer.
+- Must be a single JSON string (with quotes) — nothing else inside markers.
+- If not applicable, omit this block entirely.
+
+==================================================
+JUDGING MODE (when a student submits a practice answer)
+==================================================
+
+If the user message is wrapped as a PRACTICE ANSWER CHECK (it will say so
+explicitly with the original question, the concept context, and the
+student's answer), do NOT re-explain the whole topic and do NOT re-teach
+generically. Instead, act like a good teacher checking one answer:
+- If correct: 1-2 short encouraging sentences. No essay.
+- If wrong or incomplete: point out specifically what's missing or wrong,
+  then re-explain THAT SPECIFIC part in a different way (different
+  example/angle than before) so it clicks — keep it focused, not a full
+  restart.
+- Do NOT include another <<PRACTICE_QUESTION>> block on a judging turn.
+- Still include <<SUGGESTED_QUESTIONS>> as normal.
 ==================================================
 SMART REASONING RULE (avoid generic answers)
 ==================================================
@@ -957,6 +1093,8 @@ async def home_ai(
         used_web_search=used_web_search,
         web_deferred_no_web=web_deferred_no_web and not used_web_search,
     )
+    raw_answer, suggested_questions = _extract_suggested_questions(raw_answer)
+    raw_answer, practice_question = _extract_practice_question(raw_answer)
     answer, visual_payload = split_answer_and_visual(raw_answer)
     if not wants_visual(query):
         visual_payload = None
@@ -996,6 +1134,10 @@ async def home_ai(
         "mode": mode,
         "used_web_search": used_web_search,
     }
+    if suggested_questions:
+        result["suggested_questions"] = suggested_questions
+    if practice_question:
+        result["practice_question"] = practice_question
     if used_web_search:
         result["web_search_note"] = (
             "This answer used a live web search (current events). "
@@ -1292,7 +1434,10 @@ async def home_ai_stream(
         }
         return
 
+    # SAHI:
     answer = parser.answer
+    suggested_questions = parser.suggested_questions
+    practice_question = parser.practice_question
     visual_payload = parser.visual_payload
     if not wants_visual(query):
         visual_payload = None
@@ -1341,6 +1486,10 @@ async def home_ai_stream(
         "status": SUCCESS,
         "used_web_search": used_web_search,
     }
+    if suggested_questions:
+        cache_body["suggested_questions"] = suggested_questions
+    if practice_question:
+        cache_body["practice_question"] = practice_question
     if used_web_search:
         cache_body["web_search_note"] = (
             "This answer used a live web search (current events). "
@@ -1384,8 +1533,12 @@ async def home_ai_stream(
         "session_id": cache_body.get("session_id"),
         "knowledge": cache_body.get("knowledge"),
         "knowledge_version": cache_body.get("knowledge_version"),
-        "parent_response_id": cache_body.get("parent_response_id"),
+       "parent_response_id": cache_body.get("parent_response_id"),
     }
+    if cache_body.get("suggested_questions"):
+        done_evt["suggested_questions"] = cache_body.get("suggested_questions")
+    if cache_body.get("practice_question"):
+        done_evt["practice_question"] = cache_body.get("practice_question")
     if used_web_search:
         done_evt["web_search_note"] = cache_body.get("web_search_note")
     if visual_payload is not None:

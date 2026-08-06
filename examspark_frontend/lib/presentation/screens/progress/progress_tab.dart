@@ -7,10 +7,12 @@ import 'package:examspark_frontend/presentation/widgets/app_top_bar.dart';
 /// Personal only — never Home AI chats, private notes, or conversation history.
 class ProgressTab extends StatefulWidget {
   final bool isActive;
+  final VoidCallback? onOpenDrawer;
 
   const ProgressTab({
     super.key,
     this.isActive = true,
+    this.onOpenDrawer,
   });
 
   @override
@@ -60,7 +62,14 @@ class _ProgressTabState extends State<ProgressTab> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: const AppTopBar(title: 'Progress'),
+      appBar: AppTopBar(
+        title: 'Progress',
+        leading: IconButton(
+          icon: const Icon(Icons.menu_rounded),
+          tooltip: 'Menu',
+          onPressed: widget.onOpenDrawer,
+        ),
+      ),
       body: RefreshIndicator(
         onRefresh: _load,
         child: _buildBody(context),
