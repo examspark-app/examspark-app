@@ -44,30 +44,7 @@ def _plan_label(plan_id: str) -> str:
     return labels.get(plan_id, "Your plan")
 
 
-def _already_sent(
-    db: Any,
-    *,
-    subscription_id: str,
-    alert_kind: str,
-    period_end: date,
-) -> bool:
-    try:
-        res = (
-            db.table("subscription_expiry_alerts")
-            .select("id")
-            .eq("subscription_id", subscription_id)
-            .eq("alert_kind", alert_kind)
-            .eq("period_end", period_end.isoformat())
-            .limit(1)
-            .execute()
-        )
-        return bool(res.data)
-    except Exception as e:  # noqa: BLE001
-        logger.warning("subscription_expiry_alerts read failed: %s", e)
-        return False
-
-
-def _mark_sent(
+def _claim_alert(
     db: Any,
     *,
     user_id: str,
@@ -75,20 +52,32 @@ def _mark_sent(
     alert_kind: str,
     period_end: date,
 ) -> bool:
+    """Atomically claim this alert slot before sending.
+
+    Uses a plain INSERT (not upsert) against the unique constraint on
+    (subscription_id, alert_kind, period_end). Only the FIRST concurrent
+    call succeeds — every other call (e.g. multiple screens all checking
+    on app open at the same time) hits a unique-constraint conflict and
+    returns False immediately, so exactly one notification gets sent
+    instead of one per concurrent call.
+    """
     try:
-        db.table("subscription_expiry_alerts").upsert(
+        db.table("subscription_expiry_alerts").insert(
             {
                 "user_id": user_id,
                 "subscription_id": subscription_id,
                 "alert_kind": alert_kind,
                 "period_end": period_end.isoformat(),
-            },
-            on_conflict="subscription_id,alert_kind,period_end",
+            }
         ).execute()
         return True
     except Exception as e:  # noqa: BLE001
+        msg = str(e).lower()
+        if "duplicate" in msg or "unique" in msg or "23505" in msg:
+            # Someone else already claimed this exact alert — expected, not an error.
+            return False
         logger.warning(
-            "subscription_expiry_alerts upsert failed "
+            "subscription_expiry_alerts claim failed "
             "(run notifications_subscription_expiry_migration.sql?): %s",
             e,
         )
@@ -105,12 +94,14 @@ def _send_expiry_alert(
     days_left: int,
 ) -> bool:
     db = get_supabase_admin()
-    if _already_sent(
+    claimed = _claim_alert(
         db,
+        user_id=user_id,
         subscription_id=subscription_id,
         alert_kind=alert_kind,
         period_end=period_end,
-    ):
+    )
+    if not claimed:
         return False
 
     label = _plan_label(plan_id)
@@ -143,15 +134,7 @@ def _send_expiry_alert(
             "class_id": "",
         },
     )
-    if n <= 0:
-        return False
-    return _mark_sent(
-        db,
-        user_id=user_id,
-        subscription_id=subscription_id,
-        alert_kind=alert_kind,
-        period_end=period_end,
-    )
+    return n > 0
 
 
 def check_subscription_expiry_for_user(user_id: str) -> dict[str, Any]:

@@ -995,7 +995,47 @@ class LectureService {
       throw Exception(_extractErrorDetail(response));
     }
   }
+Future<void> homeAiRenameSession(String sessionId, String title) async {
+    if (!AppConfig.isApiConfigured) {
+      throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
+    }
+    final accessToken = await _requireAccessToken();
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/home-ai/sessions/$sessionId',
+    );
+    final response = await http.patch(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'title': title}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+  }
 
+  Future<void> homeAiPinSession(String sessionId, bool pinned) async {
+    if (!AppConfig.isApiConfigured) {
+      throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
+    }
+    final accessToken = await _requireAccessToken();
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/home-ai/sessions/$sessionId/pin',
+    );
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'pinned': pinned}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+  }
   /// Warm RAG index before Ask AI (idempotent — no credits). Soft-fail OK.
   Future<void> warmLectureRagIndex(String lectureId) async {
     final id = lectureId.trim();

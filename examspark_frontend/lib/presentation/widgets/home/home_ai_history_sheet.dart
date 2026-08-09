@@ -65,6 +65,30 @@ class _HomeAiHistorySheetState extends State<_HomeAiHistorySheet> {
   }
 
   Future<void> _delete(String id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        ),
+        title: const Text('Delete chat?'),
+        content: const Text('This chat will be permanently deleted.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
     try {
       await LectureService.instance.homeAiDeleteSession(id);
       if (!mounted) return;
@@ -73,7 +97,7 @@ class _HomeAiHistorySheetState extends State<_HomeAiHistorySheet> {
       });
     } catch (e) {
       if (!mounted) return;
-      AppToast.showSnackBar(context, 
+      AppToast.showSnackBar(context,
         SnackBar(
           content: Text(
             e.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''),
@@ -81,6 +105,138 @@ class _HomeAiHistorySheetState extends State<_HomeAiHistorySheet> {
         ),
       );
     }
+  }
+
+  Future<void> _rename(String id, String currentTitle) async {
+    final controller = TextEditingController(text: currentTitle);
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        ),
+        title: const Text('Rename chat'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 120,
+          decoration: const InputDecoration(hintText: 'Chat title'),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (newTitle == null || newTitle.isEmpty) return;
+    try {
+      await LectureService.instance.homeAiRenameSession(id, newTitle);
+      if (!mounted) return;
+      setState(() {
+        final idx = _sessions.indexWhere((s) => s['id'] == id);
+        if (idx != -1) _sessions[idx]['title'] = newTitle;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.showSnackBar(context,
+        SnackBar(
+          content: Text(
+            e.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''),
+          ),
+        ),
+      );
+    }
+  }
+
+  Future<void> _togglePin(String id, bool currentlyPinned) async {
+    try {
+      await LectureService.instance.homeAiPinSession(id, !currentlyPinned);
+      if (!mounted) return;
+      setState(() {
+        final idx = _sessions.indexWhere((s) => s['id'] == id);
+        if (idx != -1) _sessions[idx]['pinned'] = !currentlyPinned;
+        _sessions.sort((a, b) {
+          final ap = a['pinned'] == true ? 1 : 0;
+          final bp = b['pinned'] == true ? 1 : 0;
+          return bp.compareTo(ap);
+        });
+      });
+    } catch (e) {
+      if (!mounted) return;
+      AppToast.showSnackBar(context,
+        SnackBar(
+          content: Text(
+            e.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''),
+          ),
+        ),
+      );
+    }
+  }
+
+  void _showOptionsSheet(String id, String title, bool pinned) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            Container(
+              width: 36,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AppTheme.getCardBorder(ctx),
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Rename'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _rename(id, title);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                pinned ? Icons.push_pin : Icons.push_pin_outlined,
+              ),
+              title: Text(pinned ? 'Unpin' : 'Pin'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _togglePin(id, pinned);
+              },
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline_rounded,
+                color: Theme.of(ctx).colorScheme.error,
+              ),
+              title: Text(
+                'Delete',
+                style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+              ),
+              onTap: () {
+                Navigator.pop(ctx);
+                _delete(id);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -132,7 +288,7 @@ class _HomeAiHistorySheetState extends State<_HomeAiHistorySheet> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                'Open = same Q + answer + chips. No AI · 0 credits.',
+                'Open = same Q + answer + chips. Long-press for options.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                       color: AppTheme.getSecondaryText(context),
                     ),
@@ -202,18 +358,12 @@ class _HomeAiHistorySheetState extends State<_HomeAiHistorySheet> {
                                               ? updated.substring(0, 10)
                                               : updated,
                                         ),
-                                  trailing: IconButton(
-                                    tooltip: 'Delete',
-                                    icon: const Icon(
-                                      Icons.delete_outline_rounded,
-                                    ),
-                                    onPressed: id.isEmpty
-                                        ? null
-                                        : () => _delete(id),
-                                  ),
                                   onTap: id.isEmpty
                                       ? null
                                       : () => Navigator.pop(context, id),
+                                  onLongPress: id.isEmpty
+                                      ? null
+                                      : () => _showOptionsSheet(id, title, pinned),
                                 );
                               },
                             ),

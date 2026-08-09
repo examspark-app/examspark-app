@@ -1034,7 +1034,8 @@ async def home_ai(
     resolved_lang = resolve_answer_language(query, conversation_language)
 
     # PYQ match on answer path only inside Tavily gate (not for every Home ask).
-    pyq_matches: list = []
+    from app.services.pyq_retrieve import match_pyqs_for_query
+    pyq_matches = await match_pyqs_for_query(query)
 
     context_blocks: list[str] | None = None
     sources_meta: list[dict] = []
@@ -1329,7 +1330,8 @@ async def home_ai_stream(
 
     resolved_lang = resolve_answer_language(query, conversation_language)
 
-    pyq_matches: list = []
+    from app.services.pyq_retrieve import match_pyqs_for_query
+    pyq_matches = await match_pyqs_for_query(query)
 
     context_blocks: list[str] | None = None
     sources_meta: list[dict] = []

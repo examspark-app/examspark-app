@@ -283,3 +283,104 @@ async def pin_shared_item(
             ).execute()
 
     return {"id": item_id, "is_pinned": body.is_pinned}
+class ReportGroupRequest(BaseModel):
+    class_id: str = Field(..., min_length=1)
+    reason: str | None = None
+
+
+@router.post("/report")
+async def report_group(
+    body: ReportGroupRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    db = get_supabase_admin()
+    existing = (
+        db.table("group_reports")
+        .select("id")
+        .eq("class_id", body.class_id)
+        .eq("reporter_id", user.user_id)
+        .limit(1)
+        .execute()
+    )
+    if existing.data:
+        raise HTTPException(
+            status_code=409,
+            detail="You have already reported this group.",
+        )
+    db.table("group_reports").insert({
+        "class_id": body.class_id,
+        "reporter_id": user.user_id,
+        "reason": body.reason,
+    }).execute()
+    return {"status": "ok"}
+
+
+class SubmitReviewRequest(BaseModel):
+    class_id: str = Field(..., min_length=1)
+    rating: str = Field(..., pattern="^(good|bad)$")
+
+
+@router.post("/review")
+async def submit_teacher_review(
+    body: SubmitReviewRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    db = get_supabase_admin()
+
+    membership = (
+        db.table("class_memberships")
+        .select("id")
+        .eq("class_id", body.class_id)
+        .eq("student_id", user.user_id)
+        .maybe_single()
+        .execute()
+    )
+
+    if not membership.data:
+        raise HTTPException(
+            status_code=403,
+            detail="Only joined members can review",
+        )
+
+    # Get the real teacher ID from the group/class.
+    class_row = (
+        db.table("class_folders")
+        .select("teacher_id")
+        .eq("id", body.class_id)
+        .maybe_single()
+        .execute()
+    )
+
+    if not class_row.data:
+        raise HTTPException(
+            status_code=404,
+            detail="Group not found",
+        )
+
+    teacher_id = class_row.data["teacher_id"]
+
+    db.table("teacher_reviews").upsert(
+        {
+            "teacher_id": teacher_id,
+            "student_id": user.user_id,
+            "class_id": body.class_id,
+            "rating": body.rating,
+        },
+        on_conflict="teacher_id,student_id",
+    ).execute()
+
+    return {"status": "ok"}
+
+
+@router.get("/teacher/{teacher_id}/reviews")
+async def get_teacher_reviews(teacher_id: str):
+    db = get_supabase_admin()
+    rows = (
+        db.table("teacher_reviews")
+        .select("rating")
+        .eq("teacher_id", teacher_id)
+        .execute()
+    )
+    good = sum(1 for r in (rows.data or []) if r["rating"] == "good")
+    bad = sum(1 for r in (rows.data or []) if r["rating"] == "bad")
+    return {"good": good, "bad": bad, "total": good + bad}

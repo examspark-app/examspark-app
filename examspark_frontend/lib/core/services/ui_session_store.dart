@@ -50,10 +50,21 @@ class UiSessionStore {
     return p.getInt(_kTab);
   }
 
-  Future<void> saveHomeChat(List<Map<String, dynamic>> messages) async {
-    final p = await _prefs;
-    await p.setString(_kHomeChat, jsonEncode(messages));
+  static const int _maxSavedMessages = 200;
+
+Future<void> saveHomeChat(List<Map<String, dynamic>> messages) async {
+  final p = await _prefs;
+  final trimmed = messages.length > _maxSavedMessages
+      ? messages.sublist(messages.length - _maxSavedMessages)
+      : messages;
+  try {
+    await p.setString(_kHomeChat, jsonEncode(trimmed));
+  } catch (_) {
+    // Storage full or serialization failed — clear stale data rather
+    // than silently keep old/stuck chat next load.
+    await p.remove(_kHomeChat);
   }
+}
 
   Future<List<Map<String, dynamic>>> loadHomeChat() async {
     final p = await _prefs;

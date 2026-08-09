@@ -39,6 +39,10 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   bool _isLoading = true;
   bool _isJoinUpdating = false;
   String? _updatingSuggestedId;
+  bool _isSubmittingReview = false;
+  String? _myReviewRating;
+  Map<String, int> _reviewCounts = {'good': 0, 'bad': 0};
+  bool _hasReported = false;
   Map<String, dynamic>? _couponStatus;
 
   bool get _isGroupTeacher {
@@ -85,11 +89,18 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     final suggested = await GroupsRepository.instance.fetchSuggestedTeachers();
     final couponStatus =
         await GroupsRepository.instance.fetchCouponMembershipStatus(widget.groupId);
+    Map<String, int> counts = {'good': 0, 'bad': 0};
+    if (group != null) {
+      try {
+        counts = await ClassService.instance.getTeacherReviewCounts(group.teacher.userId ?? group.teacher.id);
+      } catch (_) {}
+    }
     if (!mounted) return;
     setState(() {
       _group = group;
       _suggestedTeachers = suggested.where((t) => t.id != group?.teacher.id).toList();
       _couponStatus = couponStatus;
+      _reviewCounts = counts;
       _isLoading = false;
     });
     // Student opened channel → daily active heartbeat (teacher dashboard).
@@ -153,7 +164,31 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
       AppToast.showSnackBar(context, SnackBar(content: Text(e.message)));
     }
   }
-
+Future<void> _confirmLeaveGroup() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.borderRadius)),
+        title: const Text('Leave Group?'),
+        content: const Text(
+          'If you leave, rejoining later needs an active paid plan. '
+          'Without one, you will need to buy a new plan to join again, '
+          'and you will not have access to this group\'s content until then.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            child: const Text('Leave Group'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed == true) {
+      await _toggleJoin();
+    }
+  }
   Future<void> _toggleSuggested(SuggestedTeacherModel teacher) async {
     setState(() => _updatingSuggestedId = teacher.id);
     await Future.delayed(const Duration(milliseconds: 300));
@@ -648,28 +683,205 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
   }
 
   void _reportGroup() {
+    final group = _group;
+    if (group == null) return;
+
+    const reasonOptions = [
+      'Teacher spam',
+      'Not posting lectures',
+      'Inappropriate content',
+      'Others',
+    ];
+    var selectedReason = reasonOptions.first;
+    final customController = TextEditingController();
+    var submitting = false;
+
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.borderRadius)),
-        title: const Text('Report Group'),
-        content: const Text('Report this group for inappropriate content or behaviour?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              Navigator.pop(context);
-              AppToast.showSnackBar(context, 
-                const SnackBar(content: Text('Report submitted. Our team will review it.')),
-              );
-            },
-            child: const Text('Report'),
-          ),
-        ],
-      ),
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialog) {
+            final wordCount = customController.text.trim().isEmpty
+                ? 0
+                : customController.text.trim().split(RegExp(r'\s+')).length;
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+              ),
+              title: const Text('Report Group'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (final option in reasonOptions)
+                      RadioListTile<String>(
+                        contentPadding: EdgeInsets.zero,
+                        dense: true,
+                        title: Text(option),
+                        value: option,
+                        groupValue: selectedReason,
+                        onChanged: submitting
+                            ? null
+                            : (v) => setDialog(() => selectedReason = v!),
+                      ),
+                    if (selectedReason == 'Others') ...[
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: customController,
+                        maxLines: 3,
+                        enabled: !submitting,
+                        onChanged: (_) => setDialog(() {}),
+                        decoration: InputDecoration(
+                          hintText: 'Describe the issue (max 100 words)',
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        '$wordCount / 100 words',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: wordCount > 100
+                              ? Theme.of(context).colorScheme.error
+                              : AppTheme.getSecondaryText(context),
+                        ),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: submitting ? null : () => Navigator.pop(context),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          if (selectedReason == 'Others' && wordCount > 100) {
+                            AppToast.showSnackBar(context,
+                              const SnackBar(content: Text('Please keep it under 100 words.')),
+                            );
+                            return;
+                          }
+                          setDialog(() => submitting = true);
+                          final reason = selectedReason == 'Others'
+                              ? customController.text.trim()
+                              : selectedReason;
+                          try {
+                            await ClassService.instance.reportGroup(
+                              classId: group.id,
+                              reason: reason.isEmpty ? selectedReason : reason,
+                            );
+                            if (!context.mounted) return;
+                            Navigator.pop(context);
+                            if (!mounted) return;
+                            setState(() => _hasReported = true);
+                            AppToast.showSnackBar(context,
+                              const SnackBar(
+                                content: Text('Report submitted. Our team will review it.'),
+                                backgroundColor: Colors.green,
+                              ),
+                            );
+                          } catch (e) {
+                            final msg = e.toString().replaceFirst('Exception: ', '');
+                            if (msg.contains('already reported')) {
+                              if (!context.mounted) return;
+                              Navigator.pop(context);
+                              if (!mounted) return;
+                              setState(() => _hasReported = true);
+                              AppToast.showSnackBar(context,
+                                const SnackBar(
+                                  content: Text('You already reported this group.'),
+                                  backgroundColor: Colors.green,
+                                ),
+                              );
+                              return;
+                            }
+                            setDialog(() => submitting = false);
+                            if (!context.mounted) return;
+                            AppToast.showSnackBar(context,
+                              SnackBar(content: Text('Could not submit report: $msg')),
+                            );
+                          }
+                        },
+                  child: submitting
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Submit'),
+                ),
+              ],
+            );
+          },
+        );
+      },
     );
   }
+Future<void> _submitReview(bool isGood) async {
+    final group = _group;
+    if (group == null || _isSubmittingReview) return;
 
+    if (_myReviewRating != null && _myReviewRating != (isGood ? 'good' : 'bad')) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.borderRadius)),
+          title: const Text('Change your review?'),
+          content: Text(
+            'You previously rated this teacher "${_myReviewRating == 'good' ? 'Good' : 'Bad'}". '
+            'Do you want to change it to "${isGood ? 'Good' : 'Bad'}"?',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Change'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
+    setState(() => _isSubmittingReview = true);
+    try {
+      await ClassService.instance.submitTeacherReview(
+        teacherId: group.teacher.userId ?? group.teacher.id,
+        classId: group.id,
+        isGood: isGood,
+      );
+      if (!mounted) return;
+      Map<String, int> newCounts = _reviewCounts;
+      try {
+        newCounts = await ClassService.instance.getTeacherReviewCounts(group.teacher.id);
+      } catch (_) {}
+      if (!mounted) return;
+      setState(() {
+        _myReviewRating = isGood ? 'good' : 'bad';
+        _reviewCounts = newCounts;
+        _isSubmittingReview = false;
+      });
+      AppToast.showSnackBar(context,
+        SnackBar(
+          content: Text(isGood ? 'Thanks for the good review!' : 'Feedback noted.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmittingReview = false);
+      AppToast.showSnackBar(context,
+        SnackBar(content: Text('Could not submit review: $e')),
+      );
+    }
+  }
   String? _couponBannerText() {
     final s = _couponStatus;
     if (s == null) return null;
@@ -705,6 +917,20 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
+        actions: [
+          if (group.isJoined && !_isGroupTeacher)
+            PopupMenuButton<String>(
+              onSelected: (value) {
+                if (value == 'leave') _confirmLeaveGroup();
+              },
+              itemBuilder: (context) => [
+                const PopupMenuItem(
+                  value: 'leave',
+                  child: Text('Leave Group', style: TextStyle(color: Colors.red)),
+                ),
+              ],
+            ),
+        ],
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -730,7 +956,11 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // ---- Top: Teacher profile (channel owner) ----
-            TeacherProfileHeader(teacher: teacher),
+            TeacherProfileHeader(
+              teacher: teacher,
+              goodCount: _reviewCounts['good'] ?? 0,
+              badCount: _reviewCounts['bad'] ?? 0,
+            ),
             if (_couponBannerText() != null) ...[
               const SizedBox(height: 12),
               Container(
@@ -801,7 +1031,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _reportGroup,
+                    onPressed: _hasReported ? null : _reportGroup,
                     icon: const Icon(Icons.flag_outlined, size: 16),
                     label: const Text('Report'),
                     style: OutlinedButton.styleFrom(
@@ -812,6 +1042,38 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
                 ),
               ],
             ),
+            if (group.isJoined && !_isGroupTeacher) ...[
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isSubmittingReview ? null : () => _submitReview(true),
+                      icon: Icon(
+                        Icons.thumb_up_outlined,
+                        size: 16,
+                        color: _myReviewRating == 'good' ? Colors.green : null,
+                      ),
+                      label: const Text('Good'),
+                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(40)),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: _isSubmittingReview ? null : () => _submitReview(false),
+                      icon: Icon(
+                        Icons.thumb_down_outlined,
+                        size: 16,
+                        color: _myReviewRating == 'bad' ? Colors.red : null,
+                      ),
+                      label: const Text('Bad'),
+                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(40)),
+                    ),
+                  ),
+                ],
+              ),
+            ],
             const SizedBox(height: 28),
 
             // ---- Group Information (moved up, above the feed) ----
@@ -844,31 +1106,7 @@ class _GroupInfoScreenState extends State<GroupInfoScreen> {
               const SizedBox(height: 24),
             ],
 
-            // ---- Leave (students only — teacher owns the group) ----
-            if (group.isJoined && !_isGroupTeacher) ...[
-              Align(
-                alignment: Alignment.centerRight,
-                child: OutlinedButton.icon(
-                  onPressed: _isJoinUpdating ? null : _toggleJoin,
-                  icon: const Icon(Icons.logout_rounded, size: 14),
-                  label: Text(
-                    _isJoinUpdating ? 'Updating...' : 'Leave Group',
-                    style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                  ),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-                    minimumSize: Size.zero,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    foregroundColor: const Color(0xFFE53935),
-                    side: const BorderSide(color: Color(0xFFE53935), width: 1.1),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-            ],
+            
 
             // ---- Channel feed (lectures/posts) — now at the very bottom ----
             if (group.recentSharedItems.isNotEmpty || _isGroupTeacher) ...[

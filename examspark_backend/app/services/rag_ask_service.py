@@ -814,8 +814,9 @@ async def ask_ai(
 
     resolved_lang = resolve_answer_language(query, conversation_language)
 
-    # PYQ match only inside Tavily gate — not on every Ask.
-    pyq_matches: list = []
+    from app.services.pyq_retrieve import match_pyqs_for_query
+    pyq_matches = await match_pyqs_for_query(query)
+
     timer.start("llm")
     raw_answer = await _generate_answer(
         query,
@@ -1094,7 +1095,8 @@ async def ask_ai_stream(
         if context_blocks
         else "(no context retrieved)"
     )
-    pyq_matches: list = []
+    from app.services.pyq_retrieve import match_pyqs_for_query
+    pyq_matches = await match_pyqs_for_query(query)
     max_tokens = max_tokens_for_mode(mode)
     temperature = 0.2 if mode == "deep" else 0.3
     messages = [

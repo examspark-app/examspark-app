@@ -10,11 +10,15 @@ import 'package:examspark_frontend/presentation/widgets/initials_avatar.dart';
 class TeacherProfileHeader extends StatelessWidget {
   final TeacherProfileModel teacher;
   final VoidCallback? onTapCertificates;
+  final int goodCount;
+  final int badCount;
 
   const TeacherProfileHeader({
     super.key,
     required this.teacher,
     this.onTapCertificates,
+    this.goodCount = 0,
+    this.badCount = 0,
   });
 
   // Recognizable "verified" blue — Twitter/Instagram-style checkmark color.
@@ -198,7 +202,9 @@ class TeacherProfileHeader extends StatelessWidget {
         // ---- Info pills (location / qualification / certificates) ----
         if (teacher.locationLabel.isNotEmpty ||
             teacher.qualification != null ||
-            _hasCertificateBadge)
+            _hasCertificateBadge ||
+            goodCount > 0 ||
+            badCount > 0)
           Wrap(
             alignment: WrapAlignment.center,
             spacing: 8,
@@ -213,6 +219,11 @@ class TeacherProfileHeader extends StatelessWidget {
                   icon: Icons.workspace_premium_rounded,
                   label: '${teacher.certificates.length} Certificates',
                   onTap: onTapCertificates,
+                ),
+              if (goodCount > 0 || badCount > 0)
+                _InfoPill(
+                  icon: Icons.thumb_up_outlined,
+                  label: '$goodCount good · $badCount bad',
                 ),
             ],
           ),

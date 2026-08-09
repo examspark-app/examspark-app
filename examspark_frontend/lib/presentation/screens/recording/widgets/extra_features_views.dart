@@ -194,13 +194,7 @@ class _MCQQuizViewState extends State<MCQQuizView> {
                     ),
                   ),
                   const SizedBox(height: 16),
-                  GridView.count(
-                    crossAxisCount: 2,
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    mainAxisSpacing: 10,
-                    crossAxisSpacing: 10,
-                    childAspectRatio: 2.6,
+                  Column(
                     children: currentQuestion.options.asMap().entries.map((entry) {
                       final index = entry.key;
                       final option = entry.value;
@@ -208,18 +202,21 @@ class _MCQQuizViewState extends State<MCQQuizView> {
                       final isSelected = selectedAnswer == optionLetter;
                       final isCorrectOption =
                           optionLetter == currentQuestion.correctAnswer;
-                      return _DarkOptionButton(
-                        letter: optionLetter,
-                        text: option,
-                        isSelected: isSelected,
-                        isAnswered: isSubmitted,
-                        isCorrectOption: isCorrectOption,
-                        onTap: isSubmitted
-                            ? null
-                            : () => setState(
-                                  () => _selectedAnswers[
-                                      _currentQuestionIndex] = optionLetter,
-                                ),
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 10),
+                        child: _DarkOptionButton(
+                          letter: optionLetter,
+                          text: option,
+                          isSelected: isSelected,
+                          isAnswered: isSubmitted,
+                          isCorrectOption: isCorrectOption,
+                          onTap: isSubmitted
+                              ? null
+                              : () => setState(
+                                    () => _selectedAnswers[
+                                        _currentQuestionIndex] = optionLetter,
+                                  ),
+                        ),
                       );
                     }).toList(),
                   ),
@@ -573,9 +570,8 @@ class _DarkOptionButton extends StatelessWidget {
                 style: const TextStyle(
                   color: Colors.white,
                   fontSize: 13.5,
+                  height: 1.35,
                 ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
               ),
             ),
           ],

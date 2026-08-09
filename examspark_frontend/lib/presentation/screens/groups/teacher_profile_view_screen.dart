@@ -6,7 +6,7 @@ import 'package:examspark_frontend/core/models/teacher_profile_model.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/groups/widgets/teacher_profile_header.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
-
+import 'package:examspark_frontend/core/services/class_service.dart';
 /// Full teacher profile page — opened from Discovery card tap.
 /// Shows bio (via TeacherProfileHeader) + all of that
 /// teacher's groups with Join/Open buttons.
@@ -24,7 +24,9 @@ class _TeacherProfileViewScreenState extends State<TeacherProfileViewScreen> {
   List<GroupModel> _groups = [];
   bool _loading = true;
   String? _joiningGroupId;
-
+  Map<String, int> _reviewCounts = {'good': 0, 'bad': 0};
+  bool _isSubmittingReview = false;
+  String? _myReviewRating;
   @override
   void initState() {
     super.initState();
@@ -36,14 +38,86 @@ class _TeacherProfileViewScreenState extends State<TeacherProfileViewScreen> {
         .fetchTeacherProfileByUserId(widget.teacherUserId);
     final groups = await GroupsRepository.instance
         .fetchGroupsForTeacher(widget.teacherUserId);
+    Map<String, int> counts = {'good': 0, 'bad': 0};
+    if (profile != null) {
+      try {
+        counts = await ClassService.instance.getTeacherReviewCounts(profile.userId ?? profile.id);
+      } catch (_) {}
+    }
     if (!mounted) return;
     setState(() {
       _profile = profile;
       _groups = groups;
+      _reviewCounts = counts;
       _loading = false;
     });
   }
+GroupModel? get _joinedGroup {
+    for (final g in _groups) {
+      if (g.isJoined) return g;
+    }
+    return null;
+  }
 
+  Future<void> _submitReview(bool isGood) async {
+    final profile = _profile;
+    final group = _joinedGroup;
+    if (profile == null || group == null || _isSubmittingReview) return;
+
+    if (_myReviewRating != null && _myReviewRating != (isGood ? 'good' : 'bad')) {
+      final confirm = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.borderRadius)),
+          title: const Text('Change your review?'),
+          content: Text(
+            'You previously rated this teacher "${_myReviewRating == 'good' ? 'Good' : 'Bad'}". '
+            'Do you want to change it to "${isGood ? 'Good' : 'Bad'}"?',
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Change'),
+            ),
+          ],
+        ),
+      );
+      if (confirm != true) return;
+    }
+
+    setState(() => _isSubmittingReview = true);
+    try {
+      await ClassService.instance.submitTeacherReview(
+        teacherId: profile.userId ?? profile.id,
+        classId: group.id,
+        isGood: isGood,
+      );
+      if (!mounted) return;
+      Map<String, int> newCounts = _reviewCounts;
+      try {
+        newCounts = await ClassService.instance.getTeacherReviewCounts(profile.userId ?? profile.id);
+      } catch (_) {}
+      if (!mounted) return;
+      setState(() {
+        _myReviewRating = isGood ? 'good' : 'bad';
+        _reviewCounts = newCounts;
+        _isSubmittingReview = false;
+      });
+      AppToast.showSnackBar(context,
+        SnackBar(
+          content: Text(isGood ? 'Thanks for the good review!' : 'Feedback noted.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _isSubmittingReview = false);
+      AppToast.showSnackBar(context,
+        SnackBar(content: Text('Could not submit review: $e')),
+      );
+    }
+  }
   Future<void> _joinGroup(GroupModel group) async {
     if (_joiningGroupId != null) return;
     setState(() => _joiningGroupId = group.id);
@@ -154,6 +228,8 @@ class _TeacherProfileViewScreenState extends State<TeacherProfileViewScreen> {
             TeacherProfileHeader(
               teacher: profile,
               onTapCertificates: _showCertificatesSheet,
+              goodCount: _reviewCounts['good'] ?? 0,
+              badCount: _reviewCounts['bad'] ?? 0,
             ),
             const SizedBox(height: 24),
 

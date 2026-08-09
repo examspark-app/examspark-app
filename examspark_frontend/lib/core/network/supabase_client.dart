@@ -238,7 +238,23 @@ class SupabaseClient {
 
     return List<Map<String, dynamic>>.from(response as List);
   }
-
+  /// Google Play generative-AI policy — single entry point for users to
+  /// flag offensive/incorrect AI content (Profile → Report AI content).
+  /// Inserts into `ai_content_reports` (see create_ai_content_reports_table.sql).
+  Future<void> reportAiContent({
+    required String description,
+    String? referenceNote,
+  }) async {
+    final userId = currentUser?.id;
+    if (userId == null) {
+      throw StateError('Must be signed in to report content.');
+    }
+    await client.from('ai_content_reports').insert({
+      'user_id': userId,
+      'description': description,
+      'reference_note': referenceNote,
+    });
+  }
   /// Saves the student onboarding screen's answers: `username`/`avatar_color`
   /// go on `users`, `age`/`education_level`/`subjects` go on
   /// `student_profiles` (upsert — the row may not exist yet). Marks

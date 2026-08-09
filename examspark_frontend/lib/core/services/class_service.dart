@@ -965,4 +965,60 @@ class ClassService {
           'topic': 'Hydrocarbons',
         },
       ];
+      Future<void> reportGroup({required String classId, String? reason}) async {
+    if (!AppConfig.isApiConfigured) throw StateError('API not configured');
+    final token = await _accessToken();
+    final res = await http.post(
+      Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/groups/report'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'class_id': classId, 'reason': reason}),
+    );
+    if (res.statusCode == 409) {
+      throw Exception('You have already reported this group.');
+    }
+    if (res.statusCode != 200) {
+      throw Exception('Report failed (${res.statusCode})');
+    }
+  }
+
+  Future<void> submitTeacherReview({
+    required String teacherId,
+    required String classId,
+    required bool isGood,
+  }) async {
+    if (!AppConfig.isApiConfigured) throw StateError('API not configured');
+    final token = await _accessToken();
+    final res = await http.post(
+      Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/groups/review'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'teacher_id': teacherId,
+        'class_id': classId,
+        'rating': isGood ? 'good' : 'bad',
+      }),
+    );
+    if (res.statusCode != 200) {
+      throw Exception('Review failed (${res.statusCode})');
+    }
+  }
+
+  Future<Map<String, int>> getTeacherReviewCounts(String teacherId) async {
+    if (!AppConfig.isApiConfigured) return {'good': 0, 'bad': 0, 'total': 0};
+    final res = await http.get(
+      Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/groups/teacher/$teacherId/reviews'),
+    );
+    if (res.statusCode != 200) return {'good': 0, 'bad': 0, 'total': 0};
+    final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+    return {
+      'good': decoded['good'] as int? ?? 0,
+      'bad': decoded['bad'] as int? ?? 0,
+      'total': decoded['total'] as int? ?? 0,
+    };
+  }
 }

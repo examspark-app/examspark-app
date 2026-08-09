@@ -33,16 +33,23 @@ class BrandMark extends StatelessWidget {
               borderRadius: BorderRadius.circular(radius),
             ),
             
+            padding: EdgeInsets.zero,
             alignment: Alignment.center,
-            child: Text(
-              AppBrand.markLetter,
-              style: TextStyle(
-                color: Colors.white,
-                fontWeight: FontWeight.w800,
-                fontSize: letterSize,
-                height: 1,
-                letterSpacing: 0.5,
-              ),
+            child: Image.network(
+            AppBrand.logoPath,
+            fit: BoxFit.cover,
+              errorBuilder: (context, error, stackTrace) {
+                return Text(
+                  AppBrand.markLetter,
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: letterSize,
+                    height: 1,
+                    letterSpacing: 0.5,
+                  ),
+                );
+              },
             ),
           ),
           if (showWordmark) ...[

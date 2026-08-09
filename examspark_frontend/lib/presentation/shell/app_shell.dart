@@ -171,7 +171,124 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       setState(() => _loadingSessions = false);
     }
   }
+Future<void> _renameSession(Map<String, dynamic> s) async {
+    final id = s['id']?.toString();
+    if (id == null || id.isEmpty) return;
+    final controller = TextEditingController(
+      text: (s['title'] as String?) ?? '',
+    );
+    final newTitle = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Rename chat'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: 120,
+          decoration: const InputDecoration(hintText: 'Chat title'),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (newTitle == null || newTitle.isEmpty) return;
+    try {
+      await LectureService.instance.homeAiRenameSession(id, newTitle);
+      if (!mounted) return;
+      setState(() => s['title'] = newTitle);
+    } catch (_) {}
+  }
 
+  Future<void> _togglePinSession(Map<String, dynamic> s) async {
+    final id = s['id']?.toString();
+    if (id == null || id.isEmpty) return;
+    final currentlyPinned = s['pinned'] == true;
+    try {
+      await LectureService.instance.homeAiPinSession(id, !currentlyPinned);
+      if (!mounted) return;
+      setState(() {
+        s['pinned'] = !currentlyPinned;
+        _recentSessions?.sort((a, b) {
+          final ap = a['pinned'] == true ? 1 : 0;
+          final bp = b['pinned'] == true ? 1 : 0;
+          return bp.compareTo(ap);
+        });
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _deleteSession(Map<String, dynamic> s) async {
+    final id = s['id']?.toString();
+    if (id == null || id.isEmpty) return;
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete chat?'),
+        content: const Text('This chat will be permanently deleted.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    setState(() => _recentSessions?.remove(s));
+    try {
+      await LectureService.instance.homeAiDeleteSession(id);
+    } catch (_) {}
+  }
+
+  void _showChatOptions(Map<String, dynamic> s) {
+    final pinned = s['pinned'] == true;
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: 8),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Rename'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _renameSession(s);
+              },
+            ),
+            ListTile(
+              leading: Icon(pinned ? Icons.push_pin : Icons.push_pin_outlined),
+              title: Text(pinned ? 'Unpin' : 'Pin'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _togglePinSession(s);
+              },
+            ),
+            ListTile(
+              leading: Icon(Icons.delete_outline_rounded, color: Theme.of(ctx).colorScheme.error),
+              title: Text('Delete', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+              onTap: () {
+                Navigator.pop(ctx);
+                _deleteSession(s);
+              },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
   Widget _buildAppDrawer(BuildContext context) {
     final iconColor = AppTheme.getPrimaryText(context);
     return Drawer(
@@ -322,7 +439,13 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                       ListTile(
                         dense: true,
                         visualDensity: VisualDensity.compact,
-                        leading: Icon(Icons.chat_bubble_outline, size: 18, color: iconColor),
+                        leading: Icon(
+                          s['pinned'] == true
+                              ? Icons.push_pin_rounded
+                              : Icons.chat_bubble_outline,
+                          size: 18,
+                          color: iconColor,
+                        ),
                         title: Text(
                           (s['title'] as String?)?.trim().isNotEmpty == true
                               ? s['title'] as String
@@ -332,17 +455,10 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                           overflow: TextOverflow.ellipsis,
                         ),
                         trailing: IconButton(
-                          icon: Icon(Icons.close_rounded, size: 16, color: AppTheme.getSecondaryText(context)),
+                          icon: Icon(Icons.more_vert_rounded, size: 18, color: iconColor),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
-                          onPressed: () async {
-                            final id = s['id']?.toString();
-                            if (id == null || id.isEmpty) return;
-                            setState(() => _recentSessions!.remove(s));
-                            try {
-                              await LectureService.instance.homeAiDeleteSession(id);
-                            } catch (_) {}
-                          },
+                          onPressed: () => _showChatOptions(s),
                         ),
                         onTap: () {
                           Navigator.pop(context);
@@ -576,6 +692,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       return Scaffold(
         key: _scaffoldKey,
         drawer: _buildAppDrawer(context),
+        onDrawerChanged: (isOpened) {
+          if (isOpened) _loadRecentSessions();
+        },
         body: Row(
           children: [
             NavigationRail(
@@ -588,9 +707,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
               indicatorShape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              leading: const Padding(
-                padding: EdgeInsets.only(top: 24, bottom: 16),
-                child: BrandMark(tileSize: 40, fontSize: 20),
+              leading: Padding(
+                padding: const EdgeInsets.only(top: 24, bottom: 16),
+                child: Text(
+                  'Sonaxia',
+                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 14,
+                      ),
+                  textAlign: TextAlign.center,
+                ),
               ),
               destinations: [
                 for (final d in _destinations)
@@ -643,6 +769,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     return Scaffold(
       key: _scaffoldKey,
       drawer: _buildAppDrawer(context),
+      onDrawerChanged: (isOpened) {
+        if (isOpened) _loadRecentSessions();
+      },
       body: stack,
     );
   }

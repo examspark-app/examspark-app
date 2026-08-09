@@ -12,8 +12,10 @@ import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 import 'package:examspark_frontend/presentation/widgets/auth_gate.dart';
 
 /// Profile tab. Rows: Edit profile (students) · Subscription · Credits ·
-/// Library Size · Settings · Help · Logout · **Delete account (always last)** —
-/// Teacher Dashboard row for teachers only (no “Become Teacher” for students).
+/// Library Size · Settings · Help · **Report AI Content** (Google Play
+/// generative-AI policy — single entry point, not per-message) · Logout ·
+/// **Delete account (always last)** — Teacher Dashboard row for teachers only
+/// (no "Become Teacher" for students).
 class ProfileTab extends StatefulWidget {
   final ValueChanged<int> onGoToTab;
   final bool isActive;
@@ -278,6 +280,128 @@ class _ProfileTabState extends State<ProfileTab> {
     );
   }
 
+  /// Google Play generative-AI policy — single, always-available place for
+  /// users to flag AI content from anywhere in the app (Home AI answers or
+  /// Study Workspace notes), instead of a button on every AI response.
+  Future<void> _openReportAiContentDialog() async {
+    final descriptionController = TextEditingController();
+    final referenceController = TextEditingController();
+    var submitting = false;
+
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setDialog) {
+            return AlertDialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+              ),
+              title: const Text('Report AI content'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Saw something offensive or wrong from Sonaxia AI '
+                      '(Home AI answer or lecture notes)? Describe it below.',
+                      style: Theme.of(ctx).textTheme.bodyMedium,
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: descriptionController,
+                      autofocus: true,
+                      maxLines: 4,
+                      decoration: const InputDecoration(
+                        hintText: 'What was wrong with the content?',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: referenceController,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        hintText:
+                            'Optional — which lecture/question was this from?',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed:
+                      submitting ? null : () => Navigator.pop(ctx),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: submitting
+                      ? null
+                      : () async {
+                          final description =
+                              descriptionController.text.trim();
+                          if (description.isEmpty) {
+                            AppToast.showSnackBar(
+                              context,
+                              const SnackBar(
+                                content:
+                                    Text('Please describe the issue first.'),
+                              ),
+                            );
+                            return;
+                          }
+                          setDialog(() => submitting = true);
+                          try {
+                            await SupabaseClient.instance.reportAiContent(
+                              description: description,
+                              referenceNote:
+                                  referenceController.text.trim().isEmpty
+                                      ? null
+                                      : referenceController.text.trim(),
+                            );
+                            if (!ctx.mounted) return;
+                            Navigator.pop(ctx);
+                            if (!mounted) return;
+                            AppToast.showSnackBar(
+                              context,
+                              const SnackBar(
+                                content: Text(
+                                  'Thanks — we\'ll review this content.',
+                                ),
+                              ),
+                            );
+                          } catch (e) {
+                            setDialog(() => submitting = false);
+                            if (!ctx.mounted) return;
+                            AppToast.showSnackBar(
+                              context,
+                              SnackBar(
+                                content: Text('Could not submit report: $e'),
+                              ),
+                            );
+                          }
+                        },
+                  child: submitting
+                      ? const SizedBox(
+                          height: 18,
+                          width: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Text('Submit'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    descriptionController.dispose();
+    referenceController.dispose();
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -363,6 +487,12 @@ class _ProfileTabState extends State<ProfileTab> {
               icon: Icons.help_outline,
               label: 'Help',
               onTap: () => Navigator.pushNamed(context, '/help'),
+            ),
+            _divider(context),
+            ProfileRow(
+              icon: Icons.flag_outlined,
+              label: 'Report AI content',
+              onTap: _openReportAiContentDialog,
             ),
             _divider(context),
             ProfileRow(

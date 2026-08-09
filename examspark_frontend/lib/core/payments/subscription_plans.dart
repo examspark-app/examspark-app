@@ -68,10 +68,11 @@ class SubscriptionPlans {
     priceInrPaise: 0,
     maxGroups: 0,
     features: [
-      '50 credits/month',
+      '50 credits/month to get started',
       'Ask AI, PDF, Photo/Diagram (uses credits)',
-      'Audio recording/upload locked — upgrade ₹499+',
-      'Cannot join Groups',
+      '🎙️ Audio recording + upload included',
+      '⚡ Need more? Upgrade to ₹199 or ₹499 for way more credits',
+      'Upgrade to join Study Groups',
     ],
   );
 
@@ -83,11 +84,13 @@ class SubscriptionPlans {
     priceInrPaise: 19900,
     maxGroups: 1,
     features: [
-      '400 credits/month',
-      'Ask AI, PDF, Photo/Diagram (credits)',
-      'Audio still locked — unlock at ₹499+',
-      'Join up to 1 Group',
-    ],
+  '400 AI Credits / Month',
+  'Ask AI, PDF, Photo & Diagram (uses credits)',
+  '🎙️ Audio recording + upload included',
+  '🎁 FREE Premium Group Join (1 Group Included)',
+  'Monthly Credits Renewal',
+  '⚡ Need more credits? Upgrade to ₹499 for 1,000/month + 3 Groups',
+],
   );
 
   static const plan499 = SubscriptionPlanDef(
@@ -98,11 +101,13 @@ class SubscriptionPlans {
     priceInrPaise: 49900,
     maxGroups: 3,
     features: [
-      '1,000 credits/month',
-      'Ask AI, PDF, Photo/Diagram (credits)',
-      'Audio recording + upload unlocked',
-      'Join up to 3 Groups',
-    ],
+  '1,000 AI Credits / Month',
+  'Ask AI, PDF, Photo & Diagram (uses credits)',
+  'Audio Recording + Upload Unlocked',
+  '🎁 FREE Premium Group Joins (Up to 3 Groups)',
+  'Monthly Credits Renewal',
+  'Subscription bonus: Premium Group Access included',
+],
     isPopular: true,
   );
 
@@ -114,12 +119,14 @@ class SubscriptionPlans {
     priceInrPaise: 99900,
     maxGroups: 6,
     features: [
-      '2,000 credits/month',
-      'Ask AI, PDF, Photo/Diagram (credits)',
-      'Audio recording + upload unlocked',
-      'Full access — no feature locks',
-      'Join up to 6 Groups',
-    ],
+  '2,000 AI Credits / Month',
+  'Ask AI, PDF, Photo & Diagram (uses credits)',
+  'Audio Recording + Upload Unlocked',
+  'Full Access — No Feature Locks',
+  '🎁 FREE Premium Group Joins (Up to 6 Groups)',
+  'Monthly Credits Renewal',
+  'Subscription bonus: Premium Group Access included',
+],
   );
 
   static const teacher = SubscriptionPlanDef(
@@ -131,14 +138,14 @@ class SubscriptionPlans {
     // Join as student = 0. Own Groups create = unlimited (separate gate).
     maxGroups: 0,
     features: [
-      '10,000 credits/month',
-      'Bulk Record Lecture',
-      'Audio unlocked + full AI tools for your content',
-      'PDF export + shareable links',
-      'Class / Teacher dashboard',
-      'Create unlimited own Groups (after Get Verified)',
-      'Cannot join another teacher’s Group as a student',
-    ],
+  '10,000 AI Credits / Month',
+  'Bulk Record Lecture',
+  'Audio Unlocked + Full AI Tools',
+  'PDF Export + Shareable Links',
+  'Class / Teacher Dashboard',
+  'Create Unlimited Own Groups (After Verification)',
+  'Manage Your Own Classrooms',
+],
   );
 
   static const List<SubscriptionPlanDef> all = [

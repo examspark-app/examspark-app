@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
+from app.api.v1 import webhooks_google_play, webhooks_razorpay, webhooks_phonepe
 
 from app.routers import (
     payments,
@@ -36,6 +37,9 @@ app.include_router(coupons.router)
 app.include_router(notifications.router)
 app.include_router(groups.router)
 app.include_router(teachers.router)
+app.include_router(webhooks_razorpay.router)
+app.include_router(webhooks_google_play.router)
+app.include_router(webhooks_phonepe.router)
 
 
 @app.get("/")

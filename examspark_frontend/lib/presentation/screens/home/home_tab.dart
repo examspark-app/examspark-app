@@ -35,7 +35,7 @@ import 'package:examspark_frontend/presentation/widgets/study_workspace/workspac
 import 'package:examspark_frontend/presentation/screens/search/search_overlay_screen.dart';
 import 'package:examspark_frontend/presentation/widgets/youtube_link_dialog.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
-
+import 'package:posthog_flutter/posthog_flutter.dart';
 typedef OpenWorkspace = void Function(String lectureId, String title, String? subject);
 
 /// Home = Chat Screen. Home AI Study Coach (retrieval rules + 5 credits).
@@ -202,6 +202,14 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       _conversationLanguage = _sessionLanguage;
       _homeAiSessionId = _sessionHomeAiId;
     }
+    if (_sessionMessages != null && _sessionMessages!.isNotEmpty) {
+      _messages.addAll(_sessionMessages!);
+      _conversationLanguage = _sessionLanguage;
+      _homeAiSessionId = _sessionHomeAiId;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _scrollToBottom(instant: true);
+      });
+    }
     SessionLiveSync.instance.addListener(_onSessionLive);
     HomeSessionBridge.instance.addListener(_onHomeSessionBridge);
     HomeAskBridge.instance.addListener(_onHomeAskBridge);
@@ -283,7 +291,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       _messages.addAll(bubbles);
       _sessionMessages = List<_ChatBubble>.from(_messages);
     });
-    _scrollToBottom();
+    _scrollToBottom(instant: true);
   }
 
   void _schedulePersistChat() {
@@ -297,7 +305,11 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     _sessionMessages = List<_ChatBubble>.from(_messages);
     _sessionLanguage = _conversationLanguage;
     _sessionHomeAiId = _homeAiSessionId;
-    final rows = _messages.map((m) {
+    const maxKeep = 30;
+    final trimmedMessages = _messages.length > maxKeep
+    ? _messages.sublist(_messages.length - maxKeep)
+    : _messages;
+    final rows = trimmedMessages.map((m) {
       return <String, dynamic>{
         'id': m.id,
         'text': m.text,
@@ -391,9 +403,13 @@ void _onHomeSessionBridge() {
     });
   }
 
-  void _scrollToBottom() {
+  void _scrollToBottom({bool instant = false}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!_scrollController.hasClients) return;
+      if (instant) {
+        _scrollController.jumpTo(_scrollController.position.maxScrollExtent);
+        return;
+      }
       _scrollController.animateTo(
         _scrollController.position.maxScrollExtent,
         duration: const Duration(milliseconds: 280),
@@ -477,7 +493,22 @@ void _onHomeSessionBridge() {
         _messages.add(_ChatBubble(query, true));
       }
     });
-    _schedulePersistChat();
+    if (_messages.length >= 60 && !isRetry) {
+      AppToast.showSnackBar(
+        context,
+        SnackBar(
+          content: const Text(
+            'This chat is getting long. Starting a New Chat keeps things fast.',
+          ),
+          action: SnackBarAction(
+            label: 'New Chat',
+            onPressed: _startNewChat,
+          ),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+    }
+    unawaited(_persistChatNow());
     _scrollToBottom();
 
     try {
@@ -537,7 +568,7 @@ void _onHomeSessionBridge() {
       _isSending = false;
       _liveStreamText = null;
     });
-    _schedulePersistChat();
+    unawaited(_persistChatNow());
     _scrollToBottom();
   }
 
@@ -681,7 +712,7 @@ void _onHomeSessionBridge() {
       _isSending = false;
       _liveStreamText = null;
     });
-    _schedulePersistChat();
+    unawaited(_persistChatNow());
     _scrollToBottom();
     if (responseId != null && responseId.isNotEmpty) {
       _hydrateToolStates(responseId);
@@ -728,13 +759,14 @@ void _onHomeSessionBridge() {
           }
         }
       });
-      _schedulePersistChat();
+      unawaited(_persistChatNow());
     } catch (_) {
       // Soft-fail — chips still work via generate endpoint.
     }
   }
 
   void _handleRecord() {
+    Posthog().capture(eventName: 'home_ai_record_tapped');
     if (!_audioUnlocked) {
       _showAudioLockedSheet();
       return;
@@ -762,6 +794,7 @@ void _onHomeSessionBridge() {
           _showAudioLockedSheet();
         },
         onHomeVisionCamera: () {
+          Posthog().capture(eventName: 'home_ai_camera_tapped');
           Navigator.pop(sheetContext);
           _pickHomeVisionImage(fromCamera: true);
         },
@@ -922,7 +955,7 @@ void _onHomeSessionBridge() {
         );
       }
     });
-    _schedulePersistChat();
+    unawaited(_persistChatNow());
     _scrollToBottom();
 
     try {
@@ -998,6 +1031,7 @@ void _onHomeSessionBridge() {
   }
 
   void _handleYoutube() {
+    Posthog().capture(eventName: 'home_ai_youtube_tapped');
     showYoutubeLinkDialog(
       context,
       onSubmit: (url) => _startYoutubeNotes(url),
@@ -1111,6 +1145,18 @@ void _onHomeSessionBridge() {
   }
 
   Future<void> _restoreStudySession(String sessionId) async {
+    // Optimistic: show a loading placeholder immediately so the screen
+    // never looks empty/stuck while the real history fetches.
+    setState(() {
+      _messages
+        ..clear()
+        ..add(_ChatBubble('Loading chat…', false, revealComplete: true));
+      _liveStreamText = null;
+      _isSending = false;
+    });
+    _scrollToBottom(instant: true);
+
+    
     try {
       final data =
           await LectureService.instance.homeAiRestoreSession(sessionId);
@@ -1195,7 +1241,7 @@ void _onHomeSessionBridge() {
       _sessionMessages = List<_ChatBubble>.from(_messages);
       _sessionLanguage = _conversationLanguage;
       await _persistChatNow();
-      _scrollToBottom();
+      _scrollToBottom(instant: true);
       if (!mounted) return;
       AppToast.showSnackBar(context, 
         const SnackBar(
@@ -1220,13 +1266,11 @@ void _onHomeSessionBridge() {
       appBar: AppTopBar(
         showLogo: true,
         userName: _userName,
-        leading: Responsive.isMobile(context)
-            ? IconButton(
-                icon: const Icon(Icons.menu_rounded),
-                tooltip: 'Menu',
-                onPressed: widget.onOpenDrawer,
-              )
-            : null,
+        leading: IconButton(
+          icon: const Icon(Icons.menu_rounded),
+          tooltip: 'Menu',
+          onPressed: widget.onOpenDrawer,
+        ),
         onSearchTap: Responsive.isMobile(context)
             ? null
             : () => showAppSearchOverlay(
