@@ -1,0 +1,5 @@
+name = "examspark-app"
+compatibility_date = "2026-01-01"
+
+[assets]
+directory = "examspark_frontend/build/web"
