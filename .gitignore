@@ -17,8 +17,7 @@ coverage/
 *.iml
 
 # Environment
-.env
-.env.*
+
 !.env.example
 
 # OS
