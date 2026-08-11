@@ -233,7 +233,20 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       if (mounted) setState(() => _showQuote = true);
     });
   }
-
+Future<void> _fetchDailyQuote() async {
+    if (!AppConfig.isApiConfigured) return;
+    try {
+      final res = await http.get(
+        Uri.parse(
+          '${AppConfig.resolvedApiBaseUrl}/api/v1/daily-quote?language=$_preferredLanguage',
+        ),
+      );
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body) as Map<String, dynamic>;
+        if (mounted) setState(() => _dailyQuote = data['quote'] as String?);
+      }
+    } catch (_) {}
+  }
   void _onInboxChanged() {
     if (mounted) setState(() {});
   }
