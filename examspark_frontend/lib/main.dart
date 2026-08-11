@@ -1,8 +1,11 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
+import 'package:posthog_flutter/posthog_flutter.dart';
+
 import 'package:examspark_frontend/core/brand/app_brand.dart';
 import 'package:examspark_frontend/core/config/app_config.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
@@ -15,13 +18,12 @@ import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/services/fcm_push_service.dart';
 import 'package:examspark_frontend/presentation/widgets/auth_gate.dart';
 import 'package:app_links/app_links.dart';
-// 👇 YEH NAYA IMPORT ADD KIYA HAI 👇
 import 'package:examspark_frontend/core/payments/payment_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // 👇 YEH LINE NAYI ADD KI HAI (Background Payments Listen karne ke liye) 👇
+  // Background payment listener
   PaymentService.instance.initialize();
 
   try {
@@ -30,14 +32,54 @@ Future<void> main() async {
     // .env optional when using --dart-define
   }
 
-  final url = dotenv.maybeGet('SUPABASE_URL') ?? AppConfig.supabaseUrl;
-  final key = dotenv.maybeGet('SUPABASE_ANON_KEY') ?? AppConfig.supabaseAnonKey;
+  final url =
+      dotenv.maybeGet('SUPABASE_URL') ?? AppConfig.supabaseUrl;
+
+  final key =
+      dotenv.maybeGet('SUPABASE_ANON_KEY') ?? AppConfig.supabaseAnonKey;
 
   if (url.isNotEmpty && key.isNotEmpty) {
-    await SupabaseClient.instance.initialize(url: url, anonKey: key);
+    await SupabaseClient.instance.initialize(
+      url: url,
+      anonKey: key,
+    );
   }
 
-  // FCM: soft-fails until founder adds google-services.json (FOUNDER_FCM_SETUP.md).
+  // ------------------------------------------------------------
+  // PostHog Analytics
+  // Visitor + screen/page tracking.
+  // Session Replay is intentionally OFF.
+  // ------------------------------------------------------------
+
+  final posthogApiKey =
+      dotenv.maybeGet('POSTHOG_API_KEY') ?? '';
+
+  final posthogHost =
+      dotenv.maybeGet('POSTHOG_HOST') ??
+          'https://us.i.posthog.com';
+
+  if (posthogApiKey.isNotEmpty) {
+    final posthogConfig = PostHogConfig(posthogApiKey);
+
+    posthogConfig.host = posthogHost;
+
+    // We only want visitor/page analytics.
+    // Session Replay stays OFF.
+    posthogConfig.sessionReplay = false;
+
+    await Posthog().setup(posthogConfig);
+
+    // Identify logged-in Supabase user.
+    final currentUser = SupabaseClient.instance.currentUser;
+
+    if (currentUser != null) {
+      await Posthog().identify(
+        userId: currentUser.id,
+      );
+    }
+  }
+
+  // FCM
   try {
     await FcmPushService.instance.start();
   } catch (_) {}
@@ -54,27 +96,38 @@ class ExamSparkApp extends StatefulWidget {
 
 class _ExamSparkAppState extends State<ExamSparkApp> {
   bool _inviteDeepLinkHandled = false;
+
   final AppLinks _appLinks = AppLinks();
+
   StreamSubscription<Uri>? _nativeLinkSub;
 
   @override
   void initState() {
     super.initState();
-    // `home: AuthGate` ignores URL hash — open /join/CODE after first frame.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _openInviteDeepLink());
+
+    // `home: AuthGate` ignores URL hash.
+    // Open /join/CODE after first frame.
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _openInviteDeepLink(),
+    );
+
     if (!kIsWeb) {
       _listenNativeDeepLinks();
       _listenSharedFiles();
     }
   }
 
-  /// Android/iOS App Links (https://sonaxia.com/#/join/CODE opened from
-  /// outside the app) — Uri.base only works on Flutter Web, so native
-  /// platforms need this separate listener.
+  /// Android/iOS App Links.
+  ///
+  /// Uri.base only works on Flutter Web, so native platforms
+  /// need this separate listener.
   void _listenNativeDeepLinks() {
     _appLinks.getInitialLink().then((uri) {
-      if (uri != null) _handleNativeUri(uri);
+      if (uri != null) {
+        _handleNativeUri(uri);
+      }
     }).catchError((_) {});
+
     _nativeLinkSub = _appLinks.uriLinkStream.listen(
       _handleNativeUri,
       onError: (_) {},
@@ -83,63 +136,92 @@ class _ExamSparkAppState extends State<ExamSparkApp> {
 
   Future<void> _handleNativeUri(Uri uri) async {
     final code = InviteDeepLink.joinCodeFromUri(uri);
+
     if (code == null) return;
+
     await PendingInviteStore.save(code);
+
     for (var i = 0; i < 20; i++) {
       final nav = AppNavigation.key.currentState;
+
       if (nav != null) {
         nav.pushNamed('/join/$code');
         return;
       }
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      await Future<void>.delayed(
+        const Duration(milliseconds: 50),
+      );
     }
   }
 
-  /// Photo / PDF / audio shared into the app from Gallery, WhatsApp,
-  /// Gmail, Files app, etc. Video is rejected inside ShareReceiverService.
-  /// Files land on RecorderScreen — the same screen normal recording uses,
-  /// so the existing subscription/credit check there applies automatically;
-  /// no separate credit-check logic is written here.
+  /// Photo / PDF / audio shared into the app from:
+  /// Gallery, WhatsApp, Gmail, Files app, etc.
+  ///
+  /// Video is rejected inside ShareReceiverService.
+  ///
+  /// Files land on RecorderScreen.
+  /// Existing subscription/credit checks continue to apply there.
   void _listenSharedFiles() {
-    ShareReceiverService.instance.onFilesReceived = _handleSharedFiles;
+    ShareReceiverService.instance.onFilesReceived =
+        _handleSharedFiles;
+
     ShareReceiverService.instance.start();
   }
 
-  Future<void> _handleSharedFiles(List<SharedMediaFile> files) async {
+  Future<void> _handleSharedFiles(List files) async {
     for (var i = 0; i < 20; i++) {
       final nav = AppNavigation.key.currentState;
+
       if (nav != null) {
-        nav.pushNamed('/recorder', arguments: {
-          'initialInputMethod': 'shared',
-        });
+        nav.pushNamed(
+          '/recorder',
+          arguments: {
+            'initialInputMethod': 'shared',
+          },
+        );
         return;
       }
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      await Future<void>.delayed(
+        const Duration(milliseconds: 50),
+      );
     }
   }
 
   Future<void> _openInviteDeepLink() async {
     if (_inviteDeepLinkHandled) return;
-    final code = InviteDeepLink.joinCodeFromUri(Uri.base);
+
+    final code =
+        InviteDeepLink.joinCodeFromUri(Uri.base);
+
     if (code == null) return;
+
     _inviteDeepLinkHandled = true;
+
     await PendingInviteStore.save(code);
 
     // Navigator key may not be ready on the very first frame.
     for (var i = 0; i < 20; i++) {
       final nav = AppNavigation.key.currentState;
+
       if (nav != null) {
         nav.pushNamed('/join/$code');
         return;
       }
-      await Future<void>.delayed(const Duration(milliseconds: 50));
+
+      await Future<void>.delayed(
+        const Duration(milliseconds: 50),
+      );
     }
   }
 
   @override
   void dispose() {
     _nativeLinkSub?.cancel();
+
     ShareReceiverService.instance.dispose();
+
     super.dispose();
   }
 
@@ -148,11 +230,20 @@ class _ExamSparkAppState extends State<ExamSparkApp> {
     return MaterialApp(
       title: AppBrand.materialTitle,
       debugShowCheckedModeBanner: false,
+
       navigatorKey: AppNavigation.key,
+
+      // PostHog automatically tracks screen/page navigation.
+      navigatorObservers: [
+        PosthogObserver(),
+      ],
+
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
+
       home: const AuthGate(),
+
       onGenerateRoute: AppRouter.onGenerateRoute,
     );
   }

@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
-from app.api.v1 import webhooks_google_play, webhooks_razorpay, webhooks_phonepe
+from app.api.v1 import webhooks_google_play, webhooks_razorpay, webhooks_phonepe, daily_quote
 
 from app.routers import (
     payments,
@@ -22,7 +22,12 @@ app = FastAPI(title="ExamSpark Backend", version="1.4.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[
+        "https://sonaxia.com",
+        "https://www.sonaxia.com",
+        "https://sonaxia.busbuddy25.workers.dev",
+        "http://localhost:8080",
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -40,6 +45,7 @@ app.include_router(teachers.router)
 app.include_router(webhooks_razorpay.router)
 app.include_router(webhooks_google_play.router)
 app.include_router(webhooks_phonepe.router)
+app.include_router(daily_quote.router)
 
 
 @app.get("/")

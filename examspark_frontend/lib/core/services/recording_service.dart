@@ -5,6 +5,10 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
+import 'recording_alert_sound.dart';
+
+// Alert sound conditionally imported for Web/Mobile
+import 'recording_alert_sound.dart';
 
 // dart:io is NOT available on Flutter web — conditional so Chrome does not
 // fail library init with "Library not defined" on recording screens.
@@ -102,6 +106,9 @@ class RecordingService {
       throw StateError('Microphone permission denied');
     }
 
+    // Web Audio context unlock / sound engine ready
+    await unlockRecordingAlertSound();
+
     _elapsedSeconds = 0;
     _consecutiveSilentSeconds = 0;
     _peakDb = -160.0;
@@ -125,10 +132,12 @@ class RecordingService {
             _elapsedSeconds >= silenceFirstWarnAfterSeconds) {
           if (_lastSilenceWarnAtElapsed == null) {
             _lastSilenceWarnAtElapsed = _elapsedSeconds;
+            playRecordingAlertSound(urgent: true);
             _onSilenceWarning?.call();
           } else if (_elapsedSeconds - _lastSilenceWarnAtElapsed! >=
               silenceRepeatWarnAfterSeconds) {
             _lastSilenceWarnAtElapsed = _elapsedSeconds;
+            playRecordingAlertSound(urgent: true);
             _onSilenceWarning?.call();
           }
         }
@@ -146,6 +155,7 @@ class RecordingService {
       )) {
         _lastSilenceWarnAtElapsed = _elapsedSeconds;
         _consecutiveSilentSeconds = 0;
+        playRecordingAlertSound(urgent: true);
         _onSilenceWarning?.call();
       }
     });
@@ -183,8 +193,6 @@ class RecordingService {
     return recorder.stop();
   }
 
-  /// Works for a real file path (mobile/desktop) and a browser `blob:` URL
-  /// (web) alike — [XFile] handles the platform difference internally.
   Future<Uint8List?> readRecordingBytes(String? path) async {
     if (path == null || path.isEmpty) return null;
     try {
@@ -208,7 +216,6 @@ class RecordingService {
     return null;
   }
 
-  /// Picked file bytes + original name (needed so FastAPI can route PDF vs image).
   Future<({Uint8List bytes, String name})?> pickDocumentOrImageFile() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
@@ -226,8 +233,6 @@ class RecordingService {
     return (bytes: bytes, name: name);
   }
 
-  /// Screen leave: stop timer + stop active recording. Do NOT dispose the
-  /// shared [AudioRecorder] permanently — next visit recreates if needed.
   Future<void> releaseForScreen() async {
     _timer?.cancel();
     _timer = null;
@@ -240,12 +245,9 @@ class RecordingService {
       if (await recorder.isRecording()) {
         await recorder.stop();
       }
-    } catch (_) {
-      // Already stopped / disposed mid-flight — ignore.
-    }
+    } catch (_) {}
   }
 
-  /// Pure logic for silence popups — unit-tested.
   static bool shouldFireSilenceWarning({
     required int consecutiveSilentSeconds,
     required bool heardAnyVoice,
@@ -262,7 +264,6 @@ class RecordingService {
     return consecutiveSilentSeconds >= repeatWarnSeconds;
   }
 
-  /// Full teardown (app exit / tests only). Prefer [releaseForScreen] from UI.
   void dispose() {
     _timer?.cancel();
     _timer = null;

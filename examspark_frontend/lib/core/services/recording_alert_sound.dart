@@ -1,2 +1,2 @@
-export 'recording_alert_sound_stub.dart'
-    if (dart.library.html) 'recording_alert_sound_web.dart';
+export 'recording_alert_sound_web.dart'
+    if (dart.library.io) 'recording_alert_sound_stub.dart';

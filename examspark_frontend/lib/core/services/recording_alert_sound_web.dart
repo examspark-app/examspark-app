@@ -1,18 +1,18 @@
-import 'dart:js_util' as js_util;
+import 'dart:js_interop';
+import 'dart:js_interop_unsafe';
 
-/// Flutter Web: [SystemSound] is silent in Chrome desktop.
-/// Web Audio via JS interop (dart:html has no AudioContext type on this SDK).
-
-Object? _alertCtx;
+/// Flutter Web Audio via JS interop.
+JSObject? _alertCtx;
 
 Future<void> unlockRecordingAlertSound() async {
   try {
     final ctx = _ensureCtx();
     if (ctx == null) return;
-    if (js_util.getProperty(ctx, 'state') == 'suspended') {
-      final resume = js_util.callMethod(ctx, 'resume', []);
+    final state = ctx.getProperty<JSString?>('state'.toJS)?.toDart;
+    if (state == 'suspended') {
+      final resume = ctx.callMethod<JSAny?>('resume'.toJS);
       if (resume != null) {
-        await js_util.promiseToFuture(resume);
+        await (resume as JSPromise).toDart;
       }
     }
     _beep(ctx, freq: 440, whenOffset: 0, duration: 0.04, peak: 0.001);
@@ -23,10 +23,11 @@ Future<void> playRecordingAlertSound({bool urgent = false}) async {
   try {
     final ctx = _ensureCtx();
     if (ctx == null) return;
-    if (js_util.getProperty(ctx, 'state') == 'suspended') {
-      final resume = js_util.callMethod(ctx, 'resume', []);
+    final state = ctx.getProperty<JSString?>('state'.toJS)?.toDart;
+    if (state == 'suspended') {
+      final resume = ctx.callMethod<JSAny?>('resume'.toJS);
       if (resume != null) {
-        await js_util.promiseToFuture(resume);
+        await (resume as JSPromise).toDart;
       }
     }
     if (urgent) {
@@ -40,43 +41,52 @@ Future<void> playRecordingAlertSound({bool urgent = false}) async {
   } catch (_) {}
 }
 
-Object? _ensureCtx() {
+JSObject? _ensureCtx() {
   if (_alertCtx != null) return _alertCtx;
-  final g = js_util.globalThis;
-  final ctor = js_util.getProperty(g, 'AudioContext') ??
-      js_util.getProperty(g, 'webkitAudioContext');
+  final g = globalContext;
+  final ctor = (g.getProperty<JSAny?>('AudioContext'.toJS) ??
+      g.getProperty<JSAny?>('webkitAudioContext'.toJS)) as JSFunction?;
   if (ctor == null) return null;
-  _alertCtx = js_util.callConstructor(ctor, []);
+  _alertCtx = ctor.callAsConstructor<JSObject>();
   return _alertCtx;
 }
 
 void _beep(
-  Object ctx, {
+  JSObject ctx, {
   required double freq,
   required double whenOffset,
   required double duration,
   double peak = 0.22,
 }) {
-  final currentTime = (js_util.getProperty(ctx, 'currentTime') as num?)?.toDouble() ?? 0;
+  final currentTime =
+      ctx.getProperty<JSNumber?>('currentTime'.toJS)?.toDartDouble ?? 0;
   final when = currentTime + whenOffset;
-  final osc = js_util.callMethod(ctx, 'createOscillator', []);
-  final gain = js_util.callMethod(ctx, 'createGain', []);
-  js_util.callMethod(osc, 'connect', [gain]);
-  final dest = js_util.getProperty(ctx, 'destination');
-  js_util.callMethod(gain, 'connect', [dest]);
+  final osc = ctx.callMethod<JSObject>('createOscillator'.toJS);
+  final gain = ctx.callMethod<JSObject>('createGain'.toJS);
+  osc.callMethod<JSAny?>('connect'.toJS, gain);
+  final dest = ctx.getProperty<JSObject>('destination'.toJS);
+  gain.callMethod<JSAny?>('connect'.toJS, dest);
 
-  final freqParam = js_util.getProperty(osc, 'frequency');
-  js_util.setProperty(freqParam, 'value', freq);
+  final freqParam = osc.getProperty<JSObject>('frequency'.toJS);
+  freqParam.setProperty('value'.toJS, freq.toJS);
 
-  final gainParam = js_util.getProperty(gain, 'gain');
-  js_util.callMethod(gainParam, 'setValueAtTime', [0.0001, when]);
-  js_util.callMethod(gainParam, 'exponentialRampToValueAtTime', [peak, when + 0.02]);
-  js_util.callMethod(
-    gainParam,
-    'exponentialRampToValueAtTime',
-    [0.0001, when + duration],
+  final gainParam = gain.getProperty<JSObject>('gain'.toJS);
+  gainParam.callMethod<JSAny?>(
+    'setValueAtTime'.toJS,
+    0.0001.toJS,
+    when.toJS,
+  );
+  gainParam.callMethod<JSAny?>(
+    'exponentialRampToValueAtTime'.toJS,
+    peak.toJS,
+    (when + 0.02).toJS,
+  );
+  gainParam.callMethod<JSAny?>(
+    'exponentialRampToValueAtTime'.toJS,
+    0.0001.toJS,
+    (when + duration).toJS,
   );
 
-  js_util.callMethod(osc, 'start', [when]);
-  js_util.callMethod(osc, 'stop', [when + duration + 0.05]);
+  osc.callMethod<JSAny?>('start'.toJS, when.toJS);
+  osc.callMethod<JSAny?>('stop'.toJS, (when + duration + 0.05).toJS);
 }

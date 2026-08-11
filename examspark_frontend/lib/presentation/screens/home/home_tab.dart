@@ -36,6 +36,8 @@ import 'package:examspark_frontend/presentation/screens/search/search_overlay_sc
 import 'package:examspark_frontend/presentation/widgets/youtube_link_dialog.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
 typedef OpenWorkspace = void Function(String lectureId, String title, String? subject);
 
 /// Home = Chat Screen. Home AI Study Coach (retrieval rules + 5 credits).
@@ -149,6 +151,10 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   
   bool _restoredDisk = false;
   bool _notificationsSheetOpen = false;
+  bool _showQuote = false;
+  String _preferredLanguage = 'English';
+  String? _dailyQuote;
+  Timer? _quoteTimer;
   bool get _audioUnlocked => _isTeacher
       ? PlanTierGating.isTeacherLiveRecordUnlocked(_planTier)
       : PlanTierGating.isStudentAudioUnlocked(_planTier);
@@ -221,6 +227,10 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _restoreChatFromDisk();
       _onHomeAskBridge();
+    });
+    _fetchDailyQuote();
+    _quoteTimer = Timer(const Duration(seconds: 2), () {
+      if (mounted) setState(() => _showQuote = true);
     });
   }
 
@@ -359,6 +369,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    _quoteTimer?.cancel();
     _persistDebounce?.cancel();
     _persistChatNow();
     WidgetsBinding.instance.removeObserver(this);
@@ -430,12 +441,24 @@ void _onHomeSessionBridge() {
         plan = await SupabaseClient.instance.getPlanTier(user.id);
       } catch (_) {}
       if (!mounted) return;
+      var preferredLang = 'English';
+      try {
+        final bundle =
+            await SupabaseClient.instance.fetchStudentOnboardingBundle(user.id);
+        final sp = bundle['student_profiles'];
+        if (sp is Map && sp['preferred_language'] is String) {
+          final raw = (sp['preferred_language'] as String).trim();
+          if (raw.isNotEmpty) preferredLang = raw;
+        }
+      } catch (_) {}
+
       setState(() {
         _creditsBalance = profile?['credits_balance'] as int? ?? 0;
         _userName = (profile?['full_name'] as String?) ?? user.email ?? 'User';
         _planTier = plan;
         _isTeacher = profile?['role'] == 'teacher';
         _recentLectures = lectures.take(5).toList();
+        _preferredLanguage = preferredLang;
         _isRefreshing = false;
       });
     } catch (_) {
@@ -1314,24 +1337,35 @@ void _onHomeSessionBridge() {
           if (name.isNotEmpty) _buildGreetingBanner(context, name),
           const SizedBox(height: 24),
           Text(
-            'Stuck on a doubt? Let\'s fix that in one message. 🧠',
+            'Got a doubt? Ask away. 🧠',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
                   fontSize: 19,
                   fontWeight: FontWeight.w700,
                 ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 6),
-          Text(
-            'Ask anything from your syllabus (5 credits) — or record a lecture and let me take the notes.',
-            style: Theme.of(context).textTheme.bodySmall,
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Home AI helps with study doubts. Lecture notes live in Study Workspace.',
-            style: Theme.of(context).textTheme.bodySmall,
-            textAlign: TextAlign.center,
+          const SizedBox(height: 8),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 500),
+            child: _showQuote
+                ? Padding(
+                    key: const ValueKey('quote'),
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      _dailyQuote ?? 'Keep going — you\'re closer than you think.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            fontStyle: FontStyle.italic,
+                            color: AppTheme.getSecondaryText(context),
+                          ),
+                      textAlign: TextAlign.center,
+                    ),
+                  )
+                : Text(
+                    key: const ValueKey('sub'),
+                    'Ask anything, or record a lecture for notes.',
+                    style: Theme.of(context).textTheme.bodySmall,
+                    textAlign: TextAlign.center,
+                  ),
           ),
           const SizedBox(height: 28),
           if (_recentLectures.isNotEmpty) ...[
