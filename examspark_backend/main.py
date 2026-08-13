@@ -13,7 +13,7 @@ from app.routers import (
     notifications,
     groups,
     teachers,
-    
+    # english_practice,   ← ye comment hona chahiye
 )
 from app.services.supabase_admin import get_supabase_admin
 
@@ -43,7 +43,7 @@ app.include_router(coupons.router)
 app.include_router(notifications.router)
 app.include_router(groups.router)
 app.include_router(teachers.router)
-
+# app.include_router(english_practice.router)   ← ye bhi comment hona chahiye
 app.include_router(webhooks_razorpay.router)
 app.include_router(webhooks_google_play.router)
 app.include_router(webhooks_phonepe.router)
