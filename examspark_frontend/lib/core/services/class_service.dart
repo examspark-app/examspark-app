@@ -1021,4 +1021,29 @@ class ClassService {
       'total': decoded['total'] as int? ?? 0,
     };
   }
+
+/// Names of students joined in this group — for the "Students" chip tap.
+  /// Works for both the owning teacher and any joined student.
+  Future<List<Map<String, dynamic>>> getGroupMembers(String classId) async {
+    if (!AppConfig.isApiConfigured) return [];
+    final token = await _accessToken();
+    final res = await http.get(
+      Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/groups/$classId/members'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (res.statusCode != 200) {
+      String detail = 'Could not load members (${res.statusCode})';
+      try {
+        final decoded = jsonDecode(res.body);
+        if (decoded is Map && decoded['detail'] != null) {
+          detail = decoded['detail'].toString();
+        }
+      } catch (_) {}
+      throw Exception(detail);
+    }
+    final decoded = jsonDecode(res.body) as Map<String, dynamic>;
+    final list = decoded['members'];
+    if (list is! List) return [];
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
 }

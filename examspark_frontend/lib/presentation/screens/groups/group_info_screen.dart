@@ -823,6 +823,108 @@ Future<void> _confirmLeaveGroup() async {
         );
       },
     );
+  }void _showGroupMembersSheet(String classId) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) => DraggableScrollableSheet(
+        initialChildSize: 0.5,
+        minChildSize: 0.3,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (context, scrollController) => Container(
+          decoration: BoxDecoration(
+            color: Theme.of(context).scaffoldBackgroundColor,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
+          ),
+          child: Column(
+            children: [
+              const SizedBox(height: 10),
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppTheme.getCardBorder(context),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 14, 16, 8),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Students',
+                        style: Theme.of(context)
+                            .textTheme
+                            .bodyLarge
+                            ?.copyWith(fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: FutureBuilder<List<Map<String, dynamic>>>(
+                  future: ClassService.instance.getGroupMembers(classId),
+                  builder: (context, snapshot) {
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return const Center(child: CircularProgressIndicator());
+                    }
+                    if (snapshot.hasError) {
+                      return Center(
+                        child: Text(
+                          'Could not load students: ${snapshot.error}',
+                          textAlign: TextAlign.center,
+                          style: Theme.of(context).textTheme.bodySmall,
+                        ),
+                      );
+                    }
+                    final members = snapshot.data ?? [];
+                    if (members.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'No students joined yet.',
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: AppTheme.getSecondaryText(context),
+                              ),
+                        ),
+                      );
+                    }
+                    return ListView.separated(
+                      controller: scrollController,
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      itemCount: members.length,
+                      separatorBuilder: (_, _) => const Divider(height: 1),
+                      itemBuilder: (context, index) {
+                        final name = (members[index]['name'] ?? 'Student').toString();
+                        final initial = name.isNotEmpty ? name[0].toUpperCase() : '?';
+                        return ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            backgroundColor: AppTheme.getAccentTint(context),
+                            child: Text(
+                              initial,
+                              style: TextStyle(color: AppTheme.accentColor, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                          title: Text(name),
+                        );
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 Future<void> _submitReview(bool isGood) async {
     final group = _group;
@@ -1188,6 +1290,7 @@ Future<void> _submitReview(bool isGood) async {
                 icon: Icons.people_alt_rounded,
                 value: '${group.studentsCount}',
                 label: 'Students',
+                onTap: () => _showGroupMembersSheet(group.id),
               ),
               _StatPill(
                 icon: Icons.menu_book_rounded,
@@ -1261,12 +1364,18 @@ class _StatPill extends StatelessWidget {
   final IconData icon;
   final String value;
   final String label;
+  final VoidCallback? onTap;
 
-  const _StatPill({required this.icon, required this.value, required this.label});
+  const _StatPill({
+    required this.icon,
+    required this.value,
+    required this.label,
+    this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    final pill = Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: AppTheme.getAccentTint(context),
@@ -1295,6 +1404,12 @@ class _StatPill extends StatelessWidget {
           ),
         ],
       ),
+    );
+    if (onTap == null) return pill;
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: pill,
     );
   }
 }

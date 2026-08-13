@@ -384,3 +384,63 @@ async def get_teacher_reviews(teacher_id: str):
     good = sum(1 for r in (rows.data or []) if r["rating"] == "good")
     bad = sum(1 for r in (rows.data or []) if r["rating"] == "bad")
     return {"good": good, "bad": bad, "total": good + bad}
+
+@router.get("/{class_id}/members")
+async def list_group_members(
+    class_id: str,
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Names of joined students — visible to the owning teacher AND to
+    any student who is a member of this group (read-only, no analytics)."""
+    db = get_supabase_admin()
+
+    class_row = (
+        db.table("class_folders")
+        .select("teacher_id")
+        .eq("id", class_id)
+        .maybe_single()
+        .execute()
+    )
+    if not class_row.data:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    is_teacher = str(class_row.data["teacher_id"]) == str(user.user_id)
+    if not is_teacher:
+        membership = (
+            db.table("class_memberships")
+            .select("id")
+            .eq("class_id", class_id)
+            .eq("student_id", user.user_id)
+            .maybe_single()
+            .execute()
+        )
+        if not membership.data:
+            raise HTTPException(
+                status_code=403,
+                detail="Only group members can view this",
+            )
+
+    members = (
+        db.table("class_memberships")
+        .select("student_id")
+        .eq("class_id", class_id)
+        .execute()
+    )
+    student_ids = [m["student_id"] for m in (members.data or [])]
+    if not student_ids:
+        return {"members": []}
+
+    users = (
+        db.table("users")
+        .select("id, username, full_name")
+        .in_("id", student_ids)
+        .execute()
+    )
+    umap = {u["id"]: u for u in (users.data or [])}
+
+    result = []
+    for sid in student_ids:
+        u = umap.get(sid)
+        name = (u.get("full_name") or u.get("username")) if u else None
+        result.append({"id": sid, "name": name or "Student"})
+    return {"members": result} 
