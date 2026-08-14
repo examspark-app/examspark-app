@@ -12,7 +12,8 @@ class _Bubble {
 /// Assumes native language preference is already set (see
 /// EnglishLanguagePickerScreen / EnglishPracticeEntry).
 class EnglishPracticeScreen extends StatefulWidget {
-  const EnglishPracticeScreen({super.key});
+  final String? sessionId;
+  const EnglishPracticeScreen({super.key, this.sessionId});
 
   @override
   State<EnglishPracticeScreen> createState() => _EnglishPracticeScreenState();
@@ -57,6 +58,26 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       _error = null;
     });
     try {
+      if (widget.sessionId != null) {
+        final data = await LectureService.instance
+            .restoreEnglishPracticeSession(widget.sessionId!);
+        final msgs = ((data['messages'] as List?) ?? [])
+            .map((m) => _Bubble(
+                  (m['message'] ?? '').toString(),
+                  m['role'] == 'user',
+                ))
+            .toList();
+        if (!mounted) return;
+        setState(() {
+          _sessionId = data['id'] as String?;
+          _messages
+            ..clear()
+            ..addAll(msgs);
+          _loading = false;
+        });
+        _scrollToBottom();
+        return;
+      }
       final data = await LectureService.instance.startEnglishPractice();
       if (!mounted) return;
       setState(() {
@@ -202,7 +223,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                                             ),
                                           ),
                                   ),
-                                  child: Text(
+                                  child: SelectableText(
                                     m.text,
                                     style: TextStyle(
                                       color: m.isUser
@@ -210,6 +231,29 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                                           : AppTheme.getPrimaryText(context),
                                       height: 1.4,
                                     ),
+                                    contextMenuBuilder: (context, state) {
+                                      final sel = state.textEditingValue.selection;
+                                      final selected = sel
+                                          .textInside(state.textEditingValue.text)
+                                          .trim();
+                                      final items = state.contextMenuButtonItems.toList();
+                                      if (selected.isNotEmpty) {
+                                        items.add(
+                                          ContextMenuButtonItem(
+                                            label: 'Ask about this',
+                                            onPressed: () {
+                                              state.hideToolbar();
+                                              _controller.text = selected;
+                                              _send();
+                                            },
+                                          ),
+                                        );
+                                      }
+                                      return AdaptiveTextSelectionToolbar.buttonItems(
+                                        anchors: state.contextMenuAnchors,
+                                        buttonItems: items,
+                                      );
+                                    },
                                   ),
                                 ),
                               ),

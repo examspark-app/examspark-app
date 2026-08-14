@@ -1119,6 +1119,21 @@ Future<String?> getEnglishPracticeLanguage() async {
       throw Exception(_extractErrorDetail(response));
     }
   }
+  /// Loads one past English Practice session with full message history.
+  Future<Map<String, dynamic>> restoreEnglishPracticeSession(String sessionId) async {
+    final accessToken = await _requireAccessToken();
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/sessions/$sessionId',
+    );
+    final response = await http.get(
+      uri,
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
   /// Warm RAG index before Ask AI (idempotent — no credits). Soft-fail OK.
   Future<void> warmLectureRagIndex(String lectureId) async {
     final id = lectureId.trim();

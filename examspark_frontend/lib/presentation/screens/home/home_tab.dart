@@ -225,7 +225,6 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
     _applySessionLive();
     // In case Ask AI was queued before Home mounted.
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _restoreChatFromDisk();
       _onHomeAskBridge();
     });
     _fetchDailyQuote();
@@ -1381,30 +1380,7 @@ void _onHomeSessionBridge() {
                   ),
           ),
           const SizedBox(height: 28),
-          if (_recentLectures.isNotEmpty) ...[
-            Align(
-              alignment: Alignment.centerLeft,
-              child: Text(
-                'Continue where you left off',
-                style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      fontWeight: FontWeight.w600,
-                    ),
-              ),
-            ),
-            const SizedBox(height: 12),
-            for (final lecture in _recentLectures)
-              Padding(
-                padding: const EdgeInsets.only(bottom: 10),
-                child: LectureCard(
-                  title: lecture['title'] as String? ?? 'Untitled Lecture',
-                  subject: lecture['subject'] as String?,
-                  dateLabel: formatOpenedAtLabel(
-                    lecture['last_opened_at'] ?? lecture['created_at'],
-                  ),
-                  onTap: () => _openLecture(lecture),
-                ),
-              ),
-          ],
+          
         ],
       ),
     );
