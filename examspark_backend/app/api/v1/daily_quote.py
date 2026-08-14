@@ -61,14 +61,27 @@ async def get_daily_quote(language: str = Query(default="English")):
             .select("quote_text")
             .eq("quote_date", today)
             .eq("language", language)
-            .maybe_single()
             .execute()
         )
         if existing.data:
-            return {"quote": existing.data["quote_text"], "date": today}
+            return {"quote": existing.data[0]["quote_text"], "date": today}
     except Exception as e:  # noqa: BLE001
         logger.warning("daily quote lookup failed: %s", e)
-        existing = None
+
+    try:
+        quote = await _generate_quote(language)
+    except Exception as e:  # noqa: BLE001
+        logger.warning("daily quote generation failed: %s", e)
+        quote = "Every small effort today builds the result you want tomorrow."
+
+    try:
+        db.table("daily_quotes").insert(
+            {"quote_date": today, "language": language, "quote_text": quote}
+        ).execute()
+    except Exception:  # noqa: BLE001
+        pass  # race with another request — fine, both got a quote
+
+    return {"quote": quote, "date": today}
 
     try:
         quote = await _generate_quote(language)
