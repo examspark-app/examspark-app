@@ -15,7 +15,7 @@ import 'package:examspark_frontend/presentation/widgets/study_workspace.dart';
 import 'package:examspark_frontend/core/services/home_session_bridge.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/presentation/widgets/brand_mark.dart';
-
+import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_entry.dart';
 /// The 5-tab app shell — single navigation root after login.
 /// Home · Library · Groups · Progress · Profile — nothing more.
 ///
@@ -334,6 +334,21 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                     onTap: () {
                       Navigator.pop(context);
                       _goToTab(0);
+                    },
+                  ),
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    leading: Icon(Icons.record_voice_over_outlined, size: 20, color: iconColor),
+                    title: const Text('English Practice', style: TextStyle(fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => const EnglishPracticeEntry(),
+                        ),
+                      );
                     },
                   ),
                   ListTile(
