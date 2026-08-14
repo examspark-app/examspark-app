@@ -53,18 +53,22 @@ async def _generate_quote(language: str) -> str:
 @router.get("/daily-quote")
 async def get_daily_quote(language: str = Query(default="English")):
     today = datetime.now(timezone.utc).date().isoformat()
-    db = get_supabase_admin()
 
-    existing = (
-        db.table("daily_quotes")
-        .select("quote_text")
-        .eq("quote_date", today)
-        .eq("language", language)
-        .maybe_single()
-        .execute()
-    )
-    if existing.data:
-        return {"quote": existing.data["quote_text"], "date": today}
+    try:
+        db = get_supabase_admin()
+        existing = (
+            db.table("daily_quotes")
+            .select("quote_text")
+            .eq("quote_date", today)
+            .eq("language", language)
+            .maybe_single()
+            .execute()
+        )
+        if existing.data:
+            return {"quote": existing.data["quote_text"], "date": today}
+    except Exception as e:  # noqa: BLE001
+        logger.warning("daily quote lookup failed: %s", e)
+        existing = None
 
     try:
         quote = await _generate_quote(language)
