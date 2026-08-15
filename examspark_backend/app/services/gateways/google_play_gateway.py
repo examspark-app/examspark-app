@@ -1,5 +1,6 @@
 """Google Play Billing — Android subscriptions + one-time packs."""
 import asyncio
+import json
 import logging
 from typing import Any
 from google.oauth2 import service_account
@@ -30,14 +31,14 @@ def _verify_and_acknowledge_sync(
         return False
 
     package_name = getattr(PaymentConfig, "GOOGLE_PLAY_PACKAGE_NAME", "")
-    service_account_path = getattr(
-        PaymentConfig, "GOOGLE_PLAY_SERVICE_ACCOUNT_JSON_PATH", ""
+    service_account_json = getattr(
+        PaymentConfig, "GOOGLE_PLAY_SERVICE_ACCOUNT_JSON", ""
     )
 
-    if not package_name or not service_account_path:
+    if not package_name or not service_account_json:
         logger.warning(
-            "Missing package_name=%r or service_account_path=%r",
-            package_name, service_account_path,
+            "Missing package_name=%r or service_account_json is empty",
+            package_name,
         )
         return False
 
@@ -47,8 +48,9 @@ def _verify_and_acknowledge_sync(
     )
 
     try:
-        credentials = service_account.Credentials.from_service_account_file(
-            service_account_path,
+        service_account_info = json.loads(service_account_json)
+        credentials = service_account.Credentials.from_service_account_info(
+            service_account_info,
             scopes=["https://www.googleapis.com/auth/androidpublisher"],
         )
         service = build("androidpublisher", "v3", credentials=credentials)
