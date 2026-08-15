@@ -1,5 +1,6 @@
 """Google Play Billing — Android subscriptions + one-time packs."""
 import asyncio
+import logging
 from typing import Any
 from google.oauth2 import service_account
 from googleapiclient.discovery import build
@@ -15,6 +16,8 @@ from app.models.payment import (
 )
 from app.services.gateways.base import PaymentGatewayBase
 
+logger = logging.getLogger(__name__)
+
 
 def _verify_and_acknowledge_sync(
     product_id: str,
@@ -23,6 +26,7 @@ def _verify_and_acknowledge_sync(
 ) -> bool:
     """Synchronous internal helper that calls Google Play Publisher API."""
     if not PaymentConfig.google_play_configured():
+        logger.warning("Google Play not configured (google_play_configured() = False)")
         return False
 
     package_name = getattr(PaymentConfig, "GOOGLE_PLAY_PACKAGE_NAME", "")
@@ -31,7 +35,16 @@ def _verify_and_acknowledge_sync(
     )
 
     if not package_name or not service_account_path:
+        logger.warning(
+            "Missing package_name=%r or service_account_path=%r",
+            package_name, service_account_path,
+        )
         return False
+
+    logger.info(
+        "Verifying Play purchase: package=%s product_id=%s is_subscription=%s token=%s...",
+        package_name, product_id, is_subscription, purchase_token[:15],
+    )
 
     try:
         credentials = service_account.Credentials.from_service_account_file(
@@ -51,10 +64,9 @@ def _verify_and_acknowledge_sync(
                 )
                 .execute()
             )
+            logger.info("Subscription verify response: %s", sub)
 
-            # paymentState 1 = Payment Successful
             if sub.get("paymentState") == 1:
-                # Auto-acknowledge if not done yet
                 if sub.get("acknowledgementState") == 0:
                     service.purchases().subscriptions().acknowledge(
                         packageName=package_name,
@@ -75,10 +87,9 @@ def _verify_and_acknowledge_sync(
                 )
                 .execute()
             )
+            logger.info("Product verify response: %s", prod)
 
-            # purchaseState 0 = Purchased
             if prod.get("purchaseState") == 0:
-                # Auto-acknowledge if not done yet
                 if prod.get("acknowledgementState") == 0:
                     service.purchases().products().acknowledge(
                         packageName=package_name,
@@ -89,9 +100,14 @@ def _verify_and_acknowledge_sync(
                 return True
             return False
 
-    except HttpError:
+    except HttpError as e:
+        logger.error(
+            "Google Play API HttpError: status=%s content=%s",
+            e.resp.status, e.content,
+        )
         return False
     except Exception:
+        logger.exception("Google Play verification failed with unexpected error")
         return False
 
 
@@ -182,6 +198,10 @@ class GooglePlayGateway(PaymentGatewayBase):
         )
 
         if not purchase_token or not product_id:
+            logger.warning(
+                "Missing purchase_token=%r or product_id=%r in payload=%s",
+                purchase_token, product_id, payload,
+            )
             return False
 
         if not PaymentConfig.google_play_configured():
