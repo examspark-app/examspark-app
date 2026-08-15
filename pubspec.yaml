@@ -3,7 +3,7 @@ description: "A new Flutter project."
 publish_to: 'none'
 
 # Version update karna zaroori tha Play Console ke liye (2 se 3 kar diya hai)
-version: 1.0.0+3
+version: 1.0.0+4
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
