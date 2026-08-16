@@ -103,9 +103,12 @@ class RecordingService {
   }
 
   Future<bool> get isSupported async {
-    if (kIsWeb) return false;
-    return _activeRecorder.hasPermission();
+  try {
+    return await _activeRecorder.hasPermission();
+  } catch (_) {
+    return false;
   }
+}
 
   /// Callback when silence thresholds elapse (5s mic check, then every 5 min).
   void setSilenceWarningListener(VoidCallback? listener) {
@@ -207,23 +210,72 @@ class RecordingService {
   }
 
   Future<String?> stop() async {
-    _timer?.cancel();
-    _timer = null;
-    await _amplitudeSub?.cancel();
-    _amplitudeSub = null;
-    final recorder = _recorder;
-    if (recorder == null || _recorderDisposed) return null;
-    return recorder.stop();
+  _timer?.cancel();
+  _timer = null;
+
+  await _amplitudeSub?.cancel();
+  _amplitudeSub = null;
+
+  final recorder = _recorder;
+
+  if (recorder == null || _recorderDisposed) {
+    debugPrint(
+      'RECORDING_DEBUG: stop() called but recorder unavailable',
+    );
+    return null;
   }
 
+  try {
+    final path = await recorder.stop();
+
+    debugPrint(
+      'RECORDING_DEBUG: recorder.stop() returned: $path',
+    );
+
+    return path;
+  } catch (e, stackTrace) {
+    debugPrint(
+      'RECORDING_DEBUG: recorder.stop() failed: $e',
+    );
+    debugPrint('$stackTrace');
+    rethrow;
+  }
+}
+
   Future<Uint8List?> readRecordingBytes(String? path) async {
-    if (path == null || path.isEmpty) return null;
-    try {
-      return await XFile(path).readAsBytes();
-    } catch (_) {
+  if (path == null || path.trim().isEmpty) {
+    debugPrint(
+      'RECORDING_DEBUG: stop() returned empty path',
+    );
+    return null;
+  }
+
+  try {
+    final bytes = await XFile(path).readAsBytes();
+
+    debugPrint(
+      'RECORDING_DEBUG: readRecordingBytes '
+      'path=$path bytes=${bytes.length}',
+    );
+
+    if (bytes.isEmpty) {
+      debugPrint(
+        'RECORDING_DEBUG: recording blob/file is EMPTY',
+      );
       return null;
     }
+
+    return bytes;
+  } catch (e, stackTrace) {
+    debugPrint(
+      'RECORDING_DEBUG: failed reading recording: $e',
+    );
+    debugPrint(
+      'RECORDING_DEBUG: $stackTrace',
+    );
+    return null;
   }
+}
 
   Future<Uint8List?> pickAudioFile() async {
     final result = await FilePicker.platform.pickFiles(
