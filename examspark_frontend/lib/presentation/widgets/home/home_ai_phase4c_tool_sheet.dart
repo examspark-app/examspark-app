@@ -281,3 +281,5 @@ class _Phase4cToolPageState extends State<_Phase4cToolPage> {
       padding: const EdgeInsets.all(16),
       child: SelectableText(data.toString()),
     );
+  }
+}
