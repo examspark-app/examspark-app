@@ -67,9 +67,9 @@ class SupabaseClient {
   }
 
   String? _oauthRedirectUrl() {
-    if (kIsWeb) return Uri.base.origin;
-    return null;
-  }
+  if (kIsWeb) return Uri.base.origin;
+  return 'sonaxia://login-callback';
+}
 
   Future<supabase.AuthResponse> signInWithEmail({
     required String email,

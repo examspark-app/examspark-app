@@ -71,6 +71,14 @@
                 <data android:scheme="https" android:host="sonaxia.com"/>
             </intent-filter>
 
+            <!-- Supabase auth callback (Google login, signup, password reset) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW"/>
+                <category android:name="android.intent.category.DEFAULT"/>
+                <category android:name="android.intent.category.BROWSABLE"/>
+                <data android:scheme="sonaxia" android:host="login-callback"/>
+            </intent-filter>
+
         </activity>
 
         <meta-data

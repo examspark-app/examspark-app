@@ -1,29 +1,39 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
-/// ChatGPT-inspired theme configuration — black & white professional look
+/// Logo-inspired theme configuration — pink-orange gradient accent
 class AppTheme {
   AppTheme._();
 
-  // Neutral black/grey accent (no green) — ChatGPT-style monochrome
-  static const Color accentColor = Color(0xFF101010);
-  static const Color lightBackground = Color(0xFFF9F9F9); // Soft off-white
-  static const Color lightPrimaryText = Color(0xFF0D0D0D);
-  static const Color lightSecondaryText = Color(0xFF545454);
-  static const Color lightCardBorder = Color(0xFFE5E5E5);
+  // Logo-inspired accent — pink-orange gradient blend
+  static const Color accentColor = Color(0xFFF0384C); // Pink-orange blend (primary)
+  static const Color accentColorStart = Color(0xFFEC1E7F); // Gradient start — magenta/pink
+  static const Color accentColorEnd = Color(0xFFFF9500); // Gradient end — orange
+
+  static const Color lightBackground = Color(0xFFFAF9F7);
+  static const Color lightPrimaryText = Color(0xFF1F1E1D);
+  static const Color lightSecondaryText = Color(0xFF6B6862);
+  static const Color lightCardBorder = Color(0xFFE8E6E1);
   static const Color lightCardBackground = Color(0xFFFFFFFF);
-  static const Color lightAccentTint = Color(0x0A000000);
-  
-  static const Color darkBackground = Color(0xFF212121); // Soft charcoal
-  static const Color darkPrimaryText = Color(0xFFECECEC);
-  static const Color darkSecondaryText = Color(0xFFB4B4B4);
-  static const Color darkCardBorder = Color(0xFF383838);
-  static const Color darkCardBackground = Color(0xFF2F2F2F);
-  static const Color darkAccentTint = Color(0x14FFFFFF);
-  
-  // Dark mode accent (buttons) — white on black, ChatGPT dark-mode style
-  static const Color darkAccentColor = Color(0xFFFFFFFF);
-  
+  static const Color lightAccentTint = Color(0x14F0384C); // Soft pink-orange tint
+
+  static const Color darkBackground = Color(0xFF201F1E);
+  static const Color darkPrimaryText = Color(0xFFF2F0EB);
+  static const Color darkSecondaryText = Color(0xFFB0ACA3);
+  static const Color darkCardBorder = Color(0xFF3D3B37);
+  static const Color darkCardBackground = Color(0xFF2C2B29);
+  static const Color darkAccentTint = Color(0xFFFFFFFF); // White icon-box background
+
+  // Dark mode accent (buttons) — brighter pink-orange for visibility on dark bg
+  static const Color darkAccentColor = Color(0xFFFF5C7A);
+
+  // Logo gradient — use for primary CTA buttons via BoxDecoration
+  static const LinearGradient accentGradient = LinearGradient(
+    colors: [accentColorStart, accentColorEnd],
+    begin: Alignment.topLeft,
+    end: Alignment.bottomRight,
+  );
+
   static const double borderRadius = 12.0;
   static const double screenPadding = 16.0;
   static const double elementSpacing = 16.0;
@@ -42,7 +52,7 @@ class AppTheme {
             fontSize: 16,
             fontWeight: FontWeight.w400,
             color: lightPrimaryText,
-            height: 1.65, // Highly readable for long AI text
+            height: 1.65,
           ),
           bodyMedium: TextStyle(
             fontSize: 14,
@@ -77,7 +87,7 @@ class AppTheme {
             fontSize: 16,
             fontWeight: FontWeight.w400,
             color: darkPrimaryText,
-            height: 1.65, // Highly readable for long AI text
+            height: 1.65,
           ),
           bodyMedium: TextStyle(
             fontSize: 14,
@@ -229,5 +239,62 @@ class AppTheme {
     return Theme.of(context).brightness == Brightness.light
         ? lightAccentTint
         : darkAccentTint;
+  }
+}
+
+/// Gradient CTA button — drop-in replacement for ElevatedButton wherever
+/// you want the logo-style pink-orange gradient instead of solid color.
+///
+/// Usage:
+///   GradientButton(
+///     onPressed: () {},
+///     child: const Text('Get Teacher Plan'),
+///   )
+class GradientButton extends StatelessWidget {
+  const GradientButton({
+    super.key,
+    required this.onPressed,
+    required this.child,
+    this.padding = const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
+    this.borderRadius,
+  });
+
+  final VoidCallback? onPressed;
+  final Widget child;
+  final EdgeInsetsGeometry padding;
+  final double? borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    final radius = borderRadius ?? AppTheme.borderRadius;
+    return Material(
+      color: Colors.transparent,
+      borderRadius: BorderRadius.circular(radius),
+      child: Ink(
+        decoration: BoxDecoration(
+          gradient: onPressed == null ? null : AppTheme.accentGradient,
+          color: onPressed == null ? Colors.grey.shade400 : null,
+          borderRadius: BorderRadius.circular(radius),
+        ),
+        child: InkWell(
+          onTap: onPressed,
+          borderRadius: BorderRadius.circular(radius),
+          child: Padding(
+            padding: padding,
+            child: DefaultTextStyle(
+              style: GoogleFonts.inter(
+                fontSize: 15,
+                fontWeight: FontWeight.w500,
+                color: Colors.white,
+              ),
+              child: IconTheme(
+                data: const IconThemeData(color: Colors.white),
+                child: Center(widthFactor: 1, child: child),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }

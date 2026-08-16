@@ -45,15 +45,15 @@ const kHomePrimaryChips = <HomeStudyChipDef>[
     toolType: 'important_questions',
     icon: Icons.priority_high,
   ),
+  HomeStudyChipDef(
+    label: 'Common Mistakes',
+    toolType: 'common_mistakes',
+    icon: Icons.report_gmailerrorred_outlined,
+  ),
 ];
 
 /// Was under More — now shown outside (Jul 26).
 const kHomeMoreChips = <HomeStudyChipDef>[
-  HomeStudyChipDef(
-    label: 'Visual',
-    toolType: 'visual',
-    icon: Icons.visibility_outlined,
-  ),
   HomeStudyChipDef(
     label: 'Memory',
     toolType: 'memory_tricks',
@@ -63,11 +63,6 @@ const kHomeMoreChips = <HomeStudyChipDef>[
     label: 'Mind Map',
     toolType: 'mind_map',
     icon: Icons.account_tree_outlined,
-  ),
-  HomeStudyChipDef(
-    label: 'Common Mistakes',
-    toolType: 'common_mistakes',
-    icon: Icons.report_gmailerrorred_outlined,
   ),
 ];
 
