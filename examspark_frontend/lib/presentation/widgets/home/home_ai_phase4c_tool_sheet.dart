@@ -156,20 +156,17 @@ class _Phase4cToolPageState extends State<_Phase4cToolPage> {
               ),
             ),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  if (_error != null)
-                    Text(_error!, style: TextStyle(color: Colors.red.shade700))
-                  else if (_loading)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 40),
-                      child: Center(child: CircularProgressIndicator()),
+              child: _error != null
+                  ? Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(
+                        _error!,
+                        style: TextStyle(color: Colors.red.shade700),
+                      ),
                     )
-                  else
-                    _buildPayload(context, _payload ?? const {}),
-                ],
-              ),
+                  : _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _buildPayload(context, _payload ?? const {}),
             ),
             if (!_loading && _error == null)
               Padding(
@@ -213,19 +210,16 @@ class _Phase4cToolPageState extends State<_Phase4cToolPage> {
           .whereType<Map>()
           .map((q) => MCQQuestion.fromJson(Map<String, dynamic>.from(q)))
           .toList();
-      return SizedBox(height: 420, child: MCQQuizView(questions: parsed));
+      return MCQQuizView(questions: parsed);
     }
     if (questions != null &&
         questions.isNotEmpty &&
         widget.toolType == 'important_questions') {
-      return SizedBox(
-        height: 420,
-        child: ImportantQuestionsView(
-          questions: questions
-              .whereType<Map>()
-              .map((q) => ImportantQuestion.fromJson(Map<String, dynamic>.from(q)))
-              .toList(),
-        ),
+      return ImportantQuestionsView(
+        questions: questions
+            .whereType<Map>()
+            .map((q) => ImportantQuestion.fromJson(Map<String, dynamic>.from(q)))
+            .toList(),
       );
     }
     final cards = data['cards'] as List?;
@@ -234,23 +228,13 @@ class _Phase4cToolPageState extends State<_Phase4cToolPage> {
           .whereType<Map>()
           .map((c) => Flashcard.fromJson(Map<String, dynamic>.from(c)))
           .toList();
-      return SizedBox(height: 320, child: FlashcardStackView(flashcards: parsed));
+      return FlashcardStackView(flashcards: parsed);
     }
-    // FIX: this used to be TWO separate `if (data['root'] is Map)` blocks —
-    // the first (unreachable-in-intent) one returned MindMapView with no
-    // height constraint directly inside a ListView, which is why the Mind
-    // Map chip rendered completely blank. Dart always ran that broken first
-    // block since it matched first; the second block (with the correct
-    // SizedBox(height: 500) wrapper) was unreachable dead code. Merged into
-    // one correct block below.
     if (data['root'] is Map) {
-      return SizedBox(
-        height: 500,
-        child: MindMapView(
-          title: (data['title'] as String?) ?? 'Mind Map',
-          root: MindMapNodeData.fromJson(
-            Map<String, dynamic>.from(data['root'] as Map),
-          ),
+      return MindMapView(
+        title: (data['title'] as String?) ?? 'Mind Map',
+        root: MindMapNodeData.fromJson(
+          Map<String, dynamic>.from(data['root'] as Map),
         ),
       );
     }
@@ -260,33 +244,40 @@ class _Phase4cToolPageState extends State<_Phase4cToolPage> {
         '';
     if (md.isNotEmpty) {
       final vp = data['visualPayload'] ?? data['visual_payload'];
-      return SmartEducationalContent(
-        markdownBody: md,
-        visualPayload: vp is Map
-            ? VisualPayloadData.fromJson(Map<String, dynamic>.from(vp))
-            : null,
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: SmartEducationalContent(
+          markdownBody: md,
+          visualPayload: vp is Map
+              ? VisualPayloadData.fromJson(Map<String, dynamic>.from(vp))
+              : null,
+        ),
       );
     }
     final tricks = data['tricks'] as List?;
     if (tricks != null && tricks.isNotEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final t in tricks.whereType<Map>())
-            Card(
-              child: ListTile(
-                title: Text('${t['trigger'] ?? ''}'),
-                subtitle: Text(
-                  '${t['mnemonic'] ?? ''}\n${t['why_it_works'] ?? ''}',
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final t in tricks.whereType<Map>())
+              Card(
+                child: ListTile(
+                  title: Text('${t['trigger'] ?? ''}'),
+                  subtitle: Text(
+                    '${t['mnemonic'] ?? ''}\n${t['why_it_works'] ?? ''}',
+                  ),
+                  isThreeLine: true,
                 ),
-                isThreeLine: true,
               ),
-            ),
-          if ((data['markdown'] as String?)?.isNotEmpty == true)
-            SmartEducationalContent(markdownBody: data['markdown'] as String),
-        ],
+            if ((data['markdown'] as String?)?.isNotEmpty == true)
+              SmartEducationalContent(markdownBody: data['markdown'] as String),
+          ],
+        ),
       );
     }
-    return SelectableText(data.toString());
-  }
-}
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: SelectableText(data.toString()),
+    );

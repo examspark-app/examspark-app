@@ -25,6 +25,7 @@ from app.constants.credit_costs import (
     MIND_MAP,
     PDF_ANALYSIS,
     QUIZ_20_MCQ,
+    RECORD_MIN_CREDITS, 
     REVISION_NOTES,
     YOUTUBE_MAX_MINUTES,
     record_credits_for_duration_minutes,
@@ -407,15 +408,8 @@ class LectureService:
     ) -> ProcessLectureResponse:
         timer = PipelineTimer("audio", lecture_id=lecture_id)
         timer.set_meta("upload_bytes", len(audio_bytes or b""))
-        try:
-            with timer.stage("plan_gate"):
-                await asyncio.to_thread(
-                    require_feature_unlocked, user_id, GatedFeature.RECORD_LECTURE
-                )
-        except FeatureLockedError as e:
-            timer.log_failure(e)
-            self._fail_job(job_id, str(e))
-            raise _locked(e) from e
+        with timer.stage("plan_gate"):
+            await self._precheck_balance(user_id, RECORD_MIN_CREDITS)
 
         try:
             self._jobs[str(job_id)]["status"] = LectureJobStatus.TRANSCRIBING

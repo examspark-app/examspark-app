@@ -389,7 +389,29 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
     });
     unawaited(_loadChipStates());
   }
+Future<void> _handleTabTap(int index) async {
+    if (index < 0 || index >= _visibleTabs.length) return;
+    final tab = _visibleTabs[index];
+    if (tab.key == 'ask_ai') return; // Ask AI stays inline as a chat
+    await _onTabChanged();
+    if (!mounted) return;
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (routeContext) => Scaffold(
+          appBar: AppBar(
+            title: Text(tab.label),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(routeContext).pop(),
+            ),
+          ),
+          body: SafeArea(child: _tabBodyForKey(context, tab.key)),
+        ),
+      ),
+    );
+  }
 
+  
   Future<void> _onTabChanged() async {
     if (!mounted) return;
     final i = _tabController.index;
@@ -993,6 +1015,7 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
               Expanded(
                 child: TabBar(
                   controller: _tabController,
+                  onTap: _handleTabTap,
                   isScrollable: true,
                   labelColor: AppTheme.accentColor,
                   unselectedLabelColor: AppTheme.getSecondaryText(context),

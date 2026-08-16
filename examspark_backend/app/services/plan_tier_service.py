@@ -35,7 +35,7 @@ _MINIMUM_PLAN: dict[GatedFeature, str] = {
     GatedFeature.REVISION: "free",
     GatedFeature.IMPORTANT_QUESTIONS: "free",
     GatedFeature.MIND_MAP: "free",
-    GatedFeature.RECORD_LECTURE: "plan_499",
+    
 }
 
 _PLAN_RANK = [

@@ -308,7 +308,13 @@ _MIND_MAP_SYSTEM = (
 )
 
 
-async def _chat_json(system_prompt: str, user_content: str, *, max_tokens: int = 4096) -> dict:
+async def _chat_json(
+    system_prompt: str,
+    user_content: str,
+    *,
+    max_tokens: int = 4096,
+    temperature: float = 0.3,
+) -> dict:
     if not AIConfig.openrouter_configured():
         raise QwenGenerationError("OPENROUTER_API_KEY not configured on the server.")
 
@@ -325,7 +331,7 @@ async def _chat_json(system_prompt: str, user_content: str, *, max_tokens: int =
                     {"role": "system", "content": system_prompt},
                     {"role": "user", "content": user_content},
                 ],
-                "temperature": 0.3,
+                "temperature": temperature,
                 "max_tokens": max_tokens,
                 "response_format": {"type": "json_object"},
             },
@@ -342,9 +348,36 @@ async def _chat_json(system_prompt: str, user_content: str, *, max_tokens: int =
     return _extract_json_object(content)
 
 
+import random
+import uuid
+
+
+def _vary_source(source_text: str) -> str:
+    """Breaks provider-side prompt caching + nudges the model toward a
+    genuinely different set of items on every Regenerate call."""
+    angles = [
+        "Focus more on real-world application angles this time.",
+        "Focus more on conceptual/theory angles this time.",
+        "Vary the phrasing, examples, and ordering compared to any earlier version.",
+        "Try a slightly different set of sub-topics from the material this time.",
+    ]
+    nonce = uuid.uuid4().hex[:8]
+    angle = random.choice(angles)
+    return (
+        f"{source_text}\n\n"
+        f"[regen:{nonce}] {angle} Do not repeat the exact same items or wording "
+        f"as a previous attempt — produce a fresh variation."
+    )
+
+
 async def generate_flashcards(source_text: str) -> dict:
     """Returns {cards: [{front, back}, ...]}."""
-    parsed = await _chat_json(_FLASHCARDS_SYSTEM, source_text, max_tokens=4096)
+    parsed = await _chat_json(
+        _FLASHCARDS_SYSTEM,
+        _vary_source(source_text),
+        max_tokens=4096,
+        temperature=0.85,
+    )
     cards = parsed.get("cards") or []
     if not isinstance(cards, list) or len(cards) < 3:
         raise QwenGenerationError("Flashcard generation returned too few cards.")
@@ -353,7 +386,12 @@ async def generate_flashcards(source_text: str) -> dict:
 
 async def generate_quiz_mcq(source_text: str) -> dict:
     """Returns {questions: [{question, options, correctAnswer, explanation?}, ...]}."""
-    parsed = await _chat_json(_QUIZ_SYSTEM, source_text, max_tokens=8192)
+    parsed = await _chat_json(
+        _QUIZ_SYSTEM,
+        _vary_source(source_text),
+        max_tokens=8192,
+        temperature=0.85,
+    )
     questions = parsed.get("questions") or []
     if not isinstance(questions, list) or len(questions) < 5:
         raise QwenGenerationError("Quiz generation returned too few questions.")
@@ -362,7 +400,12 @@ async def generate_quiz_mcq(source_text: str) -> dict:
 
 async def generate_revision_sheet(source_text: str) -> dict:
     """Returns {revisionSheet, visualPayload?}."""
-    parsed = await _chat_json(_REVISION_SYSTEM, source_text, max_tokens=6144)
+    parsed = await _chat_json(
+        _REVISION_SYSTEM,
+        _vary_source(source_text),
+        max_tokens=6144,
+        temperature=0.8,
+    )
     sheet = (parsed.get("revisionSheet") or parsed.get("revision_sheet") or "").strip()
     if len(sheet) < 80:
         raise QwenGenerationError("Revision sheet generation returned too little content.")
@@ -376,7 +419,12 @@ async def generate_revision_sheet(source_text: str) -> dict:
 
 async def generate_five_min_revision(source_text: str) -> dict:
     """Returns short {revisionSheet, visualPayload?} for 5-minute Home chip."""
-    parsed = await _chat_json(_FIVE_MIN_REVISION_SYSTEM, source_text, max_tokens=3072)
+    parsed = await _chat_json(
+        _FIVE_MIN_REVISION_SYSTEM,
+        _vary_source(source_text),
+        max_tokens=3072,
+        temperature=0.8,
+    )
     sheet = (parsed.get("revisionSheet") or parsed.get("revision_sheet") or "").strip()
     if len(sheet) < 60:
         raise QwenGenerationError("5-minute revision returned too little content.")
@@ -400,7 +448,12 @@ def _count_mind_map_nodes(node: dict) -> int:
 
 async def generate_important_questions(source_text: str) -> dict:
     """Returns {questions: [{question, type, marks, hint?}, ...]}."""
-    parsed = await _chat_json(_IMPORTANT_QUESTIONS_SYSTEM, source_text, max_tokens=2200)
+    parsed = await _chat_json(
+        _IMPORTANT_QUESTIONS_SYSTEM,
+        _vary_source(source_text),
+        max_tokens=2200,
+        temperature=0.85,
+    )
     questions = parsed.get("questions") or []
     if not isinstance(questions, list) or len(questions) < 5:
         raise QwenGenerationError(
@@ -411,8 +464,13 @@ async def generate_important_questions(source_text: str) -> dict:
 
 async def generate_mind_map(source_text: str) -> dict:
     """Returns {title, root: {label, children: [...]}}."""
-    parsed = await _chat_json(_MIND_MAP_SYSTEM, source_text, max_tokens=4096)
-    
+    parsed = await _chat_json(
+        _MIND_MAP_SYSTEM,
+        _vary_source(source_text),
+        max_tokens=4096,
+        temperature=0.8,
+    )
+
     title = (parsed.get("title") or "").strip()
     root = parsed.get("root")
     if not isinstance(root, dict) or _count_mind_map_nodes(root) < 4:

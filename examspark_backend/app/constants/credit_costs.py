@@ -12,6 +12,9 @@ round up, max 180). YouTube stays banded (10/20/40).
 RECORD_CREDITS_PER_MINUTE = 2
 # Hard max for Record / audio upload (3 hours). YouTube stays at 90.
 RECORD_MAX_MINUTES = 180
+# Record / Audio Upload — ₹499+ plan required (Founder Jul 15, 2026), replaced Aug 2026
+# with a flat credit-balance gate: minimum 100 credits must be in the wallet to start.
+RECORD_MIN_CREDITS = 100
 # Legacy band constants (pre–per-minute) — kept for reference / old imports only.
 RECORD_UP_TO_30_MIN = 40
 RECORD_30_TO_60_MIN = 80

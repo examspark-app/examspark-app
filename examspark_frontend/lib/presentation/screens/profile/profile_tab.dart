@@ -42,7 +42,13 @@ class _ProfileTabState extends State<ProfileTab> {
   // Teacher Dashboard from an actual teacher just because the profile
   // fetch is still in flight or failed.
   bool _isTeacher = true;
-
+  String? get _googlePhotoUrl {
+    final user = SupabaseClient.instance.currentUser;
+    final metadata = user?.userMetadata;
+    if (metadata == null) return null;
+    return (metadata['avatar_url'] as String?) ??
+        (metadata['picture'] as String?);
+  }
   String get _planLabel {
     final def = SubscriptionPlans.byId(_planId);
     return def != null ? '${def.name} Plan' : 'Free Plan';
@@ -418,7 +424,7 @@ class _ProfileTabState extends State<ProfileTab> {
         children: [
           Row(
             children: [
-              InitialsAvatar(name: _userName, size: 56),
+              InitialsAvatar(name: _userName, photoUrl: _googlePhotoUrl, size: 56),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
