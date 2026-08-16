@@ -36,10 +36,10 @@ class RecordingService {
   static const double _adaptiveMarginDb = 12.0;
 
   /// First popup when mic may be off — recording never stops.
-  static const int silenceFirstWarnAfterSeconds = 5;
+  static const int silenceFirstWarnAfterSeconds = 10;
 
   /// Repeat popup every this many seconds of continuous silence (after speech or after first warn).
-  static const int silenceRepeatWarnAfterSeconds = 300;
+  static const int silenceRepeatWarnAfterSeconds = 100;
 
   /// Lazy / re-creatable — screen dispose must NOT permanently kill the
   /// singleton recorder (leave Record tab used to leave a disposed
