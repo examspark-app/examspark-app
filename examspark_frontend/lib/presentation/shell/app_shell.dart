@@ -614,7 +614,7 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
     if (Responsive.useSideNav(context)) {
   setState(() => _openWorkspace = req);
 } else {
-  showStudyWorkspaceSheet(
+  showStudyWorkspaceFullScreen(
     context,
     lectureId: lectureId,
     title: title,
@@ -625,7 +625,7 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
     _persistedWorkspace = null;
     UiSessionStore.instance.clearWorkspace();
   });
- }
+}
 }
 
   void _closeStudyWorkspace() {

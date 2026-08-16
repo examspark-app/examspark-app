@@ -389,27 +389,15 @@ class _StudyWorkspaceState extends State<StudyWorkspace> with SingleTickerProvid
     });
     unawaited(_loadChipStates());
   }
-Future<void> _handleTabTap(int index) async {
-    if (index < 0 || index >= _visibleTabs.length) return;
-    final tab = _visibleTabs[index];
-    if (tab.key == 'ask_ai') return; // Ask AI stays inline as a chat
-    await _onTabChanged();
-    if (!mounted) return;
-    await Navigator.of(context).push(
-      MaterialPageRoute<void>(
-        builder: (routeContext) => Scaffold(
-          appBar: AppBar(
-            title: Text(tab.label),
-            leading: IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.of(routeContext).pop(),
-            ),
-          ),
-          body: SafeArea(child: _tabBodyForKey(context, tab.key)),
-        ),
-      ),
-    );
+void _handleTabTap(int index) {
+  if (index < 0 || index >= _visibleTabs.length) return;
+
+  if (_tabController.index != index) {
+    _tabController.index = index;
   }
+
+  unawaited(_onTabChanged());
+}
 
   
   Future<void> _onTabChanged() async {
@@ -1000,84 +988,101 @@ Future<void> _handleTabTap(int index) async {
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        _buildHeader(context),
-        if (!widget.readOnly) _buildRecordingChipBar(context),
-        Container(
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: AppTheme.getCardBorder(context))),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: TabBar(
-                  controller: _tabController,
-                  onTap: _handleTabTap,
-                  isScrollable: true,
-                  labelColor: AppTheme.accentColor,
-                  unselectedLabelColor: AppTheme.getSecondaryText(context),
-                  indicatorColor: AppTheme.accentColor,
-                  indicatorSize: TabBarIndicatorSize.label,
-                  tabAlignment: TabAlignment.start,
-                  tabs: _visibleTabs
-                      .map((t) => Tab(
-                            height: 44,
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(t.icon, size: 16),
-                                const SizedBox(width: 6),
-                                Text(t.label),
-                              ],
-                            ),
-                          ))
-                      .toList(),
+Widget build(BuildContext context) {
+  return AnimatedBuilder(
+    animation: _tabController,
+    builder: (context, _) {
+      final index = _tabController.index.clamp(
+        0,
+        _visibleTabs.length - 1,
+      );
+      final activeTab = _visibleTabs[index];
+
+      return SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _buildHeader(context),
+
+            if (!widget.readOnly)
+              _buildRecordingChipBar(context),
+
+            Container(
+              decoration: BoxDecoration(
+                border: Border(
+                  bottom: BorderSide(
+                    color: AppTheme.getCardBorder(context),
+                  ),
                 ),
               ),
-              if (!widget.readOnly)
-                PopupMenuButton<String>(
-                  tooltip: 'More',
-                  icon: Icon(
-                    Icons.more_vert,
-                    color: AppTheme.getSecondaryText(context),
-                  ),
-                  enabled: !_deletingLecture,
-                  onSelected: (value) {
-                    if (value == 'delete') {
-                      unawaited(_confirmDeleteLecture());
-                    }
-                  },
-                  itemBuilder: (context) => [
-                    PopupMenuItem<String>(
-                      value: 'delete',
-                      child: Text(
-                        'Delete lecture',
-                        style: TextStyle(
-                          color: Theme.of(context).colorScheme.error,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: TabBar(
+                      controller: _tabController,
+                      onTap: _handleTabTap,
+                      isScrollable: true,
+                      labelColor: AppTheme.accentColor,
+                      unselectedLabelColor:
+                          AppTheme.getSecondaryText(context),
+                      indicatorColor: AppTheme.accentColor,
+                      indicatorSize: TabBarIndicatorSize.label,
+                      tabAlignment: TabAlignment.start,
+                      tabs: _visibleTabs
+                          .map(
+                            (t) => Tab(
+                              height: 44,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Icon(t.icon, size: 16),
+                                  const SizedBox(width: 6),
+                                  Text(t.label),
+                                ],
+                              ),
+                            ),
+                          )
+                          .toList(),
                     ),
-                  ],
-                ),
-            ],
-          ),
+                  ),
+
+                  if (!widget.readOnly)
+                    PopupMenuButton<String>(
+                      tooltip: 'More',
+                      icon: Icon(
+                        Icons.more_vert,
+                        color: AppTheme.getSecondaryText(context),
+                      ),
+                      enabled: !_deletingLecture,
+                      onSelected: (value) {
+                        if (value == 'delete') {
+                          unawaited(_confirmDeleteLecture());
+                        }
+                      },
+                      itemBuilder: (context) => [
+                        PopupMenuItem<String>(
+                          value: 'delete',
+                          child: Text(
+                            'Delete lecture',
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+
+            _tabBodyForKey(context, activeTab.key),
+          ],
         ),
-        Expanded(
-          child: TabBarView(
-            controller: _tabController,
-            children: [
-              for (final t in _visibleTabs)
-                _KeepAliveTab(child: _tabBodyForKey(context, t.key)),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
+      );
+    },
+  );
+}
 
   Widget _buildRecordingChipBar(BuildContext context) {
     return Container(
@@ -1215,23 +1220,32 @@ Future<void> _handleTabTap(int index) async {
   }
 
   Widget _scrollableTab(List<Widget> children) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: children),
-    );
-  }
+  return Padding(
+    padding: const EdgeInsets.all(16),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: children,
+    ),
+  );
+}
 
   Widget _selectableScrollableTab(
-    List<Widget> children, {
-    required String sourceSurface,
-  }) {
-    return SelectableStudyText(
-      lectureId: widget.lectureId,
-      sourceSurface: sourceSurface,
-      enableAskAi: !widget.readOnly,
-      child: _scrollableTab(children),
-    );
-  }
+  List<Widget> children, {
+  required String sourceSurface,
+}) {
+  return SelectableStudyText(
+    lectureId: widget.lectureId,
+    sourceSurface: sourceSurface,
+    enableAskAi: !widget.readOnly,
+    child: Padding(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: children,
+      ),
+    ),
+  );
+}
 
   Widget _notesLoadingOrError() {
     final hasCachedNotes = _cleanNotes.isNotEmpty ||
