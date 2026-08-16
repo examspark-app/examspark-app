@@ -98,7 +98,7 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
                 items.insert(
                   0,
                   ContextMenuButtonItem(
-                    label: 'Ask AI',
+                    label: 'Reply',
                     onPressed: () {
                       ContextMenuController.removeAny();
                       widget.onSelectAi!('ask', selectedText);

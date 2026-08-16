@@ -612,21 +612,21 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
       fullPage: useFullPage,
     );
     if (Responsive.useSideNav(context)) {
-      setState(() => _openWorkspace = req);
-    } else {
-      showStudyWorkspaceFullScreen(
-        context,
-        lectureId: lectureId,
-        title: title,
-        subject: subject,
-      ).then((_) {
-        if (!mounted) return;
-        if (_persistedWorkspace?.lectureId != lectureId) return;
-        _persistedWorkspace = null;
-        UiSessionStore.instance.clearWorkspace();
-      });
-    }
-  }
+  setState(() => _openWorkspace = req);
+} else {
+  showStudyWorkspaceSheet(
+    context,
+    lectureId: lectureId,
+    title: title,
+    subject: subject,
+  ).then((_) {
+    if (!mounted) return;
+    if (_persistedWorkspace?.lectureId != lectureId) return;
+    _persistedWorkspace = null;
+    UiSessionStore.instance.clearWorkspace();
+  });
+ }
+}
 
   void _closeStudyWorkspace() {
     _persistedWorkspace = null;

@@ -196,12 +196,15 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
                       if (_liveStreamText != null &&
                           _liveStreamText!.isNotEmpty) {
                         return Padding(
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: AiAssistantMessage(
-                            text: _liveStreamText!,
-                            animate: false,
-                          ),
-                        );
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: AiAssistantMessage(
+                        text: _liveStreamText!,
+                        animate: false,
+                        onSelectAi: (actionId, selectedText) async {
+                        await _send(selectedText);
+                       },
+                     ),
+                    );
                       }
                       return const Padding(
                         padding: EdgeInsets.only(bottom: 12),
@@ -230,14 +233,17 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
                       );
                     }
                     return Padding(
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: AiAssistantMessage(
-                        text: m.text,
-                        trustLine: m.trustLine,
-                        animate: m.animateReveal,
-                        visualPayload: m.visualPayload,
-                      ),
-                    );
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: AiAssistantMessage(
+                    text: m.text,
+                    trustLine: m.trustLine,
+                    animate: m.animateReveal,
+                    visualPayload: m.visualPayload,
+                    onSelectAi: (actionId, selectedText) async {
+                    await _send(selectedText);
+                    },
+                  ),
+                );
                   },
                 ),
         ),
