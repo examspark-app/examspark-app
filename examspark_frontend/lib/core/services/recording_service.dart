@@ -25,7 +25,15 @@ class RecordingService {
   static final RecordingService instance = RecordingService._();
 
   /// dBFS-ish levels from [AudioRecorder]; voice usually well above this.
-  static const double voiceThresholdDb = -40.0;
+  /// Fallback default — adaptive threshold (calibrated per-recording,
+  /// see below) is preferred once enough samples arrive.
+  static const double voiceThresholdDb = -50.0;
+
+  /// How many seconds to sample before locking in an adaptive threshold.
+  static const int _calibrationSeconds = 8;
+
+  /// Adaptive threshold = peak seen during calibration - this margin (dB).
+  static const double _adaptiveMarginDb = 12.0;
 
   /// First popup when mic may be off — recording never stops.
   static const int silenceFirstWarnAfterSeconds = 5;
@@ -46,6 +54,9 @@ class RecordingService {
   int _consecutiveSilentSeconds = 0;
 
   double _peakDb = -160.0;
+
+  /// Learned per-recording during the calibration window — null until then.
+  double? _adaptiveThresholdDb;
 
   /// Ever heard voice this take — used for final upload validation.
   bool _heardAnyVoice = false;
@@ -116,6 +127,7 @@ class RecordingService {
     _voiceActiveNow = false;
     _lastSilenceWarnAtElapsed = null;
     _amplitudeSamplesReceived = false;
+    _adaptiveThresholdDb = null;
 
     // Web: no dart:io paths; leave `path` empty for in-memory blob + opus.
     await _activeRecorder.start(
@@ -167,8 +179,19 @@ class RecordingService {
           .listen((amp) {
         _amplitudeSamplesReceived = true;
         final level = amp.current;
+        debugPrint('AMPLITUDE_DEBUG: current=$level max=${amp.max}');
         if (level > _peakDb) _peakDb = level;
-        if (level >= voiceThresholdDb) {
+
+        // Calibration window — learn the room's peak level so classroom
+        // (distant/quiet) recording and close-mic recording both work,
+        // instead of one fixed threshold that only suits close-range.
+        if (_elapsedSeconds <= _calibrationSeconds) {
+          final candidate = _peakDb - _adaptiveMarginDb;
+          _adaptiveThresholdDb = candidate.clamp(-60.0, voiceThresholdDb);
+        }
+
+        final effectiveThreshold = _adaptiveThresholdDb ?? voiceThresholdDb;
+        if (level >= effectiveThreshold) {
           if (!_voiceActiveNow) {
             _consecutiveSilentSeconds = 0;
           }

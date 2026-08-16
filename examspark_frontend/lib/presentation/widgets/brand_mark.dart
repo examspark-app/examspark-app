@@ -26,32 +26,36 @@ class BrandMark extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Container(
-            width: tileSize,
-            height: tileSize,
-            decoration: BoxDecoration(
-              color: AppTheme.accentColor,
-              borderRadius: BorderRadius.circular(radius),
-            ),
-            
-            padding: EdgeInsets.zero,
-            alignment: Alignment.center,
-            child: Image.network(
-            AppBrand.logoPath,
-            fit: BoxFit.cover,
-              errorBuilder: (context, error, stackTrace) {
-                return Text(
-                  AppBrand.markLetter,
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: letterSize,
-                    height: 1,
-                    letterSpacing: 0.5,
-                  ),
-                );
-              },
-            ),
+  width: tileSize,
+  height: tileSize,
+  decoration: BoxDecoration(
+    color: AppTheme.accentColor,
+    borderRadius: BorderRadius.circular(radius),
+  ),
+  padding: EdgeInsets.zero,
+  alignment: Alignment.center,
+  child: ClipRRect(
+    borderRadius: BorderRadius.circular(radius),
+    child: Image.network(
+      AppBrand.logoPath,
+      fit: BoxFit.cover,
+      width: tileSize,
+      height: tileSize,
+      errorBuilder: (context, error, stackTrace) {
+        return Text(
+          AppBrand.markLetter,
+          style: TextStyle(
+            color: Colors.white,
+            fontWeight: FontWeight.w800,
+            fontSize: letterSize,
+            height: 1,
+            letterSpacing: 0.5,
           ),
+        );
+      },
+    ),
+  ),
+),
           if (showWordmark) ...[
             const SizedBox(width: 10),
             Text(

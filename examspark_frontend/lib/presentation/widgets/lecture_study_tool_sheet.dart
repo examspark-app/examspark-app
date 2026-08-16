@@ -148,20 +148,14 @@ class _LectureToolPageState extends State<_LectureToolPage> {
             const SizedBox(height: 8),
             const Divider(height: 1),
             Expanded(
-              child: ListView(
-                padding: const EdgeInsets.all(16),
-                children: [
-                  if (_error != null)
-                    Text(_error!, style: TextStyle(color: Colors.red.shade700))
-                  else if (_loading)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 40),
-                      child: Center(child: CircularProgressIndicator()),
+              child: _error != null
+                  ? Padding(
+                      padding: const EdgeInsets.all(16),
+                      child: Text(_error!, style: TextStyle(color: Colors.red.shade700)),
                     )
-                  else
-                    _buildPayload(context, _payload ?? const {}),
-                ],
-              ),
+                  : _loading
+                      ? const Center(child: CircularProgressIndicator())
+                      : _buildPayload(context, _payload ?? const {}),
             ),
             if (!_loading && _error == null)
               Padding(
@@ -192,11 +186,14 @@ class _LectureToolPageState extends State<_LectureToolPage> {
     if (widget.toolType == 'visual') {
       final vp = data['visual_payload'] ?? data['visualPayload'];
       final md = (data['markdown'] as String?) ?? '';
-      return SmartEducationalContent(
-        markdownBody: md.isNotEmpty ? md : '## Visual',
-        visualPayload: vp is Map
-            ? VisualPayloadData.fromJson(Map<String, dynamic>.from(vp))
-            : null,
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: SmartEducationalContent(
+          markdownBody: md.isNotEmpty ? md : '## Visual',
+          visualPayload: vp is Map
+              ? VisualPayloadData.fromJson(Map<String, dynamic>.from(vp))
+              : null,
+        ),
       );
     }
     final questions = data['questions'] as List?;
@@ -207,20 +204,17 @@ class _LectureToolPageState extends State<_LectureToolPage> {
           .whereType<Map>()
           .map((q) => MCQQuestion.fromJson(Map<String, dynamic>.from(q)))
           .toList();
-      return SizedBox(height: 420, child: MCQQuizView(questions: parsed));
+      return MCQQuizView(questions: parsed);
     }
     if (questions != null &&
         questions.isNotEmpty &&
         widget.toolType == 'important_questions') {
-      return SizedBox(
-        height: 420,
-        child: ImportantQuestionsView(
-          questions: questions
-              .whereType<Map>()
-              .map((q) =>
-                  ImportantQuestion.fromJson(Map<String, dynamic>.from(q)))
-              .toList(),
-        ),
+      return ImportantQuestionsView(
+        questions: questions
+            .whereType<Map>()
+            .map((q) =>
+                ImportantQuestion.fromJson(Map<String, dynamic>.from(q)))
+            .toList(),
       );
     }
     final cards = data['cards'] as List?;
@@ -229,16 +223,16 @@ class _LectureToolPageState extends State<_LectureToolPage> {
           .whereType<Map>()
           .map((c) => Flashcard.fromJson(Map<String, dynamic>.from(c)))
           .toList();
-      return SizedBox(
-        height: 320,
-        child: FlashcardStackView(flashcards: parsed),
-      );
+      return FlashcardStackView(flashcards: parsed);
     }
     if (data['root'] is Map) {
-      return MindMapView(
-        title: (data['title'] as String?) ?? 'Mind Map',
-        root: MindMapNodeData.fromJson(
-          Map<String, dynamic>.from(data['root'] as Map),
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: MindMapView(
+          title: (data['title'] as String?) ?? 'Mind Map',
+          root: MindMapNodeData.fromJson(
+            Map<String, dynamic>.from(data['root'] as Map),
+          ),
         ),
       );
     }
@@ -248,32 +242,40 @@ class _LectureToolPageState extends State<_LectureToolPage> {
         '';
     if (md.isNotEmpty) {
       final vp = data['visualPayload'] ?? data['visual_payload'];
-      return SmartEducationalContent(
-        markdownBody: md,
-        visualPayload: vp is Map
-            ? VisualPayloadData.fromJson(Map<String, dynamic>.from(vp))
-            : null,
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: SmartEducationalContent(
+          markdownBody: md,
+          visualPayload: vp is Map
+              ? VisualPayloadData.fromJson(Map<String, dynamic>.from(vp))
+              : null,
+        ),
       );
     }
     final tricks = data['tricks'] as List?;
     if (tricks != null && tricks.isNotEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          for (final t in tricks.whereType<Map>())
-            Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Text(
-                '• ${t['mnemonic'] ?? t['trigger'] ?? t}',
-                style: Theme.of(context).textTheme.bodyMedium,
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            for (final t in tricks.whereType<Map>())
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(
+                  '• ${t['mnemonic'] ?? t['trigger'] ?? t}',
+                  style: Theme.of(context).textTheme.bodyMedium,
+                ),
               ),
-            ),
-        ],
+          ],
+        ),
       );
     }
-    return Text(
-      'No content in this chip yet.',
-      style: Theme.of(context).textTheme.bodyMedium,
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Text(
+        'No content in this chip yet.',
+        style: Theme.of(context).textTheme.bodyMedium,
+      ),
     );
   }
-}
