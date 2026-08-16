@@ -271,7 +271,7 @@ class _LectureToolPageState extends State<_LectureToolPage> {
         ),
       );
     }
-    return SingleChildScrollView(
+        return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Text(
         'No content in this chip yet.',
@@ -279,3 +279,5 @@ class _LectureToolPageState extends State<_LectureToolPage> {
       ),
     );
   }
+}
+  
