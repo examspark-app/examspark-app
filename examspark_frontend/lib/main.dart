@@ -45,45 +45,6 @@ Future<void> main() async {
     );
   }
 
-  // ------------------------------------------------------------
-  // PostHog Analytics
-  // Visitor + screen/page tracking.
-  // Session Replay is intentionally OFF.
-  // ------------------------------------------------------------
-
-  final posthogApiKey =
-      dotenv.maybeGet('POSTHOG_API_KEY') ?? '';
-
-  final posthogHost =
-      dotenv.maybeGet('POSTHOG_HOST') ??
-          'https://us.i.posthog.com';
-
-  if (posthogApiKey.isNotEmpty) {
-    final posthogConfig = PostHogConfig(posthogApiKey);
-
-    posthogConfig.host = posthogHost;
-
-    // We only want visitor/page analytics.
-    // Session Replay stays OFF.
-    posthogConfig.sessionReplay = false;
-
-    await Posthog().setup(posthogConfig);
-
-    // Identify logged-in Supabase user.
-    final currentUser = SupabaseClient.instance.currentUser;
-
-    if (currentUser != null) {
-      await Posthog().identify(
-        userId: currentUser.id,
-      );
-    }
-  }
-
-  // FCM
-  try {
-    await FcmPushService.instance.start();
-  } catch (_) {}
-
   runApp(const ExamSparkApp());
 }
 
@@ -105,16 +66,50 @@ class _ExamSparkAppState extends State<ExamSparkApp> {
   void initState() {
     super.initState();
 
-    // `home: AuthGate` ignores URL hash.
-    // Open /join/CODE after first frame.
-    WidgetsBinding.instance.addPostFrameCallback(
-      (_) => _openInviteDeepLink(),
-    );
+    // First frame ke baad non-critical services start karo.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeBackgroundServices();
+      _openInviteDeepLink();
+    });
 
     if (!kIsWeb) {
       _listenNativeDeepLinks();
       _listenSharedFiles();
     }
+  }
+
+  Future<void> _initializeBackgroundServices() async {
+    final posthogApiKey =
+        dotenv.maybeGet('POSTHOG_API_KEY') ?? '';
+
+    final posthogHost =
+        dotenv.maybeGet('POSTHOG_HOST') ??
+            'https://us.i.posthog.com';
+
+    if (posthogApiKey.isNotEmpty) {
+      try {
+        final posthogConfig = PostHogConfig(posthogApiKey);
+
+        posthogConfig.host = posthogHost;
+        posthogConfig.sessionReplay = false;
+
+        await Posthog().setup(posthogConfig);
+
+        final currentUser = SupabaseClient.instance.currentUser;
+
+        if (currentUser != null) {
+          await Posthog().identify(
+            userId: currentUser.id,
+          );
+        }
+      } catch (_) {
+        // Analytics failure must never affect app startup.
+      }
+    }
+
+    try {
+      await FcmPushService.instance.start();
+    } catch (_) {}
   }
 
   /// Android/iOS App Links.
