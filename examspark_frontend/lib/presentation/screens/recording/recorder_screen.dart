@@ -1083,13 +1083,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
       _recordingPath = await _recordingService.stop();
       _recordingService.setSilenceWarningListener(null);
 
-      // Fail closed before FastAPI when amplitude proves silence (mic off).
-      // If amplitude never reports (some web builds), backend guard handles it.
-      if (_recordingService.amplitudeMonitoringActive &&
-          !_recordingService.heardVoice &&
-          _recordingService.elapsedSeconds >= 3) {
-        throw StateError(kMicCheckUserMessage);
-      }
+      
 
       final bytes = await _recordingService.readRecordingBytes(_recordingPath);
       if (bytes == null || bytes.isEmpty) {
