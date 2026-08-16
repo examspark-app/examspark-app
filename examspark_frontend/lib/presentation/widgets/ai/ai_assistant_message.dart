@@ -79,39 +79,52 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
     );
 
     final body = widget.animate && !_revealDone
-        ? AiTypewriterText(
-            text: widget.text,
-            style: textStyle,
-            onComplete: _onTypewriterComplete,
-          )
-        : SelectableText(
-            widget.text,
-            style: textStyle,
-            contextMenuBuilder: (context, editableTextState) {
-              final selectedText = editableTextState.textEditingValue.selection
-                  .textInside(editableTextState.textEditingValue.text)
-                  .trim();
-              final items = List<ContextMenuButtonItem>.from(
-                editableTextState.contextMenuButtonItems,
-              );
-              if (selectedText.isNotEmpty && widget.onSelectAi != null) {
-                items.insert(
-                  0,
-                  ContextMenuButtonItem(
-                    label: 'Reply',
-                    onPressed: () {
-                      ContextMenuController.removeAny();
-                      widget.onSelectAi!('ask', selectedText);
-                    },
-                  ),
-                );
-              }
-              return AdaptiveTextSelectionToolbar.buttonItems(
-                anchors: editableTextState.contextMenuAnchors,
-                buttonItems: items,
-              );
-            },
+    ? AiTypewriterText(
+        text: widget.text,
+        style: textStyle,
+        onComplete: _onTypewriterComplete,
+      )
+    : SelectableText(
+        widget.text,
+        style: textStyle,
+        enableInteractiveSelection: true,
+        contextMenuBuilder: (context, editableTextState) {
+          final selection =
+              editableTextState.textEditingValue.selection;
+
+          final selectedText =
+              selection.textInside(
+            editableTextState.textEditingValue.text,
+          ).trim();
+
+          final items = <ContextMenuButtonItem>[
+            ...editableTextState.contextMenuButtonItems,
+          ];
+
+          if (selectedText.isNotEmpty &&
+              widget.onSelectAi != null) {
+            items.insert(
+              0,
+              ContextMenuButtonItem(
+                label: 'Reply',
+                onPressed: () {
+                  ContextMenuController.removeAny();
+
+                  final callback = widget.onSelectAi;
+                  if (callback != null) {
+                    callback('reply', selectedText);
+                  }
+                },
+              ),
+            );
+          }
+
+          return AdaptiveTextSelectionToolbar.buttonItems(
+            anchors: editableTextState.contextMenuAnchors,
+            buttonItems: items,
           );
+        },
+      );
 
     final maxW = MediaQuery.sizeOf(context).width;
     // Match ChatGPT Web's optimal reading width (~768px max for text blocks)

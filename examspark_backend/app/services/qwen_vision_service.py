@@ -75,11 +75,26 @@ def _notes_usable(notes: dict) -> bool:
     clean = (notes.get("cleanNotes") or "").strip()
     summary = (notes.get("shortSummary") or "").strip()
     key_points = notes.get("keyPoints") or []
-    if len(clean) >= _MIN_NOTES_CHARS:
-        return True
-    if len(summary) >= 20 and isinstance(key_points, list) and len(key_points) >= 1:
-        return True
-    return False
+    important_terms = notes.get("importantTerms") or []
+
+    valid_key_points = (
+        isinstance(key_points, list)
+        and len(
+            [item for item in key_points if str(item).strip()]
+        ) >= 2
+    )
+
+    valid_terms = (
+        isinstance(important_terms, list)
+        and len(important_terms) >= 1
+    )
+
+    return (
+        len(clean) >= 120
+        and len(summary) >= 40
+        and valid_key_points
+        and valid_terms
+    )
 
 
 def _normalize_notes(parsed: dict) -> dict:

@@ -99,7 +99,71 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
       }
     }
   }
+   Future<void> _sendSelectedText(
+    String actionId,
+    String selectedText,
+  ) async {
+    final text = selectedText.trim();
+    if (text.isEmpty || _isSending) return;
 
+    setState(() {
+      _messages.add(
+        _AskMsg(text, isUser: true),
+      );
+      _isSending = true;
+      _liveStreamText = null;
+    });
+
+    _scrollToBottom();
+
+    try {
+      final done = await LectureService.instance.selectAiStream(
+        lectureId: widget.lectureId,
+        selectedText: text,
+        action: actionId,
+        sourceSurface: 'ask_ai',
+        conversationLanguage: _conversationLanguage,
+        onToken: (delta) {
+          if (!mounted) return;
+
+          setState(() {
+            _liveStreamText =
+                (_liveStreamText ?? '') + delta;
+          });
+
+          _scrollToBottom();
+        },
+      );
+
+      if (!mounted) return;
+
+      _applySuccess(
+        done,
+        animateReveal: false,
+      );
+    } catch (e) {
+      if (!mounted) return;
+
+      final msg = studentSafeError(
+        e,
+        fallback: StudentCopy.askFailed,
+      );
+
+      setState(() {
+        _messages.add(
+          _AskMsg(
+            msg,
+            isUser: false,
+            animateReveal: false,
+          ),
+        );
+        _isSending = false;
+        _liveStreamText = null;
+      });
+
+      _scrollToBottom();
+    }
+  }
   Future<void> _runStream(String query) async {
     final done = await LectureService.instance.askAiStream(
       lectureId: widget.lectureId,
@@ -201,7 +265,7 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
                         text: _liveStreamText!,
                         animate: false,
                         onSelectAi: (actionId, selectedText) async {
-                        await _send(selectedText);
+                        await _sendSelectedText(actionId, selectedText);
                        },
                      ),
                     );
@@ -240,7 +304,7 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
                     animate: m.animateReveal,
                     visualPayload: m.visualPayload,
                     onSelectAi: (actionId, selectedText) async {
-                    await _send(selectedText);
+                    await _sendSelectedText(actionId, selectedText);
                     },
                   ),
                 );
