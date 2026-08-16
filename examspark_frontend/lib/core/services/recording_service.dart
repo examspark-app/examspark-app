@@ -55,6 +55,15 @@ class RecordingService {
 
   double _peakDb = -160.0;
 
+  /// Quietest sample seen during calibration — the real noise floor
+  /// (steady background noise), not the loudest moment. Threshold is set
+  /// ABOVE this, so continuous background noise stops being misread as
+  /// "voice" (fixes the case where calibration itself happens during noise).
+  double _floorDb = double.infinity;
+
+  /// Margin above the noise floor a sample must clear to count as voice.
+  static const double _adaptiveMarginAboveFloorDb = 15.0;
+
   /// Learned per-recording during the calibration window — null until then.
   double? _adaptiveThresholdDb;
 
@@ -126,6 +135,7 @@ class RecordingService {
     _elapsedSeconds = 0;
     _consecutiveSilentSeconds = 0;
     _peakDb = -160.0;
+    _floorDb = double.infinity;
     _heardAnyVoice = false;
     _voiceActiveNow = false;
     _lastSilenceWarnAtElapsed = null;
@@ -184,12 +194,17 @@ class RecordingService {
         final level = amp.current;
         debugPrint('AMPLITUDE_DEBUG: current=$level max=${amp.max}');
         if (level > _peakDb) _peakDb = level;
+        if (level < _floorDb) _floorDb = level;
 
-        // Calibration window — learn the room's peak level so classroom
-        // (distant/quiet) recording and close-mic recording both work,
-        // instead of one fixed threshold that only suits close-range.
+        // Calibration window — learn the room's QUIETEST moment (noise
+        // floor), not its loudest. A threshold set above the noise floor
+        // means steady background noise (fan, traffic, classroom hum)
+        // never counts as "voice" — only a genuine rise above the ambient
+        // level does. (Old approach anchored to the loudest moment, which
+        // could itself BE the background noise, silently swallowing the
+        // silence alert.)
         if (_elapsedSeconds <= _calibrationSeconds) {
-          final candidate = _peakDb - _adaptiveMarginDb;
+          final candidate = _floorDb + _adaptiveMarginAboveFloorDb;
           _adaptiveThresholdDb = candidate.clamp(-60.0, voiceThresholdDb);
         }
 
