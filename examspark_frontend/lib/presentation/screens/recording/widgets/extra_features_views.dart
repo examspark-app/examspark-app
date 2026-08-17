@@ -143,15 +143,8 @@ class _MCQQuizViewState extends State<MCQQuizView> {
         Expanded(
           child: SingleChildScrollView(
             padding: const EdgeInsets.all(16),
-            child: Container(
+            child: Column(
               key: ValueKey(_currentQuestionIndex),
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              decoration: BoxDecoration(
-                color: cardBg,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Align(
@@ -1200,54 +1193,49 @@ class ImportantQuestionsView extends StatelessWidget {
     return ListView.separated(
       padding: const EdgeInsets.all(AppTheme.screenPadding),
       itemCount: questions.length,
-      separatorBuilder: (_, _) => const SizedBox(height: 12),
+      separatorBuilder: (_, _) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 16),
+        child: Divider(height: 1, color: AppTheme.getCardBorder(context)),
+      ),
       itemBuilder: (context, index) {
         final q = questions[index];
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppTheme.getCardBackground(context),
-            borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-            border: Border.all(color: AppTheme.getCardBorder(context)),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Text(
-                    'Q${index + 1}',
-                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '${q.marks} marks',
-                    style: Theme.of(context).textTheme.bodySmall,
-                  ),
-                ],
-              ),
-              const SizedBox(height: 8),
-              Text(
-                q.question,
-                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
-                  height: 1.5,
-                ),
-              ),
-              if (q.hint != null && q.hint!.isNotEmpty) ...[
-                const SizedBox(height: 10),
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
                 Text(
-                  'Hint: ${q.hint}',
-                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.getSecondaryText(context),
-                    fontStyle: FontStyle.italic,
+                  'Q${index + 1}',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
                   ),
+                ),
+                const Spacer(),
+                Text(
+                  '${q.marks} marks',
+                  style: Theme.of(context).textTheme.bodySmall,
                 ),
               ],
+            ),
+            const SizedBox(height: 8),
+            Text(
+              q.question,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w500,
+                height: 1.5,
+              ),
+            ),
+            if (q.hint != null && q.hint!.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              Text(
+                'Hint: ${q.hint}',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTheme.getSecondaryText(context),
+                  fontStyle: FontStyle.italic,
+                ),
+              ),
             ],
-          ),
+          ],
         );
       },
     );

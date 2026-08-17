@@ -36,6 +36,7 @@ class AiAssistantMessage extends StatefulWidget {
 
 class _AiAssistantMessageState extends State<AiAssistantMessage> {
   bool _revealDone = false;
+  String _selectedText = '';
 
   @override
   void initState() {
@@ -86,51 +87,10 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
         onComplete: _onTypewriterComplete,
       )
         : SelectionArea(
-        contextMenuBuilder: (context, selectableRegionState) {
-          final items = <ContextMenuButtonItem>[
-            ContextMenuButtonItem(
-              label: 'Reply',
-              onPressed: () async {
-                ContextMenuController.removeAny();
-
-                var selectedText = readDomTextSelection() ?? '';
-
-                if (selectedText.trim().isEmpty) {
-                  for (final item
-                      in selectableRegionState.contextMenuButtonItems) {
-                    if (item.type == ContextMenuButtonType.copy) {
-                      item.onPressed?.call();
-                      break;
-                    }
-                  }
-
-                  await Future<void>.delayed(
-                    const Duration(milliseconds: 40),
-                  );
-
-                  final data =
-                      await Clipboard.getData(Clipboard.kTextPlain);
-
-                  selectedText = data?.text ?? '';
-                }
-
-                selectedText = selectedText.trim();
-
-                if (selectedText.isEmpty || !context.mounted) return;
-
-                final callback = widget.onSelectAi;
-                if (callback == null) return;
-
-                await callback('reply', selectedText);
-              },
-            ),
-          ];
-          
-
-          return AdaptiveTextSelectionToolbar.buttonItems(
-            anchors: selectableRegionState.contextMenuAnchors,
-            buttonItems: items,
-          );
+        onSelectionChanged: (content) {
+          setState(() {
+            _selectedText = (content?.plainText ?? '').trim();
+          });
         },
         child: Text(
           widget.text,
@@ -163,7 +123,27 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
                 ),
               ),
               child: body,
-            ),
+              ),
+            if (_selectedText.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: ElevatedButton.icon(
+                  onPressed: () async {
+                    final text = _selectedText;
+                    setState(() => _selectedText = '');
+                    final callback = widget.onSelectAi;
+                    if (callback == null) return;
+                    await callback('reply', text);
+                  },
+                  icon: const Icon(Icons.reply, size: 16),
+                  label: const Text('Reply'),
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                  ),
+                ),
+              ),
+            ],
             if (_hasVisual && _revealDone) ...[
               const SizedBox(height: 16),
               HomeAiVisualCard(visualPayload: widget.visualPayload!),

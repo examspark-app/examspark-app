@@ -147,6 +147,8 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   String? _homeAiSessionId;
   /// Live SSE tokens while waiting (null = still thinking).
   String? _liveStreamText;
+  Uint8List? _pendingAttachmentBytes;
+  String? _pendingAttachmentName;
   Timer? _persistDebounce;
   
   bool _restoredDisk = false;
@@ -514,6 +516,15 @@ void _onHomeSessionBridge() {
     bool isRetry = false,
   }) async {
     final query = text.trim();
+
+    if (!isRetry && _pendingAttachmentBytes != null) {
+      final bytes = _pendingAttachmentBytes!;
+      final filename = _pendingAttachmentName ?? 'photo.jpg';
+      _removePendingAttachment();
+      await _sendHomeVision(bytes, filename, caption: query.isEmpty ? null : query);
+      return;
+    }
+
     if (query.isEmpty || _isSending) return;
 
     final parentId =
@@ -953,7 +964,10 @@ void _onHomeSessionBridge() {
         return;
       }
 
-      await _sendHomeVision(bytes, filename);
+      setState(() {
+        _pendingAttachmentBytes = bytes;
+        _pendingAttachmentName = filename;
+      });
     } catch (e) {
       if (!mounted) return;
       AppToast.showSnackBar(context, 
@@ -967,13 +981,21 @@ void _onHomeSessionBridge() {
       );
     }
   }
-
+void _removePendingAttachment() {
+    setState(() {
+      _pendingAttachmentBytes = null;
+      _pendingAttachmentName = null;
+    });
+  }
   Future<void> _sendHomeVision(
     Uint8List bytes,
     String filename, {
     bool isRetry = false,
+    String? caption,
   }) async {
-    final label = '📷 Photo Ask · $filename';
+    final label = (caption != null && caption.isNotEmpty)
+        ? caption
+        : '📷 Photo Ask · $filename';
     setState(() {
       _isSending = true;
       _liveStreamText = null;
@@ -1334,6 +1356,10 @@ void _onHomeSessionBridge() {
             onYoutube: _handleYoutube,
             recordLocked: !_audioUnlocked,
             isSending: _isSending,
+            attachmentBytes: _pendingAttachmentBytes,
+            attachmentName: _pendingAttachmentName,
+            attachmentIsImage: true,
+            onRemoveAttachment: _removePendingAttachment,
           ),
         ],
       ),

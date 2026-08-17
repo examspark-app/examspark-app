@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 
@@ -9,6 +10,12 @@ class BottomInputBar extends StatefulWidget {
   final bool isSending;
   final VoidCallback? onYoutube;
 
+  /// Pinned attachment (set by parent after camera/gallery pick).
+  final Uint8List? attachmentBytes;
+  final String? attachmentName;
+  final bool attachmentIsImage;
+  final VoidCallback? onRemoveAttachment;
+
   const BottomInputBar({
     super.key,
     required this.onSend,
@@ -17,6 +24,10 @@ class BottomInputBar extends StatefulWidget {
     this.recordLocked = false,
     this.onYoutube,
     this.isSending = false,
+    this.attachmentBytes,
+    this.attachmentName,
+    this.attachmentIsImage = true,
+    this.onRemoveAttachment,
   });
 
   @override
@@ -44,16 +55,19 @@ class _BottomInputBarState extends State<BottomInputBar> {
     super.dispose();
   }
 
+  bool get _hasAttachment =>
+      widget.attachmentBytes != null && widget.attachmentBytes!.isNotEmpty;
+
   void _handleSend() {
-  if (widget.isSending) return;
+    if (widget.isSending) return;
+    final text = _controller.text.trim();
+    // Attachment akela bhi bhej sakte (text ke bina), text akela bhi.
+    if (text.isEmpty && !_hasAttachment) return;
 
-  final text = _controller.text.trim();
-  if (text.isEmpty) return;
-
-  FocusScope.of(context).unfocus();
-  widget.onSend(text);
-  _controller.clear();
-}
+    FocusScope.of(context).unfocus();
+    widget.onSend(text); // text empty ho sakta hai — parent attachment ke sath combine karega
+    _controller.clear();
+  }
 
   Color _actionColor(BuildContext context) {
     return Theme.of(context).brightness == Brightness.light
@@ -67,11 +81,70 @@ class _BottomInputBarState extends State<BottomInputBar> {
         : Colors.black;
   }
 
+  Widget _buildAttachmentChip(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Container(
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: isLight ? const Color(0xFFF0F0F0) : const Color(0xFF262626),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isLight ? const Color(0xFFDDDDDD) : const Color(0xFF3A3A3A),
+            ),
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(9),
+                child: widget.attachmentIsImage
+                    ? Image.memory(
+                        widget.attachmentBytes!,
+                        width: 56,
+                        height: 56,
+                        fit: BoxFit.cover,
+                      )
+                    : Container(
+                        width: 56,
+                        height: 56,
+                        alignment: Alignment.center,
+                        color: isLight ? Colors.white : const Color(0xFF1A1A1A),
+                        child: const Icon(Icons.picture_as_pdf_outlined, size: 26),
+                      ),
+              ),
+              Positioned(
+                top: -6,
+                right: -6,
+                child: GestureDetector(
+                  onTap: widget.onRemoveAttachment,
+                  child: Container(
+                    width: 20,
+                    height: 20,
+                    decoration: const BoxDecoration(
+                      color: Colors.black87,
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.close, size: 13, color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final isLight = Theme.of(context).brightness == Brightness.light;
     final actionColor = _actionColor(context);
     final actionIconColor = _actionIconColor(context);
+    final canSend = (_hasText || _hasAttachment) && !widget.isSending;
 
     return SafeArea(
       top: false,
@@ -84,16 +157,14 @@ class _BottomInputBarState extends State<BottomInputBar> {
             color: isLight ? Colors.white : const Color(0xFF1A1A1A),
             borderRadius: BorderRadius.circular(26),
             border: Border.all(
-              color: isLight
-                  ? const Color(0xFFD9D9D9)
-                  : const Color(0xFF333333),
+              color: isLight ? const Color(0xFFD9D9D9) : const Color(0xFF333333),
               width: 1.2,
             ),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Text field row — no border, sits inside the outer box.
+              if (_hasAttachment) _buildAttachmentChip(context),
               ConstrainedBox(
                 constraints: const BoxConstraints(maxHeight: 160),
                 child: TextField(
@@ -107,21 +178,19 @@ class _BottomInputBarState extends State<BottomInputBar> {
                     color: AppTheme.getPrimaryText(context),
                   ),
                   decoration: InputDecoration(
-                    hintText: 'Ask sonaxia ...',
+                    hintText: _hasAttachment
+                        ? 'Add a caption (optional)...'
+                        : 'Ask sonaxia ...',
                     border: InputBorder.none,
                     isDense: true,
                     contentPadding: const EdgeInsets.only(bottom: 10),
                     hintStyle: TextStyle(
-                      color: isLight
-                          ? Colors.grey.shade600
-                          : Colors.grey.shade500,
+                      color: isLight ? Colors.grey.shade600 : Colors.grey.shade500,
                       fontSize: 16,
                     ),
                   ),
                 ),
               ),
-              // Bottom icon row — "+" on the left, actions on the right,
-              // all inside the same rounded box (Claude-style).
               Row(
                 children: [
                   IconButton(
@@ -136,11 +205,8 @@ class _BottomInputBarState extends State<BottomInputBar> {
                     Padding(
                       padding: const EdgeInsets.only(right: 4),
                       child: IconButton(
-                        icon: const Icon(
-                          Icons.smart_display_rounded,
-                          color: Color(0xFFEA4335),
-                          size: 22,
-                        ),
+                        icon: const Icon(Icons.smart_display_rounded,
+                            color: Color(0xFFEA4335), size: 22),
                         padding: EdgeInsets.zero,
                         constraints: const BoxConstraints(),
                         onPressed: widget.onYoutube,
@@ -167,12 +233,9 @@ class _BottomInputBarState extends State<BottomInputBar> {
                     child: IconButton(
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      icon: Icon(
-                        Icons.arrow_upward_rounded,
-                        color: actionIconColor,
-                        size: 16,
-                      ),
-                      onPressed: (!_hasText || widget.isSending) ? null : _handleSend,
+                      icon: Icon(Icons.arrow_upward_rounded,
+                          color: actionIconColor, size: 16),
+                      onPressed: canSend ? _handleSend : null,
                     ),
                   ),
                 ],
