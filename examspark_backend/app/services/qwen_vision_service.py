@@ -29,8 +29,10 @@ _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # Compact prompt only — full visual schema belongs in text-notes path, not VL.
 _VISION_SYSTEM_PROMPT = (
-    "You are an expert educational content analyzer. "
-    "Analyze the image/diagram (OCR + meaning + math if present). "
+    "You are an expert visual and educational content analyzer. "
+    "Analyze the image itself carefully using OCR, visual understanding, diagrams, "
+    "tables, charts, equations, handwriting, and visible context. "
+    "Do not assume the image is educational unless the image supports that conclusion. "
     "Return ONLY a JSON object with these keys:\n"
     '- "cleanNotes": exam-focused markdown notes (Summary, Key Points, Explanation)\n'
     '- "keyPoints": array of short bullet strings\n'
@@ -183,13 +185,32 @@ async def _call_vision_model(
     b64 = base64.b64encode(image_bytes).decode("ascii")
     data_url = f"data:{mime_type};base64,{b64}"
     user_text = text_hint or (
-        "Analyze this educational image/diagram and extract study notes. "
-        "LANGUAGE LOCK: write notes in the SAME language as text visible in the image "
-        "(OCR language = notes language). "
-        "English text in image → English notes only — do NOT translate to Hindi. "
-        "Never invent Khmer/Thai/Chinese unless that script is in the image. "
-        "Keep JSON complete and compact."
-    )
+    "Analyze this image carefully before deciding what it contains. "
+    "Do NOT assume that it is educational, a diagram, a textbook page, or an exam question. "
+    "Identify only what is actually visible or readable.\n\n"
+
+    "FIRST determine:\n"
+    "- what the image contains (question, notes, textbook page, diagram, chart, table, "
+    "formula, document, handwritten work, photo, or other content);\n"
+    "- whether there is a clear question, exercise, or problem;\n"
+    "- the main topic, only when supported by visible/readable content;\n"
+    "- the language of the visible text.\n\n"
+
+    "RESPONSE RULES:\n"
+    "- If there is a clear question/problem, answer it directly first, then explain it.\n"
+    "- If there are multiple questions, address them clearly in order.\n"
+    "- If there is no question, explain the actual content and give useful key points.\n"
+    "- If it is clearly study/exam material, make the explanation exam-useful.\n"
+    "- If the user message requests a specific language or level, follow that request.\n"
+    "- Do not invent text, objects, topics, class level, people, language, or context.\n"
+    "- If text is blurry, cropped, or unreadable, say so instead of guessing.\n"
+    "- Carefully inspect diagrams, charts, tables, equations, labels, and images; "
+    "they are part of the meaning and must not be ignored.\n\n"
+
+    "Write the answer in the user's requested language when a user request is provided. "
+    "When there is no user request, use the clearest language supported by the visible text. "
+    "Keep JSON complete and compact."
+)
 
     payload = {
         "model": model,

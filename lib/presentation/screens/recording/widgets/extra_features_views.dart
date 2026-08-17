@@ -107,51 +107,51 @@ class _MCQQuizViewState extends State<MCQQuizView> {
                   );
                 }),
 
-                // Explanation hint
-                if (isAnswered) ...[
-                  const SizedBox(height: 24),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: AppTheme.getAccentTint(context),
-                      borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-                      border: Border.all(
-                        color: AppTheme.accentColor.withOpacity(0.3),
+                        // Explanation hint
+        if (isAnswered) ...[
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppTheme.getAccentTint(context),
+              borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+              border: Border.all(
+                color: AppTheme.accentColor.withOpacity(0.3),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      Icons.info_outline,
+                      size: 16,
+                      color: AppTheme.accentColor,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Explanation',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: AppTheme.accentColor,
                       ),
                     ),
-                    child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                  Row(
-                 children: [
-                 Icon(
-                Icons.info_outline,
-                size: 16,
-                color: AppTheme.accentColor,
+                  ],
                 ),
-               const SizedBox(width: 8),
+                const SizedBox(height: 8),
                 Text(
-              'Explanation',
-               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontWeight: FontWeight.bold,
-                color: AppTheme.accentColor,
-              ),
-             ),
-            ],
-           ),
-              const SizedBox(height: 8),
-                 Text(
-                 currentQuestion.explanation ?? 'No explanation provided',
-                    style: Theme.of(context).textTheme.bodySmall,
-                    ),
-                   ],
-                   ),
-                  ),
-                ],
+                  currentQuestion.explanation ?? 'No explanation provided',
+                  style: Theme.of(context).textTheme.bodySmall,
+                ),
               ],
             ),
           ),
-        ),
+        ],
+      ],
+    ),
+  ),
+),
 
         // Navigation buttons
         Padding(

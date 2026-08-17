@@ -127,10 +127,17 @@ async def home_ai_vision(
         )
 
     hint = (query or "").strip() or (
-        "Explain this educational photo/diagram for a student: what it shows, "
-        "key concepts, and exam-ready notes."
-    )
-    display_query = (query or "").strip() or "Explain this photo / diagram"
+    "Analyze this image carefully before answering. "
+    "Do not assume it is educational, a diagram, a textbook page, or an exam question. "
+    "Identify only what is actually visible or readable. "
+    "If there is a clear question, answer it directly. "
+    "If there is no question, identify the topic only when confident, explain what is visible, "
+    "and suggest useful questions based only on the image. "
+    "Do not invent text, objects, topics, language, class level, or context. "
+    "Use the user's language when a user message is provided; otherwise use the dominant "
+    "language of the readable content."
+)
+    display_query = (query or "").strip()
 
     try:
         vision = await analyze_image(
