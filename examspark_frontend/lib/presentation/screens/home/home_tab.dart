@@ -1333,6 +1333,7 @@ void _onHomeSessionBridge() {
             onRecord: _handleRecord,
             onYoutube: _handleYoutube,
             recordLocked: !_audioUnlocked,
+            isSending: _isSending,
           ),
         ],
       ),

@@ -6,6 +6,7 @@ class BottomInputBar extends StatefulWidget {
   final VoidCallback onAttach;
   final VoidCallback onRecord;
   final bool recordLocked;
+  final bool isSending;
   final VoidCallback? onYoutube;
 
   const BottomInputBar({
@@ -15,6 +16,7 @@ class BottomInputBar extends StatefulWidget {
     required this.onRecord,
     this.recordLocked = false,
     this.onYoutube,
+    this.isSending = false,
   });
 
   @override
@@ -43,13 +45,15 @@ class _BottomInputBarState extends State<BottomInputBar> {
   }
 
   void _handleSend() {
-    final text = _controller.text.trim();
-    if (text.isEmpty) return;
+  if (widget.isSending) return;
 
-    FocusScope.of(context).unfocus();
-    widget.onSend(text);
-    _controller.clear();
-  }
+  final text = _controller.text.trim();
+  if (text.isEmpty) return;
+
+  FocusScope.of(context).unfocus();
+  widget.onSend(text);
+  _controller.clear();
+}
 
   Color _actionColor(BuildContext context) {
     return Theme.of(context).brightness == Brightness.light
@@ -168,7 +172,7 @@ class _BottomInputBarState extends State<BottomInputBar> {
                         color: actionIconColor,
                         size: 16,
                       ),
-                      onPressed: _hasText ? _handleSend : null,
+                      onPressed: (!_hasText || widget.isSending) ? null : _handleSend,
                     ),
                   ),
                 ],

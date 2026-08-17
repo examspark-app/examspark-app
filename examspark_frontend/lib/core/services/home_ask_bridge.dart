@@ -27,20 +27,32 @@ class HomeAskBridge {
   }
 }
 
-/// Build the chat question from highlighted text + Select action.
-String homeAskPromptFromSelection(String selected, {String actionId = 'ask_followup'}) {
+/// Build the Home AI chat question from highlighted text.
+String homeAskPromptFromSelection(
+  String selected, {
+  String actionId = 'reply',
+}) {
   final s = selected.trim();
   if (s.isEmpty) return '';
+
   switch (actionId) {
+    case 'reply':
+      // Selected text goes directly to Home AI as the new question.
+      return s;
+
     case 'simplify':
       return 'Simplify this for a Class 11 student in simple words:\n\n"$s"';
+
     case 'explain':
       return 'Explain this clearly step-by-step for exam prep:\n\n"$s"';
+
     case 'ask_followup':
-    default:
       if (s.length < 120 && !s.contains('\n')) {
         return s;
       }
       return 'Explain this clearly for a student:\n\n"$s"';
+
+    default:
+      return s;
   }
 }

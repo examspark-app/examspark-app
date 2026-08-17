@@ -107,13 +107,14 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
               0,
               ContextMenuButtonItem(
                 label: 'Reply',
-                onPressed: () {
-                  ContextMenuController.removeAny();
+                onPressed: () async {
+  final callback = widget.onSelectAi;
+  if (callback == null || selectedText.isEmpty) return;
 
-                  final callback = widget.onSelectAi;
-                  if (callback != null) {
-                    callback('reply', selectedText);
-                  }
+  await callback('reply', selectedText);
+
+  ContextMenuController.removeAny();
+},
                 },
               ),
             );
