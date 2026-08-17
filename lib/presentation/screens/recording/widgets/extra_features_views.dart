@@ -120,32 +120,32 @@ class _MCQQuizViewState extends State<MCQQuizView> {
                       ),
                     ),
                     child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              size: 16,
-                              color: AppTheme.accentColor,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Explanation',
-                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: AppTheme.accentColor,
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          currentQuestion.explanation ?? 'No explanation provided',
-                          style: Theme.of(context).textTheme.bodySmall,
-                        ),
-                      ],
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                  Row(
+                 children: [
+                 Icon(
+                Icons.info_outline,
+                size: 16,
+                color: AppTheme.accentColor,
+                ),
+               const SizedBox(width: 8),
+                Text(
+              'Explanation',
+               style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                fontWeight: FontWeight.bold,
+                color: AppTheme.accentColor,
+              ),
+             ),
+            ],
+           ),
+              const SizedBox(height: 8),
+                 Text(
+                 currentQuestion.explanation ?? 'No explanation provided',
+                    style: Theme.of(context).textTheme.bodySmall,
                     ),
+                   ],
+                   ),
                   ),
                 ],
               ],
