@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/widgets/ai/ai_typewriter_text.dart';
 import 'package:examspark_frontend/presentation/widgets/home/home_ai_visual_card.dart';
 import 'package:examspark_frontend/presentation/widgets/smart_educational_content.dart';
-
+import 'package:examspark_frontend/core/utils/dom_selection.dart';
 /// Left-aligned AI reply: Answer card → Visual card → study chips.
 /// Founder Lock: Home AI Mobile UX — no diagram dump inside chat text.
 /// No Ask/Explain/Simplify bar on the answer (same-reply spam removed).
@@ -84,46 +85,57 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
         style: textStyle,
         onComplete: _onTypewriterComplete,
       )
-    : SelectableText(
-        widget.text,
-        style: textStyle,
-        enableInteractiveSelection: true,
-        contextMenuBuilder: (context, editableTextState) {
-          final selection =
-              editableTextState.textEditingValue.selection;
-
-          final selectedText =
-              selection.textInside(
-            editableTextState.textEditingValue.text,
-          ).trim();
-
+        : SelectionArea(
+        contextMenuBuilder: (context, selectableRegionState) {
           final items = <ContextMenuButtonItem>[
-            ...editableTextState.contextMenuButtonItems,
+            ContextMenuButtonItem(
+              label: 'Reply',
+              onPressed: () async {
+                ContextMenuController.removeAny();
+
+                var selectedText = readDomTextSelection() ?? '';
+
+                if (selectedText.trim().isEmpty) {
+                  for (final item
+                      in selectableRegionState.contextMenuButtonItems) {
+                    if (item.type == ContextMenuButtonType.copy) {
+                      item.onPressed?.call();
+                      break;
+                    }
+                  }
+
+                  await Future<void>.delayed(
+                    const Duration(milliseconds: 40),
+                  );
+
+                  final data =
+                      await Clipboard.getData(Clipboard.kTextPlain);
+
+                  selectedText = data?.text ?? '';
+                }
+
+                selectedText = selectedText.trim();
+
+                if (selectedText.isEmpty || !context.mounted) return;
+
+                final callback = widget.onSelectAi;
+                if (callback == null) return;
+
+                await callback('reply', selectedText);
+              },
+            ),
+            ...selectableRegionState.contextMenuButtonItems,
           ];
 
-          if (selectedText.isNotEmpty &&
-    widget.onSelectAi != null) {
-  items.insert(
-    0,
-    ContextMenuButtonItem(
-      label: 'Reply',
-      onPressed: () {
-        ContextMenuController.removeAny();
-
-        final callback = widget.onSelectAi;
-        if (callback != null) {
-          callback('reply', selectedText);
-        }
-      },
-    ),
-  );
-}
-
           return AdaptiveTextSelectionToolbar.buttonItems(
-            anchors: editableTextState.contextMenuAnchors,
+            anchors: selectableRegionState.contextMenuAnchors,
             buttonItems: items,
           );
         },
+        child: Text(
+          widget.text,
+          style: textStyle,
+        ),
       );
 
     final maxW = MediaQuery.sizeOf(context).width;
