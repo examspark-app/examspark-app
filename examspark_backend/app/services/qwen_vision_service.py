@@ -289,7 +289,7 @@ async def _call_vision_model(
         raise QwenVisionError(
             f"Qwen3-VL ({model}) returned no choices: {str(err)[:300]}"
         )
-        content = choices[0].get("message", {}).get("content") or ""
+    content = choices[0].get("message", {}).get("content") or ""
 
     if not content.strip():
         finish_reason = choices[0].get("finish_reason")
@@ -372,7 +372,7 @@ async def analyze_image(
         if flash_notes is not None and _notes_usable(flash_notes):
             return VisionResult(notes=flash_notes, used_plus=False, notes_list=notes_meta)
 
-                raise QwenVisionError(
+        raise QwenVisionError(
             "Image analysis returned unusable or incomplete content after Flash and Plus attempts. "
             "Please Retry."
         )
