@@ -74,6 +74,10 @@ def _mime_from_filename(filename: str | None) -> str:
 
 
 def _notes_usable(notes: dict) -> bool:
+    """
+    Decide whether the vision response contains enough useful content.
+    importantTerms and keyPoints are optional.
+    """
     clean = (notes.get("cleanNotes") or "").strip()
     summary = (notes.get("shortSummary") or "").strip()
     key_points = notes.get("keyPoints") or []
@@ -81,22 +85,38 @@ def _notes_usable(notes: dict) -> bool:
 
     valid_key_points = (
         isinstance(key_points, list)
-        and len(
-            [item for item in key_points if str(item).strip()]
-        ) >= 2
+        and any(str(item).strip() for item in key_points)
     )
 
     valid_terms = (
         isinstance(important_terms, list)
-        and len(important_terms) >= 1
+        and any(
+            (
+                isinstance(item, dict)
+                and str(item.get("term") or "").strip()
+            )
+            or (
+                not isinstance(item, dict)
+                and str(item).strip()
+            )
+            for item in important_terms
+        )
     )
 
-    return (
-        len(clean) >= 120
-        and len(summary) >= 40
-        and valid_key_points
-        and valid_terms
-    )
+    if len(clean) >= 80:
+        return True
+
+    if len(summary) >= 30:
+        return True
+
+    if valid_key_points:
+        return True
+
+    if valid_terms:
+        return True
+
+    return False
+    
 
 
 def _normalize_notes(parsed: dict) -> dict:
@@ -269,9 +289,22 @@ async def _call_vision_model(
         raise QwenVisionError(
             f"Qwen3-VL ({model}) returned no choices: {str(err)[:300]}"
         )
-    content = choices[0].get("message", {}).get("content") or ""
+        content = choices[0].get("message", {}).get("content") or ""
+
     if not content.strip():
-        raise QwenVisionError(f"Qwen3-VL ({model}) returned empty content.")
+        finish_reason = choices[0].get("finish_reason")
+
+        logger.error(
+            "Vision model returned empty content: model=%s finish_reason=%s response_id=%s",
+            model,
+            finish_reason,
+            data.get("id"),
+        )
+
+        raise QwenVisionError(
+            f"Qwen3-VL ({model}) returned empty content."
+        )
+
     parsed = _parse_vision_json(content, model)
     return _normalize_notes(parsed)
 
@@ -339,6 +372,7 @@ async def analyze_image(
         if flash_notes is not None and _notes_usable(flash_notes):
             return VisionResult(notes=flash_notes, used_plus=False, notes_list=notes_meta)
 
-        raise QwenVisionError(
-            "Image notes failed: model output was empty. Please Retry."
+                raise QwenVisionError(
+            "Image analysis returned unusable or incomplete content after Flash and Plus attempts. "
+            "Please Retry."
         )
