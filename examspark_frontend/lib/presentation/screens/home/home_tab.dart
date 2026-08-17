@@ -1861,64 +1861,84 @@ void _removePendingAttachment() {
   }
 
   Widget _buildHomeAiErrorBubble(BuildContext context, _ChatBubble bubble) {
-    final canRetry = (bubble.retryQuery != null &&
-            bubble.retryQuery!.trim().isNotEmpty) ||
-        (bubble.retryVisionBytes != null &&
-            bubble.retryVisionBytes!.isNotEmpty);
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: MediaQuery.sizeOf(context).width * 0.92,
-        ),
-        child: Container(
-          width: double.infinity,
-          padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-          decoration: BoxDecoration(
-            color: AppTheme.getCardBackground(context),
-            borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: AppTheme.getCardBorder(context)),
+  final canRetry = (bubble.retryQuery != null &&
+          bubble.retryQuery!.trim().isNotEmpty) ||
+      (bubble.retryVisionBytes != null &&
+          bubble.retryVisionBytes!.isNotEmpty);
+
+  final isCreditError =
+      bubble.text.trim().toLowerCase() ==
+      "you don’t have enough credits for this action.";
+
+  return Align(
+    alignment: Alignment.centerLeft,
+    child: ConstrainedBox(
+      constraints: BoxConstraints(
+        maxWidth: MediaQuery.sizeOf(context).width * 0.92,
+      ),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+        decoration: BoxDecoration(
+          color: AppTheme.getCardBackground(context),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: AppTheme.getCardBorder(context),
           ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Icon(
-                    Icons.wifi_off_rounded,
-                    size: 18,
-                    color: Theme.of(context).colorScheme.error,
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      bubble.text,
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            height: 1.45,
-                          ),
-                    ),
-                  ),
-                ],
-              ),
-              if (canRetry) ...[
-                const SizedBox(height: 8),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: TextButton.icon(
-                    onPressed:
-                        _isSending ? null : () => _retryFailedBubble(bubble),
-                    icon: const Icon(Icons.refresh, size: 18),
-                    label: const Text('Retry'),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Icon(
+                  Icons.wifi_off_rounded,
+                  size: 18,
+                  color: Theme.of(context).colorScheme.error,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    bubble.text,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          height: 1.45,
+                        ),
                   ),
                 ),
               ],
+            ),
+            if (canRetry) ...[
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _isSending
+                      ? null
+                      : isCreditError
+                          ? () => Navigator.pushNamed(
+                                context,
+                                '/subscription',
+                              )
+                          : () => _retryFailedBubble(bubble),
+                  icon: Icon(
+                    isCreditError
+                        ? Icons.workspace_premium_outlined
+                        : Icons.refresh,
+                    size: 18,
+                  ),
+                  label: Text(
+                    isCreditError ? 'View Plans' : 'Retry',
+                  ),
+                ),
+              ),
             ],
-          ),
+          ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Future<void> _openNotifications() async {
     if (_notificationsSheetOpen) return;

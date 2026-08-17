@@ -37,6 +37,7 @@ class AiAssistantMessage extends StatefulWidget {
 class _AiAssistantMessageState extends State<AiAssistantMessage> {
   bool _revealDone = false;
   String _selectedText = '';
+  String? _pendingReply;
 
   @override
   void initState() {
@@ -88,9 +89,13 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
       )
         : SelectionArea(
         onSelectionChanged: (content) {
-          setState(() {
-            _selectedText = (content?.plainText ?? '').trim();
-          });
+          final text = (content?.plainText ?? '').trim();
+          if (text.isNotEmpty && text != _pendingReply) {
+            setState(() {
+              _selectedText = text;
+              _pendingReply = text;
+            });
+          }
         },
         child: Text(
           widget.text,
@@ -124,14 +129,17 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
               ),
               child: body,
               ),
-            if (_selectedText.isNotEmpty) ...[
+                        if (_pendingReply != null && _pendingReply!.isNotEmpty) ...[
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
                 child: ElevatedButton.icon(
                   onPressed: () async {
-                    final text = _selectedText;
-                    setState(() => _selectedText = '');
+                    final text = _pendingReply!;
+                    setState(() {
+                      _pendingReply = null;
+                      _selectedText = '';
+                    });
                     final callback = widget.onSelectAi;
                     if (callback == null) return;
                     await callback('reply', text);
