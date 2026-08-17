@@ -218,35 +218,29 @@ class _OptionButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // Determine styling based on state
     Color? backgroundColor;
     Color? borderColor;
     Color? textColor;
 
     if (isAnswered) {
       if (isSelected && isCorrectOption) {
-        // Correct answer selected
         backgroundColor = AppTheme.getAccentTint(context);
         borderColor = AppTheme.accentColor;
         textColor = AppTheme.accentColor;
       } else if (isSelected && !isCorrectOption) {
-        // Wrong answer selected
         backgroundColor = Colors.transparent;
         borderColor = AppTheme.getPrimaryText(context);
         textColor = AppTheme.getPrimaryText(context);
       } else if (!isSelected && isCorrectOption) {
-        // Show correct answer
         backgroundColor = AppTheme.getAccentTint(context);
         borderColor = AppTheme.accentColor;
         textColor = AppTheme.accentColor;
       } else {
-        // Unselected option
         backgroundColor = Colors.transparent;
         borderColor = AppTheme.getCardBorder(context);
         textColor = AppTheme.getSecondaryText(context);
       }
     } else {
-      // Not answered yet
       if (isSelected) {
         backgroundColor = AppTheme.getCardBackground(context);
         borderColor = AppTheme.getPrimaryText(context);
