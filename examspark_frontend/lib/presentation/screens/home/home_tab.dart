@@ -379,25 +379,15 @@ Future<void> _fetchDailyQuote() async {
 
   /// Select text → Ask AI → next Home chat question + reply (no sheet).
   Future<void> _onHomeSelectAi(String actionId, String selectedText) async {
-    final selected = selectedText.trim();
-    if (selected.isEmpty) return;
+  final selected = selectedText.trim();
+  if (selected.isEmpty) return;
 
-    if (_creditsBalance < CreditCosts.askAiNormal) {
-      if (!mounted) return;
-      AppToast.showSnackBar(context, 
-        SnackBar(
-          content: Text(
-            'Need at least ${CreditCosts.askAiNormal} credits (Home AI).',
-          ),
-        ),
-      );
-      return;
-    }
+  if (!mounted) return;
 
-    final prompt = homeAskPromptFromSelection(selected, actionId: actionId);
-    if (prompt.isEmpty) return;
-    await _handleSend(prompt);
-  }
+  setState(() {
+    _replySelection = selected;
+  });
+}
 
   @override
   void dispose() {
