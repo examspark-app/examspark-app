@@ -134,8 +134,6 @@ class _MCQQuizViewState extends State<MCQQuizView> {
     final selectedAnswer = _selectedAnswers[_currentQuestionIndex];
     final isCorrect = selectedAnswer == currentQuestion.correctAnswer;
     final total = widget.questions.length;
-    const cardBg = Color(0xFF12162B);
-    const cardBg2 = Color(0xFF181C33);
     const accent = Color(0xFF7C9CFF);
 
     return Column(
@@ -145,119 +143,110 @@ class _MCQQuizViewState extends State<MCQQuizView> {
             padding: const EdgeInsets.all(16),
             child: Column(
               key: ValueKey(_currentQuestionIndex),
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 5,
-                      ),
-                      decoration: BoxDecoration(
-                        color: accent.withOpacity(0.15),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: Text(
-                        'Q${_currentQuestionIndex + 1}/$total',
-                        style: const TextStyle(
-                          color: accent,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 12.5,
-                        ),
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: accent.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      'Q${_currentQuestionIndex + 1}/$total',
+                      style: const TextStyle(
+                        color: accent,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 12.5,
                       ),
                     ),
                   ),
+                ),
+                const SizedBox(height: 16),
+                Text(
+                  currentQuestion.question,
+                  style: TextStyle(
+                    color: AppTheme.getPrimaryText(context),
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    height: 1.4,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Column(
+                  children: currentQuestion.options.asMap().entries.map((entry) {
+                    final index = entry.key;
+                    final option = entry.value;
+                    final optionLetter = String.fromCharCode(65 + index);
+                    final isSelected = selectedAnswer == optionLetter;
+                    final isCorrectOption =
+                        optionLetter == currentQuestion.correctAnswer;
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _DarkOptionButton(
+                        letter: optionLetter,
+                        text: option,
+                        isSelected: isSelected,
+                        isAnswered: isSubmitted,
+                        isCorrectOption: isCorrectOption,
+                        onTap: isSubmitted
+                            ? null
+                            : () => setState(
+                                  () => _selectedAnswers[
+                                      _currentQuestionIndex] = optionLetter,
+                                ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                if (isSubmitted) ...[
                   const SizedBox(height: 16),
                   Container(
                     width: double.infinity,
-                    padding: const EdgeInsets.all(16),
+                    padding: const EdgeInsets.all(14),
                     decoration: BoxDecoration(
-                      color: cardBg2,
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                    child: Text(
-                      currentQuestion.question,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w600,
-                        height: 1.4,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Column(
-                    children: currentQuestion.options.asMap().entries.map((entry) {
-                      final index = entry.key;
-                      final option = entry.value;
-                      final optionLetter = String.fromCharCode(65 + index);
-                      final isSelected = selectedAnswer == optionLetter;
-                      final isCorrectOption =
-                          optionLetter == currentQuestion.correctAnswer;
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _DarkOptionButton(
-                          letter: optionLetter,
-                          text: option,
-                          isSelected: isSelected,
-                          isAnswered: isSubmitted,
-                          isCorrectOption: isCorrectOption,
-                          onTap: isSubmitted
-                              ? null
-                              : () => setState(
-                                    () => _selectedAnswers[
-                                        _currentQuestionIndex] = optionLetter,
-                                  ),
-                        ),
-                      );
-                    }).toList(),
-                  ),
-                  if (isSubmitted) ...[
-                    const SizedBox(height: 16),
-                    Container(
-                      width: double.infinity,
-                      padding: const EdgeInsets.all(14),
-                      decoration: BoxDecoration(
+                      color: isCorrect
+                          ? Colors.greenAccent.withOpacity(0.08)
+                          : Colors.redAccent.withOpacity(0.08),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
                         color: isCorrect
-                            ? Colors.greenAccent.withOpacity(0.08)
-                            : Colors.redAccent.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(
-                          color: isCorrect
-                              ? Colors.greenAccent.withOpacity(0.3)
-                              : Colors.redAccent.withOpacity(0.3),
-                        ),
+                            ? Colors.greenAccent.withOpacity(0.3)
+                            : Colors.redAccent.withOpacity(0.3),
                       ),
-                      child: Row(
-                        children: [
-                          Icon(
-                            isCorrect
-                                ? Icons.check_circle_outline
-                                : Icons.cancel_outlined,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isCorrect
+                              ? Icons.check_circle_outline
+                              : Icons.cancel_outlined,
+                          color: isCorrect
+                              ? Colors.greenAccent
+                              : Colors.redAccent,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 10),
+                        Text(
+                          isCorrect ? 'Correct' : 'Incorrect',
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
                             color: isCorrect
                                 ? Colors.greenAccent
                                 : Colors.redAccent,
-                            size: 20,
                           ),
-                          const SizedBox(width: 10),
-                          Text(
-                            isCorrect ? 'Correct' : 'Incorrect',
-                            style: TextStyle(
-                              fontWeight: FontWeight.w600,
-                              color: isCorrect
-                                  ? Colors.greenAccent
-                                  : Colors.redAccent,
-                            ),
-                          ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                    _buildExplanationDark(currentQuestion),
-                  ],
+                  ),
+                  const SizedBox(height: 12),
+                  _buildExplanationDark(currentQuestion),
                 ],
-              ),
+              ],
             ),
           ),
         ),
