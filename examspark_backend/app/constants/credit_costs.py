@@ -25,8 +25,8 @@ SUMMARY_WITH_RECORDING = 0
 ASK_AI_NORMAL = 5
 ASK_AI_DEEP = 12
 # Live web search (Tavily) — last-resort current affairs only. 2× normal Ask.
-ASK_AI_WEB_SEARCH = 10
-ASK_AI_WEB_SEARCH_DEEP = 20
+ASK_AI_WEB_SEARCH = 15
+ASK_AI_WEB_SEARCH_DEEP = 30
 
 # Home chat study chips (topic = prior Home reply). Not full lecture Mind Map / IQ.
 # Phase 4C Final Hardening (Jul 17, 2026): first open from Knowledge Object = 0.

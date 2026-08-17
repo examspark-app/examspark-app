@@ -7,6 +7,8 @@ import 'package:examspark_frontend/core/router/invite_deep_link.dart';
 import 'package:examspark_frontend/core/services/fcm_push_service.dart';
 import 'package:examspark_frontend/core/services/notification_inbox_controller.dart';
 import 'package:examspark_frontend/core/services/pending_invite_store.dart';
+import 'package:examspark_frontend/core/services/app_update_service.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/presentation/screens/auth/update_password_screen.dart';
 import 'package:examspark_frontend/presentation/screens/home/guest_home_screen.dart';
@@ -48,6 +50,7 @@ class _AuthGateState extends State<AuthGate> {
   bool _shellReady = false;
   /// Invite link after Sign Up / Google — open group once shell is ready.
   bool _pendingInviteRouted = false;
+  bool _updateCheckDone = false;
 
   @override
   void initState() {
@@ -61,6 +64,7 @@ class _AuthGateState extends State<AuthGate> {
       _profileFuture = SupabaseClient.instance.getUserProfile(uid);
     }
 
+    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowUpdateDialog());
     _authSub = SupabaseClient.instance.authStateChanges.listen((state) {
       if (!mounted) return;
 
@@ -153,6 +157,47 @@ class _AuthGateState extends State<AuthGate> {
 
   /// After Sign Up / Google / onboarding: open saved invite → group page.
   /// Skip when URL still has `/#/join/...` — [JoinInviteScreen] already owns that.
+  Future<void> _maybeShowUpdateDialog() async {
+    if (_updateCheckDone) return;
+    _updateCheckDone = true;
+
+    final info = await AppUpdateService.instance.checkForUpdate();
+    if (info == null) return;
+
+    BuildContext? ctx;
+    for (var i = 0; i < 20; i++) {
+      ctx = AppNavigation.key.currentContext;
+      if (ctx != null) break;
+      await Future<void>.delayed(const Duration(milliseconds: 50));
+    }
+    if (ctx == null || !ctx.mounted) return;
+
+    showDialog<void>(
+      context: ctx,
+      barrierDismissible: true,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Update Available'),
+        content: Text(info['updateMessage'] ?? ''),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext),
+            child: const Text('Later'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(dialogContext);
+              final uri = Uri.parse(AppUpdateService.playStoreUrl);
+              if (await canLaunchUrl(uri)) {
+                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              }
+            },
+            child: const Text('Update Now'),
+          ),
+        ],
+      ),
+    );
+  }
+
   void _routePendingInviteIfNeeded() {
     if (_pendingInviteRouted) return;
     if (InviteDeepLink.joinCodeFromUri(Uri.base) != null) return;

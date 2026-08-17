@@ -124,8 +124,8 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
                 await callback('reply', selectedText);
               },
             ),
-            ...selectableRegionState.contextMenuButtonItems,
           ];
+          
 
           return AdaptiveTextSelectionToolbar.buttonItems(
             anchors: selectableRegionState.contextMenuAnchors,
