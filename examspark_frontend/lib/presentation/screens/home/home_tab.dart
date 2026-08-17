@@ -1893,7 +1893,7 @@ void _removePendingAttachment() {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Icon(
-                  Icons.wifi_off_rounded,
+                  Icons.account_balance_wallet_outlined,
                   size: 18,
                   color: Theme.of(context).colorScheme.error,
                 ),

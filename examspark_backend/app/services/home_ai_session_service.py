@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import logging
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from app.services.home_ai_response_store import get_home_ai_response, list_tools_for_response
@@ -186,8 +186,14 @@ def ensure_session_for_turn(
         _touch_session(sid, user_id)
         return sid
 
-    try:
+        try:
         sb = get_supabase_admin()
+        # Explicit, distinct timestamps — Postgres gives every row in the
+        # SAME insert statement the exact same now(), which made user/assistant
+        # order randomly flip on restore. Assistant gets +1ms so it always
+        # sorts strictly after the user's question.
+        t_user = datetime.now(timezone.utc)
+        t_assistant = t_user + timedelta(milliseconds=1)
         sb.table("home_ai_messages").insert(
             [
                 {
@@ -196,6 +202,7 @@ def ensure_session_for_turn(
                     "role": "user",
                     "message": q,
                     "credits_used": 0,
+                    "created_at": t_user.isoformat(),
                 },
                 {
                     "session_id": sid,
@@ -204,6 +211,7 @@ def ensure_session_for_turn(
                     "message": a,
                     "response_id": rid,
                     "credits_used": max(0, int(credits_used or 0)),
+                    "created_at": t_assistant.isoformat(),
                 },
             ]
         ).execute()
@@ -219,10 +227,10 @@ def ensure_session_for_turn(
 def list_sessions(
     user_id: str,
     *,
-    limit: int = 40,
+    limit: int = 50,
     q: str | None = None,
 ) -> list[dict[str, Any]]:
-    limit = max(1, min(int(limit or 40), 100))
+    limit = max(1, min(int(limit or 50), 50))
     try:
         sb = get_supabase_admin()
         query = (
