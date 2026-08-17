@@ -7,9 +7,9 @@ import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/utils/dom_selection.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
-/// Study content selection → default **Ask AI** → Home chat (app-wide).
+/// Study content selection → Reply → Home chat composer.
 ///
-/// Group shared / read-only: [enableAskAi] false — select/copy only, no Ask.
+/// Group shared / read-only: [enableAskAi] false — select/copy only, no Reply.
 class SelectableStudyText extends StatefulWidget {
   final Widget child;
   final String lectureId;
@@ -35,16 +35,25 @@ class _SelectableStudyTextState extends State<SelectableStudyText> {
   @override
   void initState() {
     super.initState();
+
     if (!widget.enableAskAi) return;
+
     // Web: SelectionArea often won't fire selection callbacks — poll DOM.
     _poll = Timer.periodic(const Duration(milliseconds: 400), (_) {
       final dom = readDomTextSelection();
+
       if (dom == null) {
-        if (_selected.isNotEmpty && mounted) setState(() => _selected = '');
+        if (_selected.isNotEmpty && mounted) {
+          setState(() => _selected = '');
+        }
         return;
       }
+
       if (dom == _selected) return;
-      if (mounted) setState(() => _selected = dom);
+
+      if (mounted) {
+        setState(() => _selected = dom);
+      }
     });
   }
 
@@ -54,49 +63,112 @@ class _SelectableStudyTextState extends State<SelectableStudyText> {
     super.dispose();
   }
 
-  Future<void> _askAi(String selected) async {
+  Future<String> _bestEffortSelectedText(
+    SelectableRegionState selectableRegionState,
+  ) async {
+    var text = _selected.trim();
+
+    if (text.isEmpty) {
+      text = (readDomTextSelection() ?? '').trim();
+    }
+
+    if (text.isEmpty) {
+      for (final item
+          in selectableRegionState.contextMenuButtonItems) {
+        if (item.type == ContextMenuButtonType.copy) {
+          item.onPressed?.call();
+          break;
+        }
+      }
+
+      await Future<void>.delayed(
+        const Duration(milliseconds: 40),
+      );
+
+      final data =
+          await Clipboard.getData(Clipboard.kTextPlain);
+
+      text = data?.text?.trim() ?? '';
+    }
+
+    return text;
+  }
+
+  Future<void> _replyWithSelectedText(
+    SelectableRegionState selectableRegionState,
+  ) async {
     if (!widget.enableAskAi) return;
-    final trimmed = selected.trim();
-    if (trimmed.isEmpty) {
+
+    ContextMenuController.removeAny();
+
+    final text = await _bestEffortSelectedText(
+      selectableRegionState,
+    );
+
+    if (text.isEmpty) {
       if (!mounted) return;
+
       AppToast.showSnackBar(
         context,
         const SnackBar(
-          content: Text('Pehle text select (highlight) karo, phir Ask AI.'),
+          content: Text(
+            'Pehle text select (highlight) karo, phir Reply ↩ dabao.',
+          ),
         ),
       );
+
       return;
     }
-    final prompt = homeAskPromptFromSelection(trimmed);
 
-    final route = ModalRoute.of(context);
-    if (route is ModalBottomSheetRoute && context.mounted) {
-      Navigator.of(context).pop();
-      await Future<void>.delayed(const Duration(milliseconds: 50));
-    }
-
-    HomeAskBridge.instance.requestAsk(prompt);
+    // IMPORTANT:
+    // Selected text is NOT sent to AI immediately.
+    // It is queued as reply context for the Home composer.
+    HomeAskBridge.instance.requestReply(text);
   }
 
-  Future<void> _askAiBestEffort() async {
+  Future<void> _replyFromTopButton() async {
     if (!widget.enableAskAi) return;
+
     var text = _selected.trim();
-    text = text.isNotEmpty ? text : (readDomTextSelection() ?? '');
+
     if (text.isEmpty) {
-      final data = await Clipboard.getData(Clipboard.kTextPlain);
+      text = (readDomTextSelection() ?? '').trim();
+    }
+
+    if (text.isEmpty) {
+      final data =
+          await Clipboard.getData(Clipboard.kTextPlain);
       text = data?.text?.trim() ?? '';
     }
-    if (!mounted) return;
-    await _askAi(text);
+
+    if (text.isEmpty) {
+      if (!mounted) return;
+
+      AppToast.showSnackBar(
+        context,
+        const SnackBar(
+          content: Text(
+            'Pehle text select (highlight) karo, phir Reply ↩ dabao.',
+          ),
+        ),
+      );
+
+      return;
+    }
+
+    HomeAskBridge.instance.requestReply(text);
   }
 
   @override
   Widget build(BuildContext context) {
     if (!widget.enableAskAi) {
-      return SelectionArea(child: widget.child);
+      return SelectionArea(
+        child: widget.child,
+      );
     }
 
-    final hasSelection = _selected.isNotEmpty;
+    final hasSelection = _selected.trim().isNotEmpty;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -106,31 +178,38 @@ class _SelectableStudyTextState extends State<SelectableStudyText> {
               : AppTheme.getCardBackground(context),
           borderRadius: BorderRadius.circular(12),
           child: InkWell(
-            onTap: _askAiBestEffort,
+            onTap: hasSelection ? _replyFromTopButton : null,
             borderRadius: BorderRadius.circular(12),
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 10,
+              ),
               child: Row(
                 children: [
                   Icon(
-                    Icons.auto_awesome,
+                    Icons.reply_rounded,
                     size: 18,
-                    color: AppTheme.accentColor,
+                    color: hasSelection
+                        ? AppTheme.accentColor
+                        : AppTheme.getSecondaryText(context),
                   ),
                   const SizedBox(width: 8),
                   Text(
-                    'Ask AI',
+                    hasSelection ? 'Reply ↩' : 'Highlight text',
                     style: TextStyle(
                       fontWeight: FontWeight.w700,
-                      color: AppTheme.getPrimaryText(context),
+                      color: hasSelection
+                          ? AppTheme.getPrimaryText(context)
+                          : AppTheme.getSecondaryText(context),
                     ),
                   ),
                   const SizedBox(width: 6),
                   Expanded(
                     child: Text(
                       hasSelection
-                          ? '· send selection to Home'
-                          : '· highlight text, then tap',
+                          ? '· ask about this selection'
+                          : '· select text first',
                       style: TextStyle(
                         fontSize: 12,
                         color: AppTheme.getSecondaryText(context),
@@ -143,40 +222,29 @@ class _SelectableStudyTextState extends State<SelectableStudyText> {
             ),
           ),
         ),
+
         const SizedBox(height: 8),
+
         Expanded(
           child: SelectionArea(
-            contextMenuBuilder: (context, selectableRegionState) {
+            contextMenuBuilder: (
+              context,
+              selectableRegionState,
+            ) {
               final items = <ContextMenuButtonItem>[
                 ContextMenuButtonItem(
-                  label: 'Ask AI',
-                  onPressed: () async {
-                    ContextMenuController.removeAny();
-                    var text = _selected.trim();
-                    if (text.isEmpty) {
-                      text = readDomTextSelection() ?? '';
-                    }
-                    if (text.isEmpty) {
-                      for (final item
-                          in selectableRegionState.contextMenuButtonItems) {
-                        if (item.type == ContextMenuButtonType.copy) {
-                          item.onPressed?.call();
-                          break;
-                        }
-                      }
-                      await Future<void>.delayed(
-                        const Duration(milliseconds: 40),
-                      );
-                      final data =
-                          await Clipboard.getData(Clipboard.kTextPlain);
-                      text = data?.text?.trim() ?? '';
-                    }
-                    if (text.isEmpty || !context.mounted) return;
-                    await _askAi(text);
+                  label: 'Reply ↩',
+                  onPressed: () {
+                    unawaited(
+                      _replyWithSelectedText(
+                        selectableRegionState,
+                      ),
+                    );
                   },
                 ),
                 ...selectableRegionState.contextMenuButtonItems,
               ];
+
               return AdaptiveTextSelectionToolbar.buttonItems(
                 anchors: selectableRegionState.contextMenuAnchors,
                 buttonItems: items,

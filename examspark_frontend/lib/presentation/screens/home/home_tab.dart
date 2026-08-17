@@ -154,6 +154,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   bool _restoredDisk = false;
   bool _notificationsSheetOpen = false;
   bool _showQuote = false;
+  String? _replySelection;
   String _preferredLanguage = 'English';
   String? _dailyQuote;
   Timer? _quoteTimer;
@@ -353,11 +354,28 @@ Future<void> _fetchDailyQuote() async {
   }
 
   void _onHomeAskBridge() {
-    final pending = HomeAskBridge.instance.takePending();
-    if (pending == null || pending.isEmpty) return;
-    if (!mounted) return;
-    _handleSend(pending);
+  final pendingSelection =
+      HomeAskBridge.instance.takePendingSelection();
+
+  final pendingQuestion =
+      HomeAskBridge.instance.takePendingQuestion();
+
+  if (!mounted) return;
+
+  if (pendingSelection != null &&
+      pendingSelection.trim().isNotEmpty) {
+    setState(() {
+      _replySelection = pendingSelection.trim();
+    });
+
+    return;
   }
+
+  if (pendingQuestion != null &&
+      pendingQuestion.trim().isNotEmpty) {
+    _handleSend(pendingQuestion);
+  }
+}
 
   /// Select text → Ask AI → next Home chat question + reply (no sheet).
   Future<void> _onHomeSelectAi(String actionId, String selectedText) async {
@@ -510,35 +528,71 @@ void _onHomeSessionBridge() {
         q.contains('in detail');
   }
 
-  Future<void> _handleSend(
+    Future<void> _handleSend(
     String text, {
     String? studyChip,
     bool isRetry = false,
   }) async {
-    final query = text.trim();
+    final rawText = text.trim();
+    final replyContext = _replySelection?.trim();
+
+    String query = rawText;
+
+    if (!isRetry &&
+        replyContext != null &&
+        replyContext.isNotEmpty &&
+        rawText.isNotEmpty) {
+      query = '''
+The user selected this text from the previous AI response:
+
+"$replyContext"
+
+The user's follow-up question is:
+
+$rawText
+''';
+    }
 
     if (!isRetry && _pendingAttachmentBytes != null) {
       final bytes = _pendingAttachmentBytes!;
       final filename = _pendingAttachmentName ?? 'photo.jpg';
+
       _removePendingAttachment();
-      await _sendHomeVision(bytes, filename, caption: query.isEmpty ? null : query);
+
+      await _sendHomeVision(
+        bytes,
+        filename,
+        caption: rawText.isEmpty ? null : rawText,
+      );
+
       return;
     }
 
     if (query.isEmpty || _isSending) return;
 
-    final parentId =
-        _looksLikeFollowUp(query) ? _lastAiResponseId() : null;
+    final parentId = replyContext != null && replyContext.isNotEmpty
+        ? _lastAiResponseId()
+        : (_looksLikeFollowUp(query)
+            ? _lastAiResponseId()
+            : null);
 
     setState(() {
       _isSending = true;
       _liveStreamText = null;
+      _replySelection = null;
+
       if (isRetry) {
         _removeTrailingErrorBubbles();
       } else {
-        _messages.add(_ChatBubble(query, true));
+        _messages.add(
+          _ChatBubble(
+            rawText,
+            true,
+          ),
+        );
       }
     });
+
     if (_messages.length >= 60 && !isRetry) {
       AppToast.showSnackBar(
         context,
@@ -554,6 +608,7 @@ void _onHomeSessionBridge() {
         ),
       );
     }
+
     unawaited(_persistChatNow());
     _scrollToBottom();
 
@@ -564,9 +619,10 @@ void _onHomeSessionBridge() {
         parentResponseId: parentId,
       );
     } catch (_) {
-      // Stream failed — fall back to JSON + typewriter (existing path).
       if (!mounted) return;
+
       setState(() => _liveStreamText = null);
+
       try {
         await _runHomeAiJson(
           query,
@@ -575,6 +631,7 @@ void _onHomeSessionBridge() {
         );
       } catch (e) {
         if (!mounted) return;
+
         _addHomeAiErrorBubble(
           e,
           retryQuery: query,
@@ -1349,7 +1406,7 @@ void _removePendingAttachment() {
                   : _buildConversation(context),
             ),
           ),
-          BottomInputBar(
+                    BottomInputBar(
             onSend: _handleSend,
             onAttach: _handleAttach,
             onRecord: _handleRecord,
@@ -1360,6 +1417,13 @@ void _removePendingAttachment() {
             attachmentName: _pendingAttachmentName,
             attachmentIsImage: true,
             onRemoveAttachment: _removePendingAttachment,
+            replyText: _replySelection,
+            onClearReply: () {
+              if (!mounted) return;
+              setState(() {
+                _replySelection = null;
+              });
+            },
           ),
         ],
       ),

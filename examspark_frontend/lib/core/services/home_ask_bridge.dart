@@ -1,58 +1,90 @@
-/// Cross-screen bridge: Select text → Ask AI → Home chat sends the question.
+/// Cross-screen bridge:
+/// Select text → Reply → Home composer → user asks follow-up → AI sends.
 class HomeAskBridge {
   HomeAskBridge._();
+
   static final HomeAskBridge instance = HomeAskBridge._();
 
-  String? _pending;
+  String? _pendingSelection;
+  String? _pendingQuestion;
+
   final List<void Function()> _listeners = [];
 
-  void addListener(void Function() listener) => _listeners.add(listener);
-
-  void removeListener(void Function() listener) => _listeners.remove(listener);
-
-  /// Queue a Home Ask from anywhere (Study Workspace, sheets, etc.).
-  void requestAsk(String selectedOrQuestion) {
-    final q = selectedOrQuestion.trim();
-    if (q.isEmpty) return;
-    _pending = q;
-    for (final l in List<void Function()>.from(_listeners)) {
-      l();
-    }
+  void addListener(void Function() listener) {
+    _listeners.add(listener);
   }
 
-  String? takePending() {
-    final q = _pending;
-    _pending = null;
-    return q;
+  void removeListener(void Function() listener) {
+    _listeners.remove(listener);
+  }
+
+  /// Queue selected text as a reply/reference for the Home composer.
+  void requestReply(String selectedText) {
+    final text = selectedText.trim();
+    if (text.isEmpty) return;
+
+    _pendingSelection = text;
+    _pendingQuestion = null;
+
+    _notify();
+  }
+
+  /// Queue a normal Home question.
+  void requestAsk(String question) {
+    final q = question.trim();
+    if (q.isEmpty) return;
+
+    _pendingQuestion = q;
+    _pendingSelection = null;
+
+    _notify();
+  }
+
+  /// Read and clear pending selection.
+  String? takePendingSelection() {
+    final value = _pendingSelection;
+    _pendingSelection = null;
+    return value;
+  }
+
+  /// Read and clear pending question.
+  String? takePendingQuestion() {
+    final value = _pendingQuestion;
+    _pendingQuestion = null;
+    return value;
+  }
+
+  void clearPending() {
+    _pendingSelection = null;
+    _pendingQuestion = null;
+  }
+
+  void _notify() {
+    for (final listener in List<void Function()>.from(_listeners)) {
+      listener();
+    }
   }
 }
 
-/// Build the Home AI chat question from highlighted text.
-String homeAskPromptFromSelection(
-  String selected, {
-  String actionId = 'reply',
+/// Build the AI payload when the user sends a follow-up
+/// about selected text.
+String homeFollowUpPrompt({
+  required String selectedText,
+  required String question,
 }) {
-  final s = selected.trim();
-  if (s.isEmpty) return '';
+  final selected = selectedText.trim();
+  final q = question.trim();
 
-  switch (actionId) {
-    case 'reply':
-      // Selected text goes directly to Home AI as the new question.
-      return s;
+  if (selected.isEmpty) return q;
+  if (q.isEmpty) return selected;
 
-    case 'simplify':
-      return 'Simplify this for a Class 11 student in simple words:\n\n"$s"';
+  return '''
+The user selected this text from the previous AI response:
 
-    case 'explain':
-      return 'Explain this clearly step-by-step for exam prep:\n\n"$s"';
+"$selected"
 
-    case 'ask_followup':
-      if (s.length < 120 && !s.contains('\n')) {
-        return s;
-      }
-      return 'Explain this clearly for a student:\n\n"$s"';
+Now answer the user's follow-up question:
 
-    default:
-      return s;
-  }
+$q
+''';
 }
