@@ -74,9 +74,9 @@ class _BottomInputBarState extends State<BottomInputBar> {
 
     final text = _controller.text.trim();
 
-    // Attachment alone bhi bhej sakte hain.
-    // Reply context alone nahi bhejna hai — user ko actual question likhna hoga.
-    if (text.isEmpty && !_hasAttachment) return;
+    // Attachment ya sirf reply-quote (bina question ke) bhi bhej sakte hain —
+    // AI khali chhodne par khud "explain karo" samajh lega.
+    if (text.isEmpty && !_hasAttachment && !_hasReply) return;
 
     FocusScope.of(context).unfocus();
 
@@ -260,7 +260,7 @@ class _BottomInputBarState extends State<BottomInputBar> {
     final actionIconColor = _actionIconColor(context);
 
     final canSend =
-        (_hasText || _hasAttachment) && !widget.isSending;
+        (_hasText || _hasAttachment || _hasReply) && !widget.isSending;
 
     return SafeArea(
       top: false,

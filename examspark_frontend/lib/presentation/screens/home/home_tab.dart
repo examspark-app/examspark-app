@@ -147,6 +147,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   String? _homeAiSessionId;
   /// Live SSE tokens while waiting (null = still thinking).
   String? _liveStreamText;
+  String? _replyQuote;
   Uint8List? _pendingAttachmentBytes;
   String? _pendingAttachmentName;
   Timer? _persistDebounce;
