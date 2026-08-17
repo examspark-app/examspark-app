@@ -102,23 +102,22 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
           ];
 
           if (selectedText.isNotEmpty &&
-              widget.onSelectAi != null) {
-            items.insert(
-              0,
-              ContextMenuButtonItem(
-                label: 'Reply',
-                onPressed: () async {
-  final callback = widget.onSelectAi;
-  if (callback == null || selectedText.isEmpty) return;
+    widget.onSelectAi != null) {
+  items.insert(
+    0,
+    ContextMenuButtonItem(
+      label: 'Reply',
+      onPressed: () {
+        ContextMenuController.removeAny();
 
-  await callback('reply', selectedText);
-
-  ContextMenuController.removeAny();
-},
-                },
-              ),
-            );
-          }
+        final callback = widget.onSelectAi;
+        if (callback != null) {
+          callback('reply', selectedText);
+        }
+      },
+    ),
+  );
+}
 
           return AdaptiveTextSelectionToolbar.buttonItems(
             anchors: editableTextState.contextMenuAnchors,

@@ -36,12 +36,12 @@ HOME_CHIP_IMPORTANT_QUESTIONS = 10
 
 FLASHCARDS = 5
 QUIZ_20_MCQ = 5
-IMPORTANT_QUESTIONS = 20
+IMPORTANT_QUESTIONS = 5
 REVISION_NOTES = 5
 # 5 Minute Revision — short quick-recap extra (same credit band as Revision Notes).
 FIVE_MIN_REVISION = 5
-FORMULA_SHEET = 15
-MIND_MAP = 30
+FORMULA_SHEET = 10
+MIND_MAP = 5
 
 
 def ask_ai_cost(mode: str, *, used_web_search: bool = False) -> int:
@@ -69,16 +69,16 @@ def home_ai_cost_for_study_chip(
 DIAGRAM_IMAGE = 25
 # Home AI Camera / Upload Image → chat answer (not Study Workspace lecture).
 HOME_AI_VISION = 10
-PDF_ANALYSIS = 20
-OCR_IMAGE = 15
+PDF_ANALYSIS = 10
+OCR_IMAGE = 10
 
 TRANSLATE = 8
 VOICE_READ = 5
 
 # Select & Ask AI (Phase 6) — selection-scoped, cheaper than full Ask AI (5).
-SELECT_AI_EXPLAIN = 2  # explain, simplify, translate, memory_trick, exam_view, ask_followup
-SELECT_AI_MINI_QUIZ = 3  # 5 MCQ from selection
-SELECT_AI_MINI_FLASHCARDS = 3  # 5 cards from selection
+SELECT_AI_EXPLAIN = 5  # explain, simplify, translate, memory_trick, exam_view, ask_followup
+SELECT_AI_MINI_QUIZ = 5  # 5 MCQ from selection
+SELECT_AI_MINI_FLASHCARDS = 5  # 5 cards from selection
 
 # YouTube Link → Notes: cheaper than Record (10 / 20 / 40). Max 90 min.
 YOUTUBE_MAX_MINUTES = 90
