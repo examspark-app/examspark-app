@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart' show BrowserContextMenu;
 import 'package:receive_sharing_intent/receive_sharing_intent.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 
@@ -22,6 +23,13 @@ import 'package:examspark_frontend/core/payments/payment_service.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Web-only: let Flutter render its own text-selection context menu
+  // (e.g. our "Reply" button) instead of the browser's native right-click
+  // menu, which otherwise blocks custom menus from ever showing.
+  if (kIsWeb) {
+    await BrowserContextMenu.disableContextMenu();
+  }
 
   // Background payment listener
   PaymentService.instance.initialize();
