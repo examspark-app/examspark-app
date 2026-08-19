@@ -54,7 +54,7 @@ CONVERSATION MEMORY
 - Use relevant learned information naturally without repeating it unnecessarily.
 
 VOICE AND STREAMING
-- The response will be spoken by Qwen Audio 3.0 TTS Flash.
+- The response will be spoken by the learner's selected TTS voice.
 - Produce text that sounds natural when spoken aloud.
 - Avoid long sentences and complex written structures.
 - Prefer clear, conversational wording and natural sentence boundaries so streaming TTS can begin quickly.

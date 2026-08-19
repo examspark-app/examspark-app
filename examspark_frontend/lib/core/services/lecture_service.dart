@@ -1155,6 +1155,43 @@ class LectureService {
         as String;
   }
 
+  /// The backend reads/writes this only for the authenticated account. Voice
+  /// provider IDs never travel to Flutter; it receives friendly option keys.
+  Future<Map<String, dynamic>> getEnglishRoleplayVoicePreference() async {
+    final accessToken = await _requireAccessToken();
+    final response = await http.get(
+      Uri.parse(
+        '${AppConfig.resolvedApiBaseUrl}/api/v1/english-roleplay/voice-preference',
+      ),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> setEnglishRoleplayVoicePreference({
+    required String provider,
+    required String voiceKey,
+  }) async {
+    final accessToken = await _requireAccessToken();
+    final response = await http.put(
+      Uri.parse(
+        '${AppConfig.resolvedApiBaseUrl}/api/v1/english-roleplay/voice-preference',
+      ),
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'provider': provider, 'voice_key': voiceKey}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> sendEnglishRoleplayAudio({
     required String sessionId,
     required Uint8List audioBytes,

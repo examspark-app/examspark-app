@@ -7,17 +7,33 @@ from pydantic import BaseModel, Field
 from app.services.auth_service import AuthenticatedUser, get_current_user
 from app.services import english_roleplay_service as service
 from app.services import english_practice_service as chat
+from app.services import roleplay_tts_service as tts
 from app.services.openrouter_stream import format_sse
 
 router = APIRouter(prefix='/api/v1/english-roleplay', tags=['english-roleplay'])
 class StartBody(BaseModel): scenario: str = Field(..., min_length=1, max_length=300); native_language: str = Field(default='English', max_length=60)
 class TurnBody(BaseModel): session_id: str; transcript: str = Field(..., min_length=1, max_length=4000)
 class EndBody(BaseModel): duration_seconds: int | None = Field(default=None, ge=0)
+class VoicePreferenceBody(BaseModel):
+    provider: str = Field(..., pattern='^(qwen|gemini)$')
+    voice_key: str = Field(..., min_length=1, max_length=30)
 def _error(e: chat.EnglishPracticeError): return HTTPException(status_code=e.status_code, detail=str(e))
 @router.post('/start')
 async def start(body: StartBody, user: AuthenticatedUser = Depends(get_current_user)):
     try: return service.start(user.user_id, body.scenario, body.native_language)
     except chat.EnglishPracticeError as e: raise _error(e) from e
+@router.get('/voice-preference')
+async def get_voice_preference(user: AuthenticatedUser = Depends(get_current_user)):
+    try:
+        return tts.get_voice_preference(user.user_id)
+    except tts.RoleplayTtsError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+@router.put('/voice-preference')
+async def set_voice_preference(body: VoicePreferenceBody, user: AuthenticatedUser = Depends(get_current_user)):
+    try:
+        return tts.set_voice_preference(user.user_id, body.provider, body.voice_key)
+    except tts.RoleplayTtsError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
 @router.post('/turn')
 async def turn(body: TurnBody, user: AuthenticatedUser = Depends(get_current_user)):
     try: return await service.send_turn(user.user_id, body.session_id, body.transcript)

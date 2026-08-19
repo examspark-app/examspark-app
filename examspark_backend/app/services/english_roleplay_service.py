@@ -12,7 +12,7 @@ from app.constants.credit_costs import (
 from app.services import english_practice_service as chat
 from app.services.credits_service import InsufficientCreditsError, deduct_credits
 from app.services.supabase_admin import get_supabase_admin
-from app.services.qwen_tts_service import QwenTtsError, synthesize_speech
+from app.services.roleplay_tts_service import RoleplayTtsError, synthesize_for_user
 from app.services.whisper_service import (
     WhisperTranscriptionError,
     transcribe_audio,
@@ -137,8 +137,8 @@ async def send_audio_turn(
         raise chat.EnglishPracticeError("No speech detected. Please try again.", 400)
     result = await send_turn(user_id, session_id, transcription.text)
     try:
-        audio, mime_type = await synthesize_speech(result["reply"])
-    except QwenTtsError as e:
+        audio, mime_type = await synthesize_for_user(user_id, result["reply"])
+    except RoleplayTtsError as e:
         # A reply without playable audio is not a successful voice turn.
         assistant_id = result.get('assistant_message_id')
         if assistant_id:
@@ -202,7 +202,7 @@ async def stream_audio_turn(
             buffer += delta
             chunks, buffer = split_complete_speech_chunks(buffer)
             for chunk in chunks:
-                pending.append(asyncio.create_task(synthesize_speech(chunk)))
+                pending.append(asyncio.create_task(synthesize_for_user(user_id, chunk)))
             while sequence < len(pending) and pending[sequence].done():
                 audio, mime_type = await pending[sequence]
                 yield {
@@ -214,7 +214,7 @@ async def stream_audio_turn(
                 sequence += 1
         chunks, _ = split_complete_speech_chunks(buffer, final=True)
         for chunk in chunks:
-            pending.append(asyncio.create_task(synthesize_speech(chunk)))
+            pending.append(asyncio.create_task(synthesize_for_user(user_id, chunk)))
         while sequence < len(pending):
             audio, mime_type = await pending[sequence]
             yield {
@@ -224,7 +224,7 @@ async def stream_audio_turn(
                 'audio_mime_type': mime_type,
             }
             sequence += 1
-    except QwenTtsError as error:
+    except RoleplayTtsError as error:
         raise chat.EnglishPracticeError(str(error), 502) from error
     finally:
         for task in pending[sequence:]:

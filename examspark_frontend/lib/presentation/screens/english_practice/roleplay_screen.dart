@@ -20,11 +20,15 @@ class RoleplaySetupScreen extends StatefulWidget {
 class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
   String? scenario;
   String _nativeLanguage = '';
+  String _ttsProvider = 'qwen';
+  String _ttsVoiceKey = 'female';
+  bool _savingVoice = false;
 
   @override
   void initState() {
     super.initState();
     _loadLanguage();
+    _loadVoicePreference();
   }
 
   Future<void> _loadLanguage() async {
@@ -43,6 +47,54 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
     );
     if (mounted && language != null) setState(() => _nativeLanguage = language);
   }
+
+  Future<void> _loadVoicePreference() async {
+    try {
+      final preference =
+          await LectureService.instance.getEnglishRoleplayVoicePreference();
+      if (!mounted) return;
+      setState(() {
+        _ttsProvider = preference['provider'] as String? ?? 'qwen';
+        _ttsVoiceKey = preference['voice_key'] as String? ?? 'female';
+      });
+    } catch (_) {
+      // Existing Qwen female defaults remain usable until a preference loads.
+    }
+  }
+
+  Future<void> _saveVoicePreference(String provider, String voiceKey) async {
+    if (_savingVoice) return;
+    setState(() {
+      _savingVoice = true;
+      _ttsProvider = provider;
+      _ttsVoiceKey = voiceKey;
+    });
+    try {
+      final preference = await LectureService.instance
+          .setEnglishRoleplayVoicePreference(
+        provider: provider,
+        voiceKey: voiceKey,
+      );
+      if (mounted) {
+        setState(() {
+          _ttsProvider = preference['provider'] as String? ?? provider;
+          _ttsVoiceKey = preference['voice_key'] as String? ?? voiceKey;
+        });
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not save voice choice: $error')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _savingVoice = false);
+    }
+  }
+
+  List<(String, String)> get _voiceOptions => _ttsProvider == 'gemini'
+      ? const [('warm', 'Warm'), ('friendly', 'Friendly'), ('upbeat', 'Upbeat')]
+      : const [('female', 'Female'), ('male', 'Male')];
   static const items = [
     ('🎉', 'Party'),
     ('🛒', 'Market'),
@@ -190,6 +242,48 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 15),
                       ),
                     ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text('Roleplay voice', style: TextStyle(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      ChoiceChip(
+                        label: const Text('Qwen Voice'),
+                        selected: _ttsProvider == 'qwen',
+                        onSelected: _savingVoice ? null : (_) => _saveVoicePreference('qwen', 'female'),
+                      ),
+                      ChoiceChip(
+                        label: const Text('Gemini Voice'),
+                        selected: _ttsProvider == 'gemini',
+                        onSelected: _savingVoice ? null : (_) => _saveVoicePreference('gemini', 'warm'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    children: _voiceOptions.map((option) => ChoiceChip(
+                      label: Text(option.$2),
+                      selected: _ttsVoiceKey == option.$1,
+                      onSelected: _savingVoice || _ttsVoiceKey == option.$1
+                          ? null
+                          : (_) => _saveVoicePreference(_ttsProvider, option.$1),
+                    )).toList(),
                   ),
                 ],
               ),

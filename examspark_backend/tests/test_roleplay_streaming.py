@@ -6,7 +6,7 @@ import pytest
 
 from app.services import english_practice_service as chat
 from app.services import english_roleplay_service as roleplay
-from app.services.qwen_tts_service import QwenTtsError
+from app.services.roleplay_tts_service import RoleplayTtsError
 from app.routers import english_roleplay as roleplay_router
 
 
@@ -74,7 +74,7 @@ def _install_success_mocks(monkeypatch, *, tts):
         return SimpleNamespace(text='I need a table.', likely_no_speech=False)
     monkeypatch.setattr(roleplay, 'transcribe_audio', transcribe)
     monkeypatch.setattr(roleplay, '_stream_messages', lambda *_: [])
-    monkeypatch.setattr(roleplay, 'synthesize_speech', tts)
+    monkeypatch.setattr(roleplay, 'synthesize_for_user', tts)
     monkeypatch.setattr(roleplay, 'get_supabase_admin', lambda: db)
     monkeypatch.setattr(roleplay.learning_memory, 'schedule_update', lambda **_: None)
     return db
@@ -85,7 +85,7 @@ def test_stream_audio_emits_ordered_audio_and_persists_only_on_success(monkeypat
         for token in ['First sentence. ', 'Second sentence.']:
             yield token
 
-    async def tts(text):
+    async def tts(_user_id, text):
         # Sentence two finishes first, but may not overtake sentence one.
         await asyncio.sleep(0.01 if text.startswith('First') else 0)
         return text.encode(), 'audio/mpeg'
@@ -103,7 +103,7 @@ def test_stream_failure_before_audio_does_not_persist(monkeypatch):
         raise chat.EnglishPracticeError('Qwen stream failed.', 502)
         yield ''  # pragma: no cover - keeps this an async generator
 
-    async def tts(_text):
+    async def tts(_user_id, _text):
         return b'audio', 'audio/mpeg'
 
     db = _install_success_mocks(monkeypatch, tts=tts)
@@ -117,9 +117,9 @@ def test_stream_failure_after_first_audio_does_not_persist(monkeypatch):
     async def model(_messages):
         yield 'First sentence. Second sentence.'
 
-    async def tts(text):
+    async def tts(_user_id, text):
         if text.startswith('Second'):
-            raise QwenTtsError('TTS failed')
+            raise RoleplayTtsError('TTS failed')
         return b'first', 'audio/mpeg'
 
     db = _install_success_mocks(monkeypatch, tts=tts)

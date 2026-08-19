@@ -6,7 +6,9 @@ standard, directly playable ``audio/wav`` payload.
 """
 from __future__ import annotations
 
+import asyncio
 import base64
+import binascii
 import struct
 
 import httpx
@@ -16,6 +18,7 @@ from app.config import AIConfig
 _BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 _TIMEOUT_SECONDS = 45.0
 _SAMPLE_RATE = 24000
+_MAX_ATTEMPTS = 2
 
 
 class GeminiTtsError(Exception):
@@ -32,7 +35,7 @@ def _wav_from_pcm(pcm: bytes) -> bytes:
     ) + b"data" + struct.pack("<I", len(pcm)) + pcm
 
 
-async def synthesize_speech(text: str) -> tuple[bytes, str]:
+async def synthesize_speech(text: str, *, voice: str | None = None) -> tuple[bytes, str]:
     """Return Gemini TTS output as ``(wav_bytes, 'audio/wav')``."""
     if not AIConfig.gemini_tts_configured():
         raise GeminiTtsError("GEMINI_API_KEY not configured on the server.")
@@ -47,33 +50,38 @@ async def synthesize_speech(text: str) -> tuple[bytes, str]:
             "responseModalities": ["AUDIO"],
             "speechConfig": {
                 "voiceConfig": {
-                    "prebuiltVoiceConfig": {"voiceName": AIConfig.GEMINI_TTS_VOICE}
+                    "prebuiltVoiceConfig": {"voiceName": voice or AIConfig.GEMINI_TTS_VOICE}
                 }
             },
         },
     }
-    try:
-        async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
-            response = await client.post(
-                url,
-                headers={"x-goog-api-key": AIConfig.GEMINI_API_KEY},
-                json=payload,
-            )
-    except httpx.TimeoutException as e:
-        raise GeminiTtsError("Voice generation timed out. Please try again.") from e
-    except httpx.HTTPError as e:
-        raise GeminiTtsError(f"Voice generation network error: {e}") from e
-    if response.status_code != 200:
-        raise GeminiTtsError(
-            f"Voice generation failed: {response.status_code} {response.text[:200]}"
-        )
+    async with httpx.AsyncClient(timeout=_TIMEOUT_SECONDS) as client:
+        for attempt in range(_MAX_ATTEMPTS):
+            try:
+                response = await client.post(url, headers={"x-goog-api-key": AIConfig.GEMINI_API_KEY}, json=payload)
+            except (httpx.TimeoutException, httpx.RequestError) as error:
+                if attempt + 1 == _MAX_ATTEMPTS:
+                    raise GeminiTtsError("Voice generation network error. Please try again.") from error
+                await asyncio.sleep(0.5)
+                continue
+            if response.status_code == 200:
+                break
+            if (response.status_code == 429 or response.status_code >= 500) and attempt + 1 < _MAX_ATTEMPTS:
+                await asyncio.sleep(0.5)
+                continue
+            raise GeminiTtsError(f"Voice generation failed: {response.status_code} {response.text[:200]}")
+        else:  # pragma: no cover - loop always returns or raises
+            raise GeminiTtsError("Voice generation failed after retry.")
     try:
         parts = response.json()["candidates"][0]["content"]["parts"]
-        encoded = next(
-            p["inlineData"]["data"] for p in parts if p.get("inlineData", {}).get("data")
+        inline = next(
+            p["inlineData"] for p in parts if p.get("inlineData", {}).get("data")
         )
-        pcm = base64.b64decode(encoded)
-    except (KeyError, IndexError, StopIteration, ValueError) as e:
+        mime_type = inline.get("mimeType", "").lower()
+        if mime_type and "audio" not in mime_type:
+            raise ValueError("response did not contain audio")
+        pcm = base64.b64decode(inline["data"], validate=True)
+    except (KeyError, IndexError, StopIteration, ValueError, binascii.Error) as e:
         raise GeminiTtsError("Voice provider returned no playable audio.") from e
     if not pcm:
         raise GeminiTtsError("Voice provider returned empty audio.")

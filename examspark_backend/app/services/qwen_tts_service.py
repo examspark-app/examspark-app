@@ -25,7 +25,7 @@ def _retryable_status(status_code: int) -> bool:
     return status_code == 429 or status_code >= 500
 
 
-async def synthesize_speech(text: str) -> tuple[bytes, str]:
+async def synthesize_speech(text: str, *, voice: str | None = None) -> tuple[bytes, str]:
     """Synthesize one Roleplay reply through OpenRouter Qwen TTS Flash.
 
     OpenRouter returns raw audio bytes.  MP3 keeps the payload compact and is
@@ -41,7 +41,7 @@ async def synthesize_speech(text: str) -> tuple[bytes, str]:
     payload = {
         "model": AIConfig.QWEN_TTS_MODEL,
         "input": input_text,
-        "voice": AIConfig.QWEN_TTS_VOICE,
+        "voice": voice or AIConfig.QWEN_TTS_VOICE,
         "response_format": "mp3",
     }
     headers = {
