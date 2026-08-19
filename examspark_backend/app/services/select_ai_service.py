@@ -30,7 +30,11 @@ from app.constants.select_ai_prompts import (
     build_user_message,
     system_prompt_for_action,
 )
-from app.services.credits_service import InsufficientCreditsError, deduct_credits
+from app.services.credits_service import (
+    InsufficientCreditsError,
+    deduct_credits,
+    get_credits_balance as _credits_balance,
+)
 from app.services.embedding_service import EmbeddingError, embed_query
 from app.services.openrouter_stream import OpenRouterStreamError, stream_chat_completions
 from app.services.performance_timer import PerformanceTimer
@@ -43,7 +47,6 @@ from app.services.plan_tier_service import (
 from app.services.rag_ask_service import (
     AskAiError,
     _fetch_matches_with_fallback,
-    _credits_balance,
 )
 from app.services.rag_index_service import RagIndexError, ensure_lecture_indexed
 from app.services.r2_storage_service import R2StorageError, R2StorageService

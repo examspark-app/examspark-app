@@ -17,7 +17,11 @@ from app.constants.credit_costs import (
     QUIZ_20_MCQ,
     REVISION_NOTES,
 )
-from app.services.credits_service import InsufficientCreditsError, deduct_credits
+from app.services.credits_service import (
+    InsufficientCreditsError,
+    deduct_credits,
+    get_credits_balance as _credits_balance,
+)
 from app.services.home_ai_response_store import VALID_TOOL_TYPES
 from app.services.home_ai_tools_service import (
     HomeAiToolError,
@@ -33,7 +37,6 @@ from app.services.plan_tier_service import (
 )
 from app.services.pyq_retrieve import format_exam_focus_block, match_pyqs_for_query
 from app.services.qwen_service import QwenGenerationError
-from app.services.rag_ask_service import _credits_balance
 from app.services.supabase_admin import get_supabase_admin
 
 logger = logging.getLogger(__name__)

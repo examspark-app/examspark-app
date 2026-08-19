@@ -11,6 +11,23 @@ class InsufficientCreditsError(Exception):
         super().__init__(message)
 
 
+def get_credits_balance(user_id: str) -> int:
+    """Read the authenticated user's current wallet balance.
+
+    This belongs in the neutral credits service so feature services do not
+    import each other merely to read a balance.
+    """
+    profile = (
+        get_supabase_admin()
+        .table("users")
+        .select("credits_balance")
+        .eq("id", user_id)
+        .single()
+        .execute()
+    )
+    return int((profile.data or {}).get("credits_balance", 0) or 0)
+
+
 def deduct_credits(
     user_id: str,
     amount: int,

@@ -17,7 +17,11 @@ from app.constants.credit_costs import (
     QUIZ_20_MCQ,
     REVISION_NOTES,
 )
-from app.services.credits_service import InsufficientCreditsError, deduct_credits
+from app.services.credits_service import (
+    InsufficientCreditsError,
+    deduct_credits,
+    get_credits_balance as _credits_balance,
+)
 from app.services.home_ai_knowledge import knowledge_to_source_text
 from app.services.home_ai_tool_derive import derive_tool_payload, recommend_tool_types
 from app.services.home_ai_response_store import (
@@ -49,7 +53,6 @@ from app.services.pyq_retrieve import (
     format_exam_focus_block,
     match_pyqs_for_query,
 )
-from app.services.rag_ask_service import _credits_balance
 
 logger = logging.getLogger(__name__)
 

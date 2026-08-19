@@ -10,12 +10,15 @@ from typing import Any
 
 from app.constants.ai_response_status import SUCCESS
 from app.constants.credit_costs import HOME_AI_VISION
-from app.services.credits_service import InsufficientCreditsError, deduct_credits
+from app.services.credits_service import (
+    InsufficientCreditsError,
+    deduct_credits,
+    get_credits_balance as _credits_balance,
+)
 from app.services.home_ai_knowledge import build_knowledge_object
 from app.services.home_ai_response_store import persist_home_ai_response
 from app.services.home_ai_session_service import ensure_session_for_turn
 from app.services.home_ai_service import HomeAiError
-from app.services.rag_ask_service import _credits_balance
 from app.services.plan_tier_service import (
     FeatureLockedError,
     GatedFeature,

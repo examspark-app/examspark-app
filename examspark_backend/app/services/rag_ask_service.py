@@ -48,7 +48,11 @@ from app.services.ai_performance_cache import (
     get_cached_answer,
     set_cached_answer,
 )
-from app.services.credits_service import InsufficientCreditsError, deduct_credits
+from app.services.credits_service import (
+    InsufficientCreditsError,
+    deduct_credits,
+    get_credits_balance as _credits_balance,
+)
 from app.services.embedding_service import EmbeddingError, embed_query
 from app.services.openrouter_stream import OpenRouterStreamError, stream_chat_completions
 from app.services.performance_timer import PerformanceTimer
@@ -470,18 +474,6 @@ def _supplement_other_lectures(
     )
     loaded = loaded + _load_chunk_texts(tr, r2)
     return loaded[:_MAX_OTHER_BLOCKS]
-
-
-def _credits_balance(user_id: str) -> int:
-    db = get_supabase_admin()
-    profile = (
-        db.table("users")
-        .select("credits_balance")
-        .eq("id", user_id)
-        .single()
-        .execute()
-    )
-    return int((profile.data or {}).get("credits_balance", 0) or 0)
 
 
 async def _retrieve_lecture_rag(
@@ -1301,4 +1293,3 @@ async def ask_ai_stream(
     if visual_payload is not None:
         done_evt["visual_payload"] = visual_payload
     yield done_evt
-

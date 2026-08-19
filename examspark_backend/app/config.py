@@ -65,7 +65,8 @@ class AIConfig:
     QWEN_TTS_MODEL: str = os.getenv(
         "QWEN_TTS_MODEL", "qwen/qwen-audio-3.0-tts-flash"
     )
-    QWEN_TTS_VOICE: str = os.getenv("QWEN_TTS_VOICE", "loongjohn")
+    # Female American-English default for the English Roleplay teacher.
+    QWEN_TTS_VOICE: str = os.getenv("QWEN_TTS_VOICE", "loongeva_v3.6")
     # RAG embeddings (Session 3) — must be 1536 dims to match schema.sql.
     AI_EMBEDDING_MODEL: str = os.getenv(
         "AI_EMBEDDING_MODEL", "openai/text-embedding-3-small"

@@ -44,7 +44,11 @@ from app.services.ai_performance_cache import (
     get_cached_answer,
     set_cached_answer,
 )
-from app.services.credits_service import InsufficientCreditsError, deduct_credits
+from app.services.credits_service import (
+    InsufficientCreditsError,
+    deduct_credits,
+    get_credits_balance as _credits_balance,
+)
 from app.services.home_ai_followup import looks_like_knowledge_follow_up
 from app.services.openrouter_stream import OpenRouterStreamError, stream_chat_completions
 from app.services.performance_timer import PerformanceTimer
@@ -59,7 +63,6 @@ from app.services.question_router import route_home_question, should_run_rag
 from app.services.embedding_service import EmbeddingError
 from app.services.rag_ask_service import (
     AskAiError,
-    _credits_balance,
     _replay_cached_tokens,
     _retrieve_lecture_rag,
 )
