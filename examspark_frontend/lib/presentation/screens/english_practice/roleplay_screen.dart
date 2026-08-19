@@ -6,6 +6,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/constants/roleplay_voice_config.dart';
 import 'package:examspark_frontend/core/services/recording_service.dart';
+import 'package:examspark_frontend/presentation/screens/english_practice/english_language_picker_screen.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_teaching_history_screen.dart';
 
 const _violet = Color(0xFF5137ED);
@@ -18,6 +19,30 @@ class RoleplaySetupScreen extends StatefulWidget {
 
 class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
   String? scenario;
+  String _nativeLanguage = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _loadLanguage();
+  }
+
+  Future<void> _loadLanguage() async {
+    final language = await LectureService.instance.getEnglishPracticeLanguage();
+    if (mounted && language != null) {
+      setState(() => _nativeLanguage = language);
+    }
+  }
+
+  Future<void> _changeLanguage() async {
+    final language = await Navigator.push<String>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const EnglishLanguagePickerScreen(returnToPrevious: true),
+      ),
+    );
+    if (mounted && language != null) setState(() => _nativeLanguage = language);
+  }
   static const items = [
     ('🎉', 'Party'),
     ('🛒', 'Market'),
@@ -67,13 +92,26 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                   icon: const Icon(Icons.menu_rounded, size: 30),
                 ),
                 const Spacer(),
-                const Icon(Icons.language_rounded),
-                const SizedBox(width: 8),
-                const Text(
-                  'English (US)',
-                  style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                InkWell(
+                  onTap: _changeLanguage,
+                  borderRadius: BorderRadius.circular(18),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.language_rounded),
+                        const SizedBox(width: 8),
+                        Text(
+                          _nativeLanguage.isEmpty
+                              ? 'English (US)'
+                              : 'English · $_nativeLanguage',
+                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                        ),
+                        const Icon(Icons.expand_more),
+                      ],
+                    ),
+                  ),
                 ),
-                const Icon(Icons.expand_more),
                 const Spacer(),
                 IconButton(
                   onPressed: () => Navigator.push(
@@ -437,6 +475,8 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
     try {
       sessionId ??= await LectureService.instance.startEnglishRoleplay(
         scenario: widget.scenario,
+        nativeLanguage:
+            await LectureService.instance.getEnglishPracticeLanguage() ?? 'English',
       );
       _heardSpeech = false;
       RecordingService.instance.setVoiceActivityListener(_onVoiceActivity);

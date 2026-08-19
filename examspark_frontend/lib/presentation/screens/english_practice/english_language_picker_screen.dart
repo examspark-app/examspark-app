@@ -6,7 +6,11 @@ import 'package:examspark_frontend/presentation/screens/english_practice/english
 /// One-time picker — student's native/local language, shown in its own
 /// script so a non-English-comfortable student can read it easily.
 class EnglishLanguagePickerScreen extends StatefulWidget {
-  const EnglishLanguagePickerScreen({super.key});
+  const EnglishLanguagePickerScreen({super.key, this.returnToPrevious = false});
+
+  /// Lets an already-open Chat or Roleplay setup update its explanation
+  /// language without replacing that screen.
+  final bool returnToPrevious;
 
   @override
   State<EnglishLanguagePickerScreen> createState() =>
@@ -60,9 +64,13 @@ class _EnglishLanguagePickerScreenState
     try {
       await LectureService.instance.setEnglishPracticeLanguage(language);
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => const EnglishPracticeScreen()),
-      );
+      if (widget.returnToPrevious) {
+        Navigator.of(context).pop(language);
+      } else {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => const EnglishPracticeScreen()),
+        );
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);

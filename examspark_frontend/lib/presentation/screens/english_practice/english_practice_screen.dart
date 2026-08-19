@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/services/recording_service.dart';
+import 'package:examspark_frontend/presentation/screens/english_practice/english_language_picker_screen.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_teaching_history_screen.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/roleplay_screen.dart';
 
@@ -33,6 +35,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   String? _sessionId;
   bool _loading = true;
   bool _sending = false;
+  bool _recording = false;
+  String _nativeLanguage = '';
   String? _error;
   @override
   void initState() {
@@ -44,6 +48,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   void dispose() {
     _text.dispose();
     _scroll.dispose();
+    RecordingService.instance.releaseForScreen();
     super.dispose();
   }
 
@@ -56,6 +61,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       if (widget.sessionId == null) {
         final r = await LectureService.instance.startEnglishPractice();
         _sessionId = r['session_id'] as String?;
+        _nativeLanguage = '${r['native_language'] ?? ''}';
         _messages
           ..clear()
           ..add(_Message('${r['greeting'] ?? ''}', false));
@@ -66,6 +72,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
           widget.sessionId!,
         );
         _sessionId = r['id'] as String?;
+        _nativeLanguage = await LectureService.instance.getEnglishPracticeLanguage() ?? '';
         _messages
           ..clear()
           ..addAll(
@@ -172,6 +179,74 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       );
     }
   }
+
+  Future<void> _changeHelpLanguage() async {
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => const EnglishLanguagePickerScreen(returnToPrevious: true),
+      ),
+    );
+    if (mounted) {
+      final selected = await LectureService.instance.getEnglishPracticeLanguage();
+      if (selected != null && selected.trim().isNotEmpty) {
+        setState(() => _nativeLanguage = selected);
+      }
+    }
+  }
+
+  Future<void> _toggleVoiceInput() async {
+    if (_sending || _sessionId == null) return;
+    if (!_recording) {
+      try {
+        await RecordingService.instance.start();
+        if (mounted) setState(() => _recording = true);
+      } catch (error) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Microphone could not start: $error')),
+          );
+        }
+      }
+      return;
+    }
+
+    setState(() {
+      _recording = false;
+      _sending = true;
+    });
+    try {
+      final path = await RecordingService.instance.stop();
+      final audio = await RecordingService.instance.readRecordingBytes(path);
+      await RecordingService.instance.discardTemporaryRecording(path);
+      if (audio == null || audio.isEmpty) {
+        throw StateError('No speech was recorded. Please try again.');
+      }
+      final response = await LectureService.instance.sendEnglishPracticeAudio(
+        sessionId: _sessionId!,
+        audioBytes: audio,
+        filename: 'english_chat_turn.m4a',
+      );
+      if (!mounted) return;
+      setState(() {
+        _messages.add(_Message('${response['transcript'] ?? ''}', true));
+        _messages.add(_Message('${response['reply'] ?? ''}', false));
+        final suggestions = List<String>.from(
+          response['suggestions'] as List? ?? const [],
+        );
+        if (suggestions.isNotEmpty) _suggestions = suggestions;
+        _sending = false;
+      });
+      _bottom();
+    } catch (error) {
+      if (mounted) {
+        setState(() => _sending = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$error')),
+        );
+      }
+    }
+  }
   void _history() => Navigator.push(
     context,
     MaterialPageRoute(builder: (_) => const EnglishTeachingHistoryScreen()),
@@ -209,13 +284,26 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
           icon: const Icon(Icons.menu_rounded, size: 30),
         ),
         const Spacer(),
-        const Icon(Icons.language_rounded),
-        const SizedBox(width: 8),
-        const Text(
-          'English (US)',
-          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+        InkWell(
+          onTap: _changeHelpLanguage,
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.language_rounded),
+                const SizedBox(width: 8),
+                Text(
+                  _nativeLanguage.isEmpty
+                      ? 'English (US)'
+                      : 'English · $_nativeLanguage',
+                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                ),
+                const Icon(Icons.expand_more),
+              ],
+            ),
+          ),
         ),
-        const Icon(Icons.expand_more),
         const Spacer(),
         IconButton(
           onPressed: _history,
@@ -389,12 +477,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     child: Row(
       children: [
         _circle(
-          Icons.mic_none_rounded,
-          () => ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Voice chat will be available here soon.'),
-            ),
-          ),
+          _recording ? Icons.stop_rounded : Icons.mic_none_rounded,
+          _toggleVoiceInput,
         ),
         const SizedBox(width: 8),
         Expanded(

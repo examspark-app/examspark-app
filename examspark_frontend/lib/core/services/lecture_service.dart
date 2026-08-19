@@ -1100,6 +1100,37 @@ class LectureService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  /// One manual Chat mic turn. Raw recording remains in memory only; the
+  /// server persists the resulting transcript through the normal chat path.
+  Future<Map<String, dynamic>> sendEnglishPracticeAudio({
+    required String sessionId,
+    required Uint8List audioBytes,
+    required String filename,
+  }) async {
+    final accessToken = await _requireAccessToken();
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse(
+        '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/turn/audio',
+      ),
+    )
+      ..headers['Authorization'] = 'Bearer $accessToken'
+      ..fields['session_id'] = sessionId
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'audio',
+          audioBytes,
+          filename: filename,
+          contentType: MediaType('audio', 'mp4'),
+        ),
+      );
+    final response = await http.Response.fromStream(await request.send());
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   Future<String> startEnglishRoleplay({
     required String scenario,
     String nativeLanguage = 'English',

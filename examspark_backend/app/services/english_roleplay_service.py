@@ -132,7 +132,8 @@ async def send_audio_turn(
         transcription = await transcribe_audio(audio_bytes, filename)
     except WhisperTranscriptionError as e:
         raise chat.EnglishPracticeError(f"Could not understand the audio: {e}", 502) from e
-    if transcription.likely_no_speech or not transcription.text.strip():
+    # A roleplay turn can legitimately be one short beginner phrase.
+    if not transcription.text.strip():
         raise chat.EnglishPracticeError("No speech detected. Please try again.", 400)
     result = await send_turn(user_id, session_id, transcription.text)
     try:
@@ -186,7 +187,8 @@ async def stream_audio_turn(
     except WhisperTranscriptionError as error:
         raise chat.EnglishPracticeError(f'Could not understand the audio: {error}', 502) from error
     transcript = transcription.text.strip()
-    if transcription.likely_no_speech or not transcript:
+    # A roleplay turn can legitimately be one short beginner phrase.
+    if not transcript:
         raise chat.EnglishPracticeError('No speech detected. Please try again.', 400)
 
     yield {'type': 'transcript', 'transcript': transcript}

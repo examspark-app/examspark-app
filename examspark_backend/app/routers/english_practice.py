@@ -1,5 +1,5 @@
 """English Learning — AI conversation practice routes."""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
 from app.services.auth_service import AuthenticatedUser, get_current_user
@@ -54,6 +54,25 @@ async def send_message(
 ):
     try:
         return await eps.send_message(user.user_id, body.session_id, body.message)
+    except eps.EnglishPracticeError as e:
+        raise _http(e) from e
+
+
+@router.post("/turn/audio")
+async def send_audio_message(
+    session_id: str = Form(...),
+    audio: UploadFile = File(...),
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    if not (audio.content_type or "").lower().startswith("audio/"):
+        raise HTTPException(status_code=415, detail="Unsupported audio format.")
+    payload = await audio.read()
+    if len(payload) > 10 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Audio is too large. Keep one turn under 10 MB.")
+    try:
+        return await eps.send_audio_message(
+            user.user_id, session_id, payload, audio.filename or "english_chat_audio.m4a"
+        )
     except eps.EnglishPracticeError as e:
         raise _http(e) from e
 

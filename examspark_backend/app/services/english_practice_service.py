@@ -23,6 +23,7 @@ from app.services import english_learning_memory_service as learning_memory
 from app.services.credits_service import InsufficientCreditsError, deduct_credits
 from app.services.supabase_admin import get_supabase_admin
 from app.services.openrouter_stream import OpenRouterStreamError, stream_chat_completions
+from app.services.whisper_service import WhisperTranscriptionError, transcribe_audio
 
 logger = logging.getLogger(__name__)
 
@@ -57,8 +58,6 @@ def _system_prompt(native_language: str, target_focus: str | None, memory_contex
     base = f"""{build_chat_prompt(native_language)}
 {build_teacher_prompt(native_language, target_focus)}
 
-You can teach ANY target language the student wants, including English.
-
 The student's native/local language is: {native_language}.
 
 HOW TO SOUND IN {native_language}:
@@ -66,25 +65,25 @@ HOW TO SOUND IN {native_language}:
 - NEVER sound like a stiff, word-for-word translation from English. If a sentence reads like machine-translated text, rewrite it the way a local person would naturally say it.
 - Use the native script (not transliteration) unless the student writes to you in transliteration first.
 
-STRICT ONBOARDING RULES (only for a brand-new conversation, before you know what the student wants):
+STRICT ONBOARDING RULES (only for a brand-new conversation):
 1. Greet warmly in {native_language}, like a friendly local teacher — not a robot.
-2. Ask, in {native_language}: which language do you want to learn? (Any language they name — English, Hindi, Spanish, French, etc.)
-3. Once they name a language, ask ONE simple question in {native_language}: do they want to focus on Grammar, Spoken/Conversation, or Vocabulary?
-4. Do NOT repeat either question once it's been answered.
+2. Make it clear that English can start from zero; the learner does not need to know where to begin.
+3. Ask ONE simple question in {native_language}: do they want to start with basic speaking, grammar, or vocabulary? Also accept a free-form answer such as "I cannot speak English".
+4. Do NOT repeat the question once it has been answered.
 
-LEVEL-CHECK RULES (once you know the target language + focus, BEFORE teaching properly):
-5. Ask 2-3 short, simple questions IN THE TARGET LANGUAGE (not {native_language}) to see what the student already knows — e.g. a simple self-introduction, completing a basic sentence, or "how do you say ___?".
+LEVEL-CHECK RULES (once you know the focus, BEFORE teaching properly):
+5. Ask 1-2 short, pressure-free questions IN ENGLISH to see what the student already knows — e.g. a simple self-introduction or completing a basic sentence. If they say they are new, begin immediately instead of testing them further.
 6. Based on their answers (vocabulary, grammar accuracy, confidence), silently judge their level: Beginner / Elementary / Intermediate / Advanced. Never announce this label out loud — just use it to guide how you teach from here on.
 7. If they struggle, give a very basic answer, or reply in {native_language} instead of the target language, treat them as Beginner and start from the absolute basics.
 
 TEACHING RULES (once the level is known):
-- Beginner: explain mostly in {native_language}, give tiny bite-size target-language phrases, repeat often, be very encouraging.
+- Beginner: explain mostly in {native_language}, give tiny bite-size English phrases, repeat often, be very encouraging.
 - Intermediate: mix both languages roughly 50/50, introduce short grammar rules, expect full sentences back from the student.
 - Advanced: mostly the target language, natural pace, correct mistakes subtly without long explanations.
 - Keep every reply SHORT (2-5 sentences) — this is a live chat, not a lecture.
 - Always end with a small follow-up question or a tiny practice task, so the conversation keeps flowing.
 - Correct mistakes gently: show the correct form, briefly explain why (in {native_language} if the student is a beginner), then continue — never just say "wrong".
-- As the student improves, gradually use more of the target language and less {native_language}.
+- As the student improves, gradually use more English and less {native_language}.
 - Be encouraging, never robotic, never repeat the same phrasing twice in a row.
 - Never break character or mention that you are an AI model or a prompt.
 
@@ -377,3 +376,30 @@ def restore_session(session_id: str, user_id: str) -> dict | None:
         "status": session.get("status"),
         "messages": list(res.data or []),
     }
+
+
+async def send_audio_message(
+    user_id: str, session_id: str, audio_bytes: bytes, filename: str,
+) -> dict:
+    """Temporary mic audio -> existing Whisper -> normal Chat turn.
+
+    No microphone file is persisted: only the verified transcript and the
+    normal assistant reply enter the existing conversation history.
+    """
+    if not audio_bytes:
+        raise EnglishPracticeError("No audio was received. Please try again.", 400)
+    try:
+        transcription = await transcribe_audio(audio_bytes, filename)
+    except WhisperTranscriptionError as error:
+        raise EnglishPracticeError(
+            f"Could not understand the audio: {error}", 502
+        ) from error
+    transcript = transcription.text.strip()
+    # English learners often begin with a tiny but valid turn: "Hi", "Yes",
+    # or "I am from India." The shared lecture transcription guard treats
+    # short text as suspicious; voice conversation must accept it when Whisper
+    # returned actual text.
+    if not transcript:
+        raise EnglishPracticeError("No speech detected. Please try again.", 400)
+    result = await send_message(user_id, session_id, transcript)
+    return {**result, "transcript": transcript}
