@@ -1,9 +1,15 @@
 """Conversation answer-language (not Translate product).
 
-Qwen3 is multilingual — match the student's language (India + world).
-- Lock: first-turn language → stay until user overrides
-- Override: "I want Hinglish" / "answer in English" etc.
-- Primary signal when unlocked = question text, never notes language
+Hybrid design — deliberately NOT "100% trust the model, no rules":
+- A small, deterministic script/keyword layer catches the cases where
+  trusting the model alone was actually causing wrong-language replies
+  (this is the exact bug this fix addresses — see resolve_answer_language).
+- Everything the deterministic layer can't confidently classify (mixed
+  script, unusual languages) falls through to MATCH_QUESTION, which is
+  the "trust the model's multilingual understanding" path.
+- Lock: first-turn language sticks across turns for stability, but an
+  UNAMBIGUOUS new script/language in a later message is treated as the
+  student naturally switching — no need to say "please switch to X".
 """
 from __future__ import annotations
 
@@ -33,124 +39,67 @@ _NON_LATIN_SCRIPT = re.compile(
     r"\u0400-\u04FF"  # Cyrillic
     r"\u4E00-\u9FFF\u3040-\u30FF\uAC00-\uD7AF"  # CJK / JP / KR
     r"\u0E00-\u0E7F"  # Thai
-    r"\u0900-\u097F\u0980-\u09FF"  # also Devanagari/Bengali caught above first
     r"]"
 )
 _LATIN_LETTER = re.compile(r"[A-Za-z]")
 
 _FORCE_HINGLISH = re.compile(
-    r"(?i)\b("
-    r"i\s+want\s+hinglish|"
-    r"want\s+hinglish|"
-    r"talk\s+in\s+hinglish|"
-    r"reply\s+in\s+hinglish|"
-    r"answer\s+in\s+hinglish|"
-    r"hinglish\s+mein|"
-    r"hinglish\s+me|"
-    r"hinglish\s+conversation|"
-    r"use\s+hinglish|"
-    r"switch\s+to\s+hinglish"
-    r")\b"
+    r"(?i)\b(i\s+want\s+hinglish|want\s+hinglish|talk\s+in\s+hinglish|"
+    r"reply\s+in\s+hinglish|answer\s+in\s+hinglish|hinglish\s+mein|"
+    r"hinglish\s+me|hinglish\s+conversation|use\s+hinglish|"
+    r"switch\s+to\s+hinglish)\b"
 )
 _FORCE_HINDI = re.compile(
-    r"(?i)\b("
-    r"answer\s+in\s+hindi|"
-    r"talk\s+in\s+hindi|"
-    r"hindi\s+mein\s+batao|"
-    r"hindi\s+me\s+batao|"
-    r"हिंदी\s+में|"
-    r"हिन्दी\s+में"
-    r")\b"
+    r"(?i)\b(answer\s+in\s+hindi|talk\s+in\s+hindi|hindi\s+mein\s+batao|"
+    r"hindi\s+me\s+batao|हिंदी\s+में|हिन्दी\s+में)\b"
 )
 _FORCE_ENGLISH = re.compile(
-    r"(?i)\b("
-    r"answer\s+in\s+english|"
-    r"talk\s+in\s+english|"
-    r"talk\s+english|"
-    r"english\s+mein\s+batao|"
-    r"english\s+me\s+batao|"
-    r"english\s+mein\s+baat|"
-    r"english\s+me\s+baat|"
-    r"english\s+main\s+baat|"
-    r"english\s+main\s+bat|"
-    r"baat\s+karo\s+english|"
-    r"bat\s+karo\s+english|"
-    r"in\s+english\s+please|"
-    r"switch\s+to\s+english|"
-    r"i\s+want\s+english|"
-    r"reply\s+in\s+english"
-    r")\b"
+    r"(?i)\b(answer\s+in\s+english|talk\s+in\s+english|talk\s+english|"
+    r"english\s+mein\s+batao|english\s+me\s+batao|english\s+mein\s+baat|"
+    r"english\s+me\s+baat|english\s+main\s+baat|english\s+main\s+bat|"
+    r"baat\s+karo\s+english|bat\s+karo\s+english|in\s+english\s+please|"
+    r"switch\s+to\s+english|i\s+want\s+english|reply\s+in\s+english)\b"
 )
 _FORCE_BENGALI = re.compile(
-    r"(?i)\b("
-    r"answer\s+in\s+bengali|"
-    r"answer\s+in\s+bangla|"
-    r"talk\s+in\s+bengali|"
-    r"talk\s+in\s+bangla|"
-    r"bengali\s+mein|"
-    r"bengali\s+me|"
-    r"bangla\s+mein|"
-    r"bangla\s+me|"
-    r"bengali\s+te|"
-    r"bangla\s+te|"
-    r"বাংলা\s+তে|"
-    r"বাংলায়"
-    r")\b"
+    r"(?i)\b(answer\s+in\s+bengali|answer\s+in\s+bangla|talk\s+in\s+bengali|"
+    r"talk\s+in\s+bangla|bengali\s+mein|bengali\s+me|bangla\s+mein|"
+    r"bangla\s+me|bengali\s+te|bangla\s+te|বাংলা\s+তে|বাংলায়)\b"
 )
-# Clear English Latin (not Hinglish / not Spanish) — Ask AI leak fix Jul 26
 _ENGLISH_MARKERS = re.compile(
-    r"(?i)\b("
-    r"the|what|why|how|when|where|who|which|"
-    r"explain|describe|define|list|summarize|summary|"
-    r"simple|words|please|about|should|would|could|"
-    r"difference|equation|formula|idea|main|revision|"
-    r"remember|important|terms|definitions|lecture|"
-    r"photosynthesis|gravity|because|between|without"
-    r")\b"
+    r"(?i)\b(the|what|why|how|when|where|who|which|explain|describe|"
+    r"define|list|summarize|summary|simple|words|please|about|should|"
+    r"would|could|difference|equation|formula|idea|main|revision|"
+    r"remember|important|terms|definitions|lecture|photosynthesis|"
+    r"gravity|because|between|without)\b"
 )
 _STRONG_ENGLISH_START = re.compile(
     r"(?i)^\s*(what|why|how|when|where|who|which|explain|describe|define|"
     r"list|summarize|tell\s+me|can\s+you)\b"
 )
-# Named language requests (India + world) → MATCH_QUESTION
 _FORCE_NAMED_LANGUAGE = re.compile(
-    r"(?i)\b("
-    r"answer\s+in\s+tamil|talk\s+in\s+tamil|"
-    r"answer\s+in\s+telugu|talk\s+in\s+telugu|"
-    r"answer\s+in\s+marathi|talk\s+in\s+marathi|marathi\s+mein|marathi\s+me|"
-    r"answer\s+in\s+gujarati|talk\s+in\s+gujarati|"
-    r"answer\s+in\s+kannada|talk\s+in\s+kannada|"
-    r"answer\s+in\s+malayalam|talk\s+in\s+malayalam|"
-    r"answer\s+in\s+punjabi|talk\s+in\s+punjabi|"
-    r"answer\s+in\s+odia|answer\s+in\s+oriya|talk\s+in\s+odia|"
-    r"answer\s+in\s+assamese|talk\s+in\s+assamese|"
-    r"answer\s+in\s+urdu|talk\s+in\s+urdu|"
-    r"answer\s+in\s+spanish|talk\s+in\s+spanish|responde\s+en\s+espa[nñ]ol|"
-    r"answer\s+in\s+french|talk\s+in\s+french|r[eé]ponds?\s+en\s+fran[cç]ais|"
-    r"answer\s+in\s+arabic|talk\s+in\s+arabic|"
-    r"answer\s+in\s+portuguese|talk\s+in\s+portuguese|"
-    r"answer\s+in\s+german|talk\s+in\s+german|"
-    r"answer\s+in\s+chinese|talk\s+in\s+chinese|"
-    r"answer\s+in\s+japanese|talk\s+in\s+japanese|"
-    r"answer\s+in\s+korean|talk\s+in\s+korean|"
-    r"answer\s+in\s+russian|talk\s+in\s+russian|"
-    r"answer\s+in\s+indonesian|talk\s+in\s+indonesian|"
-    r"answer\s+in\s+turkish|talk\s+in\s+turkish"
-    r")\b"
+    r"(?i)\b(answer\s+in\s+tamil|talk\s+in\s+tamil|answer\s+in\s+telugu|"
+    r"talk\s+in\s+telugu|answer\s+in\s+marathi|talk\s+in\s+marathi|"
+    r"marathi\s+mein|marathi\s+me|answer\s+in\s+gujarati|"
+    r"talk\s+in\s+gujarati|answer\s+in\s+kannada|talk\s+in\s+kannada|"
+    r"answer\s+in\s+malayalam|talk\s+in\s+malayalam|answer\s+in\s+punjabi|"
+    r"talk\s+in\s+punjabi|answer\s+in\s+odia|answer\s+in\s+oriya|"
+    r"talk\s+in\s+odia|answer\s+in\s+assamese|talk\s+in\s+assamese|"
+    r"answer\s+in\s+urdu|talk\s+in\s+urdu|answer\s+in\s+spanish|"
+    r"talk\s+in\s+spanish|responde\s+en\s+espa[nñ]ol|answer\s+in\s+french|"
+    r"talk\s+in\s+french|r[eé]ponds?\s+en\s+fran[cç]ais|"
+    r"answer\s+in\s+arabic|talk\s+in\s+arabic|answer\s+in\s+portuguese|"
+    r"talk\s+in\s+portuguese|answer\s+in\s+german|talk\s+in\s+german|"
+    r"answer\s+in\s+chinese|talk\s+in\s+chinese|answer\s+in\s+japanese|"
+    r"talk\s+in\s+japanese|answer\s+in\s+korean|talk\s+in\s+korean|"
+    r"answer\s+in\s+russian|talk\s+in\s+russian|answer\s+in\s+indonesian|"
+    r"talk\s+in\s+indonesian|answer\s+in\s+turkish|talk\s+in\s+turkish)\b"
 )
-
-# Roman/Hinglish chat markers (Latin script) — ChatGPT-style student typing
 _HINGLISH_ROMAN = re.compile(
-    r"(?i)\b("
-    r"kya|kyun|kyunki|hai|hain|nahi|nahin|nhi|"
-    r"tum|tumhara|tumhare|mera|meri|mera|"
-    r"acha|accha|achha|theek|thik|"
-    r"batao|bata|bolo|bol|samajh|samjha|"
-    r"matlab|chahiye|karo|karna|raha|rahi|rahe|"
-    r"sakhta|sakte|sakti|woh|yeh|"
-    r"kaise|kitna|kitni|kahan|kab|kiya|kiye|"
-    r"bhai|yaar|pls\s+bata|please\s+bata"
-    r")\b"
+    r"(?i)\b(kya|kyun|kyunki|hai|hain|nahi|nahin|nhi|tum|tumhara|tumhare|"
+    r"mera|meri|acha|accha|achha|theek|thik|batao|bata|bolo|bol|samajh|"
+    r"samjha|matlab|chahiye|karo|karna|raha|rahi|rahe|sakhta|sakte|sakti|"
+    r"woh|yeh|kaise|kitna|kitni|kahan|kab|kiya|kiye|bhai|yaar|pls\s+bata|"
+    r"please\s+bata)\b"
 )
 
 
@@ -181,7 +130,10 @@ def detect_explicit_override(query: str) -> Optional[LanguageHint]:
 
 
 def detect_question_language_hint(query: str) -> Optional[LanguageHint]:
-    """Script / override detect for a single turn (no conversation lock)."""
+    """Script/override detect for a single turn. Returns None when the
+    message is ambiguous or mixed (e.g. Hindi words inside an English
+    sentence) — ambiguity means "don't force a switch", handled by the
+    caller."""
     text = (query or "").strip()
     if not text:
         return None
@@ -192,31 +144,26 @@ def detect_question_language_hint(query: str) -> Optional[LanguageHint]:
 
     has_bengali = bool(_BENGALI.search(text))
     has_deva = bool(_DEVANAGARI.search(text))
-    has_non_latin = bool(_NON_LATIN_SCRIPT.search(text))
+    has_non_latin = bool(_NON_LATIN_SCRIPT.search(text)) or has_bengali or has_deva
     has_latin = bool(_LATIN_LETTER.search(text))
 
     if has_bengali and not has_deva and not has_latin:
         return "BENGALI"
     if has_bengali and has_latin:
-        return None  # ambiguous mix → resolve defaults to MATCH_QUESTION
+        return None  # mixed → ambiguous, don't force a switch
     if has_deva and not has_latin:
         return "HINDI"
     if has_deva and has_latin:
         return None
-    # Any other script (Tamil, Arabic, Chinese, …) → match that language
     if has_non_latin:
         return "MATCH_QUESTION"
-    # Latin Hinglish chat (e.g. "accha tum batao kya hai") → HINGLISH
     if has_latin and len(_HINGLISH_ROMAN.findall(text)) >= 2:
         return "HINGLISH"
-    # Clear English Latin (chip prompts, study questions) → ENGLISH.
-    # Stops notes/RAG Hindi leaking into English questions.
     if has_latin and (
         len(_ENGLISH_MARKERS.findall(text)) >= 2
         or _STRONG_ENGLISH_START.search(text)
     ):
         return "ENGLISH"
-    # Other Latin (Spanish / French / Turkish / …) — match that language.
     if has_latin:
         return "MATCH_QUESTION"
     return None
@@ -227,28 +174,30 @@ def resolve_answer_language(
     conversation_language: Optional[str] = None,
 ) -> LanguageHint:
     """
-    Explicit override always wins.
-    Else keep conversation lock if set.
-    Else detect from this question (default MATCH_QUESTION — same language as input).
+    1. Explicit override ("answer in Bengali") → always wins.
+    2. THE FIX: if locked, but this message is an UNAMBIGUOUS different
+       language (pure script, not mixed) → treat it as a natural switch,
+       even without an explicit "please switch" phrase — the way a real
+       bilingual tutor notices you started writing in a different
+       language and just follows along.
+    3. If locked and this message is ambiguous/mixed → keep the lock.
+    4. No lock → detect fresh from this message.
     """
     override = detect_explicit_override(query)
     if override:
         return override
 
+    detected = detect_question_language_hint(query)
     locked = normalize_lock(conversation_language)
+
     if locked:
+        if detected and detected != locked:
+            return detected  # unambiguous switch — follow it
         return locked
 
-    detected = detect_question_language_hint(query)
     return detected or "MATCH_QUESTION"
 
 
-# Shared closing note appended to every language-hint line — this is the
-# ChatGPT/Claude-style "advanced" behavior the product wants: the detected
-# language below is a SIGNAL, not a rigid box. The model should use its own
-# multilingual understanding to mirror exactly how the student writes —
-# including natural Hindi+English code-mixing — rather than forcing an
-# artificially "pure" single language when the student themselves mixed.
 _NATURAL_MIRROR_NOTE = (
     " This detected language is a guide, not a rigid rule — use your own "
     "multilingual understanding like a bilingual human tutor would. If the "
@@ -266,25 +215,36 @@ def language_hint_user_line(
 ) -> str:
     lang = resolve_answer_language(query, conversation_language)
     locked = normalize_lock(conversation_language)
+    is_explicit = bool(detect_explicit_override(query))
+    is_implicit_switch = (
+        not is_explicit and locked is not None and lang != locked
+    )
+
     lock_note = ""
-    if locked and not detect_explicit_override(query):
-        lock_note = (
-            f" Conversation language is LOCKED to {locked} from earlier turns "
-            f"— keep answering in {locked} unless the student explicitly switches."
-        )
-    elif detect_explicit_override(query):
+    if is_explicit:
         lock_note = (
             f" Student explicitly requested {lang} — switch conversation to {lang} now."
+        )
+    elif is_implicit_switch:
+        lock_note = (
+            f" The student just switched to writing in {lang} (no need for them "
+            f"to say so explicitly) — follow their lead and continue in {lang} "
+            f"from here."
+        )
+    elif locked:
+        lock_note = (
+            f" Conversation language is LOCKED to {locked} from earlier turns "
+            f"— keep answering in {locked} unless the student clearly switches."
         )
 
     if lang == "ENGLISH":
         return (
             f"Detected answer language: ENGLISH.{lock_note} "
             "HARD LOCK: Write the ENTIRE answer in English only — including "
-            "section titles, formulas labels, and explanations. "
+            "section titles, formula labels, and explanations. "
             "Even if lecture notes / transcript / RAG are Hindi, Hinglish, "
             "Bengali, or any other language — TRANSLATE the grounded facts "
-            "into English. NEVER reply in Hindi for an English question."
+            "into English. NEVER reply in Hindi or Bengali for an English question."
             + _NATURAL_MIRROR_NOTE
         )
     if lang == "HINDI":
@@ -302,23 +262,23 @@ def language_hint_user_line(
     if lang == "MATCH_QUESTION":
         return (
             f"Detected answer language: MATCH_QUESTION (India + world).{lock_note} "
-            "Qwen3 is multilingual. Write the ENTIRE answer in the SAME language as "
+            "You are multilingual. Write the ENTIRE answer in the SAME language as "
             "the student's question — any Indian language OR any world language "
             "(English, Spanish, French, Arabic, Chinese, Japanese, Portuguese, "
             "German, Russian, Indonesian, Turkish, etc.). "
             "Do NOT force English unless the question is in English. "
             "ANTI-LEAK: ignore the language of lecture notes / transcript / RAG. "
-            "If the student wrote Latin English or Hinglish, NEVER reply in Khmer, "
-            "Thai, Chinese, or any other script just because the notes use that script."
+            "If the student wrote Latin English or Hinglish, NEVER reply in a "
+            "different script just because the notes use that script."
             + _NATURAL_MIRROR_NOTE
         )
     # HINGLISH
     return (
         f"Detected answer language: HINGLISH.{lock_note} "
         "Reply in natural Hinglish (mix Hindi + English the way Indian students chat) — "
-        "section titles can be English or Hinglish. Do not switch to pure English or pure Hindi "
-        "unless the student asks. "
-        "ANTI-LEAK: do NOT copy notes language (Khmer/Hindi/English/etc.) — follow the student."
+        "section titles can be English or Hinglish. Do not switch to pure English or pure "
+        "Hindi unless the student asks. "
+        "ANTI-LEAK: do NOT copy notes language — follow the student."
         + _NATURAL_MIRROR_NOTE
     )
 
@@ -348,25 +308,24 @@ Students often mistype. ALWAYS interpret the intended meaning and answer that qu
 def language_rule_block() -> str:
     return (
         """====================================================
-LANGUAGE RULE — CHATGPT-STYLE (Qwen3 multilingual)
+LANGUAGE RULE — DETERMINISTIC SIGNAL + NATURAL MIRRORING
 ====================================================
 Primary signal = STUDENT QUESTION / conversation lock — NEVER notes/RAG language.
 
-- Always answer in the SAME language / chat style as the student (India or world).
-  Example: English notes + student asks in Hinglish → answer in Hinglish.
-  Example: English notes + student asks in Marathi → answer in Marathi.
-- Conversation lock: keep that language across turns in this workspace/session
-  until an explicit switch (like ChatGPT memory for the chat).
-- Explicit switch wins: "I want Hinglish" / "answer in English" / "Hindi mein batao" /
-  "Marathi mein" / "answer in Bengali|Tamil|Spanish|French|Arabic|…" → switch.
-- Devanagari → Hindi (or match Marathi if the question is Marathi). Bengali script → Bengali.
-- Latin Hinglish markers → HINGLISH. Clear English Latin (explain/what/the…) → ENGLISH.
-- Any other script or Latin-script language (Spanish, French, Turkish, Japanese…) → match that language.
-- Explicit: "English main baat karo" / "Bengali mein" / "answer in Japanese" → switch now.
+- Answer in the SAME language / chat style as the student (India or world).
+- Conversation lock: keep that language across turns until the student
+  clearly writes in a different, unambiguous language — no explicit
+  "please switch" phrase needed for that.
+- Explicit switch always wins: "I want Hinglish" / "answer in English" /
+  "Hindi mein batao" / "answer in Bengali|Tamil|Spanish|French|…"
+- Devanagari (pure) → Hindi. Bengali script (pure) → Bengali.
+- Latin Hinglish markers → HINGLISH. Clear English Latin → ENGLISH.
+- Any other script or Latin-script language (Spanish, French, Japanese…) → match that language.
+- Mixed-script messages (e.g. Hindi words inside an English sentence) → treat as
+  ambiguous, keep the current lock, and mirror the natural mix in your reply.
 
 ANTI-LEAK (critical): never copy the language of lecture notes / transcript / RAG.
-If notes are wrong-language or Khmer/Thai/etc., still answer in the student's language.
-Same credits — NOT the Translate (8 cr) product.
+If notes are in the wrong language, still answer in the student's language.
 """
         + typo_intent_rule_block()
     )
@@ -385,7 +344,9 @@ def notes_language_user_line(source_text: str) -> str:
     has_non_latin = bool(_NON_LATIN_SCRIPT.search(sample))
     has_latin = bool(_LATIN_LETTER.search(sample))
     latin_chars = len(_LATIN_LETTER.findall(sample))
-    non_latin_chars = len(_NON_LATIN_SCRIPT.findall(sample))
+    non_latin_chars = len(_NON_LATIN_SCRIPT.findall(sample)) + (
+        len(_DEVANAGARI.findall(sample)) if has_deva else 0
+    ) + (len(_BENGALI.findall(sample)) if has_bengali else 0)
 
     if has_bengali and not has_deva and non_latin_chars >= latin_chars:
         tip = "Source looks primarily Bengali → write Bengali notes only."
@@ -401,7 +362,7 @@ def notes_language_user_line(source_text: str) -> str:
     elif has_latin and not has_non_latin:
         tip = (
             "Source looks primarily English/Latin → write ENGLISH notes only. "
-            "Do NOT translate into Hindi, Hinglish, Khmer, or any other language."
+            "Do NOT translate into Hindi, Hinglish, or any other language."
         )
     elif has_latin and len(_HINGLISH_ROMAN.findall(sample)) >= 2:
         tip = "Source looks Hinglish → keep Hinglish notes (same mix)."

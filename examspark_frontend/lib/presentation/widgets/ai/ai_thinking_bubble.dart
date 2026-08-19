@@ -1,22 +1,7 @@
-import 'dart:math' as math;
-
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 
-/// Professional AI thinking bubble for Home AI + Ask AI.
-///
-/// Center:
-///   📖 Open book stays stable.
-///
-/// Around the book:
-///   🌍 Earth rotates on an outer circular orbit.
-///   • Small particles travel on the same orbit.
-///
-/// Right:
-///   Rotating AI status phrases.
-///
-/// Bottom:
-///   Soft looping intelligence/loading bar.
+/// Compact AI thinking bubble — small, black/white, no heavy orbit animation.
 class AiThinkingBubble extends StatefulWidget {
   const AiThinkingBubble({super.key});
 
@@ -26,8 +11,8 @@ class AiThinkingBubble extends StatefulWidget {
 
 class _AiThinkingBubbleState extends State<AiThinkingBubble>
     with TickerProviderStateMixin {
-  late final AnimationController _orbit;
   late final AnimationController _pulse;
+  late final AnimationController _bar;
   late final AnimationController _phrase;
 
   static const _phrases = <String>[
@@ -43,12 +28,12 @@ class _AiThinkingBubbleState extends State<AiThinkingBubble>
   void initState() {
     super.initState();
 
-    _orbit = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 3600),
-    )..repeat();
-
     _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+
+    _bar = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1800),
     )..repeat(reverse: true);
@@ -61,7 +46,6 @@ class _AiThinkingBubbleState extends State<AiThinkingBubble>
           setState(() {
             _phraseIndex = (_phraseIndex + 1) % _phrases.length;
           });
-
           _phrase
             ..reset()
             ..forward();
@@ -73,180 +57,107 @@ class _AiThinkingBubbleState extends State<AiThinkingBubble>
 
   @override
   void dispose() {
-    _orbit.dispose();
     _pulse.dispose();
+    _bar.dispose();
     _phrase.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final secondary = AppTheme.getSecondaryText(context);
     final border = AppTheme.getCardBorder(context);
     final card = AppTheme.getCardBackground(context);
     final primary = AppTheme.getPrimaryText(context);
-    final accent = AppTheme.accentColor;
+
+    // Black/white — dark on light bg, light on dark bg
+    final dotColor = isDark ? Colors.white70 : Colors.black54;
+    final barColor = isDark ? Colors.white60 : Colors.black38;
 
     return Align(
       alignment: Alignment.centerLeft,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          maxWidth: math.min(
-            MediaQuery.sizeOf(context).width * 0.90,
-            420,
-          ),
-        ),
+      child: IntrinsicWidth(
         child: Container(
-          padding: const EdgeInsets.fromLTRB(14, 12, 16, 12),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
             color: card,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius: BorderRadius.circular(16),
             border: Border.all(color: border),
           ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
+              // Three pulsing dots — replaces heavy orbit animation
               AnimatedBuilder(
-                animation: Listenable.merge([_orbit, _pulse]),
+                animation: _pulse,
                 builder: (context, _) {
-                  final pulse =
-                      0.96 + (_pulse.value * 0.04);
-
-                  return Transform.scale(
-                    scale: pulse,
-                    child: SizedBox(
-                      width: 94,
-                      height: 76,
-                      child: CustomPaint(
-                        painter: _KnowledgeOrbitPainter(
-                          progress: _orbit.value,
-                          accent: accent,
-                          track: border,
-                          glowAlpha:
-                              0.14 + (_pulse.value * 0.10),
-                        ),
-                        child: Center(
-                          child: Container(
-                            width: 46,
-                            height: 42,
-                            alignment: Alignment.center,
-                            decoration: BoxDecoration(
-                              color: accent.withValues(alpha: 0.08),
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: const Text(
-                              '📖',
-                              style: TextStyle(
-                                fontSize: 25,
-                              ),
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
+                  return _ThinkingDots(pulse: _pulse.value, color: dotColor);
                 },
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    AnimatedBuilder(
-                      animation: _phrase,
-                      builder: (context, _) {
-                        final t = _phrase.value;
-
-                        double opacity;
-                        double slide;
-
-                        if (t < 0.14) {
-                          opacity = t / 0.14;
-                          slide = 6 * (1 - opacity);
-                        } else if (t > 0.82) {
-                          opacity = (1 - t) / 0.18;
-                          slide = 6 * (1 - opacity);
-                        } else {
-                          opacity = 1;
-                          slide = 0;
-                        }
-
-                        return Transform.translate(
-                          offset: Offset(slide, 0),
-                          child: Opacity(
-                            opacity: opacity.clamp(0.0, 1.0),
-                            child: Text(
-                              _phrases[_phraseIndex],
-                              maxLines: 2,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 13,
-                                height: 1.25,
-                                fontWeight: FontWeight.w600,
-                                color: primary,
-                              ),
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 7),
-                    Row(
-                      children: [
-                        _Dot(
-                          color: accent,
-                          pulse: _pulse.value,
-                          size: 4,
-                        ),
-                        const SizedBox(width: 7),
-                        Expanded(
-                          child: Text(
-                            'Knowledge + reasoning',
-                            style: TextStyle(
-                              fontSize: 11.5,
-                              color: secondary,
-                            ),
+              const SizedBox(width: 10),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Rotating phrase
+                  AnimatedBuilder(
+                    animation: _phrase,
+                    builder: (context, _) {
+                      final t = _phrase.value;
+                      double opacity;
+                      if (t < 0.14) {
+                        opacity = t / 0.14;
+                      } else if (t > 0.82) {
+                        opacity = (1 - t) / 0.18;
+                      } else {
+                        opacity = 1;
+                      }
+                      return Opacity(
+                        opacity: opacity.clamp(0.0, 1.0),
+                        child: Text(
+                          _phrases[_phraseIndex],
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                            color: primary,
                           ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    AnimatedBuilder(
-                      animation: _orbit,
-                      builder: (context, _) {
-                        final raw = _orbit.value;
-
-                        // Never shows fake 100%.
-                        final fill =
-                            0.18 + (raw * 0.68);
-
-                        return ClipRRect(
-                          borderRadius:
-                              BorderRadius.circular(3),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 5),
+                  // Progress bar — neutral black/white
+                  AnimatedBuilder(
+                    animation: _bar,
+                    builder: (context, _) {
+                      final fill = 0.2 + (_bar.value * 0.65);
+                      return SizedBox(
+                        width: 140,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(3),
                           child: LinearProgressIndicator(
                             value: fill,
-                            minHeight: 3,
+                            minHeight: 2.5,
                             backgroundColor: border,
                             valueColor:
-                                AlwaysStoppedAnimation<Color>(
-                              accent.withValues(alpha: 0.85),
-                            ),
+                                AlwaysStoppedAnimation<Color>(barColor),
                           ),
-                        );
-                      },
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Sonaxia AI',
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: secondary,
+                      letterSpacing: 0.2,
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Sonaxia AI',
-                      style: TextStyle(
-                        fontSize: 10.5,
-                        color: secondary,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ],
           ),
@@ -256,169 +167,32 @@ class _AiThinkingBubbleState extends State<AiThinkingBubble>
   }
 }
 
-class _Dot extends StatelessWidget {
-  final Color color;
+/// Three small staggered pulsing dots.
+class _ThinkingDots extends StatelessWidget {
   final double pulse;
-  final double size;
+  final Color color;
 
-  const _Dot({
-    required this.color,
-    required this.pulse,
-    required this.size,
-  });
+  const _ThinkingDots({required this.pulse, required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: size + pulse * 1.5,
-      height: size + pulse * 1.5,
-      decoration: BoxDecoration(
-        shape: BoxShape.circle,
-        color: color.withValues(
-          alpha: 0.55 + pulse * 0.35,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: color.withValues(alpha: 0.25),
-            blurRadius: 5 + pulse * 3,
-            spreadRadius: 1,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: List.generate(3, (i) {
+        final offset = ((pulse + i * 0.33) % 1.0).clamp(0.0, 1.0);
+        final size = 5.0 + offset * 2.5;
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 2),
+          child: Container(
+            width: size,
+            height: size,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: color.withValues(alpha: 0.35 + offset * 0.55),
+            ),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _KnowledgeOrbitPainter extends CustomPainter {
-  final double progress;
-  final Color accent;
-  final Color track;
-  final double glowAlpha;
-
-  _KnowledgeOrbitPainter({
-    required this.progress,
-    required this.accent,
-    required this.track,
-    required this.glowAlpha,
-  });
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final center = Offset(
-      size.width / 2,
-      size.height / 2,
-    );
-
-    final orbitRx = size.width * 0.39;
-    final orbitRy = size.height * 0.34;
-
-    final orbitRect = Rect.fromCenter(
-      center: center,
-      width: orbitRx * 2,
-      height: orbitRy * 2,
-    );
-
-    // Soft outer glow.
-    final glowPaint = Paint()
-      ..color = accent.withValues(alpha: glowAlpha)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 6;
-
-    canvas.drawOval(orbitRect, glowPaint);
-
-    // Main orbit track.
-    final trackPaint = Paint()
-      ..color = track
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.5;
-
-    canvas.drawOval(orbitRect, trackPaint);
-
-    // Rotating Earth position.
-    final angle =
-        (-math.pi / 2) + (progress * math.pi * 2);
-
-    final earthCenter = Offset(
-      center.dx + math.cos(angle) * orbitRx,
-      center.dy + math.sin(angle) * orbitRy,
-    );
-
-    // Earth glow.
-    final earthGlow = Paint()
-      ..color = accent.withValues(alpha: 0.16)
-      ..maskFilter = const MaskFilter.blur(
-        BlurStyle.normal,
-        6,
-      );
-
-    canvas.drawCircle(
-      earthCenter,
-      9,
-      earthGlow,
-    );
-
-    // Earth.
-    final earthPaint = Paint()
-      ..color = accent.withValues(alpha: 0.9);
-
-    canvas.drawCircle(
-      earthCenter,
-      6,
-      earthPaint,
-    );
-
-    // Simple "land" marks.
-    final landPaint = Paint()
-      ..color = Colors.white.withValues(alpha: 0.55)
-      ..style = PaintingStyle.fill;
-
-    canvas.drawOval(
-      Rect.fromCenter(
-        center: earthCenter.translate(-1.5, -1),
-        width: 4,
-        height: 2.5,
-      ),
-      landPaint,
-    );
-
-    canvas.drawCircle(
-      earthCenter.translate(2, 2),
-      1.2,
-      landPaint,
-    );
-
-    // Three small orbit particles.
-    for (int i = 0; i < 3; i++) {
-      final particleAngle =
-          angle + ((math.pi * 2 / 3) * (i + 1));
-
-      final particleCenter = Offset(
-        center.dx +
-            math.cos(particleAngle) * orbitRx,
-        center.dy +
-            math.sin(particleAngle) * orbitRy,
-      );
-
-      final particlePaint = Paint()
-        ..color = accent.withValues(
-          alpha: 0.28 + (0.18 * (i + 1)),
         );
-
-      canvas.drawCircle(
-        particleCenter,
-        i == 1 ? 2.2 : 1.6,
-        particlePaint,
-      );
-    }
-  }
-
-  @override
-  bool shouldRepaint(
-    covariant _KnowledgeOrbitPainter oldDelegate,
-  ) {
-    return oldDelegate.progress != progress ||
-        oldDelegate.accent != accent ||
-        oldDelegate.track != track ||
-        oldDelegate.glowAlpha != glowAlpha;
+      }),
+    );
   }
 }

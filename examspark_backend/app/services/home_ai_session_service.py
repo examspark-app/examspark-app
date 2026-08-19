@@ -137,7 +137,6 @@ def _link_response_session(response_id: str, session_id: str, user_id: str) -> N
     except Exception as e:
         logger.warning("_link_response_session failed: %s", e)
 
-
 def ensure_session_for_turn(
     *,
     user_id: str,
@@ -186,7 +185,7 @@ def ensure_session_for_turn(
         _touch_session(sid, user_id)
         return sid
 
-        try:
+    try:
         sb = get_supabase_admin()
         # Explicit, distinct timestamps — Postgres gives every row in the
         # SAME insert statement the exact same now(), which made user/assistant
@@ -222,7 +221,37 @@ def ensure_session_for_turn(
     _link_response_session(rid, sid, user_id)
     _touch_session(sid, user_id)
     return sid
+def get_recent_messages(
+    session_id: str, user_id: str, *, limit: int = 20
+) -> list[dict[str, str]]:
+    """Lightweight fetch — last N messages only, for LLM context injection.
+    Returns [{"role": "user"/"assistant", "content": "..."}] oldest→newest.
+    Soft-fails to empty list if anything goes wrong.
+    """
+    if not session_id:
+        return []
+    try:
+        sb = get_supabase_admin()
+        res = (
+            sb.table("home_ai_messages")
+            .select("role,message,created_at")
+            .eq("session_id", session_id)
+            .eq("user_id", user_id)
+            .order("created_at", desc=True)
+            .limit(limit)
+            .execute()
+        )
+        rows = list(res.data or [])
+    except Exception as e:
+        logger.warning("get_recent_messages failed: %s", e)
+        return []
 
+    rows.reverse()  # oldest → newest for LLM
+    return [
+        {"role": r.get("role") or "user", "content": r.get("message") or ""}
+        for r in rows
+        if (r.get("message") or "").strip()
+    ]
 
 def list_sessions(
     user_id: str,

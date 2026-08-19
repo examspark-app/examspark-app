@@ -29,13 +29,59 @@ logger = logging.getLogger(__name__)
 _MAX_IMAGE_BYTES = 8 * 1024 * 1024  # 8 MB
 
 
+_QUESTION_TYPES = {"question_paper", "handwritten_work"}
+_NOTES_TYPES = {"notes", "textbook", "document"}
+
+
 def _format_home_vision_answer(notes: dict[str, Any], *, query: str) -> str:
+    """Smart formatter — responds differently based on what the image actually is."""
+    content_type = (notes.get("contentType") or "other").strip().lower()
     clean = (notes.get("cleanNotes") or "").strip()
     summary = (notes.get("shortSummary") or "").strip()
     key_points = notes.get("keyPoints") or []
     terms = notes.get("importantTerms") or []
+    questions_found = notes.get("questionsFound") or []
+    extracted = (notes.get("extractedText") or "").strip()
 
     parts: list[str] = []
+
+    # ── Question Paper / Handwritten Work → Direct answer, no template headers ──
+    if content_type in _QUESTION_TYPES or questions_found:
+        if query.strip():
+            parts.append(f"*(Your question: {query.strip()[:200]})*\n")
+        if clean:
+            parts.append(clean)
+        elif extracted:
+            parts.append(
+                "I can see the following in the image:\n\n"
+                f"{extracted}\n\n"
+                "Could not generate full solutions — please retry with a clearer photo."
+            )
+        else:
+            parts.append("I analyzed your photo. See the key points below.")
+        if key_points:
+            bullets = [str(kp).strip() for kp in key_points[:8] if str(kp).strip()]
+            if bullets:
+                parts.append("\n**Key Points:**")
+                for s in bullets:
+                    parts.append(f"- {s}")
+        return "\n".join(parts).strip()
+
+    # ── Diagram → Explain what's shown ──
+    if content_type == "diagram":
+        parts.append("## What This Diagram Shows")
+        parts.append(summary or clean or "I analyzed this diagram. See details below.")
+        if query.strip():
+            parts.append(f"\n*(Your ask: {query.strip()[:200]})*")
+        if key_points:
+            bullets = [str(kp).strip() for kp in key_points[:8] if str(kp).strip()]
+            if bullets:
+                parts.append("\n## Key Points")
+                for s in bullets:
+                    parts.append(f"- {s}")
+        return "\n".join(parts).strip()
+
+    # ── Notes / Textbook / Document / Other → Standard notes template ──
     first_para = clean.split("\n\n")[0][:500] if clean else ""
     direct = summary or first_para
 
@@ -48,14 +94,9 @@ def _format_home_vision_answer(notes: dict[str, Any], *, query: str) -> str:
     if query.strip():
         parts.append(f"\n*(Your ask: {query.strip()[:200]})*")
 
-    # Easy Explanation — only when clean adds real value beyond Direct Answer
-    if clean:
-        if summary and clean != summary:
-            parts.append("\n## Easy Explanation")
-            parts.append(clean)
-        elif not summary and len(clean) > len(first_para) + 60:
-            parts.append("\n## Easy Explanation")
-            parts.append(clean)
+    if clean and ((summary and clean != summary) or (not summary and len(clean) > len(first_para) + 60)):
+        parts.append("\n## Easy Explanation")
+        parts.append(clean)
 
     if isinstance(key_points, list) and key_points:
         bullets = [str(kp).strip() for kp in key_points[:10] if str(kp).strip()]
@@ -82,7 +123,6 @@ def _format_home_vision_answer(notes: dict[str, Any], *, query: str) -> str:
             parts.append("\n## Important Terms")
             parts.extend(term_lines)
 
-    # No forced Exam Tip filler — omit low-value boilerplate
     return "\n".join(parts).strip()
 
 
@@ -93,6 +133,8 @@ async def home_ai_vision(
     filename: str | None = None,
     mime_type: str | None = None,
     query: str | None = None,
+    session_id: str | None = None,
+    parent_response_id: str | None = None,
 ) -> dict[str, Any]:
     """Photo/diagram → Home chat answer. Does not create a lecture."""
     if not image_bytes:
@@ -126,18 +168,26 @@ async def home_ai_vision(
             },
         )
 
-    hint = (query or "").strip() or (
-    "Analyze this image carefully before answering. "
-    "Do not assume it is educational, a diagram, a textbook page, or an exam question. "
-    "Identify only what is actually visible or readable. "
-    "If there is a clear question, answer it directly. "
-    "If there is no question, identify the topic only when confident, explain what is visible, "
-    "and suggest useful questions based only on the image. "
-    "Do not invent text, objects, topics, language, class level, or context. "
-    "Use the user's language when a user message is provided; otherwise use the dominant "
-    "language of the readable content."
-)
-    display_query = (query or "").strip()
+    user_q = (query or "").strip()
+    if user_q:
+        hint = (
+            f"User's request: {user_q}\n\n"
+            "Analyze this image in full context of the user's request above. "
+            "If the image contains questions or problems, answer them directly and completely. "
+            "If the user asks to explain, explain clearly. "
+            "Extract and use all readable text, numbers, diagrams, and labels from the image. "
+            "Answer in the same language as the user's request."
+        )
+    else:
+        hint = (
+            "Analyze this image carefully. "
+            "Identify what it contains: question paper, notes, diagram, textbook, or other. "
+            "If there are questions or problems, answer them directly. "
+            "Extract all readable text and explain what the image shows. "
+            "Do not invent text, objects, or context not visible in the image. "
+            "Use the dominant language of the readable content."
+        )
+    display_query = user_q
 
     try:
         vision = await analyze_image(
@@ -180,6 +230,10 @@ async def home_ai_vision(
             result_status="INSUFFICIENT_CREDITS",
         ) from e
 
+    extracted_text = (notes.get("extractedText") or "").strip()
+    content_type = (notes.get("contentType") or "other").strip()
+    questions_found = notes.get("questionsFound") or []
+
     knowledge = build_knowledge_object(
         query=display_query,
         answer=answer,
@@ -191,6 +245,11 @@ async def home_ai_vision(
     if isinstance(knowledge["metadata"], dict):
         knowledge["metadata"]["source"] = "home_ai_vision"
         knowledge["metadata"]["used_vision_plus"] = vision.used_plus
+        knowledge["metadata"]["content_type"] = content_type
+        if extracted_text:
+            knowledge["metadata"]["extracted_text"] = extracted_text[:1200]
+        if questions_found:
+            knowledge["metadata"]["questions_found"] = questions_found[:10]
 
     rid = persist_home_ai_response(
         user_id=user_id,
@@ -206,16 +265,24 @@ async def home_ai_vision(
         knowledge_version=1,
     )
 
-    session_id = None
+    # Build memory message: prefix extracted text so follow-up questions
+    # can reference exact image content (questions, text, labels).
+    memory_message = answer
+    if extracted_text:
+        memory_message = (
+            f"[Image content ({content_type}): {extracted_text[:800]}]\n\n{answer}"
+        )
+
+    result_session_id = None
     if rid:
-        session_id = ensure_session_for_turn(
+        result_session_id = ensure_session_for_turn(
             user_id=user_id,
             query=display_query,
-            answer=answer,
+            answer=memory_message,
             response_id=rid,
             credits_used=HOME_AI_VISION,
-            session_id=None,
-            parent_response_id=None,
+            session_id=session_id,
+            parent_response_id=parent_response_id,
             conversation_language=None,
         )
 
@@ -231,7 +298,7 @@ async def home_ai_vision(
         "mode": "normal",
         "visual_payload": visual_payload,
         "response_id": rid,
-        "session_id": session_id,
+        "session_id": result_session_id,
         "knowledge": {
             "summary": knowledge.get("summary"),
             "key_points": knowledge.get("key_points"),

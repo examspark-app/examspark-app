@@ -61,7 +61,7 @@ def _split_sections(answer: str) -> dict[str, str]:
     return {k: "\n".join(v).strip() for k, v in sections.items() if "\n".join(v).strip()}
 
 
-def _bullets(text: str, *, limit: int = 8) -> list[str]:
+def _bullets(text: str, *, limit: int = 20) -> list[str]:
     out: list[str] = []
     for line in (text or "").splitlines():
         s = line.strip()
@@ -76,7 +76,7 @@ def _bullets(text: str, *, limit: int = 8) -> list[str]:
     return out
 
 
-def _formulas(text: str, *, limit: int = 6) -> list[str]:
+def _formulas(text: str, *, limit: int = 20) -> list[str]:
     found: list[str] = []
     for m in re.finditer(r"\$\$([^$]+)\$\$", text or ""):
         found.append(m.group(1).strip())

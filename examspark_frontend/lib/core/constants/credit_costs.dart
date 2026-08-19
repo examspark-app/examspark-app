@@ -10,6 +10,8 @@ class CreditCosts {
 
   // Recording / Audio Upload — per-minute (actual length)
   static const int recordCreditsPerMinute = 2;
+  /// Minimum wallet balance required before a new English Roleplay starts.
+  static const int roleplayMinimumCredits = 100;
   /// Hard max for Record / audio upload (3 hours).
   static const int recordMaxMinutes = 180;
   // Legacy band constants (pre–per-minute) — reference / old imports only.

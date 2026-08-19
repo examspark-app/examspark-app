@@ -59,6 +59,13 @@ class AIConfig:
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
     AI_CHAT_MODEL: str = os.getenv("AI_CHAT_MODEL", "qwen/qwen3")
     AI_FALLBACK_MODEL: str = os.getenv("AI_FALLBACK_MODEL", "qwen/qwen3")
+    # Roleplay voice output reuses the same OpenRouter credential as Qwen3.
+    # Keeping the model and voice configurable avoids embedding provider values
+    # in the voice service.
+    QWEN_TTS_MODEL: str = os.getenv(
+        "QWEN_TTS_MODEL", "qwen/qwen-audio-3.0-tts-flash"
+    )
+    QWEN_TTS_VOICE: str = os.getenv("QWEN_TTS_VOICE", "loongjohn")
     # RAG embeddings (Session 3) — must be 1536 dims to match schema.sql.
     AI_EMBEDDING_MODEL: str = os.getenv(
         "AI_EMBEDDING_MODEL", "openai/text-embedding-3-small"
@@ -74,6 +81,13 @@ class AIConfig:
         "qwen/qwen3-vl-235b-a22b-instruct",
     )
 
+    # Roleplay voice output only. Gemini TTS is separate from text generation.
+    GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
+    GEMINI_TTS_MODEL: str = os.getenv(
+        "GEMINI_TTS_MODEL", "gemini-2.5-flash-preview-tts"
+    )
+    GEMINI_TTS_VOICE: str = os.getenv("GEMINI_TTS_VOICE", "Kore")
+
     # Whisper `verbose_json` confidence thresholds that trigger the
     # non-turbo re-transcription fallback (TECH_STACK.md Speech decision tree).
     LOW_CONFIDENCE_AVG_LOGPROB: float = -1.0
@@ -86,6 +100,10 @@ class AIConfig:
     @classmethod
     def openrouter_configured(cls) -> bool:
         return bool(cls.OPENROUTER_API_KEY)
+
+    @classmethod
+    def gemini_tts_configured(cls) -> bool:
+        return bool(cls.GEMINI_API_KEY)
 
     @classmethod
     def tavily_configured(cls) -> bool:

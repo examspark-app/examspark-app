@@ -8,3 +8,6 @@ Future<String> tempRecordingPath() async {
 Future<Uint8List> readFileBytes(String path) async {
   throw UnsupportedError('File path reads are not available on web.');
 }
+
+/// Web recordings are browser-managed blobs rather than local file paths.
+Future<void> deleteTemporaryFile(String path) async {}

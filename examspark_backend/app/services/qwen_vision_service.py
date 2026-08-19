@@ -29,20 +29,34 @@ _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # Compact prompt only — full visual schema belongs in text-notes path, not VL.
 _VISION_SYSTEM_PROMPT = (
-    "You are an expert visual and educational content analyzer. "
-    "Analyze the image itself carefully using OCR, visual understanding, diagrams, "
-    "tables, charts, equations, handwriting, and visible context. "
-    "Do not assume the image is educational unless the image supports that conclusion. "
-    "Return ONLY a JSON object with these keys:\n"
-    '- "cleanNotes": exam-focused markdown notes (Summary, Key Points, Explanation)\n'
-    '- "keyPoints": array of short bullet strings\n'
-    '- "shortSummary": 2-3 sentences\n'
-    '- "importantTerms": array of {"term","definition"}\n'
-    '- "visualPayload": optional object; use {} or omit if not needed\n'
+    "You are an expert visual content analyzer and exam tutor. "
+    "Analyze the image carefully using OCR, visual understanding, diagrams, "
+    "tables, charts, equations, handwriting, and all visible content. "
+    "Return ONLY a valid JSON object with these keys:\n"
+    '- "contentType": EXACTLY one of: "question_paper" | "notes" | "textbook" | '
+    '"diagram" | "handwritten_work" | "document" | "other"\n'
+    '- "extractedText": verbatim readable text found in the image — questions, '
+    'numbers, labels, sentences exactly as written; empty string if nothing readable\n'
+    '- "questionsFound": array of question strings detected; '
+    'each element is one question/problem as written; [] if none\n'
+    '- "cleanNotes": '
+    'IF contentType is "question_paper" or "handwritten_work" with questions → '
+    'write step-by-step solutions/answers to each question found, clearly numbered; '
+    'ELSE → exam-focused explanation of what the image contains\n'
+    '- "shortSummary": 2-3 sentences: what the image is and its main content\n'
+    '- "keyPoints": array of short bullet strings (key facts, steps, or findings)\n'
+    '- "importantTerms": array of {"term","definition"} for any technical terms\n'
+    '- "visualPayload": optional diagram/chart object; omit or use {} if not needed\n'
     + STUDY_CONTENT_LANGUAGE_RULE
-    + "\nWrite like a sharp, professional tutor — clear and specific, never "
-    "generic filler. "
-    "Keep cleanNotes compact enough to finish. Raw JSON only — no markdown fences."
+    + "\nCRITICAL RULES:\n"
+    "1. If contentType is question_paper or handwritten_work: cleanNotes MUST contain "
+    "direct answers/solutions — NOT generic notes about the topic.\n"
+    "2. extractedText must contain the actual readable text — never paraphrase it.\n"
+    "3. Never invent text, objects, or context not visible in the image.\n"
+    "4. If text is blurry or unreadable, say so in extractedText.\n"
+    "5. Answer in the language of the user's query if provided; "
+    "otherwise use the image's dominant language.\n"
+    "Raw JSON only — no markdown fences. Keep response complete and compact."
 )
 
 _MIN_NOTES_CHARS = 40
@@ -115,6 +129,11 @@ def _notes_usable(notes: dict) -> bool:
     if valid_terms:
         return True
 
+    # New: extracted text alone is enough — vision model read the image
+    extracted = (notes.get("extractedText") or "").strip()
+    if len(extracted) >= 20:
+        return True
+
     return False
     
 
@@ -123,6 +142,9 @@ def _normalize_notes(parsed: dict) -> dict:
     visual_raw = parsed.get("visualPayload") or parsed.get("visual_payload")
     visual = parse_visual_payload(visual_raw if isinstance(visual_raw, dict) else None)
     result = {
+        "contentType": (parsed.get("contentType") or "other").strip().lower(),
+        "extractedText": (parsed.get("extractedText") or "").strip(),
+        "questionsFound": parsed.get("questionsFound") or [],
         "cleanNotes": parsed.get("cleanNotes", "") or "",
         "keyPoints": parsed.get("keyPoints", []) or [],
         "shortSummary": parsed.get("shortSummary", "") or "",

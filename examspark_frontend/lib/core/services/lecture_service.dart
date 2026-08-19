@@ -3,10 +3,20 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
+import 'package:http_parser/http_parser.dart';
 
 import 'package:examspark_frontend/core/config/app_config.dart';
 import 'package:examspark_frontend/core/constants/student_copy.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
+
+class RoleplayStreamException implements Exception {
+  const RoleplayStreamException(this.message, {required this.canFallback});
+  final String message;
+  final bool canFallback;
+
+  @override
+  String toString() => message;
+}
 
 class LectureService {
   LectureService._();
@@ -17,7 +27,8 @@ class LectureService {
     var session = SupabaseClient.instance.currentSession;
     if (session != null && session.isExpired) {
       try {
-        final refreshed = await SupabaseClient.instance.client.auth.refreshSession();
+        final refreshed = await SupabaseClient.instance.client.auth
+            .refreshSession();
         session = refreshed.session;
       } catch (_) {
         // Fall through — caller gets a clear error below.
@@ -40,6 +51,7 @@ class LectureService {
     String? topic,
     bool highAccuracy = false,
     String sourceType = 'recorded',
+
     /// Only for intentional retries of a failed job — never for YouTube /
     /// generic titles (that caused Library "YouTube Notes" to reopen empty).
     bool reuseRecentSameTitle = false,
@@ -97,7 +109,9 @@ class LectureService {
         final ls = ((lecture['subject'] as String?) ?? '').trim().toLowerCase();
         if (ls != subject.trim().toLowerCase()) continue;
       }
-      final created = DateTime.tryParse((lecture['created_at'] as String?) ?? '');
+      final created = DateTime.tryParse(
+        (lecture['created_at'] as String?) ?? '',
+      );
       if (created == null) continue;
       if (now.difference(created.toUtc()).inMinutes <= 10) {
         return lecture['id'] as String?;
@@ -109,7 +123,11 @@ class LectureService {
   /// [errorMessage] is only kept when [status] is `'error'` — any other
   /// status clears it, so a later successful retry doesn't leave a stale
   /// error visible (see `error_message` column, `schema.sql`).
-  Future<void> updateStatus(String lectureId, String status, {String? errorMessage}) async {
+  Future<void> updateStatus(
+    String lectureId,
+    String status, {
+    String? errorMessage,
+  }) async {
     await SupabaseClient.instance.client
         .from('lectures')
         .update({
@@ -124,7 +142,9 @@ class LectureService {
     try {
       final row = await SupabaseClient.instance.client
           .from('lectures')
-          .select('id, status, error_message, duplicate_of_lecture_id, title, subject')
+          .select(
+            'id, status, error_message, duplicate_of_lecture_id, title, subject',
+          )
           .eq('id', lectureId)
           .maybeSingle();
       return row;
@@ -135,7 +155,10 @@ class LectureService {
 
   /// Client HTTP failures must not overwrite a lecture that already finished.
   /// Returns `true` if status was set to error; `false` if already `done`.
-  Future<bool> markErrorUnlessDone(String lectureId, String errorMessage) async {
+  Future<bool> markErrorUnlessDone(
+    String lectureId,
+    String errorMessage,
+  ) async {
     final row = await getLectureStatusRow(lectureId);
     final status = (row?['status'] as String?)?.toLowerCase();
     if (status == 'done') return false;
@@ -224,7 +247,9 @@ class LectureService {
     try {
       final response = await SupabaseClient.instance.client
           .from('lectures')
-          .select('id, title, subject, source_type, user_id, status, created_at')
+          .select(
+            'id, title, subject, source_type, user_id, status, created_at',
+          )
           .eq('id', lectureId)
           .maybeSingle();
       return response;
@@ -316,13 +341,9 @@ class LectureService {
 
     // Create the metadata rows so the lecture has transcript + notes records.
     // R2 paths are null until Phase 5 FastAPI writes them after R2 upload.
-    await client.from('transcripts').upsert({
-      'lecture_id': lectureId,
-    });
+    await client.from('transcripts').upsert({'lecture_id': lectureId});
 
-    await client.from('notes').upsert({
-      'lecture_id': lectureId,
-    });
+    await client.from('notes').upsert({'lecture_id': lectureId});
 
     await updateStatus(lectureId, 'done');
   }
@@ -350,17 +371,19 @@ class LectureService {
 
     await updateStatus(lectureId, 'transcribing');
 
-    final uri = Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/lectures/process');
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/lectures/process',
+    );
     final request = http.MultipartRequest('POST', uri)
       ..headers['Authorization'] = 'Bearer $accessToken'
       ..fields['source_type'] = sourceType
       ..fields['lecture_id'] = lectureId
       ..fields['duration_minutes'] = (durationMinutes ?? 60).toString()
-      ..files.add(http.MultipartFile.fromBytes('file', fileBytes, filename: filename));
+      ..files.add(
+        http.MultipartFile.fromBytes('file', fileBytes, filename: filename),
+      );
 
-    final streamed = await request.send().timeout(
-     const Duration(minutes: 30),
-   );
+    final streamed = await request.send().timeout(const Duration(minutes: 30));
     final response = await http.Response.fromStream(streamed);
 
     if (response.statusCode != 200) {
@@ -386,7 +409,9 @@ class LectureService {
     final accessToken = await _requireAccessToken();
     await updateStatus(lectureId, 'transcribing');
 
-    final uri = Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/lectures/process');
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/lectures/process',
+    );
     final request = http.MultipartRequest('POST', uri)
       ..headers['Authorization'] = 'Bearer $accessToken'
       ..fields['source_type'] = 'youtube_link'
@@ -416,10 +441,7 @@ class LectureService {
     late final http.Response response;
     try {
       response = await http
-          .get(
-            uri,
-            headers: {'Authorization': 'Bearer $accessToken'},
-          )
+          .get(uri, headers: {'Authorization': 'Bearer $accessToken'})
           .timeout(const Duration(seconds: 20));
     } on TimeoutException {
       throw Exception(
@@ -445,10 +467,8 @@ class LectureService {
       'short_summary': (map['shortSummary'] ?? map['short_summary'] ?? '')
           .toString(),
       'key_points': map['keyPoints'] ?? map['key_points'] ?? [],
-      'clean_notes':
-          (map['cleanNotes'] ?? map['clean_notes'] ?? '').toString(),
-      'important_terms':
-          map['importantTerms'] ?? map['important_terms'] ?? [],
+      'clean_notes': (map['cleanNotes'] ?? map['clean_notes'] ?? '').toString(),
+      'important_terms': map['importantTerms'] ?? map['important_terms'] ?? [],
       'visual_payload': map['visualPayload'] ?? map['visual_payload'],
     };
   }
@@ -717,7 +737,9 @@ class LectureService {
   }
 
   /// Generate important exam questions from lecture notes (20 credits).
-  Future<Map<String, dynamic>> generateImportantQuestions(String lectureId) async {
+  Future<Map<String, dynamic>> generateImportantQuestions(
+    String lectureId,
+  ) async {
     if (!AppConfig.isApiConfigured) {
       throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
     }
@@ -799,10 +821,7 @@ class LectureService {
 
     final accessToken = await _requireAccessToken();
     final uri = Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/home-ai');
-    final body = <String, dynamic>{
-      'query': query,
-      'mode': mode,
-    };
+    final body = <String, dynamic>{'query': query, 'mode': mode};
     if (lectureId != null && lectureId.isNotEmpty) {
       body['lecture_id'] = lectureId;
     }
@@ -846,17 +865,14 @@ class LectureService {
       throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
     }
     final accessToken = await _requireAccessToken();
-    final uri =
-        Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/home-ai/vision');
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/home-ai/vision',
+    );
     final request = http.MultipartRequest('POST', uri)
       ..headers['Authorization'] = 'Bearer $accessToken'
       ..fields['query'] = (query ?? '').trim()
       ..files.add(
-        http.MultipartFile.fromBytes(
-          'file',
-          imageBytes,
-          filename: filename,
-        ),
+        http.MultipartFile.fromBytes('file', imageBytes, filename: filename),
       );
     if (sessionId != null && sessionId.isNotEmpty) {
       request.fields['session_id'] = sessionId;
@@ -882,10 +898,7 @@ class LectureService {
     required void Function(String delta) onToken,
     void Function(Map<String, dynamic> meta)? onMeta,
   }) async {
-    final body = <String, dynamic>{
-      'query': query,
-      'mode': mode,
-    };
+    final body = <String, dynamic>{'query': query, 'mode': mode};
     if (lectureId != null && lectureId.isNotEmpty) {
       body['lecture_id'] = lectureId;
     }
@@ -995,7 +1008,8 @@ class LectureService {
       throw Exception(_extractErrorDetail(response));
     }
   }
-Future<void> homeAiRenameSession(String sessionId, String title) async {
+
+  Future<void> homeAiRenameSession(String sessionId, String title) async {
     if (!AppConfig.isApiConfigured) {
       throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
     }
@@ -1015,7 +1029,8 @@ Future<void> homeAiRenameSession(String sessionId, String title) async {
       throw Exception(_extractErrorDetail(response));
     }
   }
-Future<String?> getEnglishPracticeLanguage() async {
+
+  Future<String?> getEnglishPracticeLanguage() async {
     if (!AppConfig.isApiConfigured) return null;
     final accessToken = await _requireAccessToken();
     final uri = Uri.parse(
@@ -1085,20 +1100,176 @@ Future<String?> getEnglishPracticeLanguage() async {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  Future<List<Map<String, dynamic>>> listEnglishPracticeSessions() async {
+  Future<String> startEnglishRoleplay({
+    required String scenario,
+    String nativeLanguage = 'English',
+  }) async {
+    final accessToken = await _requireAccessToken();
+    final response = await http.post(
+      Uri.parse(
+        '${AppConfig.resolvedApiBaseUrl}/api/v1/english-roleplay/start',
+      ),
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'scenario': scenario,
+        'native_language': nativeLanguage,
+      }),
+    );
+    if (response.statusCode != 200)
+      throw Exception(_extractErrorDetail(response));
+    return (jsonDecode(response.body) as Map<String, dynamic>)['session_id']
+        as String;
+  }
+
+  Future<Map<String, dynamic>> sendEnglishRoleplayAudio({
+    required String sessionId,
+    required Uint8List audioBytes,
+    required String filename,
+  }) async {
+    final accessToken = await _requireAccessToken();
+    final request =
+        http.MultipartRequest(
+            'POST',
+            Uri.parse(
+              '${AppConfig.resolvedApiBaseUrl}/api/v1/english-roleplay/turn/audio',
+            ),
+          )
+          ..headers['Authorization'] = 'Bearer $accessToken'
+          ..fields['session_id'] = sessionId
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'audio',
+              audioBytes,
+              filename: filename,
+              contentType: MediaType('audio', 'mp4'),
+            ),
+          );
+    final response = await http.Response.fromStream(await request.send());
+    if (response.statusCode != 200)
+      throw Exception(_extractErrorDetail(response));
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  /// Additive multipart SSE Roleplay turn. The existing JSON turn remains the
+  /// caller's fallback when the stream fails before audio starts.
+  Future<Map<String, dynamic>> streamEnglishRoleplayAudio({
+    required String sessionId,
+    required Uint8List audioBytes,
+    required String filename,
+    Future<void> Function(String transcript)? onTranscript,
+    required Future<void> Function(Map<String, dynamic> chunk) onAudioChunk,
+  }) async {
+    final accessToken = await _requireAccessToken();
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse(
+        '${AppConfig.resolvedApiBaseUrl}/api/v1/english-roleplay/turn/audio/stream',
+      ),
+    )
+      ..headers['Authorization'] = 'Bearer $accessToken'
+      ..headers['Accept'] = 'text/event-stream'
+      ..fields['session_id'] = sessionId
+      ..files.add(
+        http.MultipartFile.fromBytes(
+          'audio',
+          audioBytes,
+          filename: filename,
+          contentType: MediaType('audio', 'mp4'),
+        ),
+      );
+    final response = await request.send();
+    if (response.statusCode != 200) {
+      throw Exception(await _extractErrorDetailFromStream(response));
+    }
+
+    final buffer = StringBuffer();
+    Map<String, dynamic>? done;
+    await for (final data in response.stream.transform(utf8.decoder)) {
+      buffer.write(data);
+      var raw = buffer.toString();
+      var separator = raw.indexOf('\n\n');
+      while (separator >= 0) {
+        final event = _parseSseDataBlock(raw.substring(0, separator));
+        raw = raw.substring(separator + 2);
+        if (event != null) {
+          switch (event['type']) {
+            case 'transcript':
+              await onTranscript?.call(event['transcript'] as String? ?? '');
+              break;
+            case 'audio_chunk':
+              await onAudioChunk(event);
+              break;
+            case 'done':
+              done = event;
+              break;
+            case 'error':
+              throw RoleplayStreamException(
+                event['message']?.toString() ?? 'Voice stream failed.',
+                canFallback: event['can_fallback'] == true,
+              );
+            default:
+              break;
+          }
+        }
+        separator = raw.indexOf('\n\n');
+      }
+      buffer
+        ..clear()
+        ..write(raw);
+    }
+    if (done == null) throw const RoleplayStreamException(
+      'Voice stream ended before completion.',
+      canFallback: true,
+    );
+    return done;
+  }
+
+  Future<String> _extractErrorDetailFromStream(http.StreamedResponse response) async {
+    final body = await response.stream.bytesToString();
+    return _extractErrorDetailFromBody(body, response.statusCode);
+  }
+
+  Future<void> endEnglishRoleplay({
+    required String sessionId,
+    required int durationSeconds,
+  }) async {
+    final accessToken = await _requireAccessToken();
+    final response = await http.post(
+      Uri.parse(
+        '${AppConfig.resolvedApiBaseUrl}/api/v1/english-roleplay/$sessionId/end',
+      ),
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'duration_seconds': durationSeconds}),
+    );
+    if (response.statusCode != 200)
+      throw Exception(_extractErrorDetail(response));
+  }
+
+  Future<List<Map<String, dynamic>>> listEnglishPracticeSessions({
+    int limit = 30,
+  }) async {
     final accessToken = await _requireAccessToken();
     final uri = Uri.parse(
-      '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/sessions',
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/sessions?limit=$limit',
     );
     final response = await http.get(
       uri,
       headers: {'Authorization': 'Bearer $accessToken'},
     );
-    if (response.statusCode != 200) return [];
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final list = data['sessions'] as List? ?? [];
     return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
   }
+
   Future<void> homeAiPinSession(String sessionId, bool pinned) async {
     if (!AppConfig.isApiConfigured) {
       throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
@@ -1119,8 +1290,11 @@ Future<String?> getEnglishPracticeLanguage() async {
       throw Exception(_extractErrorDetail(response));
     }
   }
+
   /// Loads one past English Practice session with full message history.
-  Future<Map<String, dynamic>> restoreEnglishPracticeSession(String sessionId) async {
+  Future<Map<String, dynamic>> restoreEnglishPracticeSession(
+    String sessionId,
+  ) async {
     final accessToken = await _requireAccessToken();
     final uri = Uri.parse(
       '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/sessions/$sessionId',
@@ -1134,6 +1308,44 @@ Future<String?> getEnglishPracticeLanguage() async {
     }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
+
+  Future<List<Map<String, dynamic>>> listEnglishRoleplaySessions({
+    int limit = 30,
+    int offset = 0,
+  }) async {
+    final accessToken = await _requireAccessToken();
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/english-roleplay/sessions?limit=$limit&offset=$offset',
+    );
+    final response = await http.get(
+      uri,
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    final list = data['sessions'] as List? ?? [];
+    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  Future<Map<String, dynamic>> restoreEnglishRoleplaySession(
+    String sessionId,
+  ) async {
+    final accessToken = await _requireAccessToken();
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/english-roleplay/sessions/$sessionId',
+    );
+    final response = await http.get(
+      uri,
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   /// Warm RAG index before Ask AI (idempotent — no credits). Soft-fail OK.
   Future<void> warmLectureRagIndex(String lectureId) async {
     final id = lectureId.trim();
@@ -1143,10 +1355,7 @@ Future<String?> getEnglishPracticeLanguage() async {
       final uri = Uri.parse(
         '${AppConfig.resolvedApiBaseUrl}/api/v1/lectures/$id/index',
       );
-      await http.post(
-        uri,
-        headers: {'Authorization': 'Bearer $accessToken'},
-      );
+      await http.post(uri, headers: {'Authorization': 'Bearer $accessToken'});
     } catch (_) {
       // Ask AI will index on first question if this fails.
     }
@@ -1274,9 +1483,7 @@ Future<String?> getEnglishPracticeLanguage() async {
     final accessToken = await _requireAccessToken();
     final uri = Uri.parse(
       '${AppConfig.resolvedApiBaseUrl}/api/v1/lectures/$lectureId/study-tools/$toolType',
-    ).replace(queryParameters: {
-      if (regenerate) 'regenerate': 'true',
-    });
+    ).replace(queryParameters: {if (regenerate) 'regenerate': 'true'});
     final response = await http.post(
       uri,
       headers: {
@@ -1395,7 +1602,9 @@ Future<String?> getEnglishPracticeLanguage() async {
     final streamed = await client.send(request);
     if (streamed.statusCode != 200) {
       final errBody = await streamed.stream.bytesToString();
-      throw Exception(_extractErrorDetailFromBody(errBody, streamed.statusCode));
+      throw Exception(
+        _extractErrorDetailFromBody(errBody, streamed.statusCode),
+      );
     }
 
     final buffer = StringBuffer();

@@ -13,7 +13,8 @@ import 'recording_alert_sound.dart';
 // dart:io is NOT available on Flutter web — conditional so Chrome does not
 // fail library init with "Library not defined" on recording screens.
 import 'recording_io_stub.dart'
-    if (dart.library.io) 'recording_io_native.dart' as io_helper;
+    if (dart.library.io) 'recording_io_native.dart'
+    as io_helper;
 
 /// Student-facing copy when no voice is captured (also backend NO_SPEECH).
 const String kMicCheckUserMessage =
@@ -77,6 +78,7 @@ class RecordingService {
   int? _lastSilenceWarnAtElapsed;
   bool _amplitudeSamplesReceived = false;
   VoidCallback? _onSilenceWarning;
+  ValueChanged<bool>? _onVoiceActivityChanged;
 
   AudioRecorder get _activeRecorder {
     if (_recorder == null || _recorderDisposed) {
@@ -112,16 +114,22 @@ class RecordingService {
   }
 
   Future<bool> get isSupported async {
-  try {
-    return await _activeRecorder.hasPermission();
-  } catch (_) {
-    return false;
+    try {
+      return await _activeRecorder.hasPermission();
+    } catch (_) {
+      return false;
+    }
   }
-}
 
   /// Callback when silence thresholds elapse (5s mic check, then every 5 min).
   void setSilenceWarningListener(VoidCallback? listener) {
     _onSilenceWarning = listener;
+  }
+
+  /// Optional real microphone activity signal for short conversational turns.
+  /// This observes the same amplitude threshold used by the recorder itself.
+  void setVoiceActivityListener(ValueChanged<bool>? listener) {
+    _onVoiceActivityChanged = listener;
   }
 
   Future<void> start() async {
@@ -190,107 +198,105 @@ class RecordingService {
       _amplitudeSub = _activeRecorder
           .onAmplitudeChanged(const Duration(milliseconds: 300))
           .listen((amp) {
-        _amplitudeSamplesReceived = true;
-        final level = amp.current;
-        debugPrint('AMPLITUDE_DEBUG: current=$level max=${amp.max}');
-        if (level > _peakDb) _peakDb = level;
-        if (level < _floorDb) _floorDb = level;
+            _amplitudeSamplesReceived = true;
+            final level = amp.current;
+            debugPrint('AMPLITUDE_DEBUG: current=$level max=${amp.max}');
+            if (level > _peakDb) _peakDb = level;
+            if (level < _floorDb) _floorDb = level;
 
-        // Calibration window — learn the room's QUIETEST moment (noise
-        // floor), not its loudest. A threshold set above the noise floor
-        // means steady background noise (fan, traffic, classroom hum)
-        // never counts as "voice" — only a genuine rise above the ambient
-        // level does. (Old approach anchored to the loudest moment, which
-        // could itself BE the background noise, silently swallowing the
-        // silence alert.)
-        if (_elapsedSeconds <= _calibrationSeconds) {
-          final candidate = _floorDb + _adaptiveMarginAboveFloorDb;
-          _adaptiveThresholdDb = candidate.clamp(-60.0, voiceThresholdDb);
-        }
+            // Calibration window — learn the room's QUIETEST moment (noise
+            // floor), not its loudest. A threshold set above the noise floor
+            // means steady background noise (fan, traffic, classroom hum)
+            // never counts as "voice" — only a genuine rise above the ambient
+            // level does. (Old approach anchored to the loudest moment, which
+            // could itself BE the background noise, silently swallowing the
+            // silence alert.)
+            if (_elapsedSeconds <= _calibrationSeconds) {
+              final candidate = _floorDb + _adaptiveMarginAboveFloorDb;
+              _adaptiveThresholdDb = candidate.clamp(-60.0, voiceThresholdDb);
+            }
 
-        final effectiveThreshold = _adaptiveThresholdDb ?? voiceThresholdDb;
-        if (level >= effectiveThreshold) {
-          if (!_voiceActiveNow) {
-            _consecutiveSilentSeconds = 0;
-          }
-          _voiceActiveNow = true;
-          _heardAnyVoice = true;
-        } else {
-          _voiceActiveNow = false;
-        }
-      });
+            final effectiveThreshold = _adaptiveThresholdDb ?? voiceThresholdDb;
+            final wasVoiceActive = _voiceActiveNow;
+            if (level >= effectiveThreshold) {
+              if (!_voiceActiveNow) {
+                _consecutiveSilentSeconds = 0;
+              }
+              _voiceActiveNow = true;
+              _heardAnyVoice = true;
+            } else {
+              _voiceActiveNow = false;
+            }
+            if (wasVoiceActive != _voiceActiveNow) {
+              _onVoiceActivityChanged?.call(_voiceActiveNow);
+            }
+          });
     } catch (_) {
       // Some platforms (or web) may not support amplitude — backend guard remains.
     }
   }
 
   Future<String?> stop() async {
-  _timer?.cancel();
-  _timer = null;
+    _timer?.cancel();
+    _timer = null;
 
-  await _amplitudeSub?.cancel();
-  _amplitudeSub = null;
+    await _amplitudeSub?.cancel();
+    _amplitudeSub = null;
 
-  final recorder = _recorder;
+    final recorder = _recorder;
 
-  if (recorder == null || _recorderDisposed) {
-    debugPrint(
-      'RECORDING_DEBUG: stop() called but recorder unavailable',
-    );
-    return null;
-  }
-
-  try {
-    final path = await recorder.stop();
-
-    debugPrint(
-      'RECORDING_DEBUG: recorder.stop() returned: $path',
-    );
-
-    return path;
-  } catch (e, stackTrace) {
-    debugPrint(
-      'RECORDING_DEBUG: recorder.stop() failed: $e',
-    );
-    debugPrint('$stackTrace');
-    rethrow;
-  }
-}
-
-  Future<Uint8List?> readRecordingBytes(String? path) async {
-  if (path == null || path.trim().isEmpty) {
-    debugPrint(
-      'RECORDING_DEBUG: stop() returned empty path',
-    );
-    return null;
-  }
-
-  try {
-    final bytes = await XFile(path).readAsBytes();
-
-    debugPrint(
-      'RECORDING_DEBUG: readRecordingBytes '
-      'path=$path bytes=${bytes.length}',
-    );
-
-    if (bytes.isEmpty) {
-      debugPrint(
-        'RECORDING_DEBUG: recording blob/file is EMPTY',
-      );
+    if (recorder == null || _recorderDisposed) {
+      debugPrint('RECORDING_DEBUG: stop() called but recorder unavailable');
       return null;
     }
 
-    return bytes;
-  } catch (e, stackTrace) {
-    debugPrint(
-      'RECORDING_DEBUG: failed reading recording: $e',
-    );
-    debugPrint(
-      'RECORDING_DEBUG: $stackTrace',
-    );
-    return null;
+    try {
+      final path = await recorder.stop();
+
+      debugPrint('RECORDING_DEBUG: recorder.stop() returned: $path');
+
+      return path;
+    } catch (e, stackTrace) {
+      debugPrint('RECORDING_DEBUG: recorder.stop() failed: $e');
+      debugPrint('$stackTrace');
+      rethrow;
+    }
   }
-}
+
+  Future<Uint8List?> readRecordingBytes(String? path) async {
+    if (path == null || path.trim().isEmpty) {
+      debugPrint('RECORDING_DEBUG: stop() returned empty path');
+      return null;
+    }
+
+    try {
+      final bytes = await XFile(path).readAsBytes();
+
+      debugPrint(
+        'RECORDING_DEBUG: readRecordingBytes '
+        'path=$path bytes=${bytes.length}',
+      );
+
+      if (bytes.isEmpty) {
+        debugPrint('RECORDING_DEBUG: recording blob/file is EMPTY');
+        return null;
+      }
+
+      return bytes;
+    } catch (e, stackTrace) {
+      debugPrint('RECORDING_DEBUG: failed reading recording: $e');
+      debugPrint('RECORDING_DEBUG: $stackTrace');
+      return null;
+    }
+  }
+
+  /// Remove only a temporary recorder file after its bytes are already held by
+  /// the caller. This is intentionally opt-in: lecture recording has a
+  /// different lifecycle, while Roleplay audio is never retained.
+  Future<void> discardTemporaryRecording(String? path) async {
+    if (path == null || path.trim().isEmpty) return;
+    await io_helper.deleteTemporaryFile(path);
+  }
 
   Future<Uint8List?> pickAudioFile() async {
     final result = await FilePicker.platform.pickFiles(
@@ -329,6 +335,7 @@ class RecordingService {
     await _amplitudeSub?.cancel();
     _amplitudeSub = null;
     _onSilenceWarning = null;
+    _onVoiceActivityChanged = null;
     final recorder = _recorder;
     if (recorder == null || _recorderDisposed) return;
     try {
@@ -360,6 +367,7 @@ class RecordingService {
     unawaited(_amplitudeSub?.cancel());
     _amplitudeSub = null;
     _onSilenceWarning = null;
+    _onVoiceActivityChanged = null;
     final recorder = _recorder;
     if (recorder != null && !_recorderDisposed) {
       try {

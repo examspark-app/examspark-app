@@ -7,6 +7,7 @@ against via fn_deduct_credits(), so it is the source of truth for billing.
 Founder Jul 22, 2026: Recording + Audio Upload = 1 credit/min (actual length,
 round up, max 180). YouTube stays banded (10/20/40).
 """
+import math
 
 # Record / Audio Upload — per-minute (founder-approved Jul 22, 2026).
 RECORD_CREDITS_PER_MINUTE = 2
@@ -15,6 +16,13 @@ RECORD_MAX_MINUTES = 180
 # Record / Audio Upload — ₹499+ plan required (Founder Jul 15, 2026), replaced Aug 2026
 # with a flat credit-balance gate: minimum 100 credits must be in the wallet to start.
 RECORD_MIN_CREDITS = 100
+
+# English Roleplay — actual server-measured duration, rounded up to a minute.
+# Unlike recording, there is deliberately no maximum session duration.
+ROLEPLAY_CREDITS_PER_MINUTE = 10
+# A user must have this balance before a new roleplay session can begin.
+# This is an entry gate, not the per-minute charge.
+ROLEPLAY_MINIMUM_CREDITS = 100
 # Legacy band constants (pre–per-minute) — kept for reference / old imports only.
 RECORD_UP_TO_30_MIN = 40
 RECORD_30_TO_60_MIN = 80
@@ -95,6 +103,12 @@ def record_credits_for_duration_minutes(minutes: int) -> int:
     """2 credits per minute (round up already done by caller). Clamp 1–180."""
     clamped = max(1, min(RECORD_MAX_MINUTES, int(minutes)))
     return clamped * RECORD_CREDITS_PER_MINUTE
+
+
+def roleplay_credits_for_duration_seconds(seconds: int | float) -> int:
+    """10 credits/minute; partial minutes round up, with a one-minute minimum."""
+    minutes = max(1, math.ceil(max(0, float(seconds)) / 60))
+    return minutes * ROLEPLAY_CREDITS_PER_MINUTE
 
 
 def youtube_credits_for_duration_minutes(minutes: int) -> int:

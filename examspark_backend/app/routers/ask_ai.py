@@ -85,6 +85,7 @@ async def post_ask_ai(
             mode=body.mode,
             conversation_language=body.conversation_language,
             charge_credits=True,
+            session_id=body.session_id,
         )
     except AskAiError as e:
         raise HTTPException(
@@ -125,11 +126,15 @@ async def post_home_ai(
 async def post_home_ai_vision(
     file: UploadFile = File(...),
     query: str = Form(""),
+    session_id: str | None = Form(None),
+    parent_response_id: str | None = Form(None),
     user: AuthenticatedUser = Depends(get_current_user),
 ):
     """Camera / image upload → Home chat answer (not Study Workspace lecture).
 
     Credits: HOME_AI_VISION (10). Deduct only after vision SUCCESS.
+    session_id / parent_response_id let the photo join the current chat
+    session, so later text turns can reference it (context lock).
     """
     raw = await file.read()
     try:
@@ -139,6 +144,8 @@ async def post_home_ai_vision(
             filename=file.filename,
             mime_type=file.content_type,
             query=query,
+            session_id=session_id,
+            parent_response_id=parent_response_id,
         )
     except HomeAiError as e:
         raise HTTPException(
@@ -164,6 +171,7 @@ async def post_ask_ai_stream(
                 mode=body.mode,
                 conversation_language=body.conversation_language,
                 charge_credits=True,
+                session_id=body.session_id,
             )
         ),
         media_type="text/event-stream",

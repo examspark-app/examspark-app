@@ -20,6 +20,22 @@ _FOLLOW_UP_HINTS = (
     r"\btranslate\b",
     r"\bbinglish\b",
     r"\bbengali\b",
+    # Re-explain / repeat patterns (any language)
+    r"\bphir se\b",
+    r"\bdobara\b",
+    r"\bagain\b",
+    r"\brepeat\b",
+    r"\bexplain again\b",
+    r"\bsamjhao\b",
+    r"\bsamjha do\b",
+    r"\bsamjha\b",
+    r"\baur samjhao\b",
+    r"\bfir se\b",
+    r"\bonce more\b",
+    r"\bone more time\b",
+    # Flutter selected-text prefix — treat as follow-up
+    r"^the user selected this text",
+    r"^selected text",
 )
 
 _STOP = frozenset(

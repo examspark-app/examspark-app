@@ -10,20 +10,26 @@ from __future__ import annotations
 
 import logging
 import uuid
+from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 
 import httpx
 
 from app.config import AIConfig
+from app.constants.english_chat_prompt import build_chat_prompt
+from app.constants.english_teacher_prompt import build_teacher_prompt
+from app.constants.english_suggestion_prompt import SUGGESTION_INSTRUCTION
+from app.services import english_learning_memory_service as learning_memory
 from app.services.credits_service import InsufficientCreditsError, deduct_credits
 from app.services.supabase_admin import get_supabase_admin
+from app.services.openrouter_stream import OpenRouterStreamError, stream_chat_completions
 
 logger = logging.getLogger(__name__)
 
 _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 _CONTEXT_MESSAGES = 8          # last N messages sent to the model
 _MAX_SESSION_MESSAGES = 50     # after this, auto-start a new session
-_CREDIT_COST = 1
+_CREDIT_COST = 2
 
 
 class EnglishPracticeError(Exception):
@@ -36,8 +42,22 @@ def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
 
 
-def _system_prompt(native_language: str, target_focus: str | None) -> str:
-    base = f"""You are "Sonaxia Speak" — a warm, encouraging AI language tutor who can teach ANY language the student wants (English, Hindi, Spanish, French, or any other) — not only English.
+def _extract_suggestions(text: str) -> tuple[str, list[str]]:
+    """Pull <<SUGGESTIONS>>...<<END_SUGGESTIONS>> out of an AI reply."""
+    import re
+    match = re.search(r'<<SUGGESTIONS>>(.*?)<<END_SUGGESTIONS>>', text, re.DOTALL)
+    if not match:
+        return text.strip(), []
+    suggestions = [s.strip() for s in match.group(1).split('|') if s.strip()]
+    clean = re.sub(r'<<SUGGESTIONS>>.*?<<END_SUGGESTIONS>>', '', text, flags=re.DOTALL).strip()
+    return clean, suggestions
+
+
+def _system_prompt(native_language: str, target_focus: str | None, memory_context: str = '') -> str:
+    base = f"""{build_chat_prompt(native_language)}
+{build_teacher_prompt(native_language, target_focus)}
+
+You can teach ANY target language the student wants, including English.
 
 The student's native/local language is: {native_language}.
 
@@ -67,10 +87,12 @@ TEACHING RULES (once the level is known):
 - As the student improves, gradually use more of the target language and less {native_language}.
 - Be encouraging, never robotic, never repeat the same phrasing twice in a row.
 - Never break character or mention that you are an AI model or a prompt.
+
+{SUGGESTION_INSTRUCTION}
 """
     if target_focus:
         base += f"\nThe student already chose to focus on: {target_focus}. Do not ask this again — teach it directly.\n"
-    return base
+    return base + (f"\n\n{memory_context}" if memory_context else '')
 
 
 async def _call_model(messages: list[dict]) -> str:
@@ -107,6 +129,20 @@ async def _call_model(messages: list[dict]) -> str:
     if not content.strip():
         raise EnglishPracticeError("Model returned an empty response.", 502)
     return content.strip()
+
+
+async def _stream_model(messages: list[dict]) -> AsyncIterator[str]:
+    """Additive Qwen3 token stream for Roleplay; JSON callers keep `_call_model`."""
+    try:
+        async for delta in stream_chat_completions(
+            messages,
+            temperature=0.5,
+            max_tokens=400,
+            timeout=60.0,
+        ):
+            yield delta
+    except OpenRouterStreamError as error:
+        raise EnglishPracticeError(str(error), error.status_code) from error
 
 
 def set_native_language(user_id: str, language: str) -> None:
@@ -200,7 +236,7 @@ async def start_session(user_id: str) -> dict:
     session = _create_session(user_id, native_language)
     sid = session["id"]
 
-    system = _system_prompt(native_language, None)
+    system = _system_prompt(native_language, None, learning_memory.format_memory_context(learning_memory.load_memory(user_id), mode='chat'))
     greeting = await _call_model(
         [
             {"role": "system", "content": system},
@@ -211,11 +247,13 @@ async def start_session(user_id: str) -> dict:
         ]
     )
     _save_message(sid, user_id, "assistant", greeting, credits=0)
+    clean_greeting, suggestions = _extract_suggestions(greeting)
 
     return {
         "session_id": sid,
         "native_language": native_language,
-        "greeting": greeting,
+        "greeting": clean_greeting,
+        "suggestions": suggestions,
         "credits_charged": 0,
     }
 
@@ -248,13 +286,15 @@ async def send_message(user_id: str, session_id: str, text: str) -> dict:
     _save_message(session_id, user_id, "user", msg, credits=_CREDIT_COST)
 
     history = _recent_messages(session_id, _CONTEXT_MESSAGES)
-    model_messages = [{"role": "system", "content": _system_prompt(native_language, target_focus)}]
+    memory_context = learning_memory.format_memory_context(learning_memory.load_memory(user_id), mode='chat')
+    model_messages = [{"role": "system", "content": _system_prompt(native_language, target_focus, memory_context)}]
     for h in history:
         role = "assistant" if h["role"] == "assistant" else "user"
         model_messages.append({"role": role, "content": h["message"]})
 
     reply = await _call_model(model_messages)
     _save_message(session_id, user_id, "assistant", reply, credits=0)
+    learning_memory.schedule_update(user_id=user_id, native_language=native_language, mode='chat', user_text=msg, assistant_text=reply)
 
     db = get_supabase_admin()
     new_count = int(session.get("message_count") or 0) + 1
@@ -278,8 +318,11 @@ async def send_message(user_id: str, session_id: str, text: str) -> dict:
 
     db.table("english_practice_sessions").update(updates).eq("id", session_id).execute()
 
+    clean_reply, suggestions = _extract_suggestions(reply)
+
     return {
-        "reply": reply,
+        "reply": clean_reply,
+        "suggestions": suggestions,
         "credits_charged": _CREDIT_COST,
         "new_balance": new_balance,
         "session_ended": session_ended,
@@ -296,7 +339,23 @@ def list_sessions(user_id: str, limit: int = 30) -> list[dict]:
         .limit(limit)
         .execute()
     )
-    return list(res.data or [])
+    sessions = list(res.data or [])
+    # The history screen needs a compact preview, not a full transcript.  Keep
+    # this owner-scoped and fetch only one saved message for each session.
+    for session in sessions:
+        preview = (
+            db.table("english_practice_messages")
+            .select("message")
+            .eq("session_id", session["id"])
+            .eq("user_id", user_id)
+            .order("created_at", desc=False)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
+        session["preview"] = (preview[0].get("message") if preview else "") or ""
+    return sessions
 
 
 def restore_session(session_id: str, user_id: str) -> dict | None:

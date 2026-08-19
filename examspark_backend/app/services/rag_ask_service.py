@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import uuid
 
 import httpx
 
@@ -41,6 +42,7 @@ from app.constants.rag_perf import (
     MATCH_COUNT_DEFAULT,
     MATCH_COUNT_EXPAND,
 )
+from app.constants.subject_patterns import subject_teaching_hint
 from app.services.ai_performance_cache import (
     answer_cache_key,
     get_cached_answer,
@@ -59,6 +61,7 @@ from app.services.plan_tier_service import (
 )
 from app.services.question_router import route_ask_question
 from app.services.rag_index_service import RagIndexError, ensure_lecture_indexed
+from app.services.home_ai_session_service import ensure_session_for_turn, get_recent_messages
 from app.services.r2_storage_service import R2StorageError, R2StorageService
 from app.services.supabase_admin import get_supabase_admin
 from app.services.visual_fallback import fallback_visual_payload, visual_reminder_user_line, wants_visual
@@ -67,15 +70,15 @@ from app.services.visual_stream_parser import VisualStreamParser, split_answer_a
 logger = logging.getLogger(__name__)
 
 _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
-_MIN_NOTES_HITS = 2
+_MIN_NOTES_HITS = 1
 _MATCH_COUNT = MATCH_COUNT_DEFAULT
 # Soft floor — short factual questions often score lower than 0.5 cosine.
-_MATCH_THRESHOLD = 0.20
+_MATCH_THRESHOLD = 0.28
 # If nothing passes the soft floor, still take nearest neighbors (threshold 0).
 _FALLBACK_THRESHOLD = 0.0
 _FALLBACK_NOTES_CHARS = 6000
 # Cross-lecture supplement — stricter so unrelated lectures do not dilute.
-_OTHER_LECTURE_THRESHOLD = 0.62
+_OTHER_LECTURE_THRESHOLD = 0.50
 _OTHER_MATCH_COUNT = 3
 _MAX_OTHER_BLOCKS = 3
 
@@ -110,6 +113,24 @@ STRICT RULES
 - Keep responses concise unless the student asks for detailed / long answers.
 - Never repeat the same information. Generate only what the student asks.
 - Use retrieved context only.
+
+====================================================
+TONE — EMOTIONAL SAFETY ("No Fear" learning space)
+====================================================
+- Be encouraging and patient. Never sound impatient, sarcastic, or dismissive.
+- Never judge or shame a student for a "silly" question, a wrong guess, or
+  not knowing something basic — treat every question as valid.
+- If a student made a mistake or misunderstood something, correct it gently:
+  acknowledge what they got right first (if anything), then clarify —
+  don't just say "wrong" or "no".
+- If a student sounds frustrated, confused, or anxious (e.g. "I don't
+  understand anything", "I'm going to fail", "this is too hard"), briefly
+  acknowledge that feeling in one short line before answering — then keep
+  the actual explanation calm, clear, and reassuring.
+- Never use discouraging language ("obviously", "everyone knows this",
+  "you should already know"). Assume the student is doing their best.
+- Stay warm but stay focused — this is not therapy, it's tutoring. One
+  short reassuring line is enough; don't over-explain feelings.
 
 ====================================================
 KNOWLEDGE / SEARCH ORDER (this session)
@@ -165,6 +186,17 @@ ANTI-LEAK (mandatory):
 
 Same Ask AI credits — NOT the separate Translate (8 cr) product.
 Always keep answers grounded only in the lecture context above.
+
+====================================================
+CONVERSATION CONTINUITY
+====================================================
+If previous conversation messages appear above (before the user's current question):
+- Use them to understand follow-up questions naturally
+  (e.g. "give another example", "explain that again", "what did you mean by X").
+- Maintain the same language/tone already established in the conversation.
+- Do NOT mix content from different subjects or lectures based on history.
+- Conversation history is for CONTEXT only — lecture notes remain the primary source.
+- If the current question is clearly standalone, ignore history — do not force connection.
 
 """
     + typo_intent_rule_block()
@@ -622,13 +654,14 @@ async def _generate_answer(
     conversation_language: str | None = None,
     pyq_matches: list | None = None,
     used_web_search: bool = False,
+    history: list[dict] | None = None,
 ) -> str:
     if not AIConfig.openrouter_configured():
         raise AskAiError("OPENROUTER_API_KEY not configured on the server.", status_code=500)
 
     context = "\n\n---\n\n".join(context_blocks) if context_blocks else "(no context retrieved)"
     max_tokens = max_tokens_for_mode(mode)
-    temperature = 0.2 if mode == "deep" else 0.3
+    temperature = 0.3 if mode == "deep" else 0.4
 
     try:
         async with httpx.AsyncClient() as client:
@@ -642,6 +675,7 @@ async def _generate_answer(
                     "model": AIConfig.AI_CHAT_MODEL,
                     "messages": [
                         {"role": "system", "content": _ASK_SYSTEM},
+                        *(history or []),
                         {
                             "role": "user",
                             "content": _ask_user_content(
@@ -651,6 +685,7 @@ async def _generate_answer(
                                 mode=mode,
                                 pyq_matches=pyq_matches,
                                 used_web_search=used_web_search,
+                                has_history=bool(history),
                             ),
                         },
                     ],
@@ -705,6 +740,7 @@ async def ask_ai(
     *,
     conversation_language: str | None = None,
     charge_credits: bool = True,
+    session_id: str | None = None,
 ) -> dict:
     timer = PerformanceTimer("ask_ai")
     timer.start("validation")
@@ -818,6 +854,9 @@ async def ask_ai(
     pyq_matches = await match_pyqs_for_query(query)
 
     timer.start("llm")
+    history = (
+        get_recent_messages(session_id, user_id, limit=20) if session_id else []
+    )
     raw_answer = await _generate_answer(
         query,
         context_blocks,
@@ -825,6 +864,7 @@ async def ask_ai(
         conversation_language=conversation_language,
         pyq_matches=pyq_matches,
         used_web_search=used_web_search,
+        history=history,
     )
     answer, visual_payload = split_answer_and_visual(raw_answer)
     if not wants_visual(query):
@@ -864,6 +904,7 @@ async def ask_ai(
         "new_balance": new_balance,
         "mode": mode,
         "used_web_search": used_web_search,
+        "session_id": session_id,
     }
     if used_web_search:
         result["web_search_note"] = (
@@ -872,6 +913,21 @@ async def ask_ai(
         )
     if visual_payload is not None:
         result["visual_payload"] = visual_payload
+
+    # Save conversation turn so follow-up questions have history context.
+    response_id = str(uuid.uuid4())
+    saved_session_id = ensure_session_for_turn(
+        user_id=user_id,
+        query=query,
+        answer=answer,
+        response_id=response_id,
+        session_id=session_id,
+        conversation_language=resolved_lang,
+        credits_used=credits_charged or 0,
+    )
+    result["session_id"] = saved_session_id
+    result["response_id"] = response_id
+
     set_cached_answer(cache_key, result)
     timer.set(cache_hit=False)
     timer.log()
@@ -886,6 +942,7 @@ def _ask_user_content(
     mode: str = "normal",
     pyq_matches: list | None = None,
     used_web_search: bool = False,
+    has_history: bool = False,
 ) -> str:
     lang_line = language_hint_user_line(
         query, conversation_language=conversation_language
@@ -894,6 +951,13 @@ def _ask_user_content(
     speed_suffix = f"\n{speed_line}" if speed_line else ""
     visual_line = visual_reminder_user_line(query)
     pyq_block = format_verified_pyq_block(pyq_matches)
+    history_note = (
+        "(Conversation history above — use it to understand follow-up context "
+        "if this is a follow-up question; lecture notes are still primary source.)\n\n"
+        if has_history else ""
+    )
+    subj_hint = subject_teaching_hint(query)
+    subj_line = f"{subj_hint}\n\n" if subj_hint else ""
     if used_web_search:
         return (
             f"CRITICAL LANGUAGE LOCK (read first — before any context):\n{lang_line}\n\n"
@@ -901,6 +965,8 @@ def _ask_user_content(
             "Not from lecture notes. Label Source as Trusted Web Search.\n\n"
             f"{context}\n\n"
             f"{pyq_block}\n\n"
+            f"{history_note}"
+            f"{subj_line}"
             f"Student question: {query}\n\n"
             f"REMINDER: {lang_line}\n"
             "If snippets are unclear, say you lack reliable current information.\n"
@@ -914,6 +980,8 @@ def _ask_user_content(
         "the context below only.\n\n"
         f"Lecture context:\n{context}\n\n"
         f"{pyq_block}\n\n"
+        f"{history_note}"
+        f"{subj_line}"
         f"Student question: {query}\n\n"
         f"REMINDER: {lang_line}\n"
         "Answer language MUST match the resolved answer language "
@@ -932,6 +1000,7 @@ async def ask_ai_stream(
     *,
     conversation_language: str | None = None,
     charge_credits: bool = True,
+    session_id: str | None = None,
 ):
     """Async generator of SSE event dicts. Does not alter ask_ai() JSON path."""
     timer = PerformanceTimer("ask_ai_stream")
@@ -1098,9 +1167,13 @@ async def ask_ai_stream(
     from app.services.pyq_retrieve import match_pyqs_for_query
     pyq_matches = await match_pyqs_for_query(query)
     max_tokens = max_tokens_for_mode(mode)
-    temperature = 0.2 if mode == "deep" else 0.3
+    temperature = 0.3 if mode == "deep" else 0.4
+    history = (
+        get_recent_messages(session_id, user_id, limit=20) if session_id else []
+    )
     messages = [
         {"role": "system", "content": _ASK_SYSTEM},
+        *history,
         {
             "role": "user",
             "content": _ask_user_content(
@@ -1110,6 +1183,7 @@ async def ask_ai_stream(
                 mode=mode,
                 pyq_matches=pyq_matches,
                 used_web_search=used_web_search,
+                has_history=bool(history),
             ),
         },
     ]
@@ -1191,6 +1265,19 @@ async def ask_ai_stream(
         )
     if visual_payload is not None:
         result_core["visual_payload"] = visual_payload
+
+    # Save conversation turn so follow-up questions have history context.
+    response_id = str(uuid.uuid4())
+    saved_session_id = ensure_session_for_turn(
+        user_id=user_id,
+        query=query,
+        answer=answer,
+        response_id=response_id,
+        session_id=session_id,
+        conversation_language=resolved_lang,
+        credits_used=credits_charged or 0,
+    )
+
     set_cached_answer(cache_key, result_core)
     timer.set(cache_hit=False)
     timer.log()
@@ -1206,9 +1293,12 @@ async def ask_ai_stream(
         "new_balance": new_balance,
         "mode": mode,
         "used_web_search": used_web_search,
+        "session_id": saved_session_id,
+        "response_id": response_id,
     }
     if used_web_search:
         done_evt["web_search_note"] = result_core["web_search_note"]
     if visual_payload is not None:
         done_evt["visual_payload"] = visual_payload
     yield done_evt
+

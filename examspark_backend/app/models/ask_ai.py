@@ -45,6 +45,8 @@ class AskAiRequest(BaseModel):
     query: str = Field(..., min_length=1, max_length=4000)
     mode: Literal["normal", "deep"] = "normal"
     conversation_language: Optional[ConversationLanguage] = None
+    # Phase 4D — Study Workspace Ask AI conversation thread (same table as Home AI)
+    session_id: Optional[str] = None
 
     @field_validator("conversation_language", mode="before")
     @classmethod

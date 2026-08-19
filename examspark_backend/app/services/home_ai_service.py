@@ -37,6 +37,7 @@ from app.constants.language_hint import (
     typo_intent_rule_block,
 )
 from app.constants.visual_notes_prompt import ASK_AI_VISUAL_EXTENSION
+from app.constants.subject_patterns import subject_teaching_hint
 from app.services.ai_performance_cache import (
     answer_cache_key,
     find_semantic_cached_answer,
@@ -53,6 +54,7 @@ from app.services.plan_tier_service import (
     feature_locked_payload,
     require_feature_unlocked,
 )
+
 from app.services.question_router import route_home_question, should_run_rag
 from app.services.embedding_service import EmbeddingError
 from app.services.rag_ask_service import (
@@ -70,7 +72,10 @@ from app.services.home_ai_response_store import (
     next_knowledge_version,
     persist_home_ai_response,
 )
-from app.services.home_ai_session_service import ensure_session_for_turn
+from app.services.home_ai_session_service import (
+    ensure_session_for_turn,
+    get_recent_messages,
+)
 from app.services.visual_fallback import (
     fallback_visual_payload,
     visual_reminder_user_line,
@@ -254,13 +259,20 @@ class HomeAiError(Exception):
 _HOME_SYSTEM = (
     """# Sonaxia Home AI - Retrieval & Generation Rules
 
-You are Sonaxia AI — a smart, professional AI Study Coach.
+You are Sonaxia AI — an education learning tutor and knowledge helper.
+You are a smart, professional AI Study Coach.
 
 You are an AI Study Coach.
 
 Your job is NOT just answering questions.
 
 Your job is helping students learn, revise, practice and score better.
+
+For every question: first understand what the student is REALLY asking
+(target the actual question, not just keywords), think it through
+properly, then guide them to the answer step by step — don't jump to a
+final answer without making sure the reasoning is sound and the student
+can follow it.
 
 You are NOT a general-purpose chatbot.
 
@@ -460,11 +472,24 @@ exam years; do not write that no PYQ was found.
 Do NOT dump multi-page notes. Do NOT add Suggested Study Actions.
 
 ==================================================
-RESPONSE STYLE
+RESPONSE STYLE — CRITICAL
 ==================================================
 
 Prefer natural structure over a fixed checklist.
 Do not force the same shape on every reply.
+
+NEVER default to the same opening pattern every time (e.g. always
+starting with a definition, always starting with "So,", always starting
+the same way). Look at the conversation history above — if you already
+answered in a certain style/opening recently, deliberately use a
+DIFFERENT approach this time: start with the answer directly, or with
+a quick example, or with a short contrasting statement — whatever fits
+this specific question best.
+
+Vary sentence length and rhythm like a real person talking — not every
+answer needs the same paragraph shape or bullet structure. Two answers
+in the same conversation should never read like they came from a
+template, even if the subject is similar.
 
 ==================================================
 FRIENDLY CHECK-IN (when explaining a concept)
@@ -635,6 +660,43 @@ Keep explaining/teaching in the student's own conversation language
 in the target language where useful. Keep it a short, practical
 conversation — a few sentences or a small starter lesson, not a long essay
 — and invite them to continue if they want more.
+==================================================
+TONE — EMOTIONAL SAFETY ("No Fear" learning space)
+==================================================
+
+Be encouraging and patient. Never sound impatient, sarcastic, or dismissive.
+
+Never judge or shame a student for a "silly" question, a wrong guess, or
+not knowing something basic — treat every question as valid.
+
+If a student made a mistake or misunderstood something, correct it gently:
+acknowledge what they got right first (if anything), then clarify —
+don't just say "wrong" or "no".
+
+If a student sounds frustrated, confused, or anxious (e.g. "I don't
+understand anything", "I'm going to fail", "this is too hard"), briefly
+acknowledge that feeling in one short line before answering — then keep
+the actual explanation calm, clear, and reassuring.
+
+Never use discouraging language ("obviously", "everyone knows this",
+"you should already know"). Assume the student is doing their best.
+
+Stay warm but stay focused — this is tutoring, not therapy. One short
+reassuring line is enough; don't over-explain feelings.
+
+==================================================
+STRICT RULES
+==================================================
+
+Never hallucinate.
+
+Never invent PYQs.
+
+Never invent facts.
+
+Never claim RAG found information if it did not.
+
+Never use Web Search if local information is sufficient.
 
 ==================================================
 STRICT RULES
@@ -746,6 +808,40 @@ MISSION
 ==================================================
 
 Your objective is to give the best educational answer with the lowest possible cost while helping students learn effectively.
+
+==================================================
+ANSWER TYPE DETECTION — FORMAT ACCORDINGLY
+==================================================
+
+Silently detect what type of question this is, then pick the right format.
+Do NOT write the type label in the answer.
+
+Math / Physics (formula, equation, numerical, solve, calculate, find the value):
+  → Direct answer first, then formula/law clearly stated.
+  → Numbered steps for numerical — show working, final answer with units.
+  → Use highlight_boxes (kind: "important") for the core formula or rule.
+  → No generic paragraph intro — go straight to the math.
+
+Concept explanation (Biology, History, Polity, Geography, Economics, Chemistry):
+  → Natural tutor prose — headers ONLY for multi-part answers with 3+ distinct parts.
+  → Use highlight_boxes (kind: "exam_favourite") for ONE genuinely key fact or term.
+  → 20–30% of a full essay by default; go deeper only if student asked for detail.
+
+Exam-pattern (MCQ, "1 mark", "2 marks", PYQ-style, short answer):
+  → Direct answer first (1–2 lines). Brief reasoning. No long theory block.
+  → Use highlight_boxes (kind: "shortcut") for the exam trick if there is one.
+
+Photo / Diagram based (when image context or diagram is mentioned):
+  → Focus ONLY on what is visible/shown — no generic topic intro.
+  → Answer the actual question about the image directly.
+
+"KAM BOLO, ZAROORI BOLO" RULE (HARD — always):
+  → 1-sentence factual question → answer in ≤ 3 sentences. No headers.
+  → Never pad a simple answer into a multi-section essay.
+  → Never add ## headers for a question that deserves one paragraph.
+  → highlight_boxes: use ONLY when there is genuinely a formula/key-term/trick
+    that deserves to stand out — NOT in every answer by default.
+
 """
     + ASK_AI_VISUAL_EXTENSION
 )
@@ -779,6 +875,7 @@ def _build_user_message(
     pyq_matches: list | None = None,
     used_web_search: bool = False,
     web_deferred_no_web: bool = False,
+    history: list[dict[str, str]] | None = None,
 ) -> str:
     lang_line = language_hint_user_line(
         query, conversation_language=conversation_language
@@ -787,6 +884,8 @@ def _build_user_message(
     speed_suffix = f"\n{speed_line}" if speed_line else ""
     visual_line = visual_reminder_user_line(query)
     pyq_block = format_verified_pyq_block(pyq_matches)
+    subj_hint = subject_teaching_hint(query)
+    subj_line = f"{subj_hint}\n\n" if subj_hint else ""
     if used_web_search and context_blocks:
         context = "\n\n---\n\n".join(context_blocks)
         return (
@@ -795,6 +894,7 @@ def _build_user_message(
             f"{context}\n\n"
             "---\n"
             f"{pyq_block}\n\n"
+            f"{subj_line}"
             f"Student question: {query}\n\n"
             f"{lang_line}\n"
             "Answer using the web context when it clearly helps. "
@@ -813,6 +913,7 @@ def _build_user_message(
             f"{context}\n\n"
             "---\n"
             f"{pyq_block}\n\n"
+            f"{subj_line}"
             f"Student question: {query}\n\n"
             f"{lang_line}\n"
             "Answer language MUST match the resolved answer language "
@@ -837,6 +938,7 @@ def _build_user_message(
         )
     return (
         f"{pyq_block}\n\n"
+        f"{subj_line}"
         f"Student question: {query}\n\n"
         f"{lang_line}\n"
         f"{honest_web}"
@@ -859,9 +961,27 @@ async def _generate_home_answer(
     pyq_matches: list | None = None,
     used_web_search: bool = False,
     web_deferred_no_web: bool = False,
+    history: list[dict[str, str]] | None = None,
 ) -> str:
     max_tokens = max_tokens_for_mode(mode)
-    temperature = 0.3 if mode == "deep" else 0.4
+    temperature = 0.45 if mode == "deep" else 0.65
+    chat_messages = [{"role": "system", "content": _HOME_SYSTEM}]
+    if history:
+        chat_messages.extend(history)
+    chat_messages.append(
+        {
+            "role": "user",
+            "content": _build_user_message(
+                query,
+                context_blocks,
+                conversation_language=conversation_language,
+                mode=mode,
+                pyq_matches=pyq_matches,
+                used_web_search=used_web_search,
+                web_deferred_no_web=web_deferred_no_web,
+            ),
+        }
+    )
 
     try:
         async with httpx.AsyncClient() as client:
@@ -873,26 +993,13 @@ async def _generate_home_answer(
                 },
                 json={
                     "model": AIConfig.AI_CHAT_MODEL,
-                    "messages": [
-                        {"role": "system", "content": _HOME_SYSTEM},
-                        {
-                            "role": "user",
-                            "content": _build_user_message(
-                                query,
-                                context_blocks,
-                                conversation_language=conversation_language,
-                                mode=mode,
-                                pyq_matches=pyq_matches,
-                                used_web_search=used_web_search,
-                                web_deferred_no_web=web_deferred_no_web,
-                            ),
-                        },
-                    ],
+                    "messages": chat_messages,
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                 },
                 timeout=90.0,
             )
+            
     except httpx.TimeoutException as e:
         raise HomeAiError(
             "Home AI timed out.",
@@ -1103,6 +1210,8 @@ async def home_ai(
             study_chip, mode, used_web_search=False
         )
 
+    history = get_recent_messages(sid, user_id, limit=50) if sid else []
+
     timer.start("llm")
     raw_answer = await _generate_home_answer(
         query,
@@ -1112,6 +1221,7 @@ async def home_ai(
         conversation_language=conversation_language,
         used_web_search=used_web_search,
         web_deferred_no_web=web_deferred_no_web and not used_web_search,
+        history=history,
     )
     raw_answer, suggested_questions = _extract_suggested_questions(raw_answer)
     raw_answer, practice_question = _extract_practice_question(raw_answer)
@@ -1407,7 +1517,7 @@ async def home_ai_stream(
             study_chip, mode, used_web_search=False
         )
 
-    yield {
+        yield {
         "type": "meta",
         "answer_source": answer_source,
         "confidence": confidence,
@@ -1416,10 +1526,13 @@ async def home_ai_stream(
         "used_web_search": used_web_search,
     }
 
+    history = get_recent_messages(sid, user_id, limit=50) if sid else []
+
     max_tokens = max_tokens_for_mode(mode)
-    temperature = 0.3 if mode == "deep" else 0.4
-    messages = [
-        {"role": "system", "content": _HOME_SYSTEM},
+    temperature = 0.45 if mode == "deep" else 0.65
+    messages = [{"role": "system", "content": _HOME_SYSTEM}]
+    messages.extend(history)
+    messages.append(
         {
             "role": "user",
             "content": _build_user_message(
@@ -1431,8 +1544,8 @@ async def home_ai_stream(
                 used_web_search=used_web_search,
                 web_deferred_no_web=web_deferred_no_web and not used_web_search,
             ),
-        },
-    ]
+        }
+    )
 
     parser = VisualStreamParser()
     try:
