@@ -28,7 +28,6 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
   void initState() {
     super.initState();
     _loadLanguage();
-    _loadVoicePreference();
   }
 
   Future<void> _loadLanguage() async {
@@ -64,6 +63,8 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
 
   Future<void> _saveVoicePreference(String provider, String voiceKey) async {
     if (_savingVoice) return;
+    final previousProvider = _ttsProvider;
+    final previousVoiceKey = _ttsVoiceKey;
     setState(() {
       _savingVoice = true;
       _ttsProvider = provider;
@@ -83,8 +84,16 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
       }
     } catch (error) {
       if (mounted) {
+        setState(() {
+          _ttsProvider = previousProvider;
+          _ttsVoiceKey = previousVoiceKey;
+        });
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not save voice choice: $error')),
+          const SnackBar(
+            content: Text(
+              'Voice settings are unavailable until the latest backend is deployed.',
+            ),
+          ),
         );
       }
     } finally {
@@ -95,6 +104,74 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
   List<(String, String)> get _voiceOptions => _ttsProvider == 'gemini'
       ? const [('warm', 'Warm'), ('friendly', 'Friendly'), ('upbeat', 'Upbeat')]
       : const [('female', 'Female'), ('male', 'Male')];
+
+  Future<void> _openVoiceSettings() async {
+    await _loadVoicePreference();
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => StatefulBuilder(
+        builder: (context, setSheetState) => SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Roleplay voice',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+                ),
+                const SizedBox(height: 16),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    ChoiceChip(
+                      label: const Text('Qwen Voice'),
+                      selected: _ttsProvider == 'qwen',
+                      onSelected: _savingVoice
+                          ? null
+                          : (_) async {
+                              await _saveVoicePreference('qwen', 'female');
+                              setSheetState(() {});
+                            },
+                    ),
+                    ChoiceChip(
+                      label: const Text('Gemini Voice'),
+                      selected: _ttsProvider == 'gemini',
+                      onSelected: _savingVoice
+                          ? null
+                          : (_) async {
+                              await _saveVoicePreference('gemini', 'warm');
+                              setSheetState(() {});
+                            },
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                const Text('Voice', style: TextStyle(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  children: _voiceOptions.map((option) => ChoiceChip(
+                    label: Text(option.$2),
+                    selected: _ttsVoiceKey == option.$1,
+                    onSelected: _savingVoice || _ttsVoiceKey == option.$1
+                        ? null
+                        : (_) async {
+                            await _saveVoicePreference(_ttsProvider, option.$1);
+                            setSheetState(() {});
+                          },
+                  )).toList(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
   static const items = [
     ('🎉', 'Party'),
     ('🛒', 'Market'),
@@ -165,6 +242,11 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                   ),
                 ),
                 const Spacer(),
+                IconButton(
+                  onPressed: _openVoiceSettings,
+                  icon: const Icon(Icons.tune_rounded, size: 25),
+                  tooltip: 'Roleplay voice',
+                ),
                 IconButton(
                   onPressed: () => Navigator.push(
                     context,
@@ -242,48 +324,6 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                         padding: const EdgeInsets.symmetric(vertical: 15),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Roleplay voice', style: TextStyle(fontWeight: FontWeight.w800)),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    children: [
-                      ChoiceChip(
-                        label: const Text('Qwen Voice'),
-                        selected: _ttsProvider == 'qwen',
-                        onSelected: _savingVoice ? null : (_) => _saveVoicePreference('qwen', 'female'),
-                      ),
-                      ChoiceChip(
-                        label: const Text('Gemini Voice'),
-                        selected: _ttsProvider == 'gemini',
-                        onSelected: _savingVoice ? null : (_) => _saveVoicePreference('gemini', 'warm'),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    children: _voiceOptions.map((option) => ChoiceChip(
-                      label: Text(option.$2),
-                      selected: _ttsVoiceKey == option.$1,
-                      onSelected: _savingVoice || _ttsVoiceKey == option.$1
-                          ? null
-                          : (_) => _saveVoicePreference(_ttsProvider, option.$1),
-                    )).toList(),
                   ),
                 ],
               ),
@@ -428,6 +468,7 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   bool _streamAudioStarted = false;
   bool _heardSpeech = false;
   bool _leaving = false;
+  bool _stopping = false;
   String? _listeningHint;
 
   bool get active =>
@@ -486,11 +527,19 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   }
 
   Future<void> _endCurrentSession({String? message}) async {
-    if (_leaving) return;
-    _leaving = true;
-    await _stopResources();
+    if (_leaving || _stopping) return;
+    _stopping = true;
     final id = sessionId;
+    // A moon tap must feel instant. In-flight STT/TTS cannot restart because
+    // its captured session id no longer matches this null value.
     sessionId = null;
+    if (mounted) {
+      setState(() {
+        state = RoleplayVoiceState.stopped;
+        _listeningHint = null;
+      });
+    }
+    await _stopResources();
     if (id != null) {
       try {
         await LectureService.instance.endEnglishRoleplay(
@@ -501,16 +550,10 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
         // Local audio cleanup still completes when the final network call fails.
       }
     }
-    if (mounted) {
-      setState(() {
-        state = RoleplayVoiceState.stopped;
-        _listeningHint = null;
-      });
-      if (message != null) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
-      }
+    if (mounted && message != null) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
     }
-    _leaving = false;
+    _stopping = false;
   }
 
   Future<void> _stopResources() async {
@@ -757,8 +800,8 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   }
 
   Future<void> toggle() async {
-    if (sessionId != null) {
-      await _endCurrentSession(message: 'Roleplay stopped.');
+    if (sessionId != null || active || processing || state == RoleplayVoiceState.aiSpeaking) {
+      unawaited(_endCurrentSession(message: 'Roleplay stopped.'));
     } else {
       await _startListening();
     }
