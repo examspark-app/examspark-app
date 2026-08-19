@@ -222,9 +222,17 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       _sending = true;
     });
     try {
+      // When amplitude monitoring is available, reject silence locally before
+      // an upload. On platforms without amplitude support the server performs
+      // the same transcript validation before any credit/Qwen call.
+      final detectedVoice = RecordingService.instance.heardAnyVoice;
+      final canMeasureVoice = RecordingService.instance.amplitudeMonitoringActive;
       final path = await RecordingService.instance.stop();
       final audio = await RecordingService.instance.readRecordingBytes(path);
       await RecordingService.instance.discardTemporaryRecording(path);
+      if (canMeasureVoice && !detectedVoice) {
+        throw StateError('No speech detected. Please try again.');
+      }
       if (audio == null || audio.isEmpty) {
         throw StateError('No speech was recorded. Please try again.');
       }
