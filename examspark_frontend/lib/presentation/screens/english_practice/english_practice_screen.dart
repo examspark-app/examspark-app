@@ -72,7 +72,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
           widget.sessionId!,
         );
         _sessionId = r['id'] as String?;
-        _nativeLanguage = await LectureService.instance.getEnglishPracticeLanguage() ?? '';
+        _nativeLanguage =
+            await LectureService.instance.getEnglishPracticeLanguage() ?? '';
         _messages
           ..clear()
           ..addAll(
@@ -175,24 +176,29 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Could not check your credits. Please try again.')),
+        const SnackBar(
+          content: Text('Could not check your credits. Please try again.'),
+        ),
       );
     }
   }
 
   Future<void> _changeHelpLanguage() async {
-    await Navigator.push(
+    final selected = await Navigator.push<String>(
       context,
       MaterialPageRoute(
-        builder: (_) => const EnglishLanguagePickerScreen(returnToPrevious: true),
+        builder: (_) =>
+            const EnglishLanguagePickerScreen(returnToPrevious: true),
       ),
     );
-    if (mounted) {
-      final selected = await LectureService.instance.getEnglishPracticeLanguage();
-      if (selected != null && selected.trim().isNotEmpty) {
-        setState(() => _nativeLanguage = selected);
-      }
-    }
+    if (!mounted || selected == null || selected.trim().isEmpty) return;
+    // A Chat session stores its explanation language. Create a fresh session
+    // so the next model turn immediately uses the newly selected language;
+    // the previous conversation remains available in History.
+    await Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const EnglishPracticeScreen()),
+    );
   }
 
   Future<void> _toggleVoiceInput() async {
@@ -241,12 +247,13 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     } catch (error) {
       if (mounted) {
         setState(() => _sending = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('$error')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$error')));
       }
     }
   }
+
   void _history() => Navigator.push(
     context,
     MaterialPageRoute(builder: (_) => const EnglishTeachingHistoryScreen()),
@@ -297,7 +304,10 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                   _nativeLanguage.isEmpty
                       ? 'English (US)'
                       : 'English · $_nativeLanguage',
-                  style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
+                  style: const TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const Icon(Icons.expand_more),
               ],
