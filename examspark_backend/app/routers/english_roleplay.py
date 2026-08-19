@@ -20,7 +20,13 @@ class VoicePreferenceBody(BaseModel):
 def _error(e: chat.EnglishPracticeError): return HTTPException(status_code=e.status_code, detail=str(e))
 @router.post('/start')
 async def start(body: StartBody, user: AuthenticatedUser = Depends(get_current_user)):
-    try: return service.start(user.user_id, body.scenario, body.native_language)
+    try:
+        result = await service.start(user.user_id, body.scenario, body.native_language)
+        audio = result.pop('audio_bytes', None)
+        return {
+            **result,
+            'audio_base64': base64.b64encode(audio).decode('ascii') if audio else None,
+        }
     except chat.EnglishPracticeError as e: raise _error(e) from e
 @router.get('/voice-preference')
 async def get_voice_preference(user: AuthenticatedUser = Depends(get_current_user)):

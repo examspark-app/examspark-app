@@ -470,6 +470,7 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   bool _leaving = false;
   bool _stopping = false;
   String? _listeningHint;
+  String? _openingReply;
 
   bool get active =>
       state == RoleplayVoiceState.listening ||
@@ -636,11 +637,31 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   Future<void> _startListening() async {
     if (_leaving || processing || active) return;
     try {
-      sessionId ??= await LectureService.instance.startEnglishRoleplay(
-        scenario: widget.scenario,
-        nativeLanguage:
-            await LectureService.instance.getEnglishPracticeLanguage() ?? 'English',
-      );
+      if (sessionId == null) {
+        final started = await LectureService.instance.startEnglishRoleplay(
+          scenario: widget.scenario,
+          nativeLanguage:
+              await LectureService.instance.getEnglishPracticeLanguage() ?? 'English',
+        );
+        sessionId = started['session_id'] as String?;
+        _openingReply = started['opening_reply'] as String?;
+        final encoded = started['audio_base64'] as String?;
+        if (encoded != null && encoded.isNotEmpty) {
+          if (mounted) setState(() => state = RoleplayVoiceState.aiSpeaking);
+          await _player.setAudioSource(
+            AudioSource.uri(
+              UriData.fromBytes(
+                base64Decode(encoded),
+                mimeType: started['audio_mime_type'] as String? ?? 'audio/mpeg',
+              ).uri,
+            ),
+          );
+          await _player.play();
+        }
+      }
+      // A moon tap can stop the session while the AI opening is playing.
+      // Never start the recorder after that stopped session.
+      if (_leaving || _stopping || sessionId == null) return;
       _heardSpeech = false;
       RecordingService.instance.setVoiceActivityListener(_onVoiceActivity);
       await RecordingService.instance.start();
@@ -829,7 +850,8 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Text(
-                  widget.scenario,
+                  _openingReply ?? widget.scenario,
+                  textAlign: TextAlign.center,
                   style: const TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 45),

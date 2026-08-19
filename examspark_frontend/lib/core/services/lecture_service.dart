@@ -1131,7 +1131,7 @@ class LectureService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
-  Future<String> startEnglishRoleplay({
+  Future<Map<String, dynamic>> startEnglishRoleplay({
     required String scenario,
     String nativeLanguage = 'English',
   }) async {
@@ -1151,8 +1151,7 @@ class LectureService {
     );
     if (response.statusCode != 200)
       throw Exception(_extractErrorDetail(response));
-    return (jsonDecode(response.body) as Map<String, dynamic>)['session_id']
-        as String;
+    return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
   /// The backend reads/writes this only for the authenticated account. Voice

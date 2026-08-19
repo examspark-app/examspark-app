@@ -1,4 +1,7 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
@@ -24,6 +27,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   static const violet = Color(0xFF5137ED);
   final _text = TextEditingController();
   final _scroll = ScrollController();
+  final _player = AudioPlayer();
   final _messages = <_Message>[];
   List<String> _suggestions = const [
     'Correct my sentence',
@@ -48,6 +52,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   void dispose() {
     _text.dispose();
     _scroll.dispose();
+    _player.dispose();
     RecordingService.instance.releaseForScreen();
     super.dispose();
   }
@@ -65,6 +70,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
         _messages
           ..clear()
           ..add(_Message('${r['greeting'] ?? ''}', false));
+        await _playReplyAudio(r);
         final s = List<String>.from(r['suggestions'] as List? ?? const []);
         if (s.isNotEmpty) _suggestions = s;
       } else {
@@ -124,6 +130,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
         if (s.isNotEmpty) _suggestions = s;
         _sending = false;
       });
+      await _playReplyAudio(r);
       _bottom();
     } catch (_) {
       if (mounted)
@@ -251,6 +258,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
         if (suggestions.isNotEmpty) _suggestions = suggestions;
         _sending = false;
       });
+      await _playReplyAudio(response);
       _bottom();
     } catch (error) {
       if (mounted) {
@@ -260,6 +268,33 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
         ).showSnackBar(SnackBar(content: Text('$error')));
       }
     }
+  }
+
+  Future<void> _playReplyAudio(Map<String, dynamic> response) async {
+    final encoded = response['audio_base64'] as String?;
+    if (encoded == null || encoded.isEmpty) return;
+    try {
+      await _player.setAudioSource(
+        AudioSource.uri(
+          UriData.fromBytes(
+            Uint8List.fromList(base64Decode(encoded)),
+            mimeType: response['audio_mime_type'] as String? ?? 'audio/mpeg',
+          ).uri,
+        ),
+      );
+      await _player.play();
+    } catch (_) {
+      // The message remains visible when device audio is unavailable.
+    }
+  }
+
+  Future<void> _newChat() async {
+    await _player.stop();
+    if (!mounted) return;
+    await Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(builder: (_) => const EnglishPracticeScreen()),
+    );
   }
 
   void _history() => Navigator.push(
@@ -323,6 +358,11 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
           ),
         ),
         const Spacer(),
+        IconButton(
+          onPressed: _newChat,
+          icon: const Icon(Icons.add_comment_outlined, size: 26),
+          tooltip: 'New Chat',
+        ),
         IconButton(
           onPressed: _history,
           icon: const Icon(Icons.history_rounded, size: 29),

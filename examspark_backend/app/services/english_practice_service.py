@@ -19,11 +19,13 @@ from app.config import AIConfig
 from app.constants.english_chat_prompt import build_chat_prompt
 from app.constants.english_teacher_prompt import build_teacher_prompt
 from app.constants.english_suggestion_prompt import SUGGESTION_INSTRUCTION
+from app.constants.english_conversation_flow import build_conversation_flow_instruction
 from app.services import english_learning_memory_service as learning_memory
 from app.services.credits_service import InsufficientCreditsError, deduct_credits
 from app.services.supabase_admin import get_supabase_admin
 from app.services.openrouter_stream import OpenRouterStreamError, stream_chat_completions
 from app.services.whisper_service import WhisperTranscriptionError, transcribe_audio
+from app.services.qwen_tts_service import QwenTtsError, synthesize_speech
 
 logger = logging.getLogger(__name__)
 
@@ -88,10 +90,20 @@ TEACHING RULES (once the level is known):
 - Never break character or mention that you are an AI model or a prompt.
 
 {SUGGESTION_INSTRUCTION}
+{build_conversation_flow_instruction(focus_selected=bool(target_focus))}
 """
     if target_focus:
         base += f"\nThe student already chose to focus on: {target_focus}. Do not ask this again — teach it directly.\n"
     return base + (f"\n\n{memory_context}" if memory_context else '')
+
+
+async def _chat_audio(text: str) -> tuple[bytes | None, str | None]:
+    """Use the existing Qwen TTS adapter; text chat remains usable on TTS failure."""
+    try:
+        return await synthesize_speech(text)
+    except QwenTtsError:
+        logger.warning("English Chat TTS unavailable", exc_info=True)
+        return None, None
 
 
 async def _call_model(messages: list[dict]) -> str:
@@ -247,6 +259,7 @@ async def start_session(user_id: str) -> dict:
     )
     _save_message(sid, user_id, "assistant", greeting, credits=0)
     clean_greeting, suggestions = _extract_suggestions(greeting)
+    audio_bytes, audio_mime_type = await _chat_audio(clean_greeting)
 
     return {
         "session_id": sid,
@@ -254,6 +267,8 @@ async def start_session(user_id: str) -> dict:
         "greeting": clean_greeting,
         "suggestions": suggestions,
         "credits_charged": 0,
+        "audio_bytes": audio_bytes,
+        "audio_mime_type": audio_mime_type,
     }
 
 
@@ -318,6 +333,7 @@ async def send_message(user_id: str, session_id: str, text: str) -> dict:
     db.table("english_practice_sessions").update(updates).eq("id", session_id).execute()
 
     clean_reply, suggestions = _extract_suggestions(reply)
+    audio_bytes, audio_mime_type = await _chat_audio(clean_reply)
 
     return {
         "reply": clean_reply,
@@ -325,6 +341,8 @@ async def send_message(user_id: str, session_id: str, text: str) -> dict:
         "credits_charged": _CREDIT_COST,
         "new_balance": new_balance,
         "session_ended": session_ended,
+        "audio_bytes": audio_bytes,
+        "audio_mime_type": audio_mime_type,
     }
 
 

@@ -1,4 +1,5 @@
 """English Learning — AI conversation practice routes."""
+import base64
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel, Field
 
@@ -42,7 +43,12 @@ async def set_preference(
 @router.post("/start")
 async def start(user: AuthenticatedUser = Depends(get_current_user)):
     try:
-        return await eps.start_session(user.user_id)
+        result = await eps.start_session(user.user_id)
+        audio = result.pop("audio_bytes", None)
+        return {
+            **result,
+            "audio_base64": base64.b64encode(audio).decode("ascii") if audio else None,
+        }
     except eps.EnglishPracticeError as e:
         raise _http(e) from e
 
@@ -53,7 +59,12 @@ async def send_message(
     user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
-        return await eps.send_message(user.user_id, body.session_id, body.message)
+        result = await eps.send_message(user.user_id, body.session_id, body.message)
+        audio = result.pop("audio_bytes", None)
+        return {
+            **result,
+            "audio_base64": base64.b64encode(audio).decode("ascii") if audio else None,
+        }
     except eps.EnglishPracticeError as e:
         raise _http(e) from e
 
@@ -70,9 +81,14 @@ async def send_audio_message(
     if len(payload) > 10 * 1024 * 1024:
         raise HTTPException(status_code=413, detail="Audio is too large. Keep one turn under 10 MB.")
     try:
-        return await eps.send_audio_message(
+        result = await eps.send_audio_message(
             user.user_id, session_id, payload, audio.filename or "english_chat_audio.m4a"
         )
+        audio_bytes = result.pop("audio_bytes", None)
+        return {
+            **result,
+            "audio_base64": base64.b64encode(audio_bytes).decode("ascii") if audio_bytes else None,
+        }
     except eps.EnglishPracticeError as e:
         raise _http(e) from e
 

@@ -1,5 +1,6 @@
 """Persisted Roleplay turns, including an additive streaming voice path."""
 import asyncio
+import logging
 import re
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
@@ -18,6 +19,8 @@ from app.services.whisper_service import (
     transcribe_audio,
 )
 from app.services import english_learning_memory_service as learning_memory
+
+logger = logging.getLogger(__name__)
 
 _ABBREVIATIONS = {
     'mr', 'mrs', 'ms', 'dr', 'prof', 'sr', 'jr', 'vs', 'etc', 'e.g', 'i.e',
@@ -96,12 +99,37 @@ def _session(session_id: str, user_id: str) -> dict | None:
     rows = get_supabase_admin().table('english_roleplay_sessions').select('*').eq('id', session_id).eq('user_id', user_id).limit(1).execute().data or []
     return rows[0] if rows else None
 
-def start(user_id: str, scenario: str, native_language: str) -> dict:
+async def start(user_id: str, scenario: str, native_language: str) -> dict:
+    """Create a session and let the in-character partner make the first move."""
     scenario = scenario.strip()
     if not scenario: raise chat.EnglishPracticeError('Choose a roleplay scenario.', 400)
     _precheck_minimum_balance(user_id)
-    row = get_supabase_admin().table('english_roleplay_sessions').insert({'user_id': user_id, 'scenario': scenario, 'native_language': native_language, 'status': 'active'}).execute().data[0]
-    return {'session_id': row['id'], 'scenario': scenario, 'started_at': row['started_at']}
+    db = get_supabase_admin()
+    row = db.table('english_roleplay_sessions').insert({'user_id': user_id, 'scenario': scenario, 'native_language': native_language, 'status': 'active'}).execute().data[0]
+    sid = row['id']
+    memory_context = learning_memory.format_memory_context(
+        learning_memory.load_memory(user_id), mode='roleplay'
+    )
+    opening = await chat._call_model([
+        {'role': 'system', 'content': build_roleplay_prompt(
+            scenario=scenario, native_language=native_language,
+            learning_memory=memory_context,
+        )},
+        {'role': 'user', 'content': '(system: Open this roleplay now in character with one short, welcoming line and one easy question. Wait for the learner after that.)'},
+    ])
+    db.table('english_roleplay_messages').insert({
+        'session_id': sid, 'user_id': user_id, 'role': 'assistant', 'message': opening,
+    }).execute()
+    try:
+        audio, mime_type = await synthesize_for_user(user_id, opening)
+    except RoleplayTtsError as error:
+        # The first text still exists; the app can show a recoverable voice error.
+        audio, mime_type = None, None
+        logger.warning('Roleplay opening TTS unavailable: %s', error)
+    return {
+        'session_id': sid, 'scenario': scenario, 'started_at': row['started_at'],
+        'opening_reply': opening, 'audio_bytes': audio, 'audio_mime_type': mime_type,
+    }
 
 async def send_turn(user_id: str, session_id: str, transcript: str) -> dict:
     session = _session(session_id, user_id)
@@ -253,10 +281,11 @@ def end(user_id: str, session_id: str, duration_seconds: int | None = None) -> d
         return {'session_id': session_id, 'duration_seconds': int(session.get('duration_seconds') or 0), 'credits_used': int(session.get('credits_used') or 0)}
     seconds = _server_duration_seconds(session['started_at'])
     db = get_supabase_admin()
-    assistant_rows = db.table('english_roleplay_messages').select('id').eq('session_id', session_id).eq('role', 'assistant').limit(1).execute().data or []
+    # An AI opening line is free. Preserve the no-user-speech/no-charge rule.
+    user_rows = db.table('english_roleplay_messages').select('id').eq('session_id', session_id).eq('role', 'user').limit(1).execute().data or []
     credits_used = 0
     new_balance = None
-    if assistant_rows:
+    if user_rows:
         credits_used = roleplay_credits_for_duration_seconds(seconds)
         try:
             new_balance = deduct_credits(
