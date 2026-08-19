@@ -845,6 +845,18 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
               ),
             ),
           ),
+          Positioned(
+            right: 14,
+            top: 8,
+            child: TextButton.icon(
+              onPressed: _leave,
+              icon: const Icon(Icons.close_rounded, color: Colors.white),
+              label: const Text(
+                'Exit',
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+              ),
+            ),
+          ),
           Center(
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,

@@ -29,13 +29,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   final _scroll = ScrollController();
   final _player = AudioPlayer();
   final _messages = <_Message>[];
-  List<String> _suggestions = const [
-    'Correct my sentence',
-    'Explain this grammar rule',
-    'Help me write this',
-    'Daily English conversation',
-    'How to speak fluently',
-  ];
+  // Suggestions are generated for the current AI turn. Do not show a large
+  // generic panel before the first teacher message has arrived.
+  List<String> _suggestions = const [];
   String? _sessionId;
   bool _loading = true;
   bool _sending = false;
@@ -67,9 +63,17 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
         final r = await LectureService.instance.startEnglishPractice();
         _sessionId = r['session_id'] as String?;
         _nativeLanguage = '${r['native_language'] ?? ''}';
+        final greeting = '${r['greeting'] ?? ''}'.trim();
         _messages
           ..clear()
-          ..add(_Message('${r['greeting'] ?? ''}', false));
+          ..add(
+            _Message(
+              greeting.isEmpty
+                  ? 'Welcome! Let’s begin with a small English practice step.'
+                  : greeting,
+              false,
+            ),
+          );
         await _playReplyAudio(r);
         final s = List<String>.from(r['suggestions'] as List? ?? const []);
         if (s.isNotEmpty) _suggestions = s;
@@ -358,10 +362,10 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
           ),
         ),
         const Spacer(),
-        IconButton(
+        TextButton.icon(
           onPressed: _newChat,
-          icon: const Icon(Icons.add_comment_outlined, size: 26),
-          tooltip: 'New Chat',
+          icon: const Icon(Icons.add_comment_outlined, size: 19),
+          label: const Text('New Chat'),
         ),
         IconButton(
           onPressed: _history,
@@ -464,7 +468,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     ],
   );
   Widget _suggestionPanel() {
-    final count = _suggestions.length > 5 ? 5 : _suggestions.length;
+    if (_suggestions.isEmpty) return const SizedBox.shrink();
+    final count = _suggestions.length > 2 ? 2 : _suggestions.length;
     final icons = [
       Icons.edit_outlined,
       Icons.menu_book_outlined,
@@ -474,34 +479,30 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     ];
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 10),
+      padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: const Color(0xFFE6E5F2)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
-            'You can try asking me:',
-            style: TextStyle(
-              color: violet,
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
-            ),
-          ),
-          const SizedBox(height: 10),
-          for (var i = 0; i < count; i++)
-            Padding(
-              padding: const EdgeInsets.only(bottom: 7),
-              child: InkWell(
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (var i = 0; i < count; i++)
+                InkWell(
                 onTap: () => _send(_suggestions[i]),
                 borderRadius: BorderRadius.circular(15),
                 child: Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width * .43,
+                  ),
                   padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 13,
+                    horizontal: 12,
+                    vertical: 10,
                   ),
                   decoration: BoxDecoration(
                     border: Border.all(color: const Color(0xFFE2E1ED)),
@@ -509,14 +510,15 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(icons[i], color: violet),
-                      const SizedBox(width: 15),
+                      Icon(icons[i], color: violet, size: 20),
+                      const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           _suggestions[i],
                           style: const TextStyle(
                             fontWeight: FontWeight.w600,
-                            fontSize: 15,
+                            fontSize: 13,
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
                       ),
@@ -524,7 +526,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                   ),
                 ),
               ),
-            ),
+            ],
+          ),
         ],
       ),
     );
