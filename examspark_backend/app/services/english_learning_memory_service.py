@@ -30,6 +30,22 @@ def _now() -> str: return datetime.now(timezone.utc).isoformat()
 
 def _profile_full_name(user_id: str) -> str | None:
     try:
+        student_rows = (
+            get_supabase_admin()
+            .table('student_profiles')
+            .select('full_name')
+            .eq('user_id', user_id)
+            .limit(1)
+            .execute()
+            .data or []
+        )
+    except Exception:
+        student_rows = []
+    if student_rows:
+        fn = student_rows[0].get('full_name')
+        if isinstance(fn, str) and fn.strip():
+            return fn.strip()[:60]
+    try:
         rows = (
             get_supabase_admin()
             .table('profiles')
@@ -48,22 +64,6 @@ def _profile_full_name(user_id: str) -> str | None:
         un = rows[0].get('username')
         if isinstance(un, str) and un.strip():
             return un.strip()[:60]
-    try:
-        student_rows = (
-            get_supabase_admin()
-            .table('student_profiles')
-            .select('full_name')
-            .eq('user_id', user_id)
-            .limit(1)
-            .execute()
-            .data or []
-        )
-    except Exception:
-        return None
-    if student_rows:
-        fn = student_rows[0].get('full_name')
-        if isinstance(fn, str) and fn.strip():
-            return fn.strip()[:60]
     return None
 
 

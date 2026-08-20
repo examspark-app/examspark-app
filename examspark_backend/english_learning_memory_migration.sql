@@ -2,6 +2,7 @@
 CREATE TABLE IF NOT EXISTS english_learning_memory (
   user_id uuid PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
   native_language text,
+  target_language text,
   english_level text CHECK (english_level IN ('beginner', 'elementary', 'intermediate', 'advanced')),
   learner_name text,
   recurring_mistakes jsonb NOT NULL DEFAULT '[]'::jsonb,
@@ -13,6 +14,7 @@ CREATE TABLE IF NOT EXISTS english_learning_memory (
 );
 
 ALTER TABLE english_learning_memory ADD COLUMN IF NOT EXISTS learner_name text;
+ALTER TABLE english_learning_memory ADD COLUMN IF NOT EXISTS target_language text;
 
 ALTER TABLE english_learning_memory ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "english_learning_memory_own" ON english_learning_memory

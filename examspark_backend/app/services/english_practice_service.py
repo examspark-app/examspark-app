@@ -308,9 +308,9 @@ def get_native_language(user_id: str) -> str:
     try:
         row = (
             get_supabase_admin()
-            .table("profiles")
+            .table("student_profiles")
             .select("english_native_language")
-            .eq("id", user_id)
+            .eq("user_id", user_id)
             .limit(1)
             .execute()
             .data or []
@@ -327,9 +327,9 @@ def get_target_language(user_id: str) -> str:
     try:
         row = (
             get_supabase_admin()
-            .table("profiles")
+            .table("student_profiles")
             .select("english_target_language")
-            .eq("id", user_id)
+            .eq("user_id", user_id)
             .limit(1)
             .execute()
             .data or []
@@ -349,9 +349,24 @@ def set_native_language(user_id: str, language: str) -> None:
     if len(lang) > 60:
         raise EnglishPracticeError("Language name is too long.", 400)
     try:
-        get_supabase_admin().table("profiles").update(
-            {"english_native_language": lang}
-        ).eq("id", user_id).execute()
+        existing = (
+            get_supabase_admin()
+            .table("student_profiles")
+            .select("id")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+            .data or []
+        )
+        if existing:
+            get_supabase_admin().table("student_profiles").update(
+                {"english_native_language": lang}
+            ).eq("user_id", user_id).execute()
+        else:
+            get_supabase_admin().table("student_profiles").insert({
+                "user_id": user_id,
+                "english_native_language": lang,
+            }).execute()
     except Exception as e:
         raise EnglishPracticeError(f"Could not save preference: {e}", 500) from e
 
@@ -363,9 +378,24 @@ def set_target_language(user_id: str, language: str) -> None:
     if len(lang) > 60:
         raise EnglishPracticeError("Language name is too long.", 400)
     try:
-        get_supabase_admin().table("profiles").update(
-            {"english_target_language": lang}
-        ).eq("id", user_id).execute()
+        existing = (
+            get_supabase_admin()
+            .table("student_profiles")
+            .select("id")
+            .eq("user_id", user_id)
+            .limit(1)
+            .execute()
+            .data or []
+        )
+        if existing:
+            get_supabase_admin().table("student_profiles").update(
+                {"english_target_language": lang}
+            ).eq("user_id", user_id).execute()
+        else:
+            get_supabase_admin().table("student_profiles").insert({
+                "user_id": user_id,
+                "english_target_language": lang,
+            }).execute()
     except Exception as e:
         raise EnglishPracticeError(f"Could not save preference: {e}", 500) from e
 
