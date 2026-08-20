@@ -308,18 +308,21 @@ def get_native_language(user_id: str) -> str:
     try:
         row = (
             get_supabase_admin()
-            .table("student_profiles")
-            .select("english_native_language")
-            .eq("user_id", user_id)
+            .table("users")
+            .select("preferred_native_language")
+            .eq("id", user_id)
             .limit(1)
             .execute()
-            .data or []
+            .data
+            or []
         )
     except Exception:
         return ""
+
     if not row:
         return ""
-    value = row[0].get("english_native_language") or ""
+
+    value = row[0].get("preferred_native_language") or ""
     return value if isinstance(value, str) else ""
 
 
@@ -327,48 +330,60 @@ def get_target_language(user_id: str) -> str:
     try:
         row = (
             get_supabase_admin()
-            .table("student_profiles")
-            .select("english_target_language")
-            .eq("user_id", user_id)
+            .table("users")
+            .select("preferred_target_language")
+            .eq("id", user_id)
             .limit(1)
             .execute()
-            .data or []
+            .data
+            or []
         )
     except Exception:
-        return ""
+        return "English"
+
     if not row:
         return "English"
-    value = row[0].get("english_target_language") or "English"
+
+    value = row[0].get("preferred_target_language") or "English"
     return value if isinstance(value, str) else "English"
 
 
 def set_native_language(user_id: str, language: str) -> None:
     lang = (language or "").strip()
+
     if not lang:
         raise EnglishPracticeError("Language cannot be empty.", 400)
+
     if len(lang) > 60:
         raise EnglishPracticeError("Language name is too long.", 400)
+
     try:
-        existing = (
-            get_supabase_admin()
-            .table("student_profiles")
-            .select("id")
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
-            .data or []
-        )
-        if existing:
-            get_supabase_admin().table("student_profiles").update(
-                {"english_native_language": lang}
-            ).eq("user_id", user_id).execute()
-        else:
-            get_supabase_admin().table("student_profiles").insert({
-                "user_id": user_id,
-                "english_native_language": lang,
-            }).execute()
+        get_supabase_admin().table("users").update(
+            {"preferred_native_language": lang}
+        ).eq("id", user_id).execute()
     except Exception as e:
-        raise EnglishPracticeError(f"Could not save preference: {e}", 500) from e
+        raise EnglishPracticeError(
+            f"Could not save preference: {e}", 500
+        ) from e
+
+
+def set_target_language(user_id: str, language: str) -> None:
+    lang = (language or "").strip()
+
+    if not lang:
+        raise EnglishPracticeError("Language cannot be empty.", 400)
+
+    if len(lang) > 60:
+        raise EnglishPracticeError("Language name is too long.", 400)
+
+    try:
+        get_supabase_admin().table("users").update(
+            {"preferred_target_language": lang}
+        ).eq("id", user_id).execute()
+    except Exception as e:
+        raise EnglishPracticeError(
+            f"Could not save preference: {e}", 500
+        ) from e
 
 
 def set_target_language(user_id: str, language: str) -> None:
