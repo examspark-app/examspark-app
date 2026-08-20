@@ -140,40 +140,66 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       );
   });
   Future<void> _send([String? prompt]) async {
-    final value = (prompt ?? _text.text).trim();
-    if (value.isEmpty || _sending || _sessionId == null) return;
-    _text.clear();
+  final value = (prompt ?? _text.text).trim();
+  if (value.isEmpty || _sending || _sessionId == null) return;
+
+  _text.clear();
+
+  setState(() {
+    _messages.add(_Message(value, true));
+    _currentMcq = null;
+    _sending = true;
+  });
+
+  _bottom();
+
+  try {
+    final r = await LectureService.instance.sendEnglishPracticeMessage(
+      sessionId: _sessionId!,
+      message: value,
+    );
+
+    if (!mounted) return;
+
     setState(() {
-      _messages.add(_Message(value, true));
-      _currentMcq = null;
-      _sending = true;
-    });
-    _bottom();
-    try {
-      final r = await LectureService.instance.sendEnglishPracticeMessage(
-        sessionId: _sessionId!,
-        message: value,
+      _messages.add(
+        _Message('${r['reply'] ?? ''}', false),
       );
-      if (!mounted) return;
-      setState(() {
-        _messages.add(_Message('${r['reply'] ?? ''}', false));
-        final s = List<String>.from(r['suggestions'] as List? ?? const []);
-        if (s.isNotEmpty) _suggestions = s;
-        final mcq = _PracticeMcq.fromJson(r['mcq']);
-        if (mcq != null) _currentMcq = mcq;
-        _sending = false;
-      });
-      _bottom();
-    } catch (_) {
-      if (mounted)
-        setState(() {
-          _sending = false;
-          _messages.add(
-            const _Message('I could not send that. Please try again.', false),
-          );
-        });
-    }
+
+      final s = List<String>.from(
+        r['suggestions'] as List? ?? const [],
+      );
+
+      if (s.isNotEmpty) {
+        _suggestions = s;
+      }
+
+      final mcq = _PracticeMcq.fromJson(r['mcq']);
+      if (mcq != null) {
+        _currentMcq = mcq;
+      }
+
+      _sending = false;
+    });
+
+    _bottom();
+  } catch (e) {
+    if (!mounted) return;
+
+    setState(() {
+      _sending = false;
+    });
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(
+          e.toString().replaceFirst('Exception: ', ''),
+        ),
+        duration: const Duration(seconds: 6),
+      ),
+    );
   }
+}
 
   Future<void> _roleplay() async {
     final user = SupabaseClient.instance.currentUser;
