@@ -651,7 +651,7 @@ async def send_message(
         focus = _focus_from_message(text)
     _persist_message(session_id, user_id, "user", text)
     try:
-        await deduct_credits(
+        deduct_credits(
             user_id,
             _CREDIT_COST,
             description="English Practice chat turn",
