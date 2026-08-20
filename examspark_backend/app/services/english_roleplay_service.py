@@ -157,207 +157,310 @@ def _fallback_opening(scenario: str) -> str:
     )
 
 
-async def start(user_id: str, scenario: str, native_language: str, target_language: str = 'English') -> dict:
+async def start(
+    user_id: str,
+    scenario: str,
+    native_language: str,
+    target_language: str = 'English'
+) -> dict:
     """Create a session and let the in-character partner make the first move."""
+
     scenario = scenario.strip()
-    if not scenario: raise chat.EnglishPracticeError('Choose a roleplay scenario.', 400)
+
+    if not scenario:
+        raise chat.EnglishPracticeError(
+            'Choose a roleplay scenario.',
+            400
+        )
+
     _precheck_minimum_balance(user_id)
+
     db = get_supabase_admin()
-    row = db.table('english_roleplay_sessions').insert({'user_id': user_id, 'scenario': scenario, 'native_language': native_language, 'target_language': target_language, 'status': 'active'}).execute().data[0]
+
+    row = (
+        db.table('english_roleplay_sessions')
+        .insert({
+            'user_id': user_id,
+            'scenario': scenario,
+            'native_language': native_language,
+            'target_language': target_language,
+            'status': 'active'
+        })
+        .execute()
+        .data[0]
+    )
+
     sid = row['id']
+
     memory_dict = learning_memory.load_memory(user_id)
-memory_context = learning_memory.format_memory_context(
-    memory_dict,
-    mode='roleplay'
-)
 
-# Load a small set of previous openings from this user's
-# previous sessions for the same scenario.
-# These are used only to prevent repetitive openings/events.
-recent_sessions = (
-    db.table('english_roleplay_sessions')
-    .select('id,created_at')
-    .eq('user_id', user_id)
-    .eq('scenario', scenario)
-    .neq('id', sid)
-    .order('created_at', desc=True)
-    .limit(8)
-    .execute()
-    .data
-    or []
-)
+    memory_context = learning_memory.format_memory_context(
+        memory_dict,
+        mode='roleplay'
+    )
 
-recent_openings: list[str] = []
-
-for previous_session in recent_sessions:
-    opening_rows = (
-        db.table('english_roleplay_messages')
-        .select('message')
-        .eq('session_id', previous_session['id'])
+    # Load a small set of previous openings from this user's
+    # previous sessions for the same scenario.
+    # These are used only to prevent repetitive openings/events.
+    recent_sessions = (
+        db.table('english_roleplay_sessions')
+        .select('id,created_at')
         .eq('user_id', user_id)
-        .eq('role', 'assistant')
-        .order('created_at', desc=False)
-        .limit(1)
+        .eq('scenario', scenario)
+        .neq('id', sid)
+        .order('created_at', desc=True)
+        .limit(8)
         .execute()
         .data
         or []
     )
 
-    if opening_rows:
-        opening_text = (opening_rows[0].get('message') or '').strip()
-        if opening_text:
-            recent_openings.append(opening_text)
+    recent_openings: list[str] = []
 
-recent_opening_context = '\n'.join(
-    f'- {opening}'
-    for opening in recent_openings
-)
+    for previous_session in recent_sessions:
+        opening_rows = (
+            db.table('english_roleplay_messages')
+            .select('message')
+            .eq('session_id', previous_session['id'])
+            .eq('user_id', user_id)
+            .eq('role', 'assistant')
+            .order('created_at', desc=False)
+            .limit(1)
+            .execute()
+            .data
+            or []
+        )
 
-freshness_context = (
-    '\nRECENT OPENINGS TO AVOID:\n'
-    f'{recent_opening_context or "- None"}\n'
-    '\nFRESH SESSION RULE:\n'
-    'These are previous openings from this learner. '
-    'Do not copy their wording, greeting pattern, event, object, '
-    'or small environment detail. '
-    'Create a materially fresh situation for this session. '
-    'Learning memory is for understanding the learner, not for '
-    'replaying old conversation.\n'
-)
+        if opening_rows:
+            opening_text = (
+                opening_rows[0].get('message') or ''
+            ).strip()
 
-sys_prompt = build_roleplay_prompt(
-    scenario=scenario,
-    native_language=native_language,
-    target_language=target_language,
-    learning_memory=memory_context + freshness_context,
-)
+            if opening_text:
+                recent_openings.append(opening_text)
+
+    recent_opening_context = '\n'.join(
+        f'- {opening}'
+        for opening in recent_openings
+    )
+
+    freshness_context = (
+        '\nRECENT OPENINGS TO AVOID:\n'
+        f'{recent_opening_context or "- None"}\n'
+        '\nFRESH SESSION RULE:\n'
+        'These are previous openings from this learner. '
+        'Do not copy their wording, greeting pattern, event, object, '
+        'or small environment detail. '
+        'Create a materially fresh situation for this session. '
+        'Learning memory is for understanding the learner, not for '
+        'replaying old conversation.\n'
+    )
+
+    sys_prompt = build_roleplay_prompt(
+        scenario=scenario,
+        native_language=native_language,
+        target_language=target_language,
+        learning_memory=memory_context + freshness_context,
+    )
+
     memory_has_name = bool(
         memory_dict.get('preferred_name')
         or memory_dict.get('learner_name')
     )
+
     if memory_has_name:
         name_note = (
             ' You already know the learner\'s name from the memory block — '
-            'use it NATURALLY and OCCASIONALLY only if it fits the scenario (e.g., '
-            'a waiter greeting a returning guest, a friend calling them by name). '
+            'use it NATURALLY and OCCASIONALLY only if it fits the scenario '
+            '(e.g., a waiter greeting a returning guest, a friend calling '
+            'them by name). '
             'Do NOT stuff it into every line.'
         )
     else:
         name_note = (
-            ' You do NOT know the learner\'s name yet. ONLY IF this scenario naturally '
-            'supports asking someone their name (e.g. a new friend introducing '
-            'themselves, a host greeting someone at a party, an interviewer asking their '
-            'pre-interview admin, a waiter asking for a booking name), THEN casually '
-            'ask for it IN-character ONCE, early in the conversation (the first OR second '
-            'line OR your first reply to their response). Do NOT force it into scenarios '
-            'where it would be weird (strangers bargaining in a market, random '
-            'passerby small talk at an airport gate). Ask in the target language '
-            'if staying in character, or briefly step out briefly in the native language '
-            'for one line then back in. If you do ask, only ask once. If the learner '
-            'skips, drop it forever.'
+            ' You do NOT know the learner\'s name yet. ONLY IF this scenario '
+            'naturally supports asking someone their name '
+            '(e.g. a new friend introducing themselves, a host greeting '
+            'someone at a party, an interviewer asking their pre-interview '
+            'admin, a waiter asking for a booking name), THEN casually ask '
+            'for it IN-character ONCE, early in the conversation '
+            '(the first OR second line OR your first reply to their response). '
+            'Do NOT force it into scenarios where it would be weird '
+            '(strangers bargaining in a market, random passerby small talk '
+            'at an airport gate). '
+            'Ask in the target language if staying in character, or briefly '
+            'step out briefly in the native language for one line then back in. '
+            'If you do ask, only ask once. If the learner skips, drop it forever.'
         )
+
     opening_instruction = (
-        '(system: THIS IS NON-NEGOTIABLE — YOU are sending the very first line of this '
-        'roleplay session. The user has not yet spoken or typed anything; there must NOT '
-        'be a blank screen. Open this roleplay NOW in character, in the target language, '
-        'with exactly ONE short warm scenario-specific greeting (1-2 short sentences MAX, '
-        'never 4+), including ONE invented tiny specific environment detail fresh for this '
-        'run (never reuse the same detail twice), followed by ONE easy follow-up question '
-        'folded naturally out of that reaction. Then STOP and WAIT. No second message, no '
-        'teaching preamble, no meta-commentary, NO mentioning "the roleplay / scenario / '
-        'practice / lesson" anywhere. NO generic lines like "Hello, how can I help you?", '
-        '"welcome to this roleplay", "let\'s practice", or any line that could be pasted '
-        'into any random scenario. Act like a real person actually inside this exact '
-        'environment — a stranger reading your line should instantly GUESS which scenario '
-        'it\'s from without being told. '
-        'FRIEND-ENERGY CALIBRATION — do NOT open with a flat greeting + empty question. '
-        'Instead: invent ONE specific tiny scenario detail (fresh every time, never repeat '
-        'the same detail twice) and react to it first, share a mini opinion/tease/observation, '
-        'THEN fold your follow-up question naturally out of that reaction. '
+        '(system: THIS IS NON-NEGOTIABLE — YOU are sending the very first '
+        'line of this roleplay session. The user has not yet spoken or typed '
+        'anything; there must NOT be a blank screen. Open this roleplay NOW '
+        'in character, in the target language, with exactly ONE short warm '
+        'scenario-specific greeting (1-2 short sentences MAX, never 4+), '
+        'including ONE invented tiny specific environment detail fresh for '
+        'this run (never reuse the same detail twice), followed by ONE easy '
+        'follow-up question folded naturally out of that reaction. '
+        'Then STOP and WAIT. No second message, no teaching preamble, '
+        'no meta-commentary, NO mentioning "the roleplay / scenario / '
+        'practice / lesson" anywhere. NO generic lines like '
+        '"Hello, how can I help you?", "welcome to this roleplay", '
+        '"let\'s practice", or any line that could be pasted into any '
+        'random scenario. Act like a real person actually inside this exact '
+        'environment — a stranger reading your line should instantly GUESS '
+        'which scenario it\'s from without being told. '
+        'FRIEND-ENERGY CALIBRATION — do NOT open with a flat greeting + empty '
+        'question. Instead: invent ONE specific tiny scenario detail '
+        '(fresh every time, never repeat the same detail twice) and react '
+        'to it first, share a mini opinion/tease/observation, THEN fold '
+        'your follow-up question naturally out of that reaction. '
         'BAD example (do NOT do): "Hi! Welcome to the party. How are you?" '
-        'GOOD example (the FEEL to copy, not the words): "Heyyy you made it! I was starting '
-        'to think you\'d bail on me lol — okay but this playlist though, you\'re gonna love it." '
-        'LENGTH/PACING: one reaction-beat + one question. Never stack multiple topics in one '
-        'opening line. Keep it 1-2 sentences only. '
-        'Vary the invented detail every single session so no two openings feel templated.'
+        'GOOD example (the FEEL to copy, not the words): '
+        '"Heyyy you made it! I was starting to think you\'d bail on me lol — '
+        'okay but this playlist though, you\'re gonna love it." '
+        'LENGTH/PACING: one reaction-beat + one question. '
+        'Never stack multiple topics in one opening line. '
+        'Keep it 1-2 sentences only. '
+        'Vary the invented detail every single session so no two openings '
+        'feel templated.'
         + name_note
         + ')'
     )
+
     opening_raw = await chat._call_model([
-        {'role': 'system', 'content': sys_prompt},
-        {'role': 'user', 'content': opening_instruction},
+        {
+            'role': 'system',
+            'content': sys_prompt
+        },
+        {
+            'role': 'user',
+            'content': opening_instruction
+        },
     ])
-    opening_clean, opening_suggestions, opening_mcq = chat._split_and_extract(opening_raw)
+
+    opening_clean, opening_suggestions, opening_mcq = (
+        chat._split_and_extract(opening_raw)
+    )
+
     opening = opening_clean.strip()
+
     if not opening:
         opening = _fallback_opening(scenario)
+
     elif _opening_looks_generic(opening):
+
         retry_instruction = (
-            '(system: Re-write the opening. The previous attempt was too generic / sounded like '
-            'a help-bot / teacher starting class / or too long. Make it sound like a real PERSON '
-            'actually INSIDE this exact environment. Scenario: '
+            '(system: Re-write the opening. The previous attempt was too '
+            'generic / sounded like a help-bot / teacher starting class / '
+            'or too long. Make it sound like a real PERSON actually INSIDE '
+            'this exact environment. Scenario: '
             + scenario
-            + '. 1-2 SHORT sentences MAX (never 4+). ONE reaction-beat (fresh invented scenario '
-            'detail, DIFFERENT from the previous attempt) + ONE easy follow-up question folded '
-            'naturally out of it. Target language only. '
-            'CRITICAL (1) ENV-GUESS TEST: a stranger reading only this line must instantly guess '
-            'the scenario from the content + energy alone — never say "welcome to this roleplay" '
-            'or explain the scene; use specific vocabulary that belongs only in this scenario. '
-            'CRITICAL (2) FRESH INVENTED DETAIL for this retry: pick a DIFFERENT tiny detail from '
-            'the previous attempt (a different restaurant special, a different party song, a '
-            'different airport delay cause, a different market vegetable, etc.). React to that '
-            'new detail first, share a mini in-character opinion / tease / observation, THEN fold '
-            'the follow-up question out of that reaction. '
-            'CRITICAL (3) LENGTH/PACING: one single beat, no stacking — 1-2 sentences only. '
+            + '. 1-2 SHORT sentences MAX (never 4+). ONE reaction-beat '
+            '(fresh invented scenario detail, DIFFERENT from the previous '
+            'attempt) + ONE easy follow-up question folded naturally out '
+            'of it. Target language only. '
+            'CRITICAL (1) ENV-GUESS TEST: a stranger reading only this line '
+            'must instantly guess the scenario from the content + energy '
+            'alone — never say "welcome to this roleplay" or explain the '
+            'scene; use specific vocabulary that belongs only in this '
+            'scenario. '
+            'CRITICAL (2) FRESH INVENTED DETAIL for this retry: pick a '
+            'DIFFERENT tiny detail from the previous attempt '
+            '(a different restaurant special, a different party song, '
+            'a different airport delay cause, a different market vegetable, '
+            'etc.). React to that new detail first, share a mini '
+            'in-character opinion / tease / observation, THEN fold the '
+            'follow-up question out of that reaction. '
+            'CRITICAL (3) LENGTH/PACING: one single beat, no stacking — '
+            '1-2 sentences only. '
             'BAD (flat): "Hi! Welcome. How are you feeling today?" '
-            'GOOD (alive, feel-only reference, do NOT copy words): "Heyyy you made it! I was starting '
-            'to think you\'d bail on me lol — okay but this playlist though, you\'re gonna love it." '
-            'Make the invented detail specific and tied to this exact scenario — a new restaurant '
-            'menu item, a song at the party, a vendor\'s just-arrived produce, whatever fits.'
+            'GOOD (alive, feel-only reference, do NOT copy words): '
+            '"Heyyy you made it! I was starting to think you\'d bail on me '
+            'lol — okay but this playlist though, you\'re gonna love it." '
+            'Make the invented detail specific and tied to this exact '
+            'scenario — a new restaurant menu item, a song at the party, '
+            'a vendor\'s just-arrived produce, whatever fits.'
             + name_note
             + ')'
         )
+
         try:
             second_raw = await chat._call_model([
-                {'role': 'system', 'content': sys_prompt},
-                {'role': 'user', 'content': retry_instruction},
+                {
+                    'role': 'system',
+                    'content': sys_prompt
+                },
+                {
+                    'role': 'user',
+                    'content': retry_instruction
+                },
             ])
+
             second_clean, _, _ = chat._split_and_extract(second_raw)
+
             second = second_clean.strip()
+
             if second and not _opening_looks_generic(second):
                 opening = second
             else:
                 opening = _fallback_opening(scenario)
+
         except Exception as exc:  # pragma: no cover - network layer
-            logger.warning('roleplay_opening_regen_failed user=%s error=%s', user_id, type(exc).__name__)
+            logger.warning(
+                'roleplay_opening_regen_failed user=%s error=%s',
+                user_id,
+                type(exc).__name__
+            )
             opening = _fallback_opening(scenario)
-            try:
-        audio, mime_type = await synthesize_for_user(user_id, opening)
+
+    try:
+        audio, mime_type = await synthesize_for_user(
+            user_id,
+            opening
+        )
+
     except RoleplayTtsError as error:
+
         logger.warning(
             'Roleplay opening TTS unavailable user=%s provider_error=%s',
             user_id,
             str(error)[:200],
         )
+
         # Do not leave a successful-looking session when the opening voice failed.
         try:
-            db.table('english_roleplay_messages').delete() \
-                .eq('session_id', sid) \
-                .eq('user_id', user_id) \
+            (
+                db.table('english_roleplay_messages')
+                .delete()
+                .eq('session_id', sid)
+                .eq('user_id', user_id)
                 .execute()
-            db.table('english_roleplay_sessions').delete() \
-                .eq('id', sid) \
-                .eq('user_id', user_id) \
+            )
+
+            (
+                db.table('english_roleplay_sessions')
+                .delete()
+                .eq('id', sid)
+                .eq('user_id', user_id)
                 .execute()
+            )
+
         except Exception:
-            logger.exception('Failed to clean up failed roleplay start user=%s', user_id)
+            logger.exception(
+                'Failed to clean up failed roleplay start user=%s',
+                user_id
+            )
+
         raise chat.EnglishPracticeError(
-            'AI voice could not be generated. Please try again.', 502
+            'AI voice could not be generated. Please try again.',
+            502
         ) from error
 
     if not audio:
         raise chat.EnglishPracticeError(
-            'AI voice returned empty audio. Please try again.', 502,
+            'AI voice returned empty audio. Please try again.',
+            502
         )
 
     db.table('english_roleplay_messages').insert({
@@ -368,19 +471,18 @@ sys_prompt = build_roleplay_prompt(
     }).execute()
 
     result = {
-        'session_id': sid, 'scenario': scenario, 'started_at': row['started_at'],
+        'session_id': sid,
+        'scenario': scenario,
+        'started_at': row['started_at'],
         'opening_reply': opening,
         'suggestions': opening_suggestions,
-        'audio_bytes': audio, 'audio_mime_type': mime_type,
+        'audio_bytes': audio,
+        'audio_mime_type': mime_type,
     }
-    result = {
-        'session_id': sid, 'scenario': scenario, 'started_at': row['started_at'],
-        'opening_reply': opening,
-        'suggestions': opening_suggestions,
-        'audio_bytes': audio, 'audio_mime_type': mime_type,
-    }
+
     if opening_mcq is not None:
         result['mcq'] = opening_mcq
+
     return result
 
 
