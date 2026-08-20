@@ -4,7 +4,8 @@ import 'package:examspark_frontend/presentation/screens/english_practice/english
 import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_screen.dart';
 
 /// Route target for "English Practice" — decides picker vs chat based on
-/// whether the student already has a saved native-language preference.
+/// whether the student already has a saved native-language AND
+/// target-language preference. Either is missing → show the two-step picker.
 class EnglishPracticeEntry extends StatefulWidget {
   const EnglishPracticeEntry({super.key});
 
@@ -14,7 +15,7 @@ class EnglishPracticeEntry extends StatefulWidget {
 
 class _EnglishPracticeEntryState extends State<EnglishPracticeEntry> {
   bool _loading = true;
-  bool _hasLanguage = false;
+  bool _hasBothLanguages = false;
 
   @override
   void initState() {
@@ -24,16 +25,20 @@ class _EnglishPracticeEntryState extends State<EnglishPracticeEntry> {
 
   Future<void> _check() async {
     try {
-      final lang = await LectureService.instance.getEnglishPracticeLanguage();
+      final pref = await LectureService.instance.getEnglishPracticePreference();
+      final native = (pref?['native_language'] as String?)?.trim();
+      final target = (pref?['target_language'] as String?)?.trim();
       if (!mounted) return;
       setState(() {
-        _hasLanguage = lang != null && lang.trim().isNotEmpty;
+        _hasBothLanguages =
+            (native != null && native.isNotEmpty) &&
+            (target != null && target.isNotEmpty);
         _loading = false;
       });
     } catch (_) {
       if (!mounted) return;
       setState(() {
-        _hasLanguage = false;
+        _hasBothLanguages = false;
         _loading = false;
       });
     }
@@ -44,7 +49,7 @@ class _EnglishPracticeEntryState extends State<EnglishPracticeEntry> {
     if (_loading) {
       return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
-    return _hasLanguage
+    return _hasBothLanguages
         ? const EnglishPracticeScreen()
         : const EnglishLanguagePickerScreen();
   }

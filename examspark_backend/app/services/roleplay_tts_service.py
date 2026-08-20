@@ -6,6 +6,11 @@ from typing import Final
 from app.services.gemini_tts_service import GeminiTtsError, synthesize_speech as synthesize_gemini
 from app.services.qwen_tts_service import QwenTtsError, synthesize_speech as synthesize_qwen
 from app.services.supabase_admin import get_supabase_admin
+from app.services import english_learning_memory_service as learning_memory
+
+
+class RoleplayTtsError(Exception):
+    """User-facing Roleplay TTS failure; recoverable via JSON fallback turn."""
 
 
 # Flutter receives only these friendly keys/labels. Provider voice IDs remain server-side.
@@ -35,9 +40,13 @@ _VOICE_IDS: Final[dict[str, dict[str, str]]] = {
 _DEFAULT_PROVIDER = "qwen"
 _DEFAULT_VOICE_KEY = "female"
 
-
-class RoleplayTtsError(Exception):
-    """A safe failure that the Roleplay HTTP/SSE routes may expose."""
+_SPEED_BY_LEVEL = {
+    "beginner": 0.75,
+    "elementary": 0.85,
+    "intermediate": 0.95,
+    "advanced": 1.0,
+}
+_DEFAULT_SPEED = 0.85
 
 
 def _normalise(provider: str | None, voice_key: str | None) -> tuple[str, str]:
@@ -88,13 +97,24 @@ def set_voice_preference(user_id: str, provider: str, voice_key: str) -> dict[st
     return get_voice_preference(user_id)
 
 
+def _user_speed(user_id: str) -> float:
+    try:
+        level = learning_memory.load_memory(user_id).get("english_level")
+        if level and level in _SPEED_BY_LEVEL:
+            return _SPEED_BY_LEVEL[level]
+    except Exception:
+        pass
+    return _DEFAULT_SPEED
+
+
 async def synthesize_for_user(user_id: str, text: str) -> tuple[bytes, str]:
     preference = get_voice_preference(user_id)
     provider = preference["provider"]
     voice_id = _VOICE_IDS[provider][preference["voice_key"]]
+    speed = _user_speed(user_id)
     try:
         if provider == "qwen":
-            return await synthesize_qwen(text, voice=voice_id)
-        return await synthesize_gemini(text, voice=voice_id)
+            return await synthesize_qwen(text, voice=voice_id, speed=speed, user_id=user_id)
+        return await synthesize_gemini(text, voice=voice_id, speed=speed, user_id=user_id)
     except (QwenTtsError, GeminiTtsError) as error:
         raise RoleplayTtsError(str(error)) from error

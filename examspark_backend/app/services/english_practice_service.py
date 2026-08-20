@@ -25,7 +25,6 @@ from app.services.credits_service import InsufficientCreditsError, deduct_credit
 from app.services.supabase_admin import get_supabase_admin
 from app.services.openrouter_stream import OpenRouterStreamError, stream_chat_completions
 from app.services.whisper_service import WhisperTranscriptionError, transcribe_audio
-from app.services.qwen_tts_service import QwenTtsError, synthesize_speech
 
 logger = logging.getLogger(__name__)
 
@@ -56,40 +55,164 @@ def _extract_suggestions(text: str) -> tuple[str, list[str]]:
     return clean, suggestions
 
 
-def _system_prompt(native_language: str, target_focus: str | None, memory_context: str = '') -> str:
-    base = f"""{build_chat_prompt(native_language)}
-{build_teacher_prompt(native_language, target_focus)}
+def _extract_mcq(text: str) -> tuple[str, dict | None]:
+    """Pull <<PRACTICE_MCQ>>...<<END_PRACTICE_MCQ>> JSON out of an AI reply.
+
+    Returns (cleaned_text_without_block, mcq_dict_or_None).
+    mcq_dict keys: question (str), options (list[str] of 3), correct_option (int 0-2).
+    """
+    import json
+    import re
+    match = re.search(
+        r'<<PRACTICE_MCQ>>\s*(.*?)\s*<<END_PRACTICE_MCQ>>',
+        text,
+        re.DOTALL,
+    )
+    if not match:
+        return text.strip(), None
+    raw = match.group(1).strip()
+    clean = re.sub(
+        r'<<PRACTICE_MCQ>>.*?<<END_PRACTICE_MCQ>>',
+        '',
+        text,
+        flags=re.DOTALL,
+    ).strip()
+    parsed: object = None
+    try:
+        parsed = json.loads(raw)
+    except Exception:
+        start = raw.find('{')
+        end = raw.rfind('}')
+        if start != -1 and end != -1 and end > start:
+            try:
+                parsed = json.loads(raw[start:end + 1])
+            except Exception:
+                parsed = None
+    if not isinstance(parsed, dict):
+        return clean, None
+    question = parsed.get("question")
+    options = parsed.get("options")
+    correct = parsed.get("correct_option")
+    if (
+        not isinstance(question, str)
+        or not question.strip()
+        or not isinstance(options, list)
+        or len(options) != 3
+        or not all(isinstance(o, str) and str(o).strip() for o in options)
+        or not isinstance(correct, int)
+        or correct < 0
+        or correct > 2
+    ):
+        return clean, None
+    return clean, {
+        "question": question.strip(),
+        "options": [str(o).strip() for o in options],
+        "correct_option": int(correct),
+    }
+
+
+def _build_mcq_instruction(native_language: str, target_language: str) -> str:
+    tgt = target_language or "English"
+    nat = native_language
+    return f"""
+OPTIONAL PRACTICE MCQ BLOCK — this is SEPARATE from the <<SUGGESTIONS>>
+short-phrase chips feature. DO NOT replace <<SUGGESTIONS>> with this block.
+Both features are independent and both may appear across different turns.
+
+WHEN TO INCLUDE IT:
+- Only when a short gradeable practice moment naturally fits, e.g. you have
+  just taught a grammar point, just introduced a new {tgt} vocabulary word,
+  or just finished correcting a clear mistake the student made in their last turn.
+- Never on the very first greeting / onboarding turn of a brand-new conversation.
+- Never more than ONE MCQ block per AI reply.
+- NOT on every single turn — only every 2-4 teaching turns when it actually helps.
+- NEVER include this block on any turn that already uses <<PRACTICE_QUESTION>>
+  (the existing open-ended practice marker). Use one or the other per turn.
+- Skip it entirely if the same question structure (grammar vs vocab vs
+  translation) was already used in either of the last 2 AI replies — vary it.
+
+OUTPUT FORMAT — if you include it, APPEND AFTER the normal reply EXACTLY:
+<<PRACTICE_MCQ>>
+{{
+  "question": "target-language question text",
+  "options": ["option 1", "option 2", "option 3"],
+  "correct_option": 0
+}}
+<<END_PRACTICE_MCQ>>
+
+VALIDATE before emitting:
+- correct_option MUST be an integer index of the correct choice (0, 1, or 2).
+- options MUST be exactly 3 non-empty strings.
+- question MUST be a single non-empty string.
+
+MCQ LANGUAGE RULES — READ EVERY TIME:
+(1) The QUESTION text is written ONLY in the TARGET LANGUAGE you are teaching
+    ({tgt}). Never write the MCQ question in {nat} (the student's native language).
+(2) Every {tgt} word or phrase whose WRITING SCRIPT differs from the native
+    {nat} script MUST have a natural pronunciation guide in round brackets
+    IMMEDIATELY after it. Transliterate the pronunciation using the student's
+    OWN native {nat} script and reading conventions — NOT Roman-only IPA.
+    Example (native = Bengali script, target = Tamil):
+      Correct:   வணக்கம் (বনক্কম)
+      Only use raw Roman transliteration (e.g. Vanakkam) in brackets if the
+      native {nat} language itself is normally typed using Roman letters.
+    Make the bracketed text how a real casual {nat} reader would naturally
+    sound it out — not a stiff dictionary phonetic entry.
+(3) The 3 OPTIONS follow EXACTLY the same rule as the question:
+    write them in {tgt}, and add a ({nat}-script pronunciation) in round
+    brackets right after every {tgt} token whose writing script differs from {nat}.
+(4) The student's answer INPUT is FREE-FORM and NEVER a forced quiz:
+      - they may tap one of the 3 MCQ options, OR
+      - they may ignore the options and type/speak their own free-form answer,
+        which can be in either {nat} or {tgt}, whichever they prefer.
+(5) REMEMBER AGAIN: this MCQ block is in ADDITION TO, not instead of, the
+    existing <<SUGGESTIONS>> chips. Both features coexist independently.
+"""
+
+
+def _system_prompt(
+    native_language: str,
+    target_focus: str | None,
+    memory_context: str = '',
+    target_language: str = "English",
+) -> str:
+    tgt = target_language or "English"
+    base = f"""{build_chat_prompt(native_language, tgt)}
+{build_teacher_prompt(native_language, target_focus, tgt)}
 
 The student's native/local language is: {native_language}.
+The language the student is learning (target language) is: {tgt}.
 
-HOW TO SOUND IN {native_language}:
-- Write {native_language} the way a real native speaker actually talks in everyday conversation — natural rhythm, common local expressions, the words a friend would really use.
-- NEVER sound like a stiff, word-for-word translation from English. If a sentence reads like machine-translated text, rewrite it the way a local person would naturally say it.
-- Use the native script (not transliteration) unless the student writes to you in transliteration first.
+HOW TO SOUND IN {native_language} — FOLLOW THESE RULES EVERY SINGLE TIME:
+- Write {native_language} the way an actual native speaker casually talks in real everyday conversation. Use natural word choice, natural sentence rhythm, and the common everyday idioms / phrases a local person would actually use when chatting with a friend. Do NOT sound like a teacher reading from a textbook.
+- ABSOLUTELY NEVER produce {native_language} that reads like a stiff, word-for-word, literal translation from {tgt} or English. If you write a sentence and it feels formal / wooden / translated / robotic — STOP — do not output it. Rewrite it the way a real person from that {native_language}-speaking community would naturally say it in their own casual, day-to-day speech.
+- Use the everyday native script people normally use for typing / texting / chatting in {native_language}. Do not use overly formal, literary, poetic, archaic, or textbook-heavy register. Sound like a helpful local friend, not a grammar book, not a dictionary, not Google Translate.
+- What to AVOID in {native_language}: awkward calques (loan-translations), word order that only works in {tgt} or English, stiff dictionary synonyms when a simpler everyday word is what everyone actually uses, rare literary / archaic words no one uses day-to-day, sentences that read naturally in English but would sound strange or pretentious to a real {native_language} speaker.
 
 STRICT ONBOARDING RULES (only for a brand-new conversation):
-1. Greet warmly in {native_language}, like a friendly local teacher — not a robot.
-2. Make it clear that English can start from zero; the learner does not need to know where to begin.
-3. Ask ONE simple question in {native_language}: do they want to start with basic speaking, grammar, or vocabulary? Also accept a free-form answer such as "I cannot speak English".
-4. Do NOT repeat the question once it has been answered.
+1. Greet warmly in {native_language}, like a friendly local teacher — not a robot. As part of this natural greeting, if you do NOT already know the learner's name, casually ask for it ONCE in {native_language}, in the same conversational tone (NOT a robotic form-field style). For example: "नमस्ते! मैं आपकी {tgt} सीखने में मदद करूँगी/करूँगा। बताइए, आपका नाम क्या है?" or whatever fits naturally in {native_language}. If the learner skips the name or doesn't give it, NEVER ask again.
+2. Make it clear that {tgt} can start from zero; the learner does not need to know where to begin.
+3. After the greeting (+ optional casual name ask above), ask ONE simple question in {native_language}: do they want to start with basic speaking, grammar, or vocabulary? Also accept a free-form answer such as "I cannot speak {tgt}".
+4. Do NOT repeat the focus question once it has been answered.
 
 LEVEL-CHECK RULES (once you know the focus, BEFORE teaching properly):
-5. Ask 1-2 short, pressure-free questions IN ENGLISH to see what the student already knows — e.g. a simple self-introduction or completing a basic sentence. If they say they are new, begin immediately instead of testing them further.
+5. Ask 1-2 short, pressure-free questions IN {tgt} to see what the student already knows — e.g. a simple self-introduction or completing a basic sentence. If they say they are new, begin immediately instead of testing them further.
 6. Based on their answers (vocabulary, grammar accuracy, confidence), silently judge their level: Beginner / Elementary / Intermediate / Advanced. Never announce this label out loud — just use it to guide how you teach from here on.
 7. If they struggle, give a very basic answer, or reply in {native_language} instead of the target language, treat them as Beginner and start from the absolute basics.
 
 TEACHING RULES (once the level is known):
-- Beginner: explain mostly in {native_language}, give tiny bite-size English phrases, repeat often, be very encouraging.
+- Beginner: explain mostly in {native_language}, give tiny bite-size {tgt} phrases, repeat often, be very encouraging.
 - Intermediate: mix both languages roughly 50/50, introduce short grammar rules, expect full sentences back from the student.
-- Advanced: mostly the target language, natural pace, correct mistakes subtly without long explanations.
+- Advanced: mostly {tgt}, natural pace, correct mistakes subtly without long explanations.
 - Keep every reply SHORT (2-5 sentences) — this is a live chat, not a lecture.
 - Always end with a small follow-up question or a tiny practice task, so the conversation keeps flowing.
 - Correct mistakes gently: show the correct form, briefly explain why (in {native_language} if the student is a beginner), then continue — never just say "wrong".
-- As the student improves, gradually use more English and less {native_language}.
+- As the student improves, gradually use more {tgt} and less {native_language}.
 - Be encouraging, never robotic, never repeat the same phrasing twice in a row.
 - Never break character or mention that you are an AI model or a prompt.
 
 {SUGGESTION_INSTRUCTION}
+{_build_mcq_instruction(native_language, tgt)}
 {build_conversation_flow_instruction(focus_selected=bool(target_focus))}
 """
     if target_focus:
@@ -97,327 +220,480 @@ TEACHING RULES (once the level is known):
     return base + (f"\n\n{memory_context}" if memory_context else '')
 
 
-async def _chat_audio(text: str) -> tuple[bytes | None, str | None]:
-    """Use the existing Qwen TTS adapter; text chat remains usable on TTS failure."""
-    try:
-        return await synthesize_speech(text)
-    except QwenTtsError:
-        logger.warning("English Chat TTS unavailable", exc_info=True)
-        return None, None
+def _temperature_for_messages(message_count: int) -> float:
+    if message_count <= 4:
+        return 0.5
+    if message_count <= 10:
+        return 0.6
+    return 0.75
+
+
+def _max_tokens_for_messages(message_count: int) -> int:
+    if message_count <= 4:
+        return 400
+    if message_count <= 10:
+        return 700
+    return 900
 
 
 async def _call_model(messages: list[dict]) -> str:
+    """Non-streaming OpenRouter call — used for turns that return JSON extras."""
+    import httpx
+    from app.config import AIConfig
+    from app.constants.ai_response_status import API_ERROR, NETWORK_ERROR, TIMEOUT
+
     if not AIConfig.openrouter_configured():
-        raise EnglishPracticeError("OPENROUTER_API_KEY not configured on the server.", 500)
+        raise EnglishPracticeError(
+            "OPENROUTER_API_KEY not configured on the server.",
+            500,
+        )
+    temperature = _temperature_for_messages(len(messages))
+    max_tokens = _max_tokens_for_messages(len(messages))
+    headers = {
+        "Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": AIConfig.AI_CHAT_MODEL,
+        "messages": messages,
+        "temperature": temperature,
+        "max_tokens": max_tokens,
+    }
     try:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=90.0) as client:
             response = await client.post(
                 _OPENROUTER_URL,
-                headers={
-                    "Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": AIConfig.AI_CHAT_MODEL,
-                    "messages": messages,
-                    "temperature": 0.5,
-                    "max_tokens": 400,
-                },
-                timeout=60.0,
+                headers=headers,
+                json=body,
             )
+            if response.status_code != 200:
+                err = (response.text or "")[:400]
+                raise EnglishPracticeError(
+                    f"Tutor call failed ({response.status_code}): {err}",
+                    502,
+                )
+            payload = response.json()
+            choices = payload.get("choices") or []
+            if not choices:
+                return ""
+            message = choices[0].get("message") or {}
+            content = message.get("content")
+            return content if isinstance(content, str) else ""
+    except httpx.TimeoutException as e:
+        raise EnglishPracticeError("Tutor call timed out.", 504) from e
     except httpx.RequestError as e:
-        raise EnglishPracticeError(f"Network error: {e}", 502) from e
-
-    if response.status_code != 200:
-        raise EnglishPracticeError(
-            f"Model call failed: {response.status_code} {response.text[:200]}", 502
-        )
-    data = response.json()
-    choices = data.get("choices") or []
-    if not choices:
-        raise EnglishPracticeError("Model returned no response.", 502)
-    content = (choices[0].get("message") or {}).get("content") or ""
-    if not content.strip():
-        raise EnglishPracticeError("Model returned an empty response.", 502)
-    return content.strip()
+        raise EnglishPracticeError(f"Tutor network error: {e}", 502) from e
+    except EnglishPracticeError:
+        raise
+    except Exception as e:
+        raise EnglishPracticeError(f"Tutor error: {e}", 500) from e
 
 
 async def _stream_model(messages: list[dict]) -> AsyncIterator[str]:
-    """Additive Qwen3 token stream for Roleplay; JSON callers keep `_call_model`."""
+    temperature = _temperature_for_messages(len(messages))
+    max_tokens = _max_tokens_for_messages(len(messages))
     try:
         async for delta in stream_chat_completions(
             messages,
-            temperature=0.5,
-            max_tokens=400,
-            timeout=60.0,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            timeout=90.0,
         ):
             yield delta
-    except OpenRouterStreamError as error:
-        raise EnglishPracticeError(str(error), error.status_code) from error
+    except OpenRouterStreamError as e:
+        raise EnglishPracticeError(str(e), e.status_code) from e
+
+
+def get_native_language(user_id: str) -> str:
+    try:
+        row = (
+            get_supabase_admin()
+            .table("profiles")
+            .select("english_native_language")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+            .data or []
+        )
+    except Exception:
+        return ""
+    if not row:
+        return ""
+    value = row[0].get("english_native_language") or ""
+    return value if isinstance(value, str) else ""
+
+
+def get_target_language(user_id: str) -> str:
+    try:
+        row = (
+            get_supabase_admin()
+            .table("profiles")
+            .select("english_target_language")
+            .eq("id", user_id)
+            .limit(1)
+            .execute()
+            .data or []
+        )
+    except Exception:
+        return ""
+    if not row:
+        return "English"
+    value = row[0].get("english_target_language") or "English"
+    return value if isinstance(value, str) else "English"
 
 
 def set_native_language(user_id: str, language: str) -> None:
     lang = (language or "").strip()
     if not lang:
-        raise EnglishPracticeError("Language is required.", 400)
-    db = get_supabase_admin()
-    db.table("users").update({"preferred_native_language": lang}).eq("id", user_id).execute()
+        raise EnglishPracticeError("Language cannot be empty.", 400)
+    if len(lang) > 60:
+        raise EnglishPracticeError("Language name is too long.", 400)
+    try:
+        get_supabase_admin().table("profiles").update(
+            {"english_native_language": lang}
+        ).eq("id", user_id).execute()
+    except Exception as e:
+        raise EnglishPracticeError(f"Could not save preference: {e}", 500) from e
 
 
-def get_native_language(user_id: str) -> str | None:
-    db = get_supabase_admin()
-    res = (
-        db.table("users")
-        .select("preferred_native_language")
-        .eq("id", user_id)
-        .limit(1)
-        .execute()
-    )
-    rows = res.data or []
-    if not rows:
-        return None
-    return rows[0].get("preferred_native_language")
+def set_target_language(user_id: str, language: str) -> None:
+    lang = (language or "").strip()
+    if not lang:
+        raise EnglishPracticeError("Language cannot be empty.", 400)
+    if len(lang) > 60:
+        raise EnglishPracticeError("Language name is too long.", 400)
+    try:
+        get_supabase_admin().table("profiles").update(
+            {"english_target_language": lang}
+        ).eq("id", user_id).execute()
+    except Exception as e:
+        raise EnglishPracticeError(f"Could not save preference: {e}", 500) from e
 
 
-def _create_session(user_id: str, native_language: str) -> dict:
-    db = get_supabase_admin()
-    row = {
-        "user_id": user_id,
-        "native_language": native_language,
-        "status": "active",
-        "title": "English Practice",
-        "created_at": _now(),
-        "updated_at": _now(),
-    }
-    res = db.table("english_practice_sessions").insert(row).execute()
-    return (res.data or [{}])[0]
-
-
-def _get_session(session_id: str, user_id: str) -> dict | None:
-    db = get_supabase_admin()
-    res = (
-        db.table("english_practice_sessions")
+def _session_row(session_id: str, user_id: str) -> dict | None:
+    rows = (
+        get_supabase_admin()
+        .table("english_practice_sessions")
         .select("*")
         .eq("id", session_id)
         .eq("user_id", user_id)
         .limit(1)
         .execute()
+        .data or []
     )
-    rows = res.data or []
     return rows[0] if rows else None
 
 
-def _save_message(session_id: str, user_id: str, role: str, text: str, credits: int = 0) -> None:
+def list_sessions(user_id: str, limit: int = 30) -> list[dict]:
+    limit = max(1, min(limit, 100))
+    rows = (
+        get_supabase_admin()
+        .table("english_practice_sessions")
+        .select("id, title, pinned, created_at, updated_at, message_count")
+        .eq("user_id", user_id)
+        .order("pinned", desc=True)
+        .order("updated_at", desc=True)
+        .limit(limit)
+        .execute()
+        .data or []
+    )
+    return list(rows)
+
+
+def restore_session(session_id: str, user_id: str) -> dict | None:
+    session = _session_row(session_id, user_id)
+    if not session:
+        return None
+    messages = (
+        get_supabase_admin()
+        .table("english_practice_messages")
+        .select("role, message, created_at")
+        .eq("session_id", session_id)
+        .eq("user_id", user_id)
+        .order("created_at", desc=False)
+        .execute()
+        .data or []
+    )
+    return {
+        "id": session["id"],
+        "title": session.get("title"),
+        "pinned": bool(session.get("pinned")),
+        "created_at": session.get("created_at"),
+        "updated_at": session.get("updated_at"),
+        "messages": list(messages),
+    }
+
+
+def rename_session(session_id: str, user_id: str, title: str) -> dict | None:
+    cleaned = (title or "").strip()[:120]
+    if not cleaned:
+        raise EnglishPracticeError("Title cannot be empty.", 400)
+    result = (
+        get_supabase_admin()
+        .table("english_practice_sessions")
+        .update({"title": cleaned})
+        .eq("id", session_id)
+        .eq("user_id", user_id)
+        .select("id, title")
+        .execute()
+        .data or []
+    )
+    return result[0] if result else None
+
+
+def delete_session(session_id: str, user_id: str) -> bool:
+    if not _session_row(session_id, user_id):
+        return False
+    get_supabase_admin().table("english_practice_messages").delete().eq(
+        "session_id", session_id
+    ).eq("user_id", user_id).execute()
+    result = (
+        get_supabase_admin()
+        .table("english_practice_sessions")
+        .delete()
+        .eq("id", session_id)
+        .eq("user_id", user_id)
+        .execute()
+    )
+    return True
+
+
+def set_session_pinned(session_id: str, user_id: str, pinned: bool) -> bool:
+    if not _session_row(session_id, user_id):
+        return False
+    get_supabase_admin().table("english_practice_sessions").update(
+        {"pinned": bool(pinned), "updated_at": _now()}
+    ).eq("id", session_id).eq("user_id", user_id).execute()
+    return True
+
+
+def _focus_from_message(text: str) -> str | None:
+    t = text.lower()
+    if any(w in t for w in ["grammar", "grammar", "vyakaran", "व्याकरण"]):
+        return "grammar"
+    if any(w in t for w in ["vocab", "word", "shabd", "शब्द", "word meaning", "vocabulary"]):
+        return "vocabulary"
+    if any(w in t for w in ["speak", "bol", "बोल", "speaking", "conversation", "baat", "बात"]):
+        return "speaking"
+    if "i cannot speak" in t or "i don't speak" in t or "i can't speak" in t:
+        return "beginner"
+    return None
+
+
+def _build_context_messages(
+    session_id: str,
+    user_id: str,
+    native_language: str,
+    target_language: str,
+    focus: str | None,
+) -> tuple[list[dict], int]:
     db = get_supabase_admin()
-    db.table("english_practice_messages").insert(
+    rows = (
+        db.table("english_practice_messages")
+        .select("role, message")
+        .eq("session_id", session_id)
+        .eq("user_id", user_id)
+        .order("created_at", desc=True)
+        .limit(_CONTEXT_MESSAGES)
+        .execute()
+        .data or []
+    )
+    message_count = len(rows)
+    memory_context = learning_memory.format_memory_context(
+        learning_memory.load_memory(user_id), mode="chat"
+    )
+    system_text = _system_prompt(
+        native_language=native_language,
+        target_focus=focus,
+        memory_context=memory_context,
+        target_language=target_language,
+    )
+    messages: list[dict] = [{"role": "system", "content": system_text}]
+    messages += [{"role": r["role"], "content": r["message"]} for r in reversed(rows)]
+    return messages, message_count
+
+
+def _persist_message(
+    session_id: str, user_id: str, role: str, message: str
+) -> None:
+    get_supabase_admin().table("english_practice_messages").insert(
         {
             "session_id": session_id,
             "user_id": user_id,
             "role": role,
-            "message": text,
-            "credits_used": credits,
-            "created_at": _now(),
+            "message": message,
         }
     ).execute()
+    get_supabase_admin().table("english_practice_sessions").update(
+        {"updated_at": _now(), "message_count": _message_count_incremental(session_id, user_id)}
+    ).eq("id", session_id).eq("user_id", user_id).execute()
 
 
-def _recent_messages(session_id: str, limit: int = _CONTEXT_MESSAGES) -> list[dict]:
-    db = get_supabase_admin()
-    res = (
-        db.table("english_practice_messages")
-        .select("role,message,created_at")
+def _message_count_incremental(session_id: str, user_id: str) -> int:
+    rows = (
+        get_supabase_admin()
+        .table("english_practice_messages")
+        .select("id", count="exact")
         .eq("session_id", session_id)
-        .order("created_at", desc=True)
-        .limit(limit)
+        .eq("user_id", user_id)
         .execute()
+        .data or []
     )
-    rows = list(res.data or [])
-    rows.reverse()  # chronological order for the model
-    return rows
+    return len(rows)
+
+
+def _split_and_extract(raw_reply: str) -> tuple[str, list[str], dict | None]:
+    """Run extractors in order and return (clean_text, suggestions, mcq)."""
+    clean, suggestions = _extract_suggestions(raw_reply)
+    clean, mcq = _extract_mcq(clean)
+    return clean.strip(), suggestions, mcq
 
 
 async def start_session(user_id: str) -> dict:
-    """Called when the user opens the English Practice page (after native
-    language is already set). Creates a session and generates the free
-    opening greeting + first question — no credit charge."""
-    native_language = get_native_language(user_id)
-    if not native_language:
-        raise EnglishPracticeError("Native language not set yet.", 400)
-
-    session = _create_session(user_id, native_language)
+    db = get_supabase_admin()
+    native = get_native_language(user_id) or "English"
+    target = get_target_language(user_id) or "English"
+    if not native or native.strip() == "":
+        native = "English"
+    session = (
+        db.table("english_practice_sessions")
+        .insert(
+            {
+                "user_id": user_id,
+                "native_language": native,
+                "target_language": target,
+                "status": "active",
+                "title": f"{target} Practice · {_now()[:10]}",
+                "message_count": 0,
+            }
+        )
+        .execute()
+        .data[0]
+    )
     sid = session["id"]
-
-    system = _system_prompt(native_language, None, learning_memory.format_memory_context(learning_memory.load_memory(user_id), mode='chat'))
-    greeting = await _call_model(
+    memory_context = learning_memory.format_memory_context(
+        learning_memory.load_memory(user_id), mode="chat"
+    )
+    system_text = _system_prompt(
+        native_language=native,
+        target_focus=None,
+        memory_context=memory_context,
+        target_language=target,
+    )
+    raw = await _call_model(
         [
-            {"role": "system", "content": system},
+            {"role": "system", "content": system_text},
             {
                 "role": "user",
-                "content": "(system: start the conversation now with the greeting + first question, per the ONBOARDING RULES)",
+                "content": "(system: This is the very first greeting turn of a brand new conversation. Welcome the learner warmly in their native language, keep it short and EXCITED — like running into a friend who wants to finally learn something together, not a reception desk. FRIEND-ENERGY CALIBRATION: Do NOT just flatly say 'Welcome! What would you like to learn today?' Instead, give ONE tiny specific vibe/opinion first (e.g. a playful 'Great day to start speaking — way better than scrolling, trust me lol' or whatever feels natural in their native language, fresh every time), then fold the rest into that reaction. If you do NOT already know the learner's name (check the learner-memory block above), casually ask for it ONCE as part of your greeting — do NOT make it sound like a form field. Then ask them whether they want to start with basic speaking, grammar, or vocabulary. If you already know their name from the memory block, you may use it naturally once. Do NOT emit a PRACTICE_MCQ block on this opening turn. BAD flat example to AVOID: 'Namaste! Aapka swagat hai. Aap kya seekhna chahenge?' GOOD alive example (feel only, do NOT copy words — invent a fresh vibe): 'Wah! Aaj finally {tgt} सीखने का perfect day hai — honestly main bhi excited hoon shuru karne ke liye! 😊 Pehle to bataiye, aapka naam kya hai? Phir decide karte hain — start with bolna chahenge, ya thoda grammar, ya naye vocabulary words?')",
             },
         ]
     )
-    _save_message(sid, user_id, "assistant", greeting, credits=0)
-    clean_greeting, suggestions = _extract_suggestions(greeting)
-    audio_bytes, audio_mime_type = await _chat_audio(clean_greeting)
-
-    return {
+    clean, suggestions, mcq = _split_and_extract(raw)
+    greeting = clean or f"Welcome! Let's start {target} practice — pick speaking, grammar, or vocabulary to begin."
+    _persist_message(sid, user_id, "assistant", greeting)
+    try:
+        from app.services.gemini_tts_service import synthesize_for_user as _tts
+        audio_bytes, mime = await _tts(user_id, greeting)
+    except Exception:
+        audio_bytes, mime = None, None
+    result: dict = {
         "session_id": sid,
-        "native_language": native_language,
-        "greeting": clean_greeting,
+        "native_language": native,
+        "target_language": target,
+        "greeting": greeting,
         "suggestions": suggestions,
-        "credits_charged": 0,
-        "audio_bytes": audio_bytes,
-        "audio_mime_type": audio_mime_type,
+        "created_at": session.get("created_at"),
     }
+    if mcq is not None:
+        result["mcq"] = mcq
+    if audio_bytes is not None:
+        result["audio_bytes"] = audio_bytes
+        result["audio_mime_type"] = mime
+    return result
 
 
-async def send_message(user_id: str, session_id: str, text: str) -> dict:
-    msg = (text or "").strip()
-    if not msg:
-        raise EnglishPracticeError("Message is empty.", 400)
-
-    session = _get_session(session_id, user_id)
+async def send_message(
+    user_id: str, session_id: str, message: str
+) -> dict:
+    session = _session_row(session_id, user_id)
+    text = (message or "").strip()
     if not session:
         raise EnglishPracticeError("Session not found.", 404)
-    if session.get("status") != "active":
-        raise EnglishPracticeError("This session has ended — start a new chat.", 409)
-
-    # Credit check (server-enforced)
+    if not text:
+        raise EnglishPracticeError("Message cannot be empty.", 400)
+    native = session.get("native_language") or get_native_language(user_id) or "English"
+    target = session.get("target_language") or "English"
+    existing_count = _message_count_incremental(session_id, user_id)
+    if existing_count >= _MAX_SESSION_MESSAGES:
+        raise EnglishPracticeError(
+            "This session has reached 50 messages. Please start a new chat.",
+            409,
+        )
+    focus: str | None = None
+    if existing_count <= 1:
+        focus = _focus_from_message(text)
+    _persist_message(session_id, user_id, "user", text)
     try:
-        new_balance = deduct_credits(
-            user_id=user_id,
-            amount=_CREDIT_COST,
-            description="English Practice message",
-            action="english_practice",
+        await deduct_credits(
+            user_id,
+            _CREDIT_COST,
+            description="English Practice chat turn",
+            action="english_practice_turn",
         )
     except InsufficientCreditsError as e:
         raise EnglishPracticeError(str(e), 402) from e
-
-    native_language = session["native_language"]
-    target_focus = session.get("target_focus")
-
-    _save_message(session_id, user_id, "user", msg, credits=_CREDIT_COST)
-
-    history = _recent_messages(session_id, _CONTEXT_MESSAGES)
-    memory_context = learning_memory.format_memory_context(learning_memory.load_memory(user_id), mode='chat')
-    model_messages = [{"role": "system", "content": _system_prompt(native_language, target_focus, memory_context)}]
-    for h in history:
-        role = "assistant" if h["role"] == "assistant" else "user"
-        model_messages.append({"role": role, "content": h["message"]})
-
-    reply = await _call_model(model_messages)
-    _save_message(session_id, user_id, "assistant", reply, credits=0)
-    learning_memory.schedule_update(user_id=user_id, native_language=native_language, mode='chat', user_text=msg, assistant_text=reply)
-
-    db = get_supabase_admin()
-    new_count = int(session.get("message_count") or 0) + 1
-    updates = {"message_count": new_count, "updated_at": _now()}
-
-    # First time student names the target focus, try to capture it lightly.
-    if not target_focus and any(
-        k in msg.lower() for k in ("grammar", "spoken", "speak", "vocabulary", "vocab")
-    ):
-        if "grammar" in msg.lower():
-            updates["target_focus"] = "grammar"
-        elif "vocab" in msg.lower():
-            updates["target_focus"] = "vocabulary"
-        elif "spoken" in msg.lower() or "speak" in msg.lower():
-            updates["target_focus"] = "spoken"
-
-    session_ended = False
-    if new_count >= _MAX_SESSION_MESSAGES:
-        updates["status"] = "archived"
-        session_ended = True
-
-    db.table("english_practice_sessions").update(updates).eq("id", session_id).execute()
-
-    clean_reply, suggestions = _extract_suggestions(reply)
-    audio_bytes, audio_mime_type = await _chat_audio(clean_reply)
-
-    return {
-        "reply": clean_reply,
+    messages, total = _build_context_messages(
+        session_id=session_id,
+        user_id=user_id,
+        native_language=native,
+        target_language=target,
+        focus=focus,
+    )
+    raw_reply = await _call_model(messages)
+    clean, suggestions, mcq = _split_and_extract(raw_reply)
+    reply = clean or "Okay, let's continue."
+    _persist_message(session_id, user_id, "assistant", reply)
+    learning_memory.schedule_update(
+        user_id=user_id,
+        native_language=native,
+        mode="chat",
+        user_text=text,
+        assistant_text=reply,
+        target_language=target,
+    )
+    result: dict = {
+        "reply": reply,
         "suggestions": suggestions,
-        "credits_charged": _CREDIT_COST,
-        "new_balance": new_balance,
-        "session_ended": session_ended,
-        "audio_bytes": audio_bytes,
-        "audio_mime_type": audio_mime_type,
     }
-
-
-def list_sessions(user_id: str, limit: int = 30) -> list[dict]:
-    db = get_supabase_admin()
-    res = (
-        db.table("english_practice_sessions")
-        .select("id,title,native_language,target_focus,status,message_count,created_at,updated_at")
-        .eq("user_id", user_id)
-        .order("updated_at", desc=True)
-        .limit(limit)
-        .execute()
-    )
-    sessions = list(res.data or [])
-    # The history screen needs a compact preview, not a full transcript.  Keep
-    # this owner-scoped and fetch only one saved message for each session.
-    for session in sessions:
-        preview = (
-            db.table("english_practice_messages")
-            .select("message")
-            .eq("session_id", session["id"])
-            .eq("user_id", user_id)
-            .order("created_at", desc=False)
-            .limit(1)
-            .execute()
-            .data
-            or []
-        )
-        session["preview"] = (preview[0].get("message") if preview else "") or ""
-    return sessions
-
-
-def restore_session(session_id: str, user_id: str) -> dict | None:
-    session = _get_session(session_id, user_id)
-    if not session:
-        return None
-    db = get_supabase_admin()
-    res = (
-        db.table("english_practice_messages")
-        .select("id,role,message,created_at")
-        .eq("session_id", session_id)
-        .order("created_at", desc=False)
-        .execute()
-    )
-    return {
-        "id": session["id"],
-        "native_language": session["native_language"],
-        "target_focus": session.get("target_focus"),
-        "status": session.get("status"),
-        "messages": list(res.data or []),
-    }
+    if mcq is not None:
+        result["mcq"] = mcq
+    try:
+        from app.services.gemini_tts_service import synthesize_for_user as _tts
+        audio_bytes, mime = await _tts(user_id, reply)
+        if audio_bytes is not None:
+            result["audio_bytes"] = audio_bytes
+            result["audio_mime_type"] = mime
+    except Exception:
+        pass
+    return result
 
 
 async def send_audio_message(
-    user_id: str, session_id: str, audio_bytes: bytes, filename: str,
+    user_id: str, session_id: str, audio_bytes: bytes, filename: str
 ) -> dict:
-    """Temporary mic audio -> existing Whisper -> normal Chat turn.
-
-    No microphone file is persisted: only the verified transcript and the
-    normal assistant reply enter the existing conversation history.
-    """
     if not audio_bytes:
-        raise EnglishPracticeError("No audio was received. Please try again.", 400)
+        raise EnglishPracticeError("Audio file is empty.", 400)
+    session = _session_row(session_id, user_id)
+    if not session:
+        raise EnglishPracticeError("Session not found.", 404)
     try:
         transcription = await transcribe_audio(audio_bytes, filename)
-    except WhisperTranscriptionError as error:
-        raise EnglishPracticeError(
-            f"Could not understand the audio: {error}", 502
-        ) from error
+    except WhisperTranscriptionError as e:
+        raise EnglishPracticeError(f"Could not understand the audio: {e}", 502) from e
     transcript = transcription.text.strip()
-    # English learners often begin with a tiny but valid turn: "Hi", "Yes",
-    # or "I am from India." The shared lecture transcription guard treats
-    # short text as suspicious; voice conversation must accept it when Whisper
-    # returned actual text.
     if not transcript:
         raise EnglishPracticeError("No speech detected. Please try again.", 400)
     result = await send_message(user_id, session_id, transcript)
-    return {**result, "transcript": transcript}
+    result["transcript"] = transcript
+    return result

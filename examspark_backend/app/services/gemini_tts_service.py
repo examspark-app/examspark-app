@@ -14,11 +14,33 @@ import struct
 import httpx
 
 from app.config import AIConfig
+from app.services import english_learning_memory_service as learning_memory
 
 _BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
 _TIMEOUT_SECONDS = 45.0
 _SAMPLE_RATE = 24000
 _MAX_ATTEMPTS = 2
+
+_DEFAULT_SPEED = 0.85
+_SPEED_BY_LEVEL = {
+    "beginner": 0.75,
+    "elementary": 0.85,
+    "intermediate": 0.95,
+    "advanced": 1.0,
+}
+
+
+def _resolve_speed(speed: float | None, user_id: str | None) -> float:
+    if speed is not None:
+        return max(0.5, min(2.0, float(speed)))
+    if user_id:
+        try:
+            level = learning_memory.load_memory(user_id).get("english_level")
+            if level and level in _SPEED_BY_LEVEL:
+                return _SPEED_BY_LEVEL[level]
+        except Exception:
+            pass
+    return _DEFAULT_SPEED
 
 
 class GeminiTtsError(Exception):
@@ -35,23 +57,34 @@ def _wav_from_pcm(pcm: bytes) -> bytes:
     ) + b"data" + struct.pack("<I", len(pcm)) + pcm
 
 
-async def synthesize_speech(text: str, *, voice: str | None = None) -> tuple[bytes, str]:
-    """Return Gemini TTS output as ``(wav_bytes, 'audio/wav')``."""
+async def synthesize_speech(
+    text: str,
+    *,
+    voice: str | None = None,
+    speed: float | None = None,
+    user_id: str | None = None,
+) -> tuple[bytes, str]:
+    """Return Gemini TTS output as ``(wav_bytes, 'audio/wav')``.
+
+    ``speakingRate`` is the Gemini-native speech speed parameter (range 0.5–2.0).
+    """
     if not AIConfig.gemini_tts_configured():
         raise GeminiTtsError("GEMINI_API_KEY not configured on the server.")
     text = (text or "").strip()
     if not text:
         raise GeminiTtsError("Cannot create speech from an empty reply.")
 
+    resolved_speed = _resolve_speed(speed, user_id)
     url = f"{_BASE_URL}/{AIConfig.GEMINI_TTS_MODEL}:generateContent"
     payload = {
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
             "responseModalities": ["AUDIO"],
             "speechConfig": {
+                "speakingRate": resolved_speed,
                 "voiceConfig": {
                     "prebuiltVoiceConfig": {"voiceName": voice or AIConfig.GEMINI_TTS_VOICE}
-                }
+                },
             },
         },
     }

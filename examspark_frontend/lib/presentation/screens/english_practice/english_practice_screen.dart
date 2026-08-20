@@ -1,7 +1,4 @@
-import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
-import 'package:just_audio/just_audio.dart';
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
@@ -16,6 +13,37 @@ class _Message {
   final bool isUser;
 }
 
+class _PracticeMcq {
+  const _PracticeMcq({
+    required this.question,
+    required this.options,
+    required this.correctOption,
+  });
+  final String question;
+  final List<String> options;
+  final int correctOption;
+
+  static _PracticeMcq? fromJson(dynamic data) {
+    if (data is! Map<String, dynamic>) return null;
+    final question = data['question']?.toString().trim() ?? '';
+    final rawOptions = data['options'];
+    final correct = data['correct_option'];
+    if (question.isEmpty) return null;
+    if (rawOptions is! List) return null;
+    final options = rawOptions
+        .map((e) => e?.toString().trim() ?? '')
+        .where((s) => s.isNotEmpty)
+        .toList(growable: false);
+    if (options.length != 3) return null;
+    if (correct is! int || correct < 0 || correct > 2) return null;
+    return _PracticeMcq(
+      question: question,
+      options: options,
+      correctOption: correct,
+    );
+  }
+}
+
 class EnglishPracticeScreen extends StatefulWidget {
   const EnglishPracticeScreen({super.key, this.sessionId});
   final String? sessionId;
@@ -27,11 +55,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   static const violet = Color(0xFF5137ED);
   final _text = TextEditingController();
   final _scroll = ScrollController();
-  final _player = AudioPlayer();
   final _messages = <_Message>[];
-  // Suggestions are generated for the current AI turn. Do not show a large
-  // generic panel before the first teacher message has arrived.
   List<String> _suggestions = const [];
+  _PracticeMcq? _currentMcq;
   String? _sessionId;
   bool _loading = true;
   bool _sending = false;
@@ -48,7 +74,6 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   void dispose() {
     _text.dispose();
     _scroll.dispose();
-    _player.dispose();
     RecordingService.instance.releaseForScreen();
     super.dispose();
   }
@@ -74,9 +99,10 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
               false,
             ),
           );
-        await _playReplyAudio(r);
         final s = List<String>.from(r['suggestions'] as List? ?? const []);
         if (s.isNotEmpty) _suggestions = s;
+        final mcq = _PracticeMcq.fromJson(r['mcq']);
+        if (mcq != null) _currentMcq = mcq;
       } else {
         final r = await LectureService.instance.restoreEnglishPracticeSession(
           widget.sessionId!,
@@ -119,6 +145,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     _text.clear();
     setState(() {
       _messages.add(_Message(value, true));
+      _currentMcq = null;
       _sending = true;
     });
     _bottom();
@@ -132,9 +159,10 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
         _messages.add(_Message('${r['reply'] ?? ''}', false));
         final s = List<String>.from(r['suggestions'] as List? ?? const []);
         if (s.isNotEmpty) _suggestions = s;
+        final mcq = _PracticeMcq.fromJson(r['mcq']);
+        if (mcq != null) _currentMcq = mcq;
         _sending = false;
       });
-      await _playReplyAudio(r);
       _bottom();
     } catch (_) {
       if (mounted)
@@ -254,15 +282,17 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       );
       if (!mounted) return;
       setState(() {
+        _currentMcq = null;
         _messages.add(_Message('${response['transcript'] ?? ''}', true));
         _messages.add(_Message('${response['reply'] ?? ''}', false));
         final suggestions = List<String>.from(
           response['suggestions'] as List? ?? const [],
         );
         if (suggestions.isNotEmpty) _suggestions = suggestions;
+        final mcq = _PracticeMcq.fromJson(response['mcq']);
+        if (mcq != null) _currentMcq = mcq;
         _sending = false;
       });
-      await _playReplyAudio(response);
       _bottom();
     } catch (error) {
       if (mounted) {
@@ -274,26 +304,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     }
   }
 
-  Future<void> _playReplyAudio(Map<String, dynamic> response) async {
-    final encoded = response['audio_base64'] as String?;
-    if (encoded == null || encoded.isEmpty) return;
-    try {
-      await _player.setAudioSource(
-        AudioSource.uri(
-          UriData.fromBytes(
-            Uint8List.fromList(base64Decode(encoded)),
-            mimeType: response['audio_mime_type'] as String? ?? 'audio/mpeg',
-          ).uri,
-        ),
-      );
-      await _player.play();
-    } catch (_) {
-      // The message remains visible when device audio is unavailable.
-    }
-  }
-
   Future<void> _newChat() async {
-    await _player.stop();
     if (!mounted) return;
     await Navigator.pushReplacement(
       context,
@@ -324,6 +335,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                 Expanded(child: _chat()),
                 _suggestionPanel(),
                 _input(),
+                _practiceMcqPanel(),
                 _tabs(),
               ],
             ),
@@ -527,6 +539,171 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _practiceMcqPanel() {
+    final mcq = _currentMcq;
+    if (mcq == null || _sending) return const SizedBox.shrink();
+    final optionLetters = ['A', 'B', 'C'];
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF3F0FF),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: const Color(0xFFD8D1FF)),
+        gradient: const LinearGradient(
+          colors: [Color(0xFFF6F3FF), Color(0xFFEFE9FF)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x1A5137ED),
+            blurRadius: 14,
+            offset: Offset(0, 5),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: violet.withOpacity(.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      Icons.quiz_outlined,
+                      color: violet,
+                      size: 15,
+                    ),
+                    const SizedBox(width: 5),
+                    Text(
+                      'Practice Question',
+                      style: TextStyle(
+                        color: violet,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              InkWell(
+                onTap: () => setState(() => _currentMcq = null),
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.all(5),
+                  child: Icon(
+                    Icons.close_rounded,
+                    color: const Color(0xFF948FB0),
+                    size: 19,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            child: Text(
+              mcq.question,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w700,
+                color: Color(0xFF1B1B33),
+                height: 1.4,
+              ),
+            ),
+          ),
+          const SizedBox(height: 11),
+          for (var i = 0; i < mcq.options.length; i++) ...[
+            if (i > 0) const SizedBox(height: 7),
+            InkWell(
+              onTap: () => _send(mcq.options[i]),
+              borderRadius: BorderRadius.circular(15),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 11,
+                ),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(15),
+                  border: Border.all(
+                    color: const Color(0xFFD5D1EC),
+                  ),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x0C000000),
+                      blurRadius: 6,
+                      offset: Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 26,
+                      height: 26,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: violet.withOpacity(.10),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        optionLetters[i],
+                        style: TextStyle(
+                          color: violet,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        mcq.options[i],
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Color(0xFF22213E),
+                          height: 1.3,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 9),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            child: Text(
+              'Tap an option above, or type your own answer below · Always optional',
+              style: TextStyle(
+                color: const Color(0xFF807C9A).withOpacity(.95),
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
           ),
         ],
       ),

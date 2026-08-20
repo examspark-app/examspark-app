@@ -1030,7 +1030,7 @@ class LectureService {
     }
   }
 
-  Future<String?> getEnglishPracticeLanguage() async {
+  Future<Map<String, dynamic>?> getEnglishPracticePreference() async {
     if (!AppConfig.isApiConfigured) return null;
     final accessToken = await _requireAccessToken();
     final uri = Uri.parse(
@@ -1042,13 +1042,90 @@ class LectureService {
     );
     if (response.statusCode != 200) return null;
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-    return data['native_language'] as String?;
+    return data;
   }
 
-  Future<void> setEnglishPracticeLanguage(String language) async {
+  Future<String?> getEnglishPracticeLanguage() async {
+    final pref = await getEnglishPracticePreference();
+    return pref?['native_language'] as String?;
+  }
+
+  Future<void> setEnglishPracticePreference({
+    required String nativeLanguage,
+    String? targetLanguage,
+  }) async {
     final accessToken = await _requireAccessToken();
     final uri = Uri.parse(
       '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/preference',
+    );
+    final body = <String, dynamic>{'native_language': nativeLanguage};
+    if (targetLanguage != null) {
+      body['target_language'] = targetLanguage;
+    }
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode(body),
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+  }
+
+  Future<void> setEnglishPracticeLanguage(String language) async {
+    await setEnglishPracticePreference(nativeLanguage: language);
+  }
+
+  Future<void> englishPracticeDeleteSession(String sessionId) async {
+    if (!AppConfig.isApiConfigured) {
+      throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
+    }
+    final accessToken = await _requireAccessToken();
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/sessions/$sessionId',
+    );
+    final response = await http.delete(
+      uri,
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+  }
+
+  Future<void> englishPracticeRenameSession(
+      String sessionId, String title) async {
+    if (!AppConfig.isApiConfigured) {
+      throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
+    }
+    final accessToken = await _requireAccessToken();
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/sessions/$sessionId',
+    );
+    final response = await http.patch(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'title': title}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+  }
+
+  Future<void> englishPracticePinSession(
+      String sessionId, bool pinned) async {
+    if (!AppConfig.isApiConfigured) {
+      throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
+    }
+    final accessToken = await _requireAccessToken();
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/sessions/$sessionId/pin',
     );
     final response = await http.post(
       uri,
@@ -1056,7 +1133,7 @@ class LectureService {
         'Authorization': 'Bearer $accessToken',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode({'language': language}),
+      body: jsonEncode({'pinned': pinned}),
     );
     if (response.statusCode != 200) {
       throw Exception(_extractErrorDetail(response));
