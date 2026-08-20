@@ -166,11 +166,71 @@ async def start(user_id: str, scenario: str, native_language: str, target_langua
     row = db.table('english_roleplay_sessions').insert({'user_id': user_id, 'scenario': scenario, 'native_language': native_language, 'target_language': target_language, 'status': 'active'}).execute().data[0]
     sid = row['id']
     memory_dict = learning_memory.load_memory(user_id)
-    memory_context = learning_memory.format_memory_context(memory_dict, mode='roleplay')
-    sys_prompt = build_roleplay_prompt(
-        scenario=scenario, native_language=native_language,
-        target_language=target_language, learning_memory=memory_context,
+memory_context = learning_memory.format_memory_context(
+    memory_dict,
+    mode='roleplay'
+)
+
+# Load a small set of previous openings from this user's
+# previous sessions for the same scenario.
+# These are used only to prevent repetitive openings/events.
+recent_sessions = (
+    db.table('english_roleplay_sessions')
+    .select('id,created_at')
+    .eq('user_id', user_id)
+    .eq('scenario', scenario)
+    .neq('id', sid)
+    .order('created_at', desc=True)
+    .limit(8)
+    .execute()
+    .data
+    or []
+)
+
+recent_openings: list[str] = []
+
+for previous_session in recent_sessions:
+    opening_rows = (
+        db.table('english_roleplay_messages')
+        .select('message')
+        .eq('session_id', previous_session['id'])
+        .eq('user_id', user_id)
+        .eq('role', 'assistant')
+        .order('created_at', desc=False)
+        .limit(1)
+        .execute()
+        .data
+        or []
     )
+
+    if opening_rows:
+        opening_text = (opening_rows[0].get('message') or '').strip()
+        if opening_text:
+            recent_openings.append(opening_text)
+
+recent_opening_context = '\n'.join(
+    f'- {opening}'
+    for opening in recent_openings
+)
+
+freshness_context = (
+    '\nRECENT OPENINGS TO AVOID:\n'
+    f'{recent_opening_context or "- None"}\n'
+    '\nFRESH SESSION RULE:\n'
+    'These are previous openings from this learner. '
+    'Do not copy their wording, greeting pattern, event, object, '
+    'or small environment detail. '
+    'Create a materially fresh situation for this session. '
+    'Learning memory is for understanding the learner, not for '
+    'replaying old conversation.\n'
+)
+
+sys_prompt = build_roleplay_prompt(
+    scenario=scenario,
+    native_language=native_language,
+    target_language=target_language,
+    learning_memory=memory_context + freshness_context,
+)
     memory_has_name = bool(
         memory_dict.get('preferred_name')
         or memory_dict.get('learner_name')
@@ -271,15 +331,48 @@ async def start(user_id: str, scenario: str, native_language: str, target_langua
         except Exception as exc:  # pragma: no cover - network layer
             logger.warning('roleplay_opening_regen_failed user=%s error=%s', user_id, type(exc).__name__)
             opening = _fallback_opening(scenario)
-    db.table('english_roleplay_messages').insert({
-        'session_id': sid, 'user_id': user_id, 'role': 'assistant', 'message': opening,
-    }).execute()
-    try:
+            try:
         audio, mime_type = await synthesize_for_user(user_id, opening)
     except RoleplayTtsError as error:
-        # The first text still exists; the app can show a recoverable voice error.
-        audio, mime_type = None, None
-        logger.warning('Roleplay opening TTS unavailable: %s', error)
+        logger.warning(
+            'Roleplay opening TTS unavailable user=%s provider_error=%s',
+            user_id,
+            str(error)[:200],
+        )
+        # Do not leave a successful-looking session when the opening voice failed.
+        try:
+            db.table('english_roleplay_messages').delete() \
+                .eq('session_id', sid) \
+                .eq('user_id', user_id) \
+                .execute()
+            db.table('english_roleplay_sessions').delete() \
+                .eq('id', sid) \
+                .eq('user_id', user_id) \
+                .execute()
+        except Exception:
+            logger.exception('Failed to clean up failed roleplay start user=%s', user_id)
+        raise chat.EnglishPracticeError(
+            'AI voice could not be generated. Please try again.', 502
+        ) from error
+
+    if not audio:
+        raise chat.EnglishPracticeError(
+            'AI voice returned empty audio. Please try again.', 502,
+        )
+
+    db.table('english_roleplay_messages').insert({
+        'session_id': sid,
+        'user_id': user_id,
+        'role': 'assistant',
+        'message': opening,
+    }).execute()
+
+    result = {
+        'session_id': sid, 'scenario': scenario, 'started_at': row['started_at'],
+        'opening_reply': opening,
+        'suggestions': opening_suggestions,
+        'audio_bytes': audio, 'audio_mime_type': mime_type,
+    }
     result = {
         'session_id': sid, 'scenario': scenario, 'started_at': row['started_at'],
         'opening_reply': opening,

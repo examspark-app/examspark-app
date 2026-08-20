@@ -646,19 +646,40 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
         sessionId = started['session_id'] as String?;
         _openingReply = started['opening_reply'] as String?;
         final encoded = started['audio_base64'] as String?;
-        if (encoded != null && encoded.isNotEmpty) {
-          if (mounted) setState(() => state = RoleplayVoiceState.aiSpeaking);
-          await _player.setAudioSource(
-            AudioSource.uri(
-              UriData.fromBytes(
-                base64Decode(encoded),
-                mimeType: started['audio_mime_type'] as String? ?? 'audio/mpeg',
-              ).uri,
-            ),
-          );
-          await _player.play();
-        }
-      }
+
+if (encoded == null || encoded.isEmpty) {
+  throw StateError(
+    'AI voice was not generated. Please try again.',
+  );
+}
+
+final audioBytes = base64Decode(encoded);
+if (audioBytes.isEmpty) {
+  throw StateError(
+    'AI voice returned empty audio. Please try again.',
+  );
+}
+
+if (mounted) {
+  setState(() => state = RoleplayVoiceState.aiSpeaking);
+}
+
+pulse.repeat(reverse: true);
+
+await _player.setAudioSource(
+  AudioSource.uri(
+    UriData.fromBytes(
+      audioBytes,
+      mimeType: started['audio_mime_type'] as String? ?? 'audio/mpeg',
+    ).uri,
+  ),
+);
+
+await _player.play();
+
+await _player.processingStateStream.firstWhere(
+  (processingState) => processingState == ProcessingState.completed,
+);
       // A moon tap can stop the session while the AI opening is playing.
       // Never start the recorder after that stopped session.
       if (_leaving || _stopping || sessionId == null) return;
