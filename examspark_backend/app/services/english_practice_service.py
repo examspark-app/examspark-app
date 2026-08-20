@@ -386,35 +386,6 @@ def set_target_language(user_id: str, language: str) -> None:
         ) from e
 
 
-def set_target_language(user_id: str, language: str) -> None:
-    lang = (language or "").strip()
-    if not lang:
-        raise EnglishPracticeError("Language cannot be empty.", 400)
-    if len(lang) > 60:
-        raise EnglishPracticeError("Language name is too long.", 400)
-    try:
-        existing = (
-            get_supabase_admin()
-            .table("student_profiles")
-            .select("id")
-            .eq("user_id", user_id)
-            .limit(1)
-            .execute()
-            .data or []
-        )
-        if existing:
-            get_supabase_admin().table("student_profiles").update(
-                {"english_target_language": lang}
-            ).eq("user_id", user_id).execute()
-        else:
-            get_supabase_admin().table("student_profiles").insert({
-                "user_id": user_id,
-                "english_target_language": lang,
-            }).execute()
-    except Exception as e:
-        raise EnglishPracticeError(f"Could not save preference: {e}", 500) from e
-
-
 def _session_row(session_id: str, user_id: str) -> dict | None:
     rows = (
         get_supabase_admin()
