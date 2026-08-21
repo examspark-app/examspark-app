@@ -15,7 +15,7 @@ class StartBody(BaseModel): scenario: str = Field(..., min_length=1, max_length=
 class TurnBody(BaseModel): session_id: str; transcript: str = Field(..., min_length=1, max_length=4000)
 class EndBody(BaseModel): duration_seconds: int | None = Field(default=None, ge=0)
 class VoicePreferenceBody(BaseModel):
-    provider: str = Field(..., pattern='^(qwen|gemini)$')
+    provider: str = Field(..., pattern='^(qwen|gemini|fish)$')
     voice_key: str = Field(..., min_length=1, max_length=30)
 def _error(e: chat.EnglishPracticeError): return HTTPException(status_code=e.status_code, detail=str(e))
 @router.post('/start')

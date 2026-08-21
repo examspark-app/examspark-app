@@ -251,9 +251,12 @@ async def start(
         'These are previous openings from this learner. '
         'Do not copy their wording, greeting pattern, event, object, '
         'or small environment detail. '
-        'Create a materially fresh situation for this session. '
-        'Learning memory is for understanding the learner, not for '
-        'replaying old conversation.\n'
+        'Create a materially fresh situation for this session: change the '
+        'underlying reason for the gathering, what just happened, and the '
+        'specific object/detail the character reacts to, not merely the '
+        'phrasing. Treat every new session, including sessions days later, '
+        'as a new moment. Use learning memory to understand the learner, '
+        'but never replay an old event or detail.\n'
     )
 
     sys_prompt = build_roleplay_prompt(
@@ -422,10 +425,10 @@ async def start(
 
     except RoleplayTtsError as error:
 
-        logger.warning(
+        logger.exception(
             'Roleplay opening TTS unavailable user=%s provider_error=%s',
             user_id,
-            str(error)[:200],
+            str(error)[:1000],
         )
 
         # Do not leave a successful-looking session when the opening voice failed.
@@ -453,8 +456,8 @@ async def start(
             )
 
         raise chat.EnglishPracticeError(
-            'AI voice could not be generated. Please try again.',
-            502
+            f'Roleplay voice failed: {error}',
+            502,
         ) from error
 
     if not audio:
@@ -496,7 +499,8 @@ async def send_turn(user_id: str, session_id: str, transcript: str) -> dict:
     db.table('english_roleplay_messages').insert({'session_id': session_id, 'user_id': user_id, 'role': 'user', 'message': text}).execute()
     rows = db.table('english_roleplay_messages').select('role,message').eq('session_id', session_id).order('created_at', desc=True).limit(8).execute().data or []
     memory_context = learning_memory.format_memory_context(learning_memory.load_memory(user_id), mode='roleplay')
-    messages = [{'role': 'system', 'content': build_roleplay_prompt(scenario=session['scenario'], native_language=session['native_language'], target_language=session.get('target_language', 'English'), learning_memory=memory_context)}]
+    turn_number = len(rows)
+    messages = [{'role': 'system', 'content': build_roleplay_prompt(scenario=session['scenario'], native_language=session['native_language'], target_language=session.get('target_language', 'English'), learning_memory=memory_context, turn_number=turn_number)}]
     messages += [{'role': r['role'], 'content': r['message']} for r in reversed(rows)]
     reply_raw = await chat._call_model(messages)
     reply, suggestions, mcq = chat._split_and_extract(reply_raw)

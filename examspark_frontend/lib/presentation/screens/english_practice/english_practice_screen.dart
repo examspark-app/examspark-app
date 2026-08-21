@@ -3,6 +3,7 @@ import 'package:examspark_frontend/core/constants/credit_costs.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/services/recording_service.dart';
+import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_language_picker_screen.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_teaching_history_screen.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/roleplay_screen.dart';
@@ -344,7 +345,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   );
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFFF8F8FF),
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
     body: SafeArea(
       child: _loading
           ? const Center(child: CircularProgressIndicator(color: violet))
@@ -417,7 +418,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       ListView.builder(
         controller: _scroll,
         padding: const EdgeInsets.fromLTRB(20, 18, 20, 90),
-        itemCount: _messages.length + (_sending ? 1 : 0),
+          itemCount: _messages.length + (_sending ? 1 : 0),
         itemBuilder: (_, i) {
           if (i == _messages.length)
             return const Padding(
@@ -444,7 +445,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
               margin: const EdgeInsets.only(bottom: 18),
               padding: const EdgeInsets.all(17),
               decoration: BoxDecoration(
-                color: m.isUser ? violet : Colors.white,
+                color: m.isUser ? violet : AppTheme.getCardBackground(context),
                 borderRadius: BorderRadius.only(
                   topLeft: const Radius.circular(20),
                   topRight: const Radius.circular(20),
@@ -462,7 +463,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
               child: Text(
                 m.text,
                 style: TextStyle(
-                  color: m.isUser ? Colors.white : const Color(0xFF15162D),
+                  color: m.isUser ? Colors.white : AppTheme.getPrimaryText(context),
                   fontSize: 16,
                   height: 1.45,
                 ),
@@ -649,10 +650,10 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 3),
             child: Text(
               mcq.question,
-              style: const TextStyle(
+                style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w700,
-                color: Color(0xFF1B1B33),
+                  color: AppTheme.getPrimaryText(context),
                 height: 1.4,
               ),
             ),
@@ -670,7 +671,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                   vertical: 11,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                    color: AppTheme.getCardBackground(context),
                   borderRadius: BorderRadius.circular(15),
                   border: Border.all(
                     color: const Color(0xFFD5D1EC),
@@ -706,10 +707,10 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                     Expanded(
                       child: Text(
                         mcq.options[i],
-                        style: const TextStyle(
+                          style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
-                          color: Color(0xFF22213E),
+                            color: AppTheme.getPrimaryText(context),
                           height: 1.3,
                         ),
                       ),
@@ -725,7 +726,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
             child: Text(
               'Tap an option above, or type your own answer below · Always optional',
               style: TextStyle(
-                color: const Color(0xFF807C9A).withOpacity(.95),
+                  color: AppTheme.getSecondaryText(context).withOpacity(.95),
                 fontSize: 11.5,
                 fontWeight: FontWeight.w600,
               ),
@@ -753,7 +754,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
             decoration: InputDecoration(
               hintText: 'Type a message...',
               filled: true,
-              fillColor: Colors.white,
+                fillColor: AppTheme.getCardBackground(context),
               contentPadding: const EdgeInsets.symmetric(
                 horizontal: 20,
                 vertical: 15,

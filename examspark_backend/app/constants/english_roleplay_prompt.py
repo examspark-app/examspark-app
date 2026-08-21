@@ -7,6 +7,7 @@ def build_roleplay_prompt(
     native_language: str,
     target_language: str = 'English',
     learning_memory: str = '',
+    turn_number: int = 0,
 ) -> str:
     nat = native_language or 'English'
     tgt = target_language or 'English'
@@ -294,6 +295,17 @@ SILENT SELF-CHECK — RUN THIS INTERNAL CHECKLIST RIGHT BEFORE FINISHING EVERY R
     folded in naturally — OR — is there a flat isolated question? If flat,
     add the reaction line first.
 If any of the 4 checks fail, silently revise before responding.
+
+PACING FOR THIS SESSION:
+- Turn 0 (the opening) and turns 1-2: use one very short, simple beat and
+  one easy question. Prefer roughly 8-18 spoken words per sentence.
+- Turns 3-5: add one small scenario detail or a little more depth, but stay
+  conversational and easy to answer.
+- Turn 6 onward: lengthen naturally only when the learner is responding
+  comfortably; never jump to a lecture or stack multiple questions.
+
+The current learner turn number is {turn_number}. Follow the matching pacing
+stage above while keeping the response short.
 
 IMPORTANT
 This is a live conversation, not an essay. Your goal is to help the learner speak more {tgt}, not to give long explanations."""

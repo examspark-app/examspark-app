@@ -1,12 +1,18 @@
 """Provider selection and safe, user-scoped voice preferences for Roleplay."""
 from __future__ import annotations
 
+import logging
+import inspect
 from typing import Final
 
+from app.config import AIConfig
+from app.services.fish_tts_service import FishTtsError, synthesize_speech as synthesize_fish
 from app.services.gemini_tts_service import GeminiTtsError, synthesize_speech as synthesize_gemini
 from app.services.qwen_tts_service import QwenTtsError, synthesize_speech as synthesize_qwen
 from app.services.supabase_admin import get_supabase_admin
 from app.services import english_learning_memory_service as learning_memory
+
+logger = logging.getLogger(__name__)
 
 
 class RoleplayTtsError(Exception):
@@ -24,6 +30,10 @@ VOICE_OPTIONS: Final[dict[str, tuple[dict[str, str], ...]]] = {
         {"key": "friendly", "label": "Friendly"},
         {"key": "upbeat", "label": "Upbeat"},
     ),
+    "fish": (
+        {"key": "female", "label": "Female"},
+        {"key": "male", "label": "Male"},
+    ),
 }
 
 _VOICE_IDS: Final[dict[str, dict[str, str]]] = {
@@ -35,6 +45,10 @@ _VOICE_IDS: Final[dict[str, dict[str, str]]] = {
         "warm": "Sulafat",
         "friendly": "Achird",
         "upbeat": "Puck",
+    },
+    "fish": {
+        "female": AIConfig.FISH_AUDIO_FEMALE_VOICE_ID,
+        "male": AIConfig.FISH_AUDIO_MALE_VOICE_ID,
     },
 }
 _DEFAULT_PROVIDER = "qwen"
@@ -110,11 +124,46 @@ def _user_speed(user_id: str) -> float:
 async def synthesize_for_user(user_id: str, text: str) -> tuple[bytes, str]:
     preference = get_voice_preference(user_id)
     provider = preference["provider"]
-    voice_id = _VOICE_IDS[provider][preference["voice_key"]]
     speed = _user_speed(user_id)
-    try:
-        if provider == "qwen":
-            return await synthesize_qwen(text, voice=voice_id, speed=speed, user_id=user_id)
-        return await synthesize_gemini(text, voice=voice_id, speed=speed, user_id=user_id)
-    except (QwenTtsError, GeminiTtsError) as error:
-        raise RoleplayTtsError(str(error)) from error
+    providers = [provider]
+    alternate = "gemini" if provider == "qwen" else "qwen"
+    alternate_configured = (
+        alternate == "qwen" and AIConfig.openrouter_configured()
+    ) or (
+        alternate == "gemini" and AIConfig.gemini_tts_configured()
+    )
+    if alternate_configured:
+        providers.append(alternate)
+
+    errors: list[str] = []
+    for selected_provider in providers:
+        selected_voice = _VOICE_IDS[selected_provider][
+            preference["voice_key"]
+            if selected_provider == provider
+            else VOICE_OPTIONS[selected_provider][0]["key"]
+        ]
+        try:
+            adapter = {
+                "qwen": synthesize_qwen,
+                "gemini": synthesize_gemini,
+                "fish": synthesize_fish,
+            }[selected_provider]
+            adapter_parameters = inspect.signature(adapter).parameters
+            adapter_kwargs = {"voice": selected_voice}
+            if "speed" in adapter_parameters:
+                adapter_kwargs["speed"] = speed
+            if "user_id" in adapter_parameters:
+                adapter_kwargs["user_id"] = user_id
+            return await adapter(text, **adapter_kwargs)
+        except (QwenTtsError, GeminiTtsError, FishTtsError) as error:
+            detail = f"{selected_provider}: {error}"
+            errors.append(detail)
+            logger.exception(
+                "roleplay_tts_provider_failed user=%s provider=%s voice=%s detail=%s",
+                user_id,
+                selected_provider,
+                selected_voice,
+                str(error)[:1000],
+            )
+
+    raise RoleplayTtsError("Voice generation failed. " + " | ".join(errors))

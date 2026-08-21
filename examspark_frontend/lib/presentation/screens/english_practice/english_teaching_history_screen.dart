@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_screen.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/roleplay_transcript_screen.dart';
+import 'package:examspark_frontend/core/theme/app_theme.dart';
 
 const _violet = Color(0xFF5137ED);
 
@@ -87,7 +88,7 @@ class _EnglishTeachingHistoryScreenState
   Widget build(BuildContext context) {
     final items = _mode == 0 ? _chat : _roleplay;
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F8FF),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -173,7 +174,7 @@ class _EnglishTeachingHistoryScreenState
           duration: const Duration(milliseconds: 160),
           alignment: Alignment.center,
           decoration: BoxDecoration(
-            color: selected ? Colors.white : Colors.transparent,
+            color: selected ? AppTheme.getCardBackground(context) : Colors.transparent,
             borderRadius: BorderRadius.circular(11),
             boxShadow: selected
                 ? const [BoxShadow(color: Color(0x12000000), blurRadius: 5)]
@@ -208,7 +209,7 @@ class _EnglishTeachingHistoryScreenState
     final preview = (item['preview'] as String? ?? '').trim();
     final date = _date((item['updated_at'] ?? item['started_at']) as String?);
     return Material(
-      color: Colors.white,
+      color: AppTheme.getCardBackground(context),
       borderRadius: BorderRadius.circular(18),
       child: InkWell(
         borderRadius: BorderRadius.circular(18),

@@ -11,7 +11,7 @@ ALTER TABLE public.users
 
 ALTER TABLE public.users
     ADD CONSTRAINT users_roleplay_tts_provider_check
-        CHECK (roleplay_tts_provider IN ('qwen', 'gemini')),
+        CHECK (roleplay_tts_provider IN ('qwen', 'gemini', 'fish')),
     ADD CONSTRAINT users_roleplay_tts_voice_key_check
         CHECK (
             roleplay_tts_voice_key IN (

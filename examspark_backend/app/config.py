@@ -89,6 +89,19 @@ class AIConfig:
     )
     GEMINI_TTS_VOICE: str = os.getenv("GEMINI_TTS_VOICE", "Kore")
 
+    # Fish Audio uses account/library reference IDs rather than universal
+    # male/female voice names. Configure both IDs in the deployment secret.
+    FISH_AUDIO_API_KEY: str = os.getenv("FISH_AUDIO_API_KEY", "")
+    FISH_AUDIO_TTS_MODEL: str = os.getenv(
+        "FISH_AUDIO_TTS_MODEL", "fish-audio/s2.1-pro"
+    )
+    FISH_AUDIO_FEMALE_VOICE_ID: str = os.getenv(
+        "FISH_AUDIO_FEMALE_VOICE_ID", ""
+    )
+    FISH_AUDIO_MALE_VOICE_ID: str = os.getenv(
+        "FISH_AUDIO_MALE_VOICE_ID", ""
+    )
+
     # Whisper `verbose_json` confidence thresholds that trigger the
     # non-turbo re-transcription fallback (TECH_STACK.md Speech decision tree).
     LOW_CONFIDENCE_AVG_LOGPROB: float = -1.0
@@ -105,6 +118,14 @@ class AIConfig:
     @classmethod
     def gemini_tts_configured(cls) -> bool:
         return bool(cls.GEMINI_API_KEY)
+
+    @classmethod
+    def fish_audio_configured(cls) -> bool:
+        return bool(
+            cls.FISH_AUDIO_API_KEY
+            and cls.FISH_AUDIO_FEMALE_VOICE_ID
+            and cls.FISH_AUDIO_MALE_VOICE_ID
+        )
 
     @classmethod
     def tavily_configured(cls) -> bool:

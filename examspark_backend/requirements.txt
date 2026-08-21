@@ -6,6 +6,7 @@ pydantic
 pyjwt
 python-multipart
 httpx
+openai
 boto3
 pypdf
 pymupdf

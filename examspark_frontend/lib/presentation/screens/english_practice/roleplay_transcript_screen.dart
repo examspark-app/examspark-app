@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/theme/app_theme.dart';
 
 const _violet = Color(0xFF5137ED);
 
@@ -37,7 +38,7 @@ class _RoleplayTranscriptScreenState extends State<RoleplayTranscriptScreen> {
     final session = _session;
     final messages = session?['messages'] as List? ?? const [];
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F8FF),
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Column(
           children: [
@@ -91,12 +92,12 @@ class _RoleplayTranscriptScreenState extends State<RoleplayTranscriptScreen> {
                             margin: const EdgeInsets.only(bottom: 12),
                             padding: const EdgeInsets.symmetric(horizontal: 15, vertical: 12),
                             decoration: BoxDecoration(
-                              color: isUser ? _violet : Colors.white,
+                              color: isUser ? _violet : AppTheme.getCardBackground(context),
                               borderRadius: BorderRadius.circular(17),
                             ),
                             child: Text(
                               message['message'] as String? ?? '',
-                              style: TextStyle(color: isUser ? Colors.white : const Color(0xFF19182B), height: 1.35),
+                              style: TextStyle(color: isUser ? Colors.white : AppTheme.getPrimaryText(context), height: 1.35),
                             ),
                           ),
                         );

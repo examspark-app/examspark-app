@@ -6,6 +6,7 @@ import 'package:just_audio/just_audio.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/constants/roleplay_voice_config.dart';
 import 'package:examspark_frontend/core/services/recording_service.dart';
+import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_language_picker_screen.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_teaching_history_screen.dart';
 
@@ -101,9 +102,16 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
     }
   }
 
-  List<(String, String)> get _voiceOptions => _ttsProvider == 'gemini'
-      ? const [('warm', 'Warm'), ('friendly', 'Friendly'), ('upbeat', 'Upbeat')]
-      : const [('female', 'Female'), ('male', 'Male')];
+  List<(String, String)> get _voiceOptions {
+    if (_ttsProvider == 'gemini') {
+      return const [
+        ('warm', 'Warm'),
+        ('friendly', 'Friendly'),
+        ('upbeat', 'Upbeat'),
+      ];
+    }
+    return const [('female', 'Female'), ('male', 'Male')];
+  }
 
   Future<void> _openVoiceSettings() async {
     await _loadVoicePreference();
@@ -144,6 +152,16 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                           ? null
                           : (_) async {
                               await _saveVoicePreference('gemini', 'warm');
+                              setSheetState(() {});
+                            },
+                    ),
+                    ChoiceChip(
+                      label: const Text('Fish Audio'),
+                      selected: _ttsProvider == 'fish',
+                      onSelected: _savingVoice
+                          ? null
+                          : (_) async {
+                              await _saveVoicePreference('fish', 'female');
                               setSheetState(() {});
                             },
                     ),
@@ -208,7 +226,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFFF8F8FF),
+    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
     body: SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -263,7 +281,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
               width: double.infinity,
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: AppTheme.getCardBackground(context),
                 borderRadius: BorderRadius.circular(24),
               ),
               child: Column(
@@ -694,7 +712,23 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
           ),
         );
 
+        final openingDuration = _player.duration;
+        debugPrint(
+          'ROLEPLAY_OPENING_AUDIO_READY bytes=${audioBytes.length} '
+          'mime=${started['audio_mime_type']} duration=$openingDuration',
+        );
+        if (openingDuration == null || openingDuration <= Duration.zero) {
+          throw StateError(
+            'Roleplay opening audio loaded without a playable duration.',
+          );
+        }
+
         await _player.play();
+
+        debugPrint(
+          'ROLEPLAY_OPENING_AUDIO_PLAYING playing=${_player.playing} '
+          'processingState=${_player.processingState}',
+        );
 
         await _player.processingStateStream.firstWhere(
           (processingState) => processingState == ProcessingState.completed,

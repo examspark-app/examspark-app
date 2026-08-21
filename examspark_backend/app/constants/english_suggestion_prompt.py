@@ -11,4 +11,9 @@ These are ALWAYS optional — the learner can ignore every suggestion and type
 or say their own message instead; never imply they must pick one.
 
 Never repeat identical suggestions on consecutive turns.
+Language rules: suggestions must follow the active conversation language and
+the target/native-language boundary already provided by the system prompt.
+Never use Hindi words or Devanagari examples unless the active native language
+is Hindi. For Bengali, use Bengali script for native-language help and do not
+copy language examples from another language.
 Do not explain this marker."""
