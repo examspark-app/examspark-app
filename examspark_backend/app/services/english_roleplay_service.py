@@ -161,7 +161,8 @@ async def start(
     user_id: str,
     scenario: str,
     native_language: str,
-    target_language: str = 'English'
+    target_language: str = 'English',
+    chat_session_id: str | None = None,
 ) -> dict:
     """Create a session and let the in-character partner make the first move."""
 
@@ -177,6 +178,19 @@ async def start(
 
     db = get_supabase_admin()
 
+    if chat_session_id:
+        chat_rows = (
+            db.table('english_practice_sessions').select(
+                'id,native_language,target_language'
+            ).eq('id', chat_session_id).eq('user_id', user_id).limit(1)
+            .execute().data or []
+        )
+        if not chat_rows:
+            raise chat.EnglishPracticeError('Chat session not found.', 404)
+        chat_session = chat_rows[0]
+        native_language = chat_session.get('native_language') or native_language
+        target_language = chat_session.get('target_language') or target_language
+
     row = (
         db.table('english_roleplay_sessions')
         .insert({
@@ -184,6 +198,7 @@ async def start(
             'scenario': scenario,
             'native_language': native_language,
             'target_language': target_language,
+            'chat_session_id': chat_session_id,
             'status': 'active'
         })
         .execute()
@@ -192,7 +207,7 @@ async def start(
 
     sid = row['id']
 
-    memory_dict = learning_memory.load_memory(user_id)
+    memory_dict = learning_memory.load_memory(user_id, target_language)
 
     memory_context = learning_memory.format_memory_context(
         memory_dict,
@@ -498,7 +513,10 @@ async def send_turn(user_id: str, session_id: str, transcript: str) -> dict:
     db = get_supabase_admin()
     db.table('english_roleplay_messages').insert({'session_id': session_id, 'user_id': user_id, 'role': 'user', 'message': text}).execute()
     rows = db.table('english_roleplay_messages').select('role,message').eq('session_id', session_id).order('created_at', desc=True).limit(8).execute().data or []
-    memory_context = learning_memory.format_memory_context(learning_memory.load_memory(user_id), mode='roleplay')
+    memory_context = learning_memory.format_memory_context(
+        learning_memory.load_memory(user_id, session.get('target_language', 'English')),
+        mode='roleplay',
+    )
     turn_number = len(rows)
     messages = [{'role': 'system', 'content': build_roleplay_prompt(scenario=session['scenario'], native_language=session['native_language'], target_language=session.get('target_language', 'English'), learning_memory=memory_context, turn_number=turn_number)}]
     messages += [{'role': r['role'], 'content': r['message']} for r in reversed(rows)]
@@ -508,12 +526,75 @@ async def send_turn(user_id: str, session_id: str, transcript: str) -> dict:
         reply = 'Okay — let me think. Could you say that again a little more simply?'
     assistant_insert = db.table('english_roleplay_messages').insert({'session_id': session_id, 'user_id': user_id, 'role': 'assistant', 'message': reply}).execute()
     assistant_id = ((assistant_insert.data or [{}])[0]).get('id')
-    learning_memory.schedule_update(user_id=user_id, native_language=session['native_language'], mode='roleplay', user_text=text, assistant_text=reply, scenario=session['scenario'])
+    learning_memory.schedule_update(
+        user_id=user_id,
+        native_language=session['native_language'],
+        target_language=session.get('target_language', 'English'),
+        mode='roleplay',
+        user_text=text,
+        assistant_text=reply,
+        scenario=session['scenario'],
+    )
     db.table('english_roleplay_sessions').update({'updated_at': _now()}).eq('id', session_id).execute()
     result = {'transcript': text, 'reply': reply, 'suggestions': suggestions, 'assistant_message_id': assistant_id}
     if mcq is not None:
         result['mcq'] = mcq
     return result
+
+
+async def reengage(user_id: str, session_id: str) -> dict:
+    """Prompt a silent learner without advancing the conversation history."""
+    session = _session(session_id, user_id)
+    if not session:
+        raise chat.EnglishPracticeError('Roleplay session not found.', 404)
+    if session['status'] != 'active':
+        raise chat.EnglishPracticeError('This roleplay has ended.', 409)
+    db = get_supabase_admin()
+    rows = (
+        db.table('english_roleplay_messages').select('role,message')
+        .eq('session_id', session_id).eq('user_id', user_id)
+        .order('created_at', desc=True).limit(8).execute().data or []
+    )
+    target = session.get('target_language', 'English')
+    memory_context = learning_memory.format_memory_context(
+        learning_memory.load_memory(user_id, target), mode='roleplay'
+    )
+    messages = [{
+        'role': 'system',
+        'content': build_roleplay_prompt(
+            scenario=session['scenario'],
+            native_language=session['native_language'],
+            target_language=target,
+            learning_memory=memory_context,
+            turn_number=len(rows),
+        ),
+    }]
+    messages += [
+        {'role': row['role'], 'content': row['message']}
+        for row in reversed(rows)
+    ]
+    messages.append({
+        'role': 'user',
+        'content': (
+            '(system: The learner has been silent after your last line. '
+            'Do not advance the scene or invent a learner reply. Give one '
+            'very short, warm, in-character check-in in the target language, '
+            'such as asking whether they are still there, then wait again. '
+            'Use one short sentence only.)'
+        ),
+    })
+    reply_raw = await chat._call_model(messages)
+    reply, _, _ = chat._split_and_extract(reply_raw)
+    reply = reply.strip() or 'Are you still there?'
+    try:
+        audio, mime_type = await synthesize_for_user(user_id, reply)
+    except RoleplayTtsError as error:
+        raise chat.EnglishPracticeError(str(error), 502) from error
+    return {
+        'reply': reply,
+        'audio_bytes': audio,
+        'audio_mime_type': mime_type,
+    }
 
 async def send_audio_turn(
     user_id: str, session_id: str, audio_bytes: bytes, filename: str
@@ -549,7 +630,9 @@ def _stream_messages(session: dict, user_id: str, transcript: str) -> list[dict]
         .order('created_at', desc=True).limit(8).execute().data or []
     )
     memory_context = learning_memory.format_memory_context(
-        learning_memory.load_memory(user_id), mode='roleplay'
+        learning_memory.load_memory(
+            user_id, session.get('target_language', 'English')
+        ), mode='roleplay'
     )
     messages = [{'role': 'system', 'content': build_roleplay_prompt(
         scenario=session['scenario'], native_language=session['native_language'],
@@ -634,7 +717,8 @@ async def stream_audio_turn(
         {'session_id': session_id, 'user_id': user_id, 'role': 'assistant', 'message': reply},
     ]).execute()
     learning_memory.schedule_update(
-        user_id=user_id, native_language=session['native_language'], mode='roleplay',
+        user_id=user_id, native_language=session['native_language'],
+        target_language=session.get('target_language', 'English'), mode='roleplay',
         user_text=transcript, assistant_text=reply, scenario=session['scenario'],
     )
     db.table('english_roleplay_sessions').update({'updated_at': _now()}).eq('id', session_id).execute()

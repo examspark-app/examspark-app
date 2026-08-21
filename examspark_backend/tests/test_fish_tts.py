@@ -36,8 +36,7 @@ class _Client:
 def test_fish_request_uses_openai_compatible_endpoint_and_reference_voice(monkeypatch):
     captured = {}
     monkeypatch.setattr(fish.AIConfig, "FISH_AUDIO_API_KEY", "test-key")
-    monkeypatch.setattr(fish.AIConfig, "FISH_AUDIO_FEMALE_VOICE_ID", "female-ref")
-    monkeypatch.setattr(fish.AIConfig, "FISH_AUDIO_MALE_VOICE_ID", "male-ref")
+    monkeypatch.setattr(fish.AIConfig, "fish_audio_configured", classmethod(lambda cls: True))
     monkeypatch.setattr(fish, "OpenAI", lambda **kwargs: _Client(captured, **kwargs))
 
     result = asyncio.run(fish.synthesize_speech("Hello", voice="female-ref"))
@@ -54,8 +53,8 @@ def test_fish_request_uses_openai_compatible_endpoint_and_reference_voice(monkey
 
 def test_fish_requires_key_and_both_voice_ids(monkeypatch):
     monkeypatch.setattr(fish.AIConfig, "FISH_AUDIO_API_KEY", "")
-    monkeypatch.setattr(fish.AIConfig, "FISH_AUDIO_FEMALE_VOICE_ID", "")
-    monkeypatch.setattr(fish.AIConfig, "FISH_AUDIO_MALE_VOICE_ID", "")
+    monkeypatch.setattr(fish.AIConfig, "FISH_VOICE_ENGLISH_FEMALE", "")
+    monkeypatch.setattr(fish.AIConfig, "FISH_VOICE_ENGLISH_MALE", "")
 
     try:
         asyncio.run(fish.synthesize_speech("Hello", voice="female-ref"))
@@ -67,8 +66,13 @@ def test_fish_requires_key_and_both_voice_ids(monkeypatch):
 
 def test_placeholder_fish_voice_ids_are_not_configured(monkeypatch):
     monkeypatch.setattr(fish.AIConfig, "FISH_AUDIO_API_KEY", "test-key")
-    monkeypatch.setattr(fish.AIConfig, "FISH_AUDIO_FEMALE_VOICE_ID", "<female>")
-    monkeypatch.setattr(fish.AIConfig, "FISH_AUDIO_MALE_VOICE_ID", "<male>")
+    monkeypatch.setattr(
+        fish.AIConfig,
+        'fish_audio_voice_ids',
+        classmethod(lambda cls: {
+            'English': {'female': '<female>', 'male': '<male>'},
+        }),
+    )
     assert fish.AIConfig.fish_audio_configured() is False
 
 
@@ -85,8 +89,12 @@ def test_fish_provider_dispatches_selected_voice(monkeypatch):
         return b"mp3", "audio/mpeg"
 
     monkeypatch.setattr(tts, "synthesize_fish", fish_adapter)
-    monkeypatch.setattr(tts.AIConfig, "FISH_AUDIO_MALE_VOICE_ID", "male-ref")
-    tts._VOICE_IDS["fish"]["male"] = "male-ref"
+    monkeypatch.setattr(
+        tts.AIConfig,
+        "fish_audio_voice_id",
+        classmethod(lambda cls, language, voice_key='female': 'male-ref'),
+    )
+    monkeypatch.setattr(tts, "_provider_configured", lambda provider: provider == "fish")
 
     assert asyncio.run(tts.synthesize_for_user("user-a", "Hello")) == (
         b"mp3",

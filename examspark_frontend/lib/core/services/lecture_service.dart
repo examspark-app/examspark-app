@@ -1212,6 +1212,7 @@ class LectureService {
     required String scenario,
     String nativeLanguage = 'English',
     String targetLanguage = 'English',
+    String? chatSessionId,
   }) async {
     final accessToken = await _requireAccessToken();
     final response = await http.post(
@@ -1226,6 +1227,8 @@ class LectureService {
         'scenario': scenario,
         'native_language': nativeLanguage,
         'target_language': targetLanguage,
+        if (chatSessionId != null && chatSessionId.isNotEmpty)
+          'chat_session_id': chatSessionId,
       }),
     );
     if (response.statusCode != 200)
@@ -1301,6 +1304,25 @@ class LectureService {
     final response = await http.Response.fromStream(await request.send());
     if (response.statusCode != 200)
       throw Exception(_extractErrorDetail(response));
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> reengageEnglishRoleplay({
+    required String sessionId,
+  }) async {
+    final accessToken = await _requireAccessToken();
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse(
+        '${AppConfig.resolvedApiBaseUrl}/api/v1/english-roleplay/reengage',
+      ),
+    )
+      ..headers['Authorization'] = 'Bearer $accessToken'
+      ..fields['session_id'] = sessionId;
+    final response = await http.Response.fromStream(await request.send());
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 

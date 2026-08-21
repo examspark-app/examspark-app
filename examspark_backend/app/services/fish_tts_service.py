@@ -65,7 +65,7 @@ async def synthesize_speech(
     input_text = (text or "").strip()
     if not AIConfig.fish_audio_configured():
         raise FishTtsError(
-            "FISH_AUDIO_API_KEY and both Fish Audio voice IDs must be configured."
+            "FISH_AUDIO_API_KEY and all language/gender Fish Audio voice IDs must be configured."
         )
     if not input_text:
         raise FishTtsError("Cannot create speech from an empty reply.")

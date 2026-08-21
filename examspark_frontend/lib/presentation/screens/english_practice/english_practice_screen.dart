@@ -6,6 +6,7 @@ import 'package:examspark_frontend/core/services/recording_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_language_picker_screen.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_teaching_history_screen.dart';
+import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_drawer.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/roleplay_screen.dart';
 
 class _Message {
@@ -64,6 +65,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   bool _sending = false;
   bool _recording = false;
   String _nativeLanguage = '';
+  String _targetLanguage = 'English';
   String? _error;
   @override
   void initState() {
@@ -89,6 +91,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
         final r = await LectureService.instance.startEnglishPractice();
         _sessionId = r['session_id'] as String?;
         _nativeLanguage = '${r['native_language'] ?? ''}';
+        _targetLanguage = '${r['target_language'] ?? 'English'}';
         final greeting = '${r['greeting'] ?? ''}'.trim();
         _messages
           ..clear()
@@ -111,6 +114,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
         _sessionId = r['id'] as String?;
         _nativeLanguage =
             await LectureService.instance.getEnglishPracticeLanguage() ?? '';
+        _targetLanguage = '${r['target_language'] ?? 'English'}';
         _messages
           ..clear()
           ..addAll(
@@ -237,7 +241,13 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       }
       await Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => const RoleplaySetupScreen()),
+        MaterialPageRoute(
+          builder: (_) => RoleplaySetupScreen(
+            chatSessionId: _sessionId,
+            nativeLanguage: _nativeLanguage,
+            targetLanguage: _targetLanguage,
+          ),
+        ),
       );
     } catch (_) {
       if (!mounted) return;
@@ -335,7 +345,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     if (!mounted) return;
     await Navigator.pushReplacement(
       context,
-      MaterialPageRoute(builder: (_) => const EnglishPracticeScreen()),
+      MaterialPageRoute(builder: (_) => const EnglishLanguagePickerScreen()),
     );
   }
 
@@ -346,6 +356,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    drawer: const EnglishPracticeDrawer(),
     body: SafeArea(
       child: _loading
           ? const Center(child: CircularProgressIndicator(color: violet))
@@ -372,9 +383,12 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
     child: Row(
       children: [
-        IconButton(
-          onPressed: () => Navigator.maybePop(context),
-          icon: const Icon(Icons.menu_rounded, size: 30),
+        Builder(
+          builder: (context) => IconButton(
+            onPressed: () => Scaffold.of(context).openDrawer(),
+            icon: const Icon(Icons.menu_rounded, size: 30),
+            tooltip: 'Open menu',
+          ),
         ),
         const Spacer(),
         InkWell(

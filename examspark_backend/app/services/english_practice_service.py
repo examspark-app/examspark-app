@@ -120,9 +120,11 @@ short-phrase chips feature. DO NOT replace <<SUGGESTIONS>> with this block.
 Both features are independent and both may appear across different turns.
 
 WHEN TO INCLUDE IT:
-- Only when a short gradeable practice moment naturally fits, e.g. you have
+- When a short gradeable practice moment naturally fits, e.g. you have
   just taught a grammar point, just introduced a new {tgt} vocabulary word,
   or just finished correcting a clear mistake the student made in their last turn.
+- In that situation, you MUST append exactly one valid MCQ block. Do not omit
+    it merely because the turn is conversational; keep it short and relevant.
 - Never on the very first greeting / onboarding turn of a brand-new conversation.
 - Never more than ONE MCQ block per AI reply.
 - NOT on every single turn — only every 2-4 teaching turns when it actually helps.
@@ -278,7 +280,13 @@ async def _call_model(messages: list[dict]) -> str:
                 return ""
             message = choices[0].get("message") or {}
             content = message.get("content")
-            return content if isinstance(content, str) else ""
+            if isinstance(content, str):
+                logger.info(
+                    "english_practice_raw_mcq_marker=%s",
+                    "<<PRACTICE_MCQ>>" in content,
+                )
+                return content
+            return ""
     except httpx.TimeoutException as e:
         raise EnglishPracticeError("Tutor call timed out.", 504) from e
     except httpx.RequestError as e:
@@ -434,6 +442,8 @@ def restore_session(session_id: str, user_id: str) -> dict | None:
         "id": session["id"],
         "title": session.get("title"),
         "pinned": bool(session.get("pinned")),
+        "native_language": session.get("native_language") or "English",
+        "target_language": session.get("target_language") or "English",
         "created_at": session.get("created_at"),
         "updated_at": session.get("updated_at"),
         "messages": list(messages),
@@ -516,7 +526,7 @@ def _build_context_messages(
     )
     message_count = len(rows)
     memory_context = learning_memory.format_memory_context(
-        learning_memory.load_memory(user_id), mode="chat"
+        learning_memory.load_memory(user_id, target_language), mode="chat"
     )
     system_text = _system_prompt(
         native_language=native_language,
@@ -588,7 +598,7 @@ async def start_session(user_id: str) -> dict:
     )
     sid = session["id"]
     memory_context = learning_memory.format_memory_context(
-        learning_memory.load_memory(user_id), mode="chat"
+        learning_memory.load_memory(user_id, target), mode="chat"
     )
     system_text = _system_prompt(
         native_language=native,

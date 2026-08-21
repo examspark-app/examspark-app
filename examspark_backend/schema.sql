@@ -175,7 +175,7 @@ CREATE TABLE credit_transactions (
     action TEXT,
     description TEXT NOT NULL,
     lecture_id UUID REFERENCES lectures(id) ON DELETE SET NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- Quiz finishes (Study Workspace) — Progress Learning Score (Slice A).

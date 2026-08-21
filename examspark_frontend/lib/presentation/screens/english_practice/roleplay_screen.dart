@@ -8,11 +8,20 @@ import 'package:examspark_frontend/core/constants/roleplay_voice_config.dart';
 import 'package:examspark_frontend/core/services/recording_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_teaching_history_screen.dart';
+import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_drawer.dart';
 
 const _violet = Color(0xFF5137ED);
 
 class RoleplaySetupScreen extends StatefulWidget {
-  const RoleplaySetupScreen({super.key});
+  const RoleplaySetupScreen({
+    super.key,
+    this.chatSessionId,
+    this.nativeLanguage,
+    this.targetLanguage,
+  });
+  final String? chatSessionId;
+  final String? nativeLanguage;
+  final String? targetLanguage;
   @override
   State<RoleplaySetupScreen> createState() => _RoleplaySetupScreenState();
 }
@@ -40,7 +49,9 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
       setState(() {
         _ttsProvider = preference['provider'] as String? ?? 'fish';
         _ttsVoiceKey = preference['voice_key'] as String? ?? 'female';
-        _targetLanguage = preference['language'] as String? ?? 'English';
+        _targetLanguage = widget.targetLanguage ??
+          preference['language'] as String? ??
+          'English';
         _hasSavedPreference = preference['preference_set'] == true;
         _preferenceLoaded = true;
       });
@@ -127,7 +138,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
       showDragHandle: true,
       builder: (sheetContext) {
         var selectedProvider = forcePicker ? 'fish' : _ttsProvider;
-        var selectedGender = _ttsVoiceKey == 'male' ? 'male' : 'female';
+        var selectedVoiceKey = _ttsVoiceKey;
         var selectedLanguage = forcePicker ? 'English' : _targetLanguage;
         var query = '';
         final search = TextEditingController();
@@ -167,78 +178,102 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                           ChoiceChip(
                             label: const Text('Fish Voice'),
                             selected: selectedProvider == 'fish',
-                            onSelected: (_) =>
-                                setSheetState(() => selectedProvider = 'fish'),
+                            onSelected: (_) => setSheetState(() {
+                              selectedProvider = 'fish';
+                              selectedVoiceKey = 'female';
+                            }),
                           ),
                           ChoiceChip(
                             label: const Text('Qwen Voice'),
                             selected: selectedProvider == 'qwen',
-                            onSelected: (_) =>
-                                setSheetState(() => selectedProvider = 'qwen'),
+                            onSelected: (_) => setSheetState(() {
+                              selectedProvider = 'qwen';
+                              selectedVoiceKey = 'female';
+                            }),
                           ),
                           ChoiceChip(
                             label: const Text('Gemini Voice'),
                             selected: selectedProvider == 'gemini',
-                            onSelected: (_) => setSheetState(
-                              () => selectedProvider = 'gemini',
-                            ),
+                            onSelected: (_) => setSheetState(() {
+                              selectedProvider = 'gemini';
+                              selectedVoiceKey = 'warm';
+                            }),
                           ),
                         ],
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        'Voice gender',
+                      Text(
+                        selectedProvider == 'gemini' ? 'Voice' : 'Voice gender',
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
                       const SizedBox(height: 8),
                       Wrap(
                         spacing: 8,
                         children: [
-                          ChoiceChip(
-                            label: const Text('Female'),
-                            selected: selectedGender == 'female',
-                            onSelected: (_) =>
-                                setSheetState(() => selectedGender = 'female'),
-                          ),
-                          ChoiceChip(
-                            label: const Text('Male'),
-                            selected: selectedGender == 'male',
-                            onSelected: (_) =>
-                                setSheetState(() => selectedGender = 'male'),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'Language',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
-                      TextField(
-                        controller: search,
-                        onChanged: (value) => setSheetState(
-                          () => query = value.trim().toLowerCase(),
-                        ),
-                        decoration: const InputDecoration(
-                          prefixIcon: Icon(Icons.search),
-                          hintText: 'Search language',
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: [
-                          for (final language in filtered)
+                          if (selectedProvider == 'gemini') ...[
+                            for (final voice in const [
+                              ('warm', 'Warm'),
+                              ('friendly', 'Friendly'),
+                              ('upbeat', 'Upbeat'),
+                            ])
+                              ChoiceChip(
+                                label: Text(voice.$2),
+                                selected: selectedVoiceKey == voice.$1,
+                                onSelected: (_) => setSheetState(
+                                  () => selectedVoiceKey = voice.$1,
+                                ),
+                              ),
+                          ] else ...[
                             ChoiceChip(
-                              label: Text(language),
-                              selected: selectedLanguage == language,
+                              label: const Text('Female'),
+                              selected: selectedVoiceKey == 'female',
                               onSelected: (_) => setSheetState(
-                                () => selectedLanguage = language,
+                                () => selectedVoiceKey = 'female',
                               ),
                             ),
+                            ChoiceChip(
+                              label: const Text('Male'),
+                              selected: selectedVoiceKey == 'male',
+                              onSelected: (_) => setSheetState(
+                                () => selectedVoiceKey = 'male',
+                              ),
+                            ),
+                          ],
                         ],
                       ),
+                      if (selectedProvider == 'fish') ...[
+                        const SizedBox(height: 16),
+                        const Text(
+                          'Language',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        const SizedBox(height: 8),
+                        TextField(
+                          controller: search,
+                          onChanged: (value) => setSheetState(
+                            () => query = value.trim().toLowerCase(),
+                          ),
+                          decoration: const InputDecoration(
+                            prefixIcon: Icon(Icons.search),
+                            hintText: 'Search language',
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: [
+                            for (final language in filtered)
+                              ChoiceChip(
+                                label: Text(language),
+                                selected: selectedLanguage == language,
+                                onSelected: (_) => setSheetState(
+                                  () => selectedLanguage = language,
+                                ),
+                              ),
+                          ],
+                        ),
+                      ],
                       const SizedBox(height: 20),
                       SizedBox(
                         width: double.infinity,
@@ -246,7 +281,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                           onPressed: () async {
                             await _saveVoicePreference(
                               selectedProvider,
-                              selectedGender,
+                              selectedVoiceKey,
                               selectedLanguage,
                             );
                             if (sheetContext.mounted)
@@ -270,7 +305,9 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
       MaterialPageRoute(
         builder: (_) => RoleplayVoiceScreen(
           scenario: scenario!,
-          targetLanguage: _targetLanguage,
+          targetLanguage: widget.targetLanguage ?? _targetLanguage,
+          nativeLanguage: widget.nativeLanguage ?? 'English',
+          chatSessionId: widget.chatSessionId,
         ),
       ),
     );
@@ -284,7 +321,9 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
         MaterialPageRoute(
           builder: (_) => RoleplayVoiceScreen(
             scenario: scenario!,
-            targetLanguage: _targetLanguage,
+            targetLanguage: widget.targetLanguage ?? _targetLanguage,
+            nativeLanguage: widget.nativeLanguage ?? 'English',
+            chatSessionId: widget.chatSessionId,
           ),
         ),
       );
@@ -377,6 +416,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
   @override
   Widget build(BuildContext context) => Scaffold(
     backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+    drawer: const EnglishPracticeDrawer(),
     body: SafeArea(
       child: Padding(
         padding: const EdgeInsets.all(16),
@@ -384,9 +424,12 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
           children: [
             Row(
               children: [
-                IconButton(
-                  onPressed: () => Navigator.pop(context),
-                  icon: const Icon(Icons.menu_rounded, size: 30),
+                Builder(
+                  builder: (context) => IconButton(
+                    onPressed: () => Scaffold.of(context).openDrawer(),
+                    icon: const Icon(Icons.menu_rounded, size: 30),
+                    tooltip: 'Open menu',
+                  ),
                 ),
                 const Spacer(),
                 IconButton(
@@ -606,9 +649,13 @@ class RoleplayVoiceScreen extends StatefulWidget {
     super.key,
     required this.scenario,
     required this.targetLanguage,
+    required this.nativeLanguage,
+    this.chatSessionId,
   });
   final String scenario;
   final String targetLanguage;
+  final String nativeLanguage;
+  final String? chatSessionId;
   @override
   State<RoleplayVoiceScreen> createState() => _RoleplayVoiceScreenState();
 }
@@ -636,6 +683,7 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   bool _stopping = false;
   bool _starting = false;
   bool _micEnabled = true;
+  bool _inactivityPromptShown = false;
   int _sessionGeneration = 0;
   String? _listeningHint;
   String? _openingReply;
@@ -784,6 +832,7 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
     if (!mounted || !active) return;
     if (speaking) {
       _heardSpeech = true;
+      _inactivityPromptShown = false;
       _speechEndTimer?.cancel();
       _sessionInactivityTimer?.cancel();
       _firstSpeechPromptTimer?.cancel();
@@ -830,6 +879,43 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
 
   Future<void> _autoStopForInactivity() async {
     if (!mounted || !active) return;
+    if (!_inactivityPromptShown) {
+      _inactivityPromptShown = true;
+      setState(() => state = RoleplayVoiceState.generatingAiResponse);
+      RecordingService.instance.setVoiceActivityListener(null);
+      await RecordingService.instance.releaseForScreen();
+      try {
+        final result = await LectureService.instance.reengageEnglishRoleplay(
+          sessionId: sessionId!,
+        );
+        final encoded = result['audio_base64'] as String? ?? '';
+        if (encoded.isEmpty) throw StateError('Re-engagement voice was not generated.');
+        final audio = base64Decode(encoded);
+        await _loadPlayableAudio(
+          audio,
+          result['audio_mime_type'] as String? ?? 'audio/mpeg',
+        );
+        if (!mounted || _leaving || _stopping || sessionId == null) return;
+        _openingReply = result['reply'] as String? ?? 'Are you still there?';
+        setState(() => state = RoleplayVoiceState.aiSpeaking);
+        pulse.repeat(reverse: true);
+        await _player.play();
+        await _player.processingStateStream.firstWhere(
+          (processingState) => processingState == ProcessingState.completed,
+        );
+        if (mounted && !_leaving && !_stopping) {
+          await _startListening();
+        }
+      } catch (error) {
+        if (mounted && !_leaving && !_stopping) {
+          setState(() => state = RoleplayVoiceState.error);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('$error')),
+          );
+        }
+      }
+      return;
+    }
     await _endCurrentSession(
       message:
           'Roleplay stopped because no speech was detected for one minute.',
@@ -846,10 +932,9 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
           setState(() => state = RoleplayVoiceState.generatingOpeningText);
         final started = await LectureService.instance.startEnglishRoleplay(
           scenario: widget.scenario,
-          nativeLanguage:
-              await LectureService.instance.getEnglishPracticeLanguage() ??
-              'English',
+          nativeLanguage: widget.nativeLanguage,
           targetLanguage: widget.targetLanguage,
+          chatSessionId: widget.chatSessionId,
         );
         final startedSessionId = started['session_id'] as String?;
         if (startedSessionId == null ||
@@ -924,6 +1009,7 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
         return;
       }
       if (mounted) setState(() => state = RoleplayVoiceState.listening);
+      _inactivityPromptShown = false;
       _armSessionInactivityTimer();
       _armFirstSpeechPrompt();
       timer ??= Timer.periodic(const Duration(seconds: 1), (_) {

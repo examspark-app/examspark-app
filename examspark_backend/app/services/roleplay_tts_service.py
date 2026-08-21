@@ -47,11 +47,11 @@ _VOICE_IDS: Final[dict[str, dict[str, str]]] = {
         "upbeat": "Puck",
     },
     "fish": {
-        "female": "language-specific",
-        "male": "language-specific",
+        "female": "",
+        "male": "",
     },
 }
-_DEFAULT_PROVIDER = "qwen"
+_DEFAULT_PROVIDER = "fish"
 _DEFAULT_VOICE_KEY = "female"
 _DEFAULT_LANGUAGE = "English"
 SUPPORTED_ROLEPLAY_LANGUAGES = frozenset({
@@ -117,7 +117,7 @@ def set_voice_preference(user_id: str, provider: str, voice_key: str, language: 
     if language not in SUPPORTED_ROLEPLAY_LANGUAGES:
         raise RoleplayTtsError("That roleplay language is not available.")
     voice_id = (
-        AIConfig.fish_audio_voice_id(language)
+        AIConfig.fish_audio_voice_id(language, voice_key)
         if provider == "fish"
         else _VOICE_IDS[provider][voice_key]
     )
@@ -155,7 +155,7 @@ def _provider_configured(provider: str) -> bool:
 
 def _voice_id(provider: str, voice_key: str, language: str) -> str:
     if provider == "fish":
-        return AIConfig.fish_audio_voice_id(language)
+        return AIConfig.fish_audio_voice_id(language, voice_key)
     return _VOICE_IDS[provider][voice_key]
 
 

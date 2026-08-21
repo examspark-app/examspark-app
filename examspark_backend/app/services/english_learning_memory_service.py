@@ -67,8 +67,13 @@ def _profile_full_name(user_id: str) -> str | None:
     return None
 
 
-def load_memory(user_id: str) -> dict:
-    rows = get_supabase_admin().table('english_learning_memory').select('*').eq('user_id', user_id).limit(1).execute().data or []
+def load_memory(user_id: str, target_language: str = 'English') -> dict:
+    target = (target_language or 'English').strip() or 'English'
+    rows = (
+        get_supabase_admin().table('english_learning_memory').select('*')
+        .eq('user_id', user_id).eq('target_language', target).limit(1)
+        .execute().data or []
+    )
     memory = dict(rows[0]) if rows else {}
     preferred = _profile_full_name(user_id)
     if preferred:
@@ -177,7 +182,8 @@ def _extract_name_candidate(user_text: str, assistant_text: str = '') -> str | N
 async def update_from_turn(*, user_id: str, native_language: str, mode: str, user_text: str, assistant_text: str, scenario: str | None = None, target_language: str | None = None, turn_index: int | None = None) -> None:
     """Use the existing English Qwen client to extract only bounded learning facts."""
     from app.services.english_practice_service import _call_model
-    existing = load_memory(user_id)
+    target = (target_language or 'English').strip() or 'English'
+    existing = load_memory(user_id, target)
     already_has_name = bool(existing.get('preferred_name') or existing.get('learner_name'))
 
     learner_name_from_user: str | None = None
@@ -213,7 +219,12 @@ async def update_from_turn(*, user_id: str, native_language: str, mode: str, use
         logger.warning('english_learning_memory_meta_failed user=%s error=%s', user_id, type(e).__name__)
 
     try:
-        row = {'user_id': user_id, 'native_language': native_language, 'updated_at': _now()}
+        row = {
+            'user_id': user_id,
+            'native_language': native_language,
+            'target_language': target,
+            'updated_at': _now(),
+        }
         level = str(extracted.get('english_level') or '').lower()
         row['english_level'] = level if level in _LEVELS else existing.get('english_level')
         for key in _LIST_FIELDS:
@@ -223,7 +234,9 @@ async def update_from_turn(*, user_id: str, native_language: str, mode: str, use
             row['recent_roleplay_scenarios'] = _clean_list([scenario] + list(existing.get('recent_roleplay_scenarios') or []), _LIMITS['recent_roleplay_scenarios'])
         if learner_name_from_user and not already_has_name:
             row['learner_name'] = learner_name_from_user
-        get_supabase_admin().table('english_learning_memory').upsert(row, on_conflict='user_id').execute()
+        get_supabase_admin().table('english_learning_memory').upsert(
+            row, on_conflict='user_id,target_language'
+        ).execute()
     except Exception as e:
         logger.warning('english_learning_memory_update_failed user=%s error=%s', user_id, type(e).__name__)
 

@@ -11,7 +11,7 @@ from app.services import roleplay_tts_service as tts
 from app.services.openrouter_stream import format_sse
 
 router = APIRouter(prefix='/api/v1/english-roleplay', tags=['english-roleplay'])
-class StartBody(BaseModel): scenario: str = Field(..., min_length=1, max_length=300); native_language: str = Field(default='English', max_length=60); target_language: str = Field(default='English', max_length=60)
+class StartBody(BaseModel): scenario: str = Field(..., min_length=1, max_length=300); native_language: str = Field(default='English', max_length=60); target_language: str = Field(default='English', max_length=60); chat_session_id: str | None = None
 class TurnBody(BaseModel): session_id: str; transcript: str = Field(..., min_length=1, max_length=4000)
 class EndBody(BaseModel): duration_seconds: int | None = Field(default=None, ge=0)
 class VoicePreferenceBody(BaseModel):
@@ -27,6 +27,7 @@ async def start(body: StartBody, user: AuthenticatedUser = Depends(get_current_u
             body.scenario,
             body.native_language,
             target_language=body.target_language,
+            chat_session_id=body.chat_session_id,
         )
         audio = result.pop('audio_bytes', None)
         return {
@@ -52,6 +53,22 @@ async def set_voice_preference(body: VoicePreferenceBody, user: AuthenticatedUse
 async def turn(body: TurnBody, user: AuthenticatedUser = Depends(get_current_user)):
     try: return await service.send_turn(user.user_id, body.session_id, body.transcript)
     except chat.EnglishPracticeError as e: raise _error(e) from e
+
+
+@router.post('/reengage')
+async def reengage(
+    session_id: str = Form(...),
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    try:
+        result = await service.reengage(user.user_id, session_id)
+    except chat.EnglishPracticeError as e:
+        raise _error(e) from e
+    return {
+        'reply': result['reply'],
+        'audio_base64': base64.b64encode(result['audio_bytes']).decode('ascii'),
+        'audio_mime_type': result['audio_mime_type'],
+    }
 @router.post('/turn/audio')
 async def audio_turn(
     session_id: str = Form(...),
