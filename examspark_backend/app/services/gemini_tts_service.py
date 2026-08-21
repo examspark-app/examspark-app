@@ -66,7 +66,8 @@ async def synthesize_speech(
 ) -> tuple[bytes, str]:
     """Return Gemini TTS output as ``(wav_bytes, 'audio/wav')``.
 
-    ``speakingRate`` is the Gemini-native speech speed parameter (range 0.5–2.0).
+    Gemini's current GenerateContent TTS schema does not define a speech-rate
+    field under ``speechConfig``; pacing is controlled by the spoken prompt.
     """
     if not AIConfig.gemini_tts_configured():
         raise GeminiTtsError("GEMINI_API_KEY not configured on the server.")
@@ -74,14 +75,12 @@ async def synthesize_speech(
     if not text:
         raise GeminiTtsError("Cannot create speech from an empty reply.")
 
-    resolved_speed = _resolve_speed(speed, user_id)
     url = f"{_BASE_URL}/{AIConfig.GEMINI_TTS_MODEL}:generateContent"
     payload = {
         "contents": [{"parts": [{"text": text}]}],
         "generationConfig": {
             "responseModalities": ["AUDIO"],
             "speechConfig": {
-                "speakingRate": resolved_speed,
                 "voiceConfig": {
                     "prebuiltVoiceConfig": {"voiceName": voice or AIConfig.GEMINI_TTS_VOICE}
                 },

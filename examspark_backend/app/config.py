@@ -121,10 +121,16 @@ class AIConfig:
 
     @classmethod
     def fish_audio_configured(cls) -> bool:
+        def usable(value: str) -> bool:
+            cleaned = (value or "").strip()
+            return bool(cleaned) and not (
+                cleaned.startswith("<") and cleaned.endswith(">")
+            )
+
         return bool(
-            cls.FISH_AUDIO_API_KEY
-            and cls.FISH_AUDIO_FEMALE_VOICE_ID
-            and cls.FISH_AUDIO_MALE_VOICE_ID
+            usable(cls.FISH_AUDIO_API_KEY)
+            and usable(cls.FISH_AUDIO_FEMALE_VOICE_ID)
+            and usable(cls.FISH_AUDIO_MALE_VOICE_ID)
         )
 
     @classmethod

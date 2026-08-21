@@ -123,6 +123,7 @@ def test_qwen_request_uses_selected_backend_voice_and_returns_provider_mime(monk
     assert captured['url'] == 'https://openrouter.ai/api/v1/audio/speech'
     assert captured['json']['model'] == 'qwen/qwen-audio-3.0-tts-flash'
     assert captured['json']['voice'] == 'loongjohn'
+    assert 'speed' not in captured['json']
 
 
 def test_gemini_request_uses_selected_voice_and_wraps_pcm_as_wav(monkeypatch):
@@ -137,3 +138,4 @@ def test_gemini_request_uses_selected_voice_and_wraps_pcm_as_wav(monkeypatch):
     assert mime == 'audio/wav' and audio.startswith(b'RIFF')
     assert captured['url'].endswith('gemini-2.5-flash-preview-tts:generateContent')
     assert captured['json']['generationConfig']['speechConfig']['voiceConfig']['prebuiltVoiceConfig']['voiceName'] == 'Sulafat'
+    assert 'speakingRate' not in captured['json']['generationConfig']['speechConfig']

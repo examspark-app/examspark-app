@@ -59,10 +59,9 @@ async def synthesize_speech(
     OpenRouter returns raw audio bytes.  MP3 keeps the payload compact and is
     directly playable by the existing Flutter ``just_audio`` integration.
 
-    Speech speed is chosen by, in order:
-    * explicit ``speed`` argument (clamped 0.25–4.0, OpenRouter /audio/speech range),
-    * user's ``english_level`` from learning memory (Beginner slowest → Advanced normal),
-    * app-wide learner-friendly default of 0.85x (slower than provider default 1.0).
+    Qwen Audio TTS does not accept a speed parameter. The argument remains in
+    the shared adapter signature, but is intentionally omitted from the
+    provider request.
     """
     if not AIConfig.openrouter_configured():
         raise QwenTtsError("OPENROUTER_API_KEY not configured on the server.")
@@ -71,13 +70,11 @@ async def synthesize_speech(
     if not input_text:
         raise QwenTtsError("Cannot create speech from an empty reply.")
 
-    resolved_speed = _resolve_speed(speed, user_id)
     payload = {
         "model": AIConfig.QWEN_TTS_MODEL,
         "input": input_text,
         "voice": voice or AIConfig.QWEN_TTS_VOICE,
         "response_format": "mp3",
-        "speed": resolved_speed,
     }
     headers = {
         "Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}",

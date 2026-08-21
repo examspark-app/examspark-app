@@ -121,19 +121,28 @@ def _user_speed(user_id: str) -> float:
     return _DEFAULT_SPEED
 
 
+def _provider_configured(provider: str) -> bool:
+    if provider == "qwen":
+        return AIConfig.openrouter_configured()
+    if provider == "gemini":
+        return AIConfig.gemini_tts_configured()
+    if provider == "fish":
+        return AIConfig.fish_audio_configured()
+    return False
+
+
 async def synthesize_for_user(user_id: str, text: str) -> tuple[bytes, str]:
     preference = get_voice_preference(user_id)
     provider = preference["provider"]
     speed = _user_speed(user_id)
-    providers = [provider]
-    alternate = "gemini" if provider == "qwen" else "qwen"
-    alternate_configured = (
-        alternate == "qwen" and AIConfig.openrouter_configured()
-    ) or (
-        alternate == "gemini" and AIConfig.gemini_tts_configured()
-    )
-    if alternate_configured:
-        providers.append(alternate)
+    # The saved preference remains primary. Fish is included explicitly in
+    # the fallback chain; previously a Qwen preference could only fall back
+    # to Gemini, so Fish was never attempted.
+    providers = [provider] + [
+        candidate
+        for candidate in ("fish", "qwen", "gemini")
+        if candidate != provider and _provider_configured(candidate)
+    ]
 
     errors: list[str] = []
     for selected_provider in providers:
