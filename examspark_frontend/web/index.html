@@ -1,40 +1,85 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <!--
-    If you are serving your web app in a path other than the root, change the
-    href value below to reflect the base path you are serving from.
-    The path provided below has to start and end with a slash "/" in order for
-    it to work correctly.
-    For more details:
-    * https://developer.mozilla.org/en-US/docs/Web/HTML/Element/base
-    This is a placeholder for base href that will be replaced by the value of
-    the `--base-href` argument provided to `flutter build`.
-  -->
   <base href="$FLUTTER_BASE_HREF">
   <meta charset="UTF-8">
   <meta content="IE=Edge" http-equiv="X-UA-Compatible">
-  <meta name="description" content="A new Flutter project.">
-  <!-- iOS meta tags & icons -->
+  <meta name="description" content="Sonaxia">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
-  <meta name="apple-mobile-web-app-title" content="examspark_frontend">
-  <link rel="apple-touch-icon" href="icons/Icon-192.png">
-  <!-- Favicon -->
+  <meta name="apple-mobile-web-app-title" content="Sonaxia">
+  <meta name="theme-color" content="#F0384C">
+  <link rel="apple-touch-icon" href="images/sonaxia_logo.png">
   <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
   <link rel="icon" type="image/png" href="favicon.png"/>
-  <title>examspark_frontend</title>
+  <title>Sonaxia</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    html, body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      background: #f7f4f2;
+      font-family: Arial, Helvetica, sans-serif;
+    }
+
+    body {
+      overflow: hidden;
+    }
+
+    #sonaxia-shell {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 72px;
+      background: rgba(255, 255, 255, 0.94);
+      border-bottom: 1px solid rgba(15, 23, 42, 0.07);
+      box-shadow: 0 1px 0 rgba(15, 23, 42, 0.04);
+      backdrop-filter: blur(8px);
+      transition: opacity 220ms ease;
+    }
+
+    #sonaxia-shell.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #sonaxia-shell img {
+      display: block;
+      width: 180px;
+      max-width: calc(100vw - 80px);
+      height: auto;
+      object-fit: contain;
+    }
+
+    #sonaxia-shell::after {
+      content: "";
+      width: 16px;
+      height: 16px;
+      margin-left: 12px;
+      border-radius: 50%;
+      border: 2px solid rgba(240, 56, 76, 0.2);
+      border-top-color: #f0384c;
+      animation: sonaxia-spin 0.9s linear infinite;
+    }
+
+    @keyframes sonaxia-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
 </head>
 <body>
-  <!--
-    You can customize the "flutter_bootstrap.js" script.
-    This is useful to provide a custom configuration to the Flutter loader
-    or to give the user feedback during the initialization process.
-    For more details:
-    * https://docs.flutter.dev/platform-integration/web/initialization
-  -->
-  <!-- Razorpay Checkout (Web) — Session 6 -->
+  <div id="sonaxia-shell" aria-live="polite" aria-label="Sonaxia loading shell">
+    <img src="images/sonaxia_logo.png" alt="Sonaxia" />
+  </div>
+
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
   <script>
     window.openExamSparkRazorpay = function (optionsJson) {
@@ -52,6 +97,18 @@
         rzp.open();
       });
     };
+
+    function hideInitialShell() {
+      var shell = document.getElementById('sonaxia-shell');
+      if (shell) {
+        shell.classList.add('hidden');
+      }
+    }
+
+    window.addEventListener('flutter-first-frame', hideInitialShell);
+    window.addEventListener('load', function () {
+      setTimeout(hideInitialShell, 150);
+    });
   </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>

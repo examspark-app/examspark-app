@@ -47,8 +47,27 @@ class _PracticeMcq {
 }
 
 class EnglishPracticeScreen extends StatefulWidget {
-  const EnglishPracticeScreen({super.key, this.sessionId});
+  const EnglishPracticeScreen({
+    super.key,
+    this.sessionId,
+    this.resumeLatest = false,
+  });
   final String? sessionId;
+  final bool resumeLatest;
+
+  static bool shouldResumeLatestSession({
+    required bool resumeLatest,
+    required String? sessionId,
+    required int requestId,
+    required int activeRequestId,
+    bool cancelled = false,
+  }) {
+    return !cancelled &&
+        resumeLatest &&
+        sessionId == null &&
+        requestId == activeRequestId;
+  }
+
   @override
   State<EnglishPracticeScreen> createState() => _EnglishPracticeScreenState();
 }
@@ -61,16 +80,20 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   List<String> _suggestions = const [];
   _PracticeMcq? _currentMcq;
   String? _sessionId;
-  bool _loading = true;
+  bool _loading = false;
+  int _latestSessionRequestId = 0;
   bool _sending = false;
   bool _recording = false;
   String _nativeLanguage = '';
   String _targetLanguage = 'English';
   String? _error;
+  bool _longChatPromptShown = false;
+  bool _resumeCancelled = false;
+
   @override
   void initState() {
     super.initState();
-    _load();
+    _load(initial: true);
   }
 
   @override
@@ -81,58 +104,114 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     super.dispose();
   }
 
-  Future<void> _load() async {
+  Future<void> _startFreshPracticeSession() async {
+    final r = await LectureService.instance.startEnglishPractice();
+    if (!mounted) return;
     setState(() {
-      _loading = true;
-      _error = null;
-    });
-    try {
-      if (widget.sessionId == null) {
-        final r = await LectureService.instance.startEnglishPractice();
-        _sessionId = r['session_id'] as String?;
-        _nativeLanguage = '${r['native_language'] ?? ''}';
-        _targetLanguage = '${r['target_language'] ?? 'English'}';
-        final greeting = '${r['greeting'] ?? ''}'.trim();
-        _messages
-          ..clear()
-          ..add(
-            _Message(
-              greeting.isEmpty
-                  ? 'Welcome! Let’s begin with a small English practice step.'
-                  : greeting,
-              false,
-            ),
-          );
-        final s = List<String>.from(r['suggestions'] as List? ?? const []);
-        if (s.isNotEmpty) _suggestions = s;
-        final mcq = _PracticeMcq.fromJson(r['mcq']);
-        if (mcq != null) _currentMcq = mcq;
-      } else {
-        final r = await LectureService.instance.restoreEnglishPracticeSession(
-          widget.sessionId!,
+      _sessionId = r['session_id'] as String?;
+      _nativeLanguage = '${r['native_language'] ?? ''}';
+      _targetLanguage = '${r['target_language'] ?? 'English'}';
+      final greeting = '${r['greeting'] ?? ''}'.trim();
+      _messages
+        ..clear()
+        ..add(
+          _Message(
+            greeting.isEmpty
+                ? 'Welcome! Let’s begin with a small English practice step.'
+                : greeting,
+            false,
+          ),
         );
-        _sessionId = r['id'] as String?;
-        _nativeLanguage =
-            await LectureService.instance.getEnglishPracticeLanguage() ?? '';
-        _targetLanguage = '${r['target_language'] ?? 'English'}';
-        _messages
-          ..clear()
-          ..addAll(
-            (r['messages'] as List? ?? const []).map(
-              (m) => _Message('${m['message'] ?? ''}', m['role'] == 'user'),
-            ),
-          );
+      _suggestions = List<String>.from(r['suggestions'] as List? ?? const []);
+      final mcq = _PracticeMcq.fromJson(r['mcq']);
+      if (mcq != null) _currentMcq = mcq;
+      _loading = false;
+    });
+    _bottom();
+  }
+
+  Future<void> _restoreExistingSession(String sessionId) async {
+    final r = await LectureService.instance.restoreEnglishPracticeSession(
+      sessionId,
+    );
+    if (!mounted) {
+      return;
+    }
+    final language = await LectureService.instance.getEnglishPracticeLanguage();
+    if (!mounted) {
+      return;
+    }
+    setState(() {
+      _sessionId = r['id'] as String?;
+      _nativeLanguage = language ?? '';
+      _targetLanguage = '${r['target_language'] ?? 'English'}';
+      _messages
+        ..clear()
+        ..addAll(
+          (r['messages'] as List? ?? const []).map(
+            (m) => _Message('${m['message'] ?? ''}', m['role'] == 'user'),
+          ),
+        );
+      _loading = false;
+    });
+    _bottom();
+  }
+
+  void _invalidatePendingResume() {
+    _resumeCancelled = true;
+    _latestSessionRequestId++;
+  }
+
+  Future<void> _load({bool initial = false}) async {
+    if (mounted) {
+      setState(() {
+        if (!initial) _loading = true;
+        _error = null;
+      });
+    }
+    try {
+      if (initial && widget.resumeLatest && widget.sessionId == null) {
+        _resumeCancelled = false;
+        final requestId = ++_latestSessionRequestId;
+        final sessionId = await LectureService.instance
+            .getLatestActiveEnglishPracticeSession();
+        if (!mounted) {
+          return;
+        }
+        if (!EnglishPracticeScreen.shouldResumeLatestSession(
+          resumeLatest: widget.resumeLatest,
+          sessionId: widget.sessionId,
+          requestId: requestId,
+          activeRequestId: _latestSessionRequestId,
+          cancelled: _resumeCancelled,
+        )) {
+          return;
+        }
+        if (sessionId == null) {
+          await _startFreshPracticeSession();
+          return;
+        }
+        await _restoreExistingSession(sessionId);
+        return;
       }
-      if (mounted) {
-        setState(() => _loading = false);
-        _bottom();
+
+      var sessionId = widget.sessionId;
+      if (sessionId == null && widget.resumeLatest) {
+        sessionId = await LectureService.instance
+            .getLatestActiveEnglishPracticeSession();
+      }
+      if (sessionId == null) {
+        await _startFreshPracticeSession();
+      } else {
+        await _restoreExistingSession(sessionId);
       }
     } catch (e) {
-      if (mounted)
+      if (mounted) {
         setState(() {
           _loading = false;
           _error = '$e';
         });
+      }
     }
   }
 
@@ -185,7 +264,14 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       }
 
       _sending = false;
+      if (r['suggest_new_chat'] == true && !_longChatPromptShown) {
+        _longChatPromptShown = true;
+      }
     });
+
+    if (r['suggest_new_chat'] == true && mounted) {
+      _showLongChatPrompt();
+    }
 
     _bottom();
   } catch (e) {
@@ -330,6 +416,12 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
         if (mcq != null) _currentMcq = mcq;
         _sending = false;
       });
+      if (response['suggest_new_chat'] == true &&
+          !_longChatPromptShown &&
+          mounted) {
+        _longChatPromptShown = true;
+        _showLongChatPrompt();
+      }
       _bottom();
     } catch (error) {
       if (mounted) {
@@ -341,8 +433,34 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     }
   }
 
+  Future<void> _showLongChatPrompt() async {
+    final startNew = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Start a fresh chat?'),
+        content: const Text(
+          'This conversation is getting long. Your learning memory will carry into a new chat, but this transcript will stay in History.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Keep chatting'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('New Chat'),
+          ),
+        ],
+      ),
+    );
+    if (startNew == true && mounted) {
+      await _newChat();
+    }
+  }
+
   Future<void> _newChat() async {
     if (!mounted) return;
+    _invalidatePendingResume();
     await Navigator.pushReplacement(
       context,
       MaterialPageRoute(builder: (_) => const EnglishLanguagePickerScreen()),
@@ -474,12 +592,14 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                   ),
                 ],
               ),
-              child: Text(
-                m.text,
-                style: TextStyle(
-                  color: m.isUser ? Colors.white : AppTheme.getPrimaryText(context),
-                  fontSize: 16,
-                  height: 1.45,
+              child: SelectionArea(
+                child: Text(
+                  m.text,
+                  style: TextStyle(
+                    color: m.isUser ? Colors.white : AppTheme.getPrimaryText(context),
+                    fontSize: 16,
+                    height: 1.45,
+                  ),
                 ),
               ),
             ),

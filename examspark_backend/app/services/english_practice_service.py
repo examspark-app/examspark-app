@@ -30,7 +30,8 @@ logger = logging.getLogger(__name__)
 
 _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 _CONTEXT_MESSAGES = 8          # last N messages sent to the model
-_MAX_SESSION_MESSAGES = 50     # after this, auto-start a new session
+_MAX_SESSION_MESSAGES = 500
+_NEW_CHAT_SUGGESTION_THRESHOLD = 100
 _CREDIT_COST = 2
 
 
@@ -424,6 +425,20 @@ def list_sessions(user_id: str, limit: int = 30) -> list[dict]:
     return list(rows)
 
 
+def latest_active_session(user_id: str) -> dict | None:
+    rows = (
+        get_supabase_admin().table("english_practice_sessions")
+        .select("id")
+        .eq("user_id", user_id)
+        .eq("status", "active")
+        .order("updated_at", desc=True)
+        .limit(1)
+        .execute()
+        .data or []
+    )
+    return rows[0] if rows else None
+
+
 def restore_session(session_id: str, user_id: str) -> dict | None:
     session = _session_row(session_id, user_id)
     if not session:
@@ -653,7 +668,7 @@ async def send_message(
     existing_count = _message_count_incremental(session_id, user_id)
     if existing_count >= _MAX_SESSION_MESSAGES:
         raise EnglishPracticeError(
-            "This session has reached 50 messages. Please start a new chat.",
+            "This session has reached 100 messages. Please start a new chat.",
             409,
         )
     focus: str | None = None
@@ -691,6 +706,8 @@ async def send_message(
     result: dict = {
         "reply": reply,
         "suggestions": suggestions,
+        "message_count": existing_count + 2,
+        "suggest_new_chat": existing_count + 2 >= _NEW_CHAT_SUGGESTION_THRESHOLD,
     }
     if mcq is not None:
         result["mcq"] = mcq

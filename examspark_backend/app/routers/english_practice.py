@@ -120,6 +120,13 @@ async def sessions(
     return {"sessions": eps.list_sessions(user.user_id, limit=limit)}
 
 
+@router.get("/sessions/latest-active")
+async def latest_active_session(
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    return {"session": eps.latest_active_session(user.user_id)}
+
+
 @router.get("/sessions/{session_id}")
 async def restore(
     session_id: str,

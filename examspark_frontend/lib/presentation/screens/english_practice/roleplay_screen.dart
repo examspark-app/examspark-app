@@ -409,7 +409,6 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
     );
     if (value != null && value.isNotEmpty) {
       setState(() => scenario = value);
-      await _openSelectedScenario();
     }
   }
 
@@ -481,10 +480,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                               ),
                             ),
                             selected: scenario == x.$2,
-                            onSelected: (_) async {
-                              setState(() => scenario = x.$2);
-                              await _openSelectedScenario();
-                            },
+                            onSelected: (_) => setState(() => scenario = x.$2),
                             selectedColor: const Color(0xFFE8E3FF),
                             side: BorderSide(
                               color: scenario == x.$2
@@ -753,21 +749,33 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   }
 
   Future<void> _leave() async {
+    if (_leaving) return;
     _leaving = true;
     _sessionGeneration++;
-    await _stopResources();
     final id = sessionId;
+    sessionId = null;
+    if (mounted) {
+      setState(() {
+        state = RoleplayVoiceState.stopped;
+        _listeningHint = null;
+      });
+    }
+    unawaited(_stopResources());
     if (id != null) {
-      try {
-        await LectureService.instance.endEnglishRoleplay(
-          sessionId: id,
-          durationSeconds: elapsed.inSeconds,
-        );
-      } catch (_) {
-        // The server retains the active session if the network is unavailable.
-      }
+      unawaited(_endRoleplayOnServer(id));
     }
     if (mounted) Navigator.pop(context);
+  }
+
+  Future<void> _endRoleplayOnServer(String id) async {
+    try {
+      await LectureService.instance.endEnglishRoleplay(
+        sessionId: id,
+        durationSeconds: elapsed.inSeconds,
+      );
+    } catch (_) {
+      // Local cleanup and navigation still complete when the network is unavailable.
+    }
   }
 
   Future<void> _stopForBackground() async {

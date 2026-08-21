@@ -1045,6 +1045,21 @@ class LectureService {
     return data;
   }
 
+  Future<String?> getLatestActiveEnglishPracticeSession() async {
+    final accessToken = await _requireAccessToken();
+    final response = await http.get(
+      Uri.parse(
+        '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/sessions/latest-active',
+      ),
+      headers: {'Authorization': 'Bearer $accessToken'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return (data['session'] as Map<String, dynamic>?)?['id'] as String?;
+  }
+
   Future<String?> getEnglishPracticeLanguage() async {
     final pref = await getEnglishPracticePreference();
     return pref?['native_language'] as String?;
