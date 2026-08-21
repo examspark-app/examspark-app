@@ -53,6 +53,12 @@ _VOICE_IDS: Final[dict[str, dict[str, str]]] = {
 }
 _DEFAULT_PROVIDER = "qwen"
 _DEFAULT_VOICE_KEY = "female"
+_DEFAULT_LANGUAGE = "English"
+SUPPORTED_ROLEPLAY_LANGUAGES = frozenset({
+    "English", "Spanish", "French", "Japanese", "German", "Korean",
+    "Italian", "Chinese (Mandarin)", "Portuguese", "Hindi", "Arabic",
+    "Vietnamese", "Indonesian", "Russian", "Bengali", "Tamil",
+})
 
 _SPEED_BY_LEVEL = {
     "beginner": 0.75,
@@ -63,7 +69,7 @@ _SPEED_BY_LEVEL = {
 _DEFAULT_SPEED = 0.85
 
 
-def _normalise(provider: str | None, voice_key: str | None) -> tuple[str, str]:
+def _normalise(provider: str | None, voice_key: str | None, language: str | None) -> tuple[str, str, str]:
     provider = (provider or _DEFAULT_PROVIDER).strip().lower()
     voice_key = (voice_key or "").strip().lower()
     if provider not in VOICE_OPTIONS:
@@ -71,41 +77,52 @@ def _normalise(provider: str | None, voice_key: str | None) -> tuple[str, str]:
     if voice_key not in _VOICE_IDS[provider]:
         # Switching provider always gets a valid provider-specific default.
         voice_key = VOICE_OPTIONS[provider][0]["key"]
-    return provider, voice_key
+    language = (language or _DEFAULT_LANGUAGE).strip()
+    if language not in SUPPORTED_ROLEPLAY_LANGUAGES:
+        language = _DEFAULT_LANGUAGE
+    return provider, voice_key, language
 
 
 def get_voice_preference(user_id: str) -> dict[str, object]:
     row = (
         get_supabase_admin()
         .table("users")
-        .select("roleplay_tts_provider,roleplay_tts_voice_key,roleplay_tts_voice_id")
+        .select("roleplay_tts_provider,roleplay_tts_voice_key,roleplay_tts_voice_id,roleplay_tts_language,roleplay_tts_preference_set")
         .eq("id", user_id)
         .limit(1)
         .execute()
         .data
         or [{}]
     )[0]
-    provider, voice_key = _normalise(
-        row.get("roleplay_tts_provider"), row.get("roleplay_tts_voice_key")
+    provider, voice_key, language = _normalise(
+        row.get("roleplay_tts_provider"), row.get("roleplay_tts_voice_key"),
+        row.get("roleplay_tts_language"),
     )
     return {
         "provider": provider,
         "voice_key": voice_key,
+        "language": language,
+        "preference_set": bool(row.get("roleplay_tts_preference_set")),
         "voice_options": list(VOICE_OPTIONS[provider]),
     }
 
 
-def set_voice_preference(user_id: str, provider: str, voice_key: str) -> dict[str, object]:
+def set_voice_preference(user_id: str, provider: str, voice_key: str, language: str = _DEFAULT_LANGUAGE) -> dict[str, object]:
     provider = (provider or "").strip().lower()
     voice_key = (voice_key or "").strip().lower()
     # Reject a mismatched voice rather than silently persisting it.
     if provider not in _VOICE_IDS or voice_key not in _VOICE_IDS[provider]:
         raise RoleplayTtsError("That voice is not available for the selected provider.")
+    language = language.strip() or _DEFAULT_LANGUAGE
+    if language not in SUPPORTED_ROLEPLAY_LANGUAGES:
+        raise RoleplayTtsError("That roleplay language is not available.")
     get_supabase_admin().table("users").update(
         {
             "roleplay_tts_provider": provider,
             "roleplay_tts_voice_key": voice_key,
             "roleplay_tts_voice_id": _VOICE_IDS[provider][voice_key],
+            "roleplay_tts_language": language.strip() or _DEFAULT_LANGUAGE,
+            "roleplay_tts_preference_set": True,
         }
     ).eq("id", user_id).execute()
     return get_voice_preference(user_id)
@@ -131,9 +148,19 @@ def _provider_configured(provider: str) -> bool:
     return False
 
 
+def _voice_id(provider: str, voice_key: str, language: str) -> str:
+    if provider == "fish":
+        language_key = f"{language.strip()}:{voice_key}"
+        mapped = AIConfig.fish_audio_voice_ids().get(language_key)
+        if mapped:
+            return mapped
+    return _VOICE_IDS[provider][voice_key]
+
+
 async def synthesize_for_user(user_id: str, text: str) -> tuple[bytes, str]:
     preference = get_voice_preference(user_id)
     provider = preference["provider"]
+    language = preference.get("language", _DEFAULT_LANGUAGE)
     # The saved preference remains primary. Fish is included explicitly in
     # the fallback chain; previously a Qwen preference could only fall back
     # to Gemini, so Fish was never attempted.
@@ -145,11 +172,12 @@ async def synthesize_for_user(user_id: str, text: str) -> tuple[bytes, str]:
 
     errors: list[str] = []
     for selected_provider in providers:
-        selected_voice = _VOICE_IDS[selected_provider][
-            preference["voice_key"]
-            if selected_provider == provider
-            else VOICE_OPTIONS[selected_provider][0]["key"]
-        ]
+        selected_voice = _voice_id(
+            selected_provider,
+            preference["voice_key"] if selected_provider == provider
+            else VOICE_OPTIONS[selected_provider][0]["key"],
+            language,
+        )
         try:
             adapter = {
                 "qwen": synthesize_qwen,
@@ -158,6 +186,8 @@ async def synthesize_for_user(user_id: str, text: str) -> tuple[bytes, str]:
             }[selected_provider]
             adapter_parameters = inspect.signature(adapter).parameters
             adapter_kwargs = {"voice": selected_voice}
+            if selected_provider == "fish" and "language" in adapter_parameters:
+                adapter_kwargs["language"] = language
             if "user_id" in adapter_parameters:
                 adapter_kwargs["user_id"] = user_id
             return await adapter(text, **adapter_kwargs)

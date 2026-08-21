@@ -11,17 +11,23 @@ from app.services import roleplay_tts_service as tts
 from app.services.openrouter_stream import format_sse
 
 router = APIRouter(prefix='/api/v1/english-roleplay', tags=['english-roleplay'])
-class StartBody(BaseModel): scenario: str = Field(..., min_length=1, max_length=300); native_language: str = Field(default='English', max_length=60)
+class StartBody(BaseModel): scenario: str = Field(..., min_length=1, max_length=300); native_language: str = Field(default='English', max_length=60); target_language: str = Field(default='English', max_length=60)
 class TurnBody(BaseModel): session_id: str; transcript: str = Field(..., min_length=1, max_length=4000)
 class EndBody(BaseModel): duration_seconds: int | None = Field(default=None, ge=0)
 class VoicePreferenceBody(BaseModel):
     provider: str = Field(..., pattern='^(qwen|gemini|fish)$')
     voice_key: str = Field(..., min_length=1, max_length=30)
+    language: str = Field(default='English', min_length=1, max_length=60)
 def _error(e: chat.EnglishPracticeError): return HTTPException(status_code=e.status_code, detail=str(e))
 @router.post('/start')
 async def start(body: StartBody, user: AuthenticatedUser = Depends(get_current_user)):
     try:
-        result = await service.start(user.user_id, body.scenario, body.native_language)
+        result = await service.start(
+            user.user_id,
+            body.scenario,
+            body.native_language,
+            target_language=body.target_language,
+        )
         audio = result.pop('audio_bytes', None)
         return {
             **result,
@@ -37,7 +43,9 @@ async def get_voice_preference(user: AuthenticatedUser = Depends(get_current_use
 @router.put('/voice-preference')
 async def set_voice_preference(body: VoicePreferenceBody, user: AuthenticatedUser = Depends(get_current_user)):
     try:
-        return tts.set_voice_preference(user.user_id, body.provider, body.voice_key)
+        return tts.set_voice_preference(
+            user.user_id, body.provider, body.voice_key, body.language
+        )
     except tts.RoleplayTtsError as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 @router.post('/turn')

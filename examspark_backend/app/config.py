@@ -1,4 +1,5 @@
 """Payment configuration — keys empty until production."""
+import json
 import os
 from dotenv import load_dotenv
 
@@ -101,6 +102,15 @@ class AIConfig:
     FISH_AUDIO_MALE_VOICE_ID: str = os.getenv(
         "FISH_AUDIO_MALE_VOICE_ID", ""
     )
+    FISH_AUDIO_VOICE_IDS_JSON: str = os.getenv("FISH_AUDIO_VOICE_IDS_JSON", "")
+
+    @classmethod
+    def fish_audio_voice_ids(cls) -> dict[str, str]:
+        try:
+            value = json.loads(cls.FISH_AUDIO_VOICE_IDS_JSON or "{}")
+            return value if isinstance(value, dict) else {}
+        except json.JSONDecodeError:
+            return {}
 
     # Whisper `verbose_json` confidence thresholds that trigger the
     # non-turbo re-transcription fallback (TECH_STACK.md Speech decision tree).

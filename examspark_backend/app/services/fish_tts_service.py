@@ -58,9 +58,10 @@ async def synthesize_speech(
     voice: str | None = None,
     speed: float | None = None,
     user_id: str | None = None,
+    language: str | None = None,
 ) -> tuple[bytes, str]:
     """Return Fish Audio output as ``(mp3_bytes, 'audio/mpeg')``."""
-    del speed, user_id  # Fish's compatible endpoint has no speed field.
+    del speed, user_id, language  # Fish's compatible endpoint has no such fields.
     input_text = (text or "").strip()
     if not AIConfig.fish_audio_configured():
         raise FishTtsError(

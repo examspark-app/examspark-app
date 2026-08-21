@@ -7,7 +7,6 @@ import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/constants/roleplay_voice_config.dart';
 import 'package:examspark_frontend/core/services/recording_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
-import 'package:examspark_frontend/presentation/screens/english_practice/english_language_picker_screen.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_teaching_history_screen.dart';
 
 const _violet = Color(0xFF5137ED);
@@ -20,32 +19,17 @@ class RoleplaySetupScreen extends StatefulWidget {
 
 class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
   String? scenario;
-  String _nativeLanguage = '';
-  String _ttsProvider = 'qwen';
+  String _ttsProvider = 'fish';
   String _ttsVoiceKey = 'female';
+  String _targetLanguage = 'English';
+  bool _preferenceLoaded = false;
+  bool _hasSavedPreference = false;
   bool _savingVoice = false;
 
   @override
   void initState() {
     super.initState();
-    _loadLanguage();
-  }
-
-  Future<void> _loadLanguage() async {
-    final language = await LectureService.instance.getEnglishPracticeLanguage();
-    if (mounted && language != null) {
-      setState(() => _nativeLanguage = language);
-    }
-  }
-
-  Future<void> _changeLanguage() async {
-    final language = await Navigator.push<String>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => const EnglishLanguagePickerScreen(returnToPrevious: true),
-      ),
-    );
-    if (mounted && language != null) setState(() => _nativeLanguage = language);
+    _loadVoicePreference();
   }
 
   Future<void> _loadVoicePreference() async {
@@ -54,33 +38,45 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
           await LectureService.instance.getEnglishRoleplayVoicePreference();
       if (!mounted) return;
       setState(() {
-        _ttsProvider = preference['provider'] as String? ?? 'qwen';
+        _ttsProvider = preference['provider'] as String? ?? 'fish';
         _ttsVoiceKey = preference['voice_key'] as String? ?? 'female';
+        _targetLanguage = preference['language'] as String? ?? 'English';
+        _hasSavedPreference = preference['preference_set'] == true;
+        _preferenceLoaded = true;
       });
     } catch (_) {
-      // Existing Qwen female defaults remain usable until a preference loads.
+      if (mounted) setState(() => _preferenceLoaded = true);
     }
   }
 
-  Future<void> _saveVoicePreference(String provider, String voiceKey) async {
+  Future<void> _saveVoicePreference(
+    String provider,
+    String voiceKey,
+    String language,
+  ) async {
     if (_savingVoice) return;
     final previousProvider = _ttsProvider;
     final previousVoiceKey = _ttsVoiceKey;
+    final previousLanguage = _targetLanguage;
     setState(() {
       _savingVoice = true;
       _ttsProvider = provider;
       _ttsVoiceKey = voiceKey;
+      _targetLanguage = language;
     });
     try {
       final preference = await LectureService.instance
           .setEnglishRoleplayVoicePreference(
         provider: provider,
         voiceKey: voiceKey,
+        language: language,
       );
       if (mounted) {
         setState(() {
           _ttsProvider = preference['provider'] as String? ?? provider;
           _ttsVoiceKey = preference['voice_key'] as String? ?? voiceKey;
+          _targetLanguage = preference['language'] as String? ?? language;
+          _hasSavedPreference = true;
         });
       }
     } catch (error) {
@@ -88,6 +84,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
         setState(() {
           _ttsProvider = previousProvider;
           _ttsVoiceKey = previousVoiceKey;
+          _targetLanguage = previousLanguage;
         });
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
@@ -102,94 +99,99 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
     }
   }
 
-  List<(String, String)> get _voiceOptions {
-    if (_ttsProvider == 'gemini') {
-      return const [
-        ('warm', 'Warm'),
-        ('friendly', 'Friendly'),
-        ('upbeat', 'Upbeat'),
-      ];
-    }
-    return const [('female', 'Female'), ('male', 'Male')];
+  static const _roleplayLanguages = [
+    'English', 'Spanish', 'French', 'Japanese', 'German', 'Korean',
+    'Italian', 'Chinese (Mandarin)', 'Portuguese', 'Hindi', 'Arabic',
+    'Vietnamese', 'Indonesian', 'Russian', 'Bengali', 'Tamil',
+  ];
+
+  Future<void> _openVoiceSettings({bool forcePicker = false}) async {
+    if (!_preferenceLoaded) await _loadVoicePreference();
+    if (!mounted) return;
+    final provider = await showModalBottomSheet<String>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (sheetContext) {
+        var selectedProvider = forcePicker ? 'fish' : _ttsProvider;
+        var selectedGender = _ttsVoiceKey == 'male' ? 'male' : 'female';
+        var selectedLanguage = forcePicker ? 'English' : _targetLanguage;
+        var query = '';
+        final search = TextEditingController();
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            final filtered = _roleplayLanguages
+                .where((language) => language.toLowerCase().contains(query))
+                .toList();
+            return SafeArea(
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  20, 4, 20, MediaQuery.viewInsetsOf(context).bottom + 24,
+                ),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Text('Roleplay preferences', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800)),
+                      const SizedBox(height: 16),
+                      const Text('TTS Provider', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      Wrap(spacing: 8, children: [
+                        ChoiceChip(label: const Text('Fish Voice'), selected: selectedProvider == 'fish', onSelected: (_) => setSheetState(() => selectedProvider = 'fish')),
+                        ChoiceChip(label: const Text('Qwen Voice'), selected: selectedProvider == 'qwen', onSelected: (_) => setSheetState(() => selectedProvider = 'qwen')),
+                        ChoiceChip(label: const Text('Gemini Voice'), selected: selectedProvider == 'gemini', onSelected: (_) => setSheetState(() => selectedProvider = 'gemini')),
+                      ]),
+                      const SizedBox(height: 16),
+                      const Text('Voice gender', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      Wrap(spacing: 8, children: [
+                        ChoiceChip(label: const Text('Female'), selected: selectedGender == 'female', onSelected: (_) => setSheetState(() => selectedGender = 'female')),
+                        ChoiceChip(label: const Text('Male'), selected: selectedGender == 'male', onSelected: (_) => setSheetState(() => selectedGender = 'male')),
+                      ]),
+                      const SizedBox(height: 16),
+                      const Text('Language', style: TextStyle(fontWeight: FontWeight.w700)),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: search,
+                        onChanged: (value) => setSheetState(() => query = value.trim().toLowerCase()),
+                        decoration: const InputDecoration(prefixIcon: Icon(Icons.search), hintText: 'Search language'),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(spacing: 8, runSpacing: 8, children: [
+                        for (final language in filtered)
+                          ChoiceChip(label: Text(language), selected: selectedLanguage == language, onSelected: (_) => setSheetState(() => selectedLanguage = language)),
+                      ]),
+                      const SizedBox(height: 20),
+                      SizedBox(width: double.infinity, child: FilledButton(
+                        onPressed: () async {
+                          await _saveVoicePreference(selectedProvider, selectedGender, selectedLanguage);
+                          if (sheetContext.mounted) Navigator.pop(sheetContext, selectedProvider);
+                        },
+                        child: const Text('Save and continue'),
+                      )),
+                    ],
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    if (!mounted || provider == null || scenario == null) return;
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => RoleplayVoiceScreen(scenario: scenario!, targetLanguage: _targetLanguage)));
   }
 
-  Future<void> _openVoiceSettings() async {
-    await _loadVoicePreference();
-    if (!mounted) return;
-    await showModalBottomSheet<void>(
-      context: context,
-      showDragHandle: true,
-      builder: (sheetContext) => StatefulBuilder(
-        builder: (context, setSheetState) => SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 4, 20, 28),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Roleplay voice',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
-                ),
-                const SizedBox(height: 16),
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    ChoiceChip(
-                      label: const Text('Qwen Voice'),
-                      selected: _ttsProvider == 'qwen',
-                      onSelected: _savingVoice
-                          ? null
-                          : (_) async {
-                              await _saveVoicePreference('qwen', 'female');
-                              setSheetState(() {});
-                            },
-                    ),
-                    ChoiceChip(
-                      label: const Text('Gemini Voice'),
-                      selected: _ttsProvider == 'gemini',
-                      onSelected: _savingVoice
-                          ? null
-                          : (_) async {
-                              await _saveVoicePreference('gemini', 'warm');
-                              setSheetState(() {});
-                            },
-                    ),
-                    ChoiceChip(
-                      label: const Text('Fish Audio'),
-                      selected: _ttsProvider == 'fish',
-                      onSelected: _savingVoice
-                          ? null
-                          : (_) async {
-                              await _saveVoicePreference('fish', 'female');
-                              setSheetState(() {});
-                            },
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 14),
-                const Text('Voice', style: TextStyle(fontWeight: FontWeight.w700)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  children: _voiceOptions.map((option) => ChoiceChip(
-                    label: Text(option.$2),
-                    selected: _ttsVoiceKey == option.$1,
-                    onSelected: _savingVoice || _ttsVoiceKey == option.$1
-                        ? null
-                        : (_) async {
-                            await _saveVoicePreference(_ttsProvider, option.$1);
-                            setSheetState(() {});
-                          },
-                  )).toList(),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
+  Future<void> _openSelectedScenario() async {
+    if (scenario == null) return;
+    if (_hasSavedPreference) {
+      await Navigator.push(context, MaterialPageRoute(builder: (_) => RoleplayVoiceScreen(scenario: scenario!, targetLanguage: _targetLanguage)));
+      return;
+    }
+    await _openVoiceSettings(forcePicker: true);
   }
+
+
   static const items = [
     ('🎉', 'Party'),
     ('🛒', 'Market'),
@@ -221,7 +223,10 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
         ],
       ),
     );
-    if (value != null && value.isNotEmpty) setState(() => scenario = value);
+    if (value != null && value.isNotEmpty) {
+      setState(() => scenario = value);
+      await _openSelectedScenario();
+    }
   }
 
   @override
@@ -239,29 +244,8 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                   icon: const Icon(Icons.menu_rounded, size: 30),
                 ),
                 const Spacer(),
-                InkWell(
-                  onTap: _changeLanguage,
-                  borderRadius: BorderRadius.circular(18),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
-                    child: Row(
-                      children: [
-                        const Icon(Icons.language_rounded),
-                        const SizedBox(width: 8),
-                        Text(
-                          _nativeLanguage.isEmpty
-                              ? 'English (US)'
-                              : 'English · $_nativeLanguage',
-                          style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w700),
-                        ),
-                        const Icon(Icons.expand_more),
-                      ],
-                    ),
-                  ),
-                ),
-                const Spacer(),
                 IconButton(
-                  onPressed: _openVoiceSettings,
+                  onPressed: () => _openVoiceSettings(),
                   icon: const Icon(Icons.tune_rounded, size: 25),
                   tooltip: 'Roleplay voice',
                 ),
@@ -309,7 +293,10 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                               ),
                             ),
                             selected: scenario == x.$2,
-                            onSelected: (_) => setState(() => scenario = x.$2),
+                            onSelected: (_) async {
+                              setState(() => scenario = x.$2);
+                              await _openSelectedScenario();
+                            },
                             selectedColor: const Color(0xFFE8E3FF),
                             side: BorderSide(
                               color: scenario == x.$2
@@ -351,13 +338,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
               child: InkWell(
                 onTap: scenario == null
                     ? null
-                    : () => Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (_) =>
-                              RoleplayVoiceScreen(scenario: scenario!),
-                        ),
-                      ),
+                    : _openSelectedScenario,
                 borderRadius: BorderRadius.circular(25),
                 child: Container(
                   width: double.infinity,
@@ -446,17 +427,24 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
 
 enum RoleplayVoiceState {
   idle,
+  generatingOpeningText,
+  showingOpeningText,
+  generatingOpeningAudio,
   listening,
   userSpeaking,
   processing,
+  generatingAiResponse,
   aiSpeaking,
+  waitingForUser,
+  stopping,
   stopped,
   error,
 }
 
 class RoleplayVoiceScreen extends StatefulWidget {
-  const RoleplayVoiceScreen({super.key, required this.scenario});
+  const RoleplayVoiceScreen({super.key, required this.scenario, required this.targetLanguage});
   final String scenario;
+  final String targetLanguage;
   @override
   State<RoleplayVoiceScreen> createState() => _RoleplayVoiceScreenState();
 }
@@ -479,11 +467,6 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   bool showTimer = true;
   String? sessionId;
   final _player = AudioPlayer();
-  final _streamAudioQueue = <Map<String, dynamic>>[];
-  Completer<void>? _streamPlaybackDone;
-  bool _streamPlaying = false;
-  bool _streamFinished = false;
-  bool _streamAudioStarted = false;
   bool _heardSpeech = false;
   bool _leaving = false;
   bool _stopping = false;
@@ -497,6 +480,39 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
       state == RoleplayVoiceState.listening ||
       state == RoleplayVoiceState.userSpeaking;
   bool get processing => state == RoleplayVoiceState.processing;
+
+  Future<Duration> _loadPlayableAudio(
+    Uint8List bytes,
+    String mimeType,
+  ) async {
+    if (bytes.isEmpty) {
+      throw StateError('Roleplay audio was empty.');
+    }
+    await _player.setAudioSource(
+      AudioSource.uri(
+        UriData.fromBytes(bytes, mimeType: mimeType).uri,
+      ),
+    );
+    var duration = _player.duration;
+    if (duration == null || duration <= Duration.zero) {
+      try {
+        final loadedDuration = await _player.durationStream
+          .where((value) => value != null)
+          .cast<Duration>()
+            .firstWhere((value) => value > Duration.zero)
+            .timeout(const Duration(seconds: 5));
+        duration = loadedDuration;
+      } on TimeoutException {
+        throw StateError(
+          'Roleplay audio loaded but has no playable duration.',
+        );
+      }
+    }
+    if (duration <= Duration.zero) {
+      throw StateError('Roleplay audio duration was invalid.');
+    }
+    return duration;
+  }
   @override
   void dispose() {
     _leaving = true;
@@ -562,7 +578,7 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
     sessionId = null;
     if (mounted) {
       setState(() {
-        state = RoleplayVoiceState.stopped;
+        state = RoleplayVoiceState.stopping;
         _listeningHint = null;
       });
     }
@@ -577,8 +593,11 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
         // Local audio cleanup still completes when the final network call fails.
       }
     }
-    if (mounted && message != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    if (mounted) {
+      setState(() => state = RoleplayVoiceState.stopped);
+      if (message != null) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+      }
     }
     _stopping = false;
   }
@@ -590,6 +609,8 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
     _dismissSpeechPromptTimer?.cancel();
     timer?.cancel();
     timer = null;
+    elapsed = Duration.zero;
+    pulse.stop();
     RecordingService.instance.setVoiceActivityListener(null);
     try {
       await RecordingService.instance.releaseForScreen();
@@ -597,12 +618,6 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
     try {
       await _player.stop();
     } catch (_) {}
-    _streamAudioQueue.clear();
-    _streamPlaying = false;
-    _streamFinished = true;
-    if (_streamPlaybackDone != null && !_streamPlaybackDone!.isCompleted) {
-      _streamPlaybackDone!.complete();
-    }
   }
 
   void _onVoiceActivity(bool speaking) {
@@ -666,10 +681,12 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
     final generation = _sessionGeneration;
     try {
       if (sessionId == null) {
+        if (mounted) setState(() => state = RoleplayVoiceState.generatingOpeningText);
         final started = await LectureService.instance.startEnglishRoleplay(
           scenario: widget.scenario,
           nativeLanguage:
               await LectureService.instance.getEnglishPracticeLanguage() ?? 'English',
+          targetLanguage: widget.targetLanguage,
         );
         final startedSessionId = started['session_id'] as String?;
         if (startedSessionId == null ||
@@ -686,6 +703,10 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
         }
         sessionId = startedSessionId;
         _openingReply = started['opening_reply'] as String?;
+        if ((_openingReply ?? '').trim().isEmpty) {
+          throw StateError('Roleplay opening text was empty.');
+        }
+        if (mounted) setState(() => state = RoleplayVoiceState.showingOpeningText);
         final encoded = started['audio_base64'] as String?;
 
         if (encoded == null || encoded.isEmpty) {
@@ -697,32 +718,15 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
           throw StateError('AI voice returned empty audio. Please try again.');
         }
 
-        if (mounted) {
-          setState(() => state = RoleplayVoiceState.aiSpeaking);
-        }
-
-        pulse.repeat(reverse: true);
-
-        await _player.setAudioSource(
-          AudioSource.uri(
-            UriData.fromBytes(
-              audioBytes,
-              mimeType: started['audio_mime_type'] as String? ?? 'audio/mpeg',
-            ).uri,
-          ),
-        );
-
-        final openingDuration = _player.duration;
+        if (mounted) setState(() => state = RoleplayVoiceState.generatingOpeningAudio);
+        final openingMime = started['audio_mime_type'] as String? ?? 'audio/mpeg';
+        final openingDuration = await _loadPlayableAudio(audioBytes, openingMime);
         debugPrint(
           'ROLEPLAY_OPENING_AUDIO_READY bytes=${audioBytes.length} '
           'mime=${started['audio_mime_type']} duration=$openingDuration',
         );
-        if (openingDuration == null || openingDuration <= Duration.zero) {
-          throw StateError(
-            'Roleplay opening audio loaded without a playable duration.',
-          );
-        }
-
+        if (mounted) setState(() => state = RoleplayVoiceState.aiSpeaking);
+        pulse.repeat(reverse: true);
         await _player.play();
 
         debugPrint(
@@ -739,6 +743,7 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
       if (_leaving || _stopping || generation != _sessionGeneration || sessionId == null) {
         return;
       }
+      if (mounted) setState(() => state = RoleplayVoiceState.waitingForUser);
       _heardSpeech = false;
       RecordingService.instance.setVoiceActivityListener(_onVoiceActivity);
       await RecordingService.instance.start();
@@ -794,21 +799,7 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
         throw StateError('No speech was recorded. Please try again.');
       }
       if (_leaving || _stopping || sessionId != turnSessionId) return;
-      try {
-        await _playStreamedTurn(bytes, turnSessionId!);
-      } catch (error) {
-        if (_leaving || _stopping || sessionId != turnSessionId) return;
-        final canFallback = error is! RoleplayStreamException ||
-            error.canFallback;
-        if (!canFallback || _streamAudioStarted) {
-          // A partly heard streamed reply must never be replayed through the
-          // JSON fallback. Stop its player before surfacing the normal error
-          // state, so the moon cannot resume listening mid-response.
-          await _player.stop();
-          rethrow;
-        }
-        await _playFallbackTurn(bytes, turnSessionId!);
-      }
+      await _playJsonTurn(bytes, turnSessionId!);
       // A manual stop may happen while STT/TTS is processing. Do not let the
       // old in-flight turn restart the microphone after its session was ended.
       if (mounted &&
@@ -828,100 +819,37 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
     }
   }
 
-  Future<void> _playStreamedTurn(Uint8List bytes, String turnSessionId) async {
-    _streamAudioQueue.clear();
-    _streamPlaybackDone = Completer<void>();
-    _streamPlaying = false;
-    _streamFinished = false;
-    _streamAudioStarted = false;
-    await LectureService.instance.streamEnglishRoleplayAudio(
-      sessionId: turnSessionId,
-      audioBytes: bytes,
-      filename: 'roleplay_turn.m4a',
-      onAudioChunk: _enqueueStreamAudio,
-    );
-    _streamFinished = true;
-    _completeStreamPlaybackIfReady();
-    await _streamPlaybackDone!.future;
-  }
-
-  Future<void> _enqueueStreamAudio(Map<String, dynamic> event) async {
-    if (_leaving || _stopping || sessionId == null) return;
-    final encoded = event['audio_base64'] as String? ?? '';
-    if (encoded.isEmpty) {
-      throw const RoleplayStreamException(
-        'Voice stream returned an empty audio chunk.',
-        canFallback: true,
-      );
-    }
-    _streamAudioQueue.add({
-      'bytes': base64Decode(encoded),
-      'mime': event['audio_mime_type'] as String? ?? 'audio/mpeg',
-    });
-    if (!_streamPlaying) {
-      _streamPlaying = true;
-      unawaited(_playQueuedStreamAudio());
-    }
-  }
-
-  Future<void> _playQueuedStreamAudio() async {
-    try {
-        while (_streamAudioQueue.isNotEmpty &&
-          !_leaving &&
-          !_stopping &&
-          sessionId != null) {
-        final chunk = _streamAudioQueue.removeAt(0);
-        _streamAudioStarted = true;
-        if (mounted) setState(() => state = RoleplayVoiceState.aiSpeaking);
-        pulse.repeat(reverse: true);
-        await _player.setAudioSource(
-          AudioSource.uri(
-            UriData.fromBytes(
-              chunk['bytes'] as Uint8List,
-              mimeType: chunk['mime'] as String,
-            ).uri,
-          ),
-        );
-        await _player.play();
-      }
-    } catch (error, stackTrace) {
-      if (_streamPlaybackDone != null && !_streamPlaybackDone!.isCompleted) {
-        _streamPlaybackDone!.completeError(error, stackTrace);
-      }
-    } finally {
-      _streamPlaying = false;
-      _completeStreamPlaybackIfReady();
-    }
-  }
-
-  void _completeStreamPlaybackIfReady() {
-    if (_streamFinished &&
-        !_streamPlaying &&
-        _streamAudioQueue.isEmpty &&
-        _streamPlaybackDone != null &&
-        !_streamPlaybackDone!.isCompleted) {
-      _streamPlaybackDone!.complete();
-    }
-  }
-
-  Future<void> _playFallbackTurn(Uint8List bytes, String turnSessionId) async {
+  Future<void> _playJsonTurn(Uint8List bytes, String turnSessionId) async {
+    if (mounted) setState(() => state = RoleplayVoiceState.generatingAiResponse);
     final result = await LectureService.instance.sendEnglishRoleplayAudio(
       sessionId: turnSessionId,
       audioBytes: bytes,
       filename: 'roleplay_turn.m4a',
     );
-    final audio = base64Decode(result['audio_base64'] as String);
-    await _player.setAudioSource(
-      AudioSource.uri(
-        UriData.fromBytes(
-          audio,
-          mimeType: result['audio_mime_type'] as String? ?? 'audio/mpeg',
-        ).uri,
-      ),
+    final reply = (result['reply'] as String? ?? '').trim();
+    final encoded = result['audio_base64'] as String?;
+    if (reply.isEmpty) throw StateError('AI response text was empty.');
+    if (encoded == null || encoded.isEmpty) {
+      throw StateError('AI response voice was not generated.');
+    }
+    final audio = base64Decode(encoded);
+    if (mounted) {
+      setState(() {
+        _openingReply = reply;
+        state = RoleplayVoiceState.showingOpeningText;
+      });
+    }
+    await _loadPlayableAudio(
+      audio,
+      result['audio_mime_type'] as String? ?? 'audio/mpeg',
     );
+    if (_leaving || _stopping || sessionId != turnSessionId) return;
     if (mounted) setState(() => state = RoleplayVoiceState.aiSpeaking);
     pulse.repeat(reverse: true);
     await _player.play();
+    await _player.processingStateStream.firstWhere(
+      (processingState) => processingState == ProcessingState.completed,
+    );
   }
 
   Future<void> toggle() async {

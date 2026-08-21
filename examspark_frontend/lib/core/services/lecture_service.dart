@@ -1211,6 +1211,7 @@ class LectureService {
   Future<Map<String, dynamic>> startEnglishRoleplay({
     required String scenario,
     String nativeLanguage = 'English',
+    String targetLanguage = 'English',
   }) async {
     final accessToken = await _requireAccessToken();
     final response = await http.post(
@@ -1224,6 +1225,7 @@ class LectureService {
       body: jsonEncode({
         'scenario': scenario,
         'native_language': nativeLanguage,
+        'target_language': targetLanguage,
       }),
     );
     if (response.statusCode != 200)
@@ -1250,6 +1252,7 @@ class LectureService {
   Future<Map<String, dynamic>> setEnglishRoleplayVoicePreference({
     required String provider,
     required String voiceKey,
+    String language = 'English',
   }) async {
     final accessToken = await _requireAccessToken();
     final response = await http.put(
@@ -1260,7 +1263,11 @@ class LectureService {
         'Authorization': 'Bearer $accessToken',
         'Content-Type': 'application/json',
       },
-      body: jsonEncode({'provider': provider, 'voice_key': voiceKey}),
+      body: jsonEncode({
+        'provider': provider,
+        'voice_key': voiceKey,
+        'language': language,
+      }),
     );
     if (response.statusCode != 200) {
       throw Exception(_extractErrorDetail(response));
