@@ -469,6 +469,9 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   bool _heardSpeech = false;
   bool _leaving = false;
   bool _stopping = false;
+  bool _starting = false;
+  bool _micEnabled = true;
+  int _sessionGeneration = 0;
   String? _listeningHint;
   String? _openingReply;
 
@@ -478,6 +481,8 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   bool get processing => state == RoleplayVoiceState.processing;
   @override
   void dispose() {
+    _leaving = true;
+    _sessionGeneration++;
     WidgetsBinding.instance.removeObserver(this);
     timer?.cancel();
     _speechEndTimer?.cancel();
@@ -495,6 +500,7 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    unawaited(_startListening());
   }
 
   @override
@@ -508,6 +514,7 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
 
   Future<void> _leave() async {
     _leaving = true;
+    _sessionGeneration++;
     await _stopResources();
     final id = sessionId;
     if (id != null) {
@@ -530,6 +537,7 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   Future<void> _endCurrentSession({String? message}) async {
     if (_leaving || _stopping) return;
     _stopping = true;
+    _sessionGeneration++;
     final id = sessionId;
     // A moon tap must feel instant. In-flight STT/TTS cannot restart because
     // its captured session id no longer matches this null value.
@@ -635,7 +643,9 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   }
 
   Future<void> _startListening() async {
-    if (_leaving || processing || active) return;
+    if (_leaving || _starting || processing || active) return;
+    _starting = true;
+    final generation = _sessionGeneration;
     try {
       if (sessionId == null) {
         final started = await LectureService.instance.startEnglishRoleplay(
@@ -643,49 +653,65 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
           nativeLanguage:
               await LectureService.instance.getEnglishPracticeLanguage() ?? 'English',
         );
-        sessionId = started['session_id'] as String?;
+        final startedSessionId = started['session_id'] as String?;
+        if (startedSessionId == null ||
+            _leaving ||
+            _stopping ||
+            generation != _sessionGeneration) {
+          if (startedSessionId != null) {
+            await LectureService.instance.endEnglishRoleplay(
+              sessionId: startedSessionId,
+              durationSeconds: 0,
+            );
+          }
+          return;
+        }
+        sessionId = startedSessionId;
         _openingReply = started['opening_reply'] as String?;
         final encoded = started['audio_base64'] as String?;
 
-if (encoded == null || encoded.isEmpty) {
-  throw StateError(
-    'AI voice was not generated. Please try again.',
-  );
-}
+        if (encoded == null || encoded.isEmpty) {
+          throw StateError('AI voice was not generated. Please try again.');
+        }
 
-final audioBytes = base64Decode(encoded);
-if (audioBytes.isEmpty) {
-  throw StateError(
-    'AI voice returned empty audio. Please try again.',
-  );
-}
+        final audioBytes = base64Decode(encoded);
+        if (audioBytes.isEmpty) {
+          throw StateError('AI voice returned empty audio. Please try again.');
+        }
 
-if (mounted) {
-  setState(() => state = RoleplayVoiceState.aiSpeaking);
-}
+        if (mounted) {
+          setState(() => state = RoleplayVoiceState.aiSpeaking);
+        }
 
-pulse.repeat(reverse: true);
+        pulse.repeat(reverse: true);
 
-await _player.setAudioSource(
-  AudioSource.uri(
-    UriData.fromBytes(
-      audioBytes,
-      mimeType: started['audio_mime_type'] as String? ?? 'audio/mpeg',
-    ).uri,
-  ),
-);
+        await _player.setAudioSource(
+          AudioSource.uri(
+            UriData.fromBytes(
+              audioBytes,
+              mimeType: started['audio_mime_type'] as String? ?? 'audio/mpeg',
+            ).uri,
+          ),
+        );
 
-await _player.play();
+        await _player.play();
 
-await _player.processingStateStream.firstWhere(
-  (processingState) => processingState == ProcessingState.completed,
-);
+        await _player.processingStateStream.firstWhere(
+          (processingState) => processingState == ProcessingState.completed,
+        );
+      }
       // A moon tap can stop the session while the AI opening is playing.
       // Never start the recorder after that stopped session.
-      if (_leaving || _stopping || sessionId == null) return;
+      if (_leaving || _stopping || generation != _sessionGeneration || sessionId == null) {
+        return;
+      }
       _heardSpeech = false;
       RecordingService.instance.setVoiceActivityListener(_onVoiceActivity);
       await RecordingService.instance.start();
+      if (_leaving || _stopping || generation != _sessionGeneration) {
+        await RecordingService.instance.releaseForScreen();
+        return;
+      }
       if (mounted) setState(() => state = RoleplayVoiceState.listening);
       _armSessionInactivityTimer();
       _armFirstSpeechPrompt();
@@ -694,12 +720,25 @@ await _player.processingStateStream.firstWhere(
       });
       pulse.repeat(reverse: true);
     } catch (e) {
+      if (_leaving || _stopping || generation != _sessionGeneration) return;
+      final failedSessionId = sessionId;
+      sessionId = null;
+      if (failedSessionId != null) {
+        try {
+          await LectureService.instance.endEnglishRoleplay(
+            sessionId: failedSessionId,
+            durationSeconds: elapsed.inSeconds,
+          );
+        } catch (_) {}
+      }
       if (mounted) {
         setState(() => state = RoleplayVoiceState.error);
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('$e')));
       }
+    } finally {
+      _starting = false;
     }
   }
 
@@ -720,9 +759,11 @@ await _player.processingStateStream.firstWhere(
       if (bytes == null) {
         throw StateError('No speech was recorded. Please try again.');
       }
+      if (_leaving || _stopping || sessionId != turnSessionId) return;
       try {
-        await _playStreamedTurn(bytes);
+        await _playStreamedTurn(bytes, turnSessionId!);
       } catch (error) {
+        if (_leaving || _stopping || sessionId != turnSessionId) return;
         final canFallback = error is! RoleplayStreamException ||
             error.canFallback;
         if (!canFallback || _streamAudioStarted) {
@@ -732,15 +773,19 @@ await _player.processingStateStream.firstWhere(
           await _player.stop();
           rethrow;
         }
-        await _playFallbackTurn(bytes);
+        await _playFallbackTurn(bytes, turnSessionId!);
       }
       // A manual stop may happen while STT/TTS is processing. Do not let the
       // old in-flight turn restart the microphone after its session was ended.
-      if (mounted && !_leaving && sessionId == turnSessionId) {
+      if (mounted &&
+          !_leaving &&
+          !_stopping &&
+          _micEnabled &&
+          sessionId == turnSessionId) {
         await _startListening();
       }
     } catch (e) {
-      if (mounted) {
+      if (mounted && !_leaving && !_stopping && sessionId == turnSessionId) {
         setState(() => state = RoleplayVoiceState.error);
         ScaffoldMessenger.of(
           context,
@@ -749,14 +794,14 @@ await _player.processingStateStream.firstWhere(
     }
   }
 
-  Future<void> _playStreamedTurn(Uint8List bytes) async {
+  Future<void> _playStreamedTurn(Uint8List bytes, String turnSessionId) async {
     _streamAudioQueue.clear();
     _streamPlaybackDone = Completer<void>();
     _streamPlaying = false;
     _streamFinished = false;
     _streamAudioStarted = false;
     await LectureService.instance.streamEnglishRoleplayAudio(
-      sessionId: sessionId!,
+      sessionId: turnSessionId,
       audioBytes: bytes,
       filename: 'roleplay_turn.m4a',
       onAudioChunk: _enqueueStreamAudio,
@@ -767,6 +812,7 @@ await _player.processingStateStream.firstWhere(
   }
 
   Future<void> _enqueueStreamAudio(Map<String, dynamic> event) async {
+    if (_leaving || _stopping || sessionId == null) return;
     final encoded = event['audio_base64'] as String? ?? '';
     if (encoded.isEmpty) {
       throw const RoleplayStreamException(
@@ -786,7 +832,10 @@ await _player.processingStateStream.firstWhere(
 
   Future<void> _playQueuedStreamAudio() async {
     try {
-      while (_streamAudioQueue.isNotEmpty && !_leaving) {
+        while (_streamAudioQueue.isNotEmpty &&
+          !_leaving &&
+          !_stopping &&
+          sessionId != null) {
         final chunk = _streamAudioQueue.removeAt(0);
         _streamAudioStarted = true;
         if (mounted) setState(() => state = RoleplayVoiceState.aiSpeaking);
@@ -821,9 +870,9 @@ await _player.processingStateStream.firstWhere(
     }
   }
 
-  Future<void> _playFallbackTurn(Uint8List bytes) async {
+  Future<void> _playFallbackTurn(Uint8List bytes, String turnSessionId) async {
     final result = await LectureService.instance.sendEnglishRoleplayAudio(
-      sessionId: sessionId!,
+      sessionId: turnSessionId,
       audioBytes: bytes,
       filename: 'roleplay_turn.m4a',
     );
@@ -842,9 +891,30 @@ await _player.processingStateStream.firstWhere(
   }
 
   Future<void> toggle() async {
+    if (state == RoleplayVoiceState.error) {
+      await _startListening();
+      return;
+    }
     if (sessionId != null || active || processing || state == RoleplayVoiceState.aiSpeaking) {
       unawaited(_endCurrentSession(message: 'Roleplay stopped.'));
     } else {
+      await _startListening();
+    }
+  }
+
+  Future<void> _toggleMic() async {
+    if (_starting || processing) return;
+    final enabled = !_micEnabled;
+    setState(() => _micEnabled = enabled);
+    if (!enabled) {
+      _speechEndTimer?.cancel();
+      _sessionInactivityTimer?.cancel();
+      RecordingService.instance.setVoiceActivityListener(null);
+      await RecordingService.instance.releaseForScreen();
+      if (mounted && active) setState(() => state = RoleplayVoiceState.idle);
+      return;
+    }
+    if (sessionId != null && state != RoleplayVoiceState.aiSpeaking) {
       await _startListening();
     }
   }
@@ -927,14 +997,30 @@ await _player.processingStateStream.firstWhere(
                 const SizedBox(height: 12),
                 Text(
                   _listeningHint ??
-                      (state == RoleplayVoiceState.aiSpeaking
+                    (!_micEnabled
+                      ? 'Microphone off'
+                      : state == RoleplayVoiceState.aiSpeaking
                           ? 'AI is speaking…'
                           : active
                               ? 'Listening… speak naturally'
-                              : 'Tap the moon to start speaking'),
+                              : state == RoleplayVoiceState.error
+                                ? 'Tap the moon to retry'
+                                : 'Starting conversation…'),
                   style: const TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 80),
+                TextButton.icon(
+                  onPressed: sessionId == null ? null : _toggleMic,
+                  icon: Icon(
+                    _micEnabled ? Icons.mic_rounded : Icons.mic_off_rounded,
+                    color: Colors.white,
+                  ),
+                  label: Text(
+                    _micEnabled ? 'Mic ON' : 'Mic OFF',
+                    style: const TextStyle(color: Colors.white),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 Text(
                   active
                       ? 'Listening automatically\nTap the moon to stop the session'
