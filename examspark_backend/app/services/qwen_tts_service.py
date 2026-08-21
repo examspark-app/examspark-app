@@ -11,33 +11,10 @@ import asyncio
 import httpx
 
 from app.config import AIConfig
-from app.services import english_learning_memory_service as learning_memory
 
 _OPENROUTER_TTS_URL = "https://openrouter.ai/api/v1/audio/speech"
 _TIMEOUT_SECONDS = 45.0
 _MAX_ATTEMPTS = 2
-
-_DEFAULT_SPEED = 0.85
-_SPEED_BY_LEVEL = {
-    "beginner": 0.75,
-    "elementary": 0.85,
-    "intermediate": 0.95,
-    "advanced": 1.0,
-}
-
-
-def _resolve_speed(speed: float | None, user_id: str | None) -> float:
-    if speed is not None:
-        return max(0.25, min(4.0, float(speed)))
-    if user_id:
-        try:
-            level = learning_memory.load_memory(user_id).get("english_level")
-            if level and level in _SPEED_BY_LEVEL:
-                return _SPEED_BY_LEVEL[level]
-        except Exception:
-            pass
-    return _DEFAULT_SPEED
-
 
 class QwenTtsError(Exception):
     """A safe, user-facing failure raised by the Roleplay voice provider."""
@@ -51,8 +28,6 @@ async def synthesize_speech(
     text: str,
     *,
     voice: str | None = None,
-    speed: float | None = None,
-    user_id: str | None = None,
 ) -> tuple[bytes, str]:
     """Synthesize one Roleplay reply through OpenRouter Qwen TTS Flash.
 

@@ -80,8 +80,8 @@ def test_fish_provider_dispatches_selected_voice(monkeypatch):
     )
     called = {}
 
-    async def fish_adapter(text, *, voice, speed, user_id):
-        called.update(text=text, voice=voice, speed=speed, user_id=user_id)
+    async def fish_adapter(text, *, voice, user_id):
+        called.update(text=text, voice=voice, user_id=user_id)
         return b"mp3", "audio/mpeg"
 
     monkeypatch.setattr(tts, "synthesize_fish", fish_adapter)

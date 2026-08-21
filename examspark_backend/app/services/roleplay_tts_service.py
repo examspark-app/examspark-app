@@ -134,7 +134,6 @@ def _provider_configured(provider: str) -> bool:
 async def synthesize_for_user(user_id: str, text: str) -> tuple[bytes, str]:
     preference = get_voice_preference(user_id)
     provider = preference["provider"]
-    speed = _user_speed(user_id)
     # The saved preference remains primary. Fish is included explicitly in
     # the fallback chain; previously a Qwen preference could only fall back
     # to Gemini, so Fish was never attempted.
@@ -159,8 +158,6 @@ async def synthesize_for_user(user_id: str, text: str) -> tuple[bytes, str]:
             }[selected_provider]
             adapter_parameters = inspect.signature(adapter).parameters
             adapter_kwargs = {"voice": selected_voice}
-            if "speed" in adapter_parameters:
-                adapter_kwargs["speed"] = speed
             if "user_id" in adapter_parameters:
                 adapter_kwargs["user_id"] = user_id
             return await adapter(text, **adapter_kwargs)
