@@ -1,5 +1,4 @@
 """Payment configuration — keys empty until production."""
-import json
 import os
 from dotenv import load_dotenv
 
@@ -90,27 +89,52 @@ class AIConfig:
     )
     GEMINI_TTS_VOICE: str = os.getenv("GEMINI_TTS_VOICE", "Kore")
 
-    # Fish Audio uses account/library reference IDs rather than universal
-    # male/female voice names. Configure both IDs in the deployment secret.
+    # Fish Audio requires a distinct account/library reference ID per language.
     FISH_AUDIO_API_KEY: str = os.getenv("FISH_AUDIO_API_KEY", "")
     FISH_AUDIO_TTS_MODEL: str = os.getenv(
         "FISH_AUDIO_TTS_MODEL", "fish-audio/s2.1-pro"
     )
-    FISH_AUDIO_FEMALE_VOICE_ID: str = os.getenv(
-        "FISH_AUDIO_FEMALE_VOICE_ID", ""
-    )
-    FISH_AUDIO_MALE_VOICE_ID: str = os.getenv(
-        "FISH_AUDIO_MALE_VOICE_ID", ""
-    )
-    FISH_AUDIO_VOICE_IDS_JSON: str = os.getenv("FISH_AUDIO_VOICE_IDS_JSON", "")
+    FISH_VOICE_ENGLISH: str = os.getenv("FISH_VOICE_ENGLISH", "")
+    FISH_VOICE_SPANISH: str = os.getenv("FISH_VOICE_SPANISH", "")
+    FISH_VOICE_FRENCH: str = os.getenv("FISH_VOICE_FRENCH", "")
+    FISH_VOICE_JAPANESE: str = os.getenv("FISH_VOICE_JAPANESE", "")
+    FISH_VOICE_GERMAN: str = os.getenv("FISH_VOICE_GERMAN", "")
+    FISH_VOICE_KOREAN: str = os.getenv("FISH_VOICE_KOREAN", "")
+    FISH_VOICE_ITALIAN: str = os.getenv("FISH_VOICE_ITALIAN", "")
+    FISH_VOICE_CHINESE_MANDARIN: str = os.getenv("FISH_VOICE_CHINESE_MANDARIN", "")
+    FISH_VOICE_PORTUGUESE: str = os.getenv("FISH_VOICE_PORTUGUESE", "")
+    FISH_VOICE_HINDI: str = os.getenv("FISH_VOICE_HINDI", "")
+    FISH_VOICE_ARABIC: str = os.getenv("FISH_VOICE_ARABIC", "")
+    FISH_VOICE_VIETNAMESE: str = os.getenv("FISH_VOICE_VIETNAMESE", "")
+    FISH_VOICE_INDONESIAN: str = os.getenv("FISH_VOICE_INDONESIAN", "")
+    FISH_VOICE_RUSSIAN: str = os.getenv("FISH_VOICE_RUSSIAN", "")
+    FISH_VOICE_BENGALI: str = os.getenv("FISH_VOICE_BENGALI", "")
+    FISH_VOICE_TAMIL: str = os.getenv("FISH_VOICE_TAMIL", "")
 
     @classmethod
     def fish_audio_voice_ids(cls) -> dict[str, str]:
-        try:
-            value = json.loads(cls.FISH_AUDIO_VOICE_IDS_JSON or "{}")
-            return value if isinstance(value, dict) else {}
-        except json.JSONDecodeError:
-            return {}
+        return {
+            "English": cls.FISH_VOICE_ENGLISH,
+            "Spanish": cls.FISH_VOICE_SPANISH,
+            "French": cls.FISH_VOICE_FRENCH,
+            "Japanese": cls.FISH_VOICE_JAPANESE,
+            "German": cls.FISH_VOICE_GERMAN,
+            "Korean": cls.FISH_VOICE_KOREAN,
+            "Italian": cls.FISH_VOICE_ITALIAN,
+            "Chinese (Mandarin)": cls.FISH_VOICE_CHINESE_MANDARIN,
+            "Portuguese": cls.FISH_VOICE_PORTUGUESE,
+            "Hindi": cls.FISH_VOICE_HINDI,
+            "Arabic": cls.FISH_VOICE_ARABIC,
+            "Vietnamese": cls.FISH_VOICE_VIETNAMESE,
+            "Indonesian": cls.FISH_VOICE_INDONESIAN,
+            "Russian": cls.FISH_VOICE_RUSSIAN,
+            "Bengali": cls.FISH_VOICE_BENGALI,
+            "Tamil": cls.FISH_VOICE_TAMIL,
+        }
+
+    @classmethod
+    def fish_audio_voice_id(cls, language: str) -> str:
+        return cls.fish_audio_voice_ids().get(language.strip(), "")
 
     # Whisper `verbose_json` confidence thresholds that trigger the
     # non-turbo re-transcription fallback (TECH_STACK.md Speech decision tree).
@@ -137,10 +161,12 @@ class AIConfig:
                 cleaned.startswith("<") and cleaned.endswith(">")
             )
 
-        return bool(
+        voice_ids = cls.fish_audio_voice_ids()
+        usable_ids = [voice_id.strip() for voice_id in voice_ids.values() if usable(voice_id)]
+        return (
             usable(cls.FISH_AUDIO_API_KEY)
-            and usable(cls.FISH_AUDIO_FEMALE_VOICE_ID)
-            and usable(cls.FISH_AUDIO_MALE_VOICE_ID)
+            and len(usable_ids) == len(voice_ids)
+            and len(set(usable_ids)) == len(usable_ids)
         )
 
     @classmethod

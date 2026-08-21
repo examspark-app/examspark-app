@@ -47,8 +47,8 @@ _VOICE_IDS: Final[dict[str, dict[str, str]]] = {
         "upbeat": "Puck",
     },
     "fish": {
-        "female": AIConfig.FISH_AUDIO_FEMALE_VOICE_ID,
-        "male": AIConfig.FISH_AUDIO_MALE_VOICE_ID,
+        "female": "language-specific",
+        "male": "language-specific",
     },
 }
 _DEFAULT_PROVIDER = "qwen"
@@ -116,11 +116,16 @@ def set_voice_preference(user_id: str, provider: str, voice_key: str, language: 
     language = language.strip() or _DEFAULT_LANGUAGE
     if language not in SUPPORTED_ROLEPLAY_LANGUAGES:
         raise RoleplayTtsError("That roleplay language is not available.")
+    voice_id = (
+        AIConfig.fish_audio_voice_id(language)
+        if provider == "fish"
+        else _VOICE_IDS[provider][voice_key]
+    )
     get_supabase_admin().table("users").update(
         {
             "roleplay_tts_provider": provider,
             "roleplay_tts_voice_key": voice_key,
-            "roleplay_tts_voice_id": _VOICE_IDS[provider][voice_key],
+            "roleplay_tts_voice_id": voice_id,
             "roleplay_tts_language": language.strip() or _DEFAULT_LANGUAGE,
             "roleplay_tts_preference_set": True,
         }
@@ -150,10 +155,7 @@ def _provider_configured(provider: str) -> bool:
 
 def _voice_id(provider: str, voice_key: str, language: str) -> str:
     if provider == "fish":
-        language_key = f"{language.strip()}:{voice_key}"
-        mapped = AIConfig.fish_audio_voice_ids().get(language_key)
-        if mapped:
-            return mapped
+        return AIConfig.fish_audio_voice_id(language)
     return _VOICE_IDS[provider][voice_key]
 
 
