@@ -241,5 +241,10 @@ async def update_from_turn(*, user_id: str, native_language: str, mode: str, use
         logger.warning('english_learning_memory_update_failed user=%s error=%s', user_id, type(e).__name__)
 
 
+_background_tasks: set[asyncio.Task] = set()
+
+
 def schedule_update(**kwargs) -> None:
-    asyncio.create_task(update_from_turn(**kwargs))
+    task = asyncio.create_task(update_from_turn(**kwargs))
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)

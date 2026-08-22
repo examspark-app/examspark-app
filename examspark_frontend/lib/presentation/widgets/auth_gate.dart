@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart' show AuthChangeEvent;
 import 'package:examspark_frontend/core/network/supabase_client.dart';
@@ -8,6 +9,7 @@ import 'package:examspark_frontend/core/services/fcm_push_service.dart';
 import 'package:examspark_frontend/core/services/notification_inbox_controller.dart';
 import 'package:examspark_frontend/core/services/pending_invite_store.dart';
 import 'package:examspark_frontend/core/services/app_update_service.dart';
+import 'package:examspark_frontend/core/services/web_reload.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/services/device_identifier.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -207,12 +209,16 @@ class _AuthGateState extends State<AuthGate> {
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(dialogContext);
+              if (kIsWeb) {
+                await hardReloadWebApp();
+                return;
+              }
               final uri = Uri.parse(AppUpdateService.playStoreUrl);
               if (await canLaunchUrl(uri)) {
                 await launchUrl(uri, mode: LaunchMode.externalApplication);
               }
             },
-            child: const Text('Update Now'),
+            child: Text(kIsWeb ? 'Refresh' : 'Update Now'),
           ),
         ],
       ),

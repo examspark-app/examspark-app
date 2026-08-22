@@ -7,6 +7,7 @@ CREATE TABLE IF NOT EXISTS english_roleplay_sessions (
   native_language text NOT NULL DEFAULT 'English',
   target_language text NOT NULL DEFAULT 'English',
   chat_session_id uuid REFERENCES public.english_practice_sessions(id) ON DELETE SET NULL,
+  text_model text NOT NULL DEFAULT 'qwen3' CHECK (text_model IN ('qwen3', 'gemini', 'claude')),
   status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'ended')),
   started_at timestamptz NOT NULL DEFAULT now(),
   ended_at timestamptz,
@@ -29,6 +30,8 @@ ALTER TABLE english_roleplay_sessions
   ADD COLUMN IF NOT EXISTS target_language text NOT NULL DEFAULT 'English';
 ALTER TABLE english_roleplay_sessions
   ADD COLUMN IF NOT EXISTS chat_session_id uuid REFERENCES public.english_practice_sessions(id) ON DELETE SET NULL;
+ALTER TABLE english_roleplay_sessions
+  ADD COLUMN IF NOT EXISTS text_model text NOT NULL DEFAULT 'qwen3';
 
 CREATE INDEX IF NOT EXISTS idx_english_roleplay_sessions_user_updated ON english_roleplay_sessions(user_id, updated_at DESC);
 CREATE INDEX IF NOT EXISTS idx_english_roleplay_sessions_chat_session ON english_roleplay_sessions(chat_session_id);

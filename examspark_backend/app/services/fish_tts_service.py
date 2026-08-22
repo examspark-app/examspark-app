@@ -38,17 +38,27 @@ def _synthesise_blocking(
     text: str,
     *,
     voice: str,
+    speed: float,
 ) -> bytes:
     client = OpenAI(
         base_url="https://api.fish.audio/compat/v1",
         api_key=AIConfig.FISH_AUDIO_API_KEY,
     )
-    response = client.audio.speech.create(
-        model=AIConfig.FISH_AUDIO_TTS_MODEL,
-        input=text,
-        voice=voice,
-        response_format="mp3",
-    )
+    try:
+        response = client.audio.speech.create(
+            model=AIConfig.FISH_AUDIO_TTS_MODEL,
+            input=text,
+            voice=voice,
+            response_format="mp3",
+            speed=speed,
+        )
+    except Exception:
+        response = client.audio.speech.create(
+            model=AIConfig.FISH_AUDIO_TTS_MODEL,
+            input=text,
+            voice=voice,
+            response_format="mp3",
+        )
     return response.read()
 
 
@@ -61,7 +71,8 @@ async def synthesize_speech(
     language: str | None = None,
 ) -> tuple[bytes, str]:
     """Return Fish Audio output as ``(mp3_bytes, 'audio/mpeg')``."""
-    del speed, user_id, language  # Fish's compatible endpoint has no such fields.
+    del user_id, language  # Fish's compatible endpoint has no such fields.
+    resolved_speed = _resolve_speed(speed, None)
     input_text = (text or "").strip()
     if not AIConfig.fish_audio_configured():
         raise FishTtsError(
@@ -76,6 +87,7 @@ async def synthesize_speech(
             _synthesise_blocking,
             input_text,
             voice=voice,
+            speed=resolved_speed,
         )
     except Exception as error:
         raise FishTtsError(

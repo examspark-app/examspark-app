@@ -7,7 +7,6 @@ import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/constants/roleplay_voice_config.dart';
 import 'package:examspark_frontend/core/services/recording_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
-import 'package:examspark_frontend/presentation/screens/english_practice/english_teaching_history_screen.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_drawer.dart';
 
 const _violet = Color(0xFF5137ED);
@@ -34,6 +33,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
   bool _preferenceLoaded = false;
   bool _hasSavedPreference = false;
   bool _savingVoice = false;
+  String _textModel = 'qwen3';
 
   @override
   void initState() {
@@ -58,6 +58,57 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
     } catch (_) {
       if (mounted) setState(() => _preferenceLoaded = true);
     }
+  }
+
+  Widget _premiumChip({
+    required String label,
+    required IconData icon,
+    required bool selected,
+    required VoidCallback onTap,
+    bool compact = false,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(14),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: EdgeInsets.symmetric(
+          horizontal: compact ? 12 : 14,
+          vertical: compact ? 9 : 11,
+        ),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(14),
+          gradient: selected
+              ? const LinearGradient(
+                  colors: [Color(0xFF6F56FF), Color(0xFF3020BF)],
+                )
+              : null,
+          color: selected ? null : const Color(0xFFF6F5FB),
+          border: Border.all(
+            color: selected ? Colors.transparent : const Color(0xFFE6E4F2),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: compact ? 15 : 17,
+              color: selected ? Colors.white : const Color(0xFF6F56FF),
+            ),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: compact ? 12.5 : 13.5,
+                fontWeight: FontWeight.w700,
+                color: selected ? Colors.white : const Color(0xFF3B3856),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _saveVoicePreference(
@@ -140,6 +191,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
         var selectedProvider = forcePicker ? 'fish' : _ttsProvider;
         var selectedVoiceKey = _ttsVoiceKey;
         var selectedLanguage = forcePicker ? 'English' : _targetLanguage;
+        var selectedTextModel = _textModel;
         var query = '';
         final search = TextEditingController();
         return StatefulBuilder(
@@ -149,145 +201,313 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                 .toList();
             return SafeArea(
               child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  20,
-                  4,
-                  20,
-                  MediaQuery.viewInsetsOf(context).bottom + 24,
+                padding: EdgeInsets.only(
+                  bottom: MediaQuery.viewInsetsOf(context).bottom,
                 ),
                 child: SingleChildScrollView(
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      const Text(
-                        'Roleplay preferences',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Text(
-                        'TTS Provider',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          ChoiceChip(
-                            label: const Text('Fish Voice'),
-                            selected: selectedProvider == 'fish',
-                            onSelected: (_) => setSheetState(() {
-                              selectedProvider = 'fish';
-                              selectedVoiceKey = 'female';
-                            }),
-                          ),
-                          ChoiceChip(
-                            label: const Text('Qwen Voice'),
-                            selected: selectedProvider == 'qwen',
-                            onSelected: (_) => setSheetState(() {
-                              selectedProvider = 'qwen';
-                              selectedVoiceKey = 'female';
-                            }),
-                          ),
-                          ChoiceChip(
-                            label: const Text('Gemini Voice'),
-                            selected: selectedProvider == 'gemini',
-                            onSelected: (_) => setSheetState(() {
-                              selectedProvider = 'gemini';
-                              selectedVoiceKey = 'warm';
-                            }),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 16),
-                      Text(
-                        selectedProvider == 'gemini' ? 'Voice' : 'Voice gender',
-                        style: TextStyle(fontWeight: FontWeight.w700),
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        children: [
-                          if (selectedProvider == 'gemini') ...[
-                            for (final voice in const [
-                              ('warm', 'Warm'),
-                              ('friendly', 'Friendly'),
-                              ('upbeat', 'Upbeat'),
-                            ])
-                              ChoiceChip(
-                                label: Text(voice.$2),
-                                selected: selectedVoiceKey == voice.$1,
-                                onSelected: (_) => setSheetState(
-                                  () => selectedVoiceKey = voice.$1,
-                                ),
-                              ),
-                          ] else ...[
-                            ChoiceChip(
-                              label: const Text('Female'),
-                              selected: selectedVoiceKey == 'female',
-                              onSelected: (_) => setSheetState(
-                                () => selectedVoiceKey = 'female',
-                              ),
-                            ),
-                            ChoiceChip(
-                              label: const Text('Male'),
-                              selected: selectedVoiceKey == 'male',
-                              onSelected: (_) => setSheetState(
-                                () => selectedVoiceKey = 'male',
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      if (selectedProvider == 'fish') ...[
-                        const SizedBox(height: 16),
-                        const Text(
-                          'Language',
-                          style: TextStyle(fontWeight: FontWeight.w700),
-                        ),
-                        const SizedBox(height: 8),
-                        TextField(
-                          controller: search,
-                          onChanged: (value) => setSheetState(
-                            () => query = value.trim().toLowerCase(),
-                          ),
-                          decoration: const InputDecoration(
-                            prefixIcon: Icon(Icons.search),
-                            hintText: 'Search language',
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Wrap(
-                          spacing: 8,
-                          runSpacing: 8,
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 4, 12, 4),
+                        child: Row(
                           children: [
-                            for (final language in filtered)
-                              ChoiceChip(
-                                label: Text(language),
-                                selected: selectedLanguage == language,
-                                onSelected: (_) => setSheetState(
-                                  () => selectedLanguage = language,
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: LinearGradient(
+                                  colors: [Color(0xFF6F56FF), Color(0xFF3020BF)],
                                 ),
                               ),
+                              child: const Icon(
+                                Icons.graphic_eq_rounded,
+                                color: Colors.white,
+                                size: 22,
+                              ),
+                            ),
+                            const SizedBox(width: 12),
+                            const Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Roleplay preferences',
+                                    style: TextStyle(
+                                      fontSize: 18,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  SizedBox(height: 2),
+                                  Text(
+                                    'Voice, tone and language',
+                                    style: TextStyle(
+                                      fontSize: 12.5,
+                                      color: Color(0xFF8B87A6),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            IconButton(
+                              onPressed: () => Navigator.pop(sheetContext),
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                color: Color(0xFF8B87A6),
+                              ),
+                            ),
                           ],
                         ),
-                      ],
-                      const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: FilledButton(
-                          onPressed: () async {
-                            await _saveVoicePreference(
-                              selectedProvider,
-                              selectedVoiceKey,
-                              selectedLanguage,
-                            );
-                            if (sheetContext.mounted)
-                              Navigator.pop(sheetContext, selectedProvider);
-                          },
-                          child: const Text('Save and continue'),
+                      ),
+                      const Divider(height: 1, color: Color(0xFFEDEBF7)),
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            if (widget.chatSessionId == null) ...[
+                              const Text(
+                                'AI MODEL',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 11.5,
+                                  letterSpacing: .6,
+                                  color: Color(0xFF8B87A6),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Wrap(
+                                spacing: 10,
+                                runSpacing: 10,
+                                children: [
+                                  for (final model in const [
+                                    ('qwen3', 'Qwen3', Icons.auto_awesome_rounded),
+                                    ('gemini', 'Gemini Flash', Icons.auto_awesome),
+                                    ('claude', 'Claude Premium', Icons.psychology_rounded),
+                                  ])
+                                    _premiumChip(
+                                      label: model.$2,
+                                      icon: model.$3,
+                                      selected: selectedTextModel == model.$1,
+                                      onTap: () => setSheetState(
+                                        () => selectedTextModel = model.$1,
+                                      ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(height: 22),
+                            ] else
+                              const Padding(
+                                padding: EdgeInsets.only(bottom: 22),
+                                child: Text(
+                                  'AI MODEL  ·  INHERITED FROM CHAT',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 11.5,
+                                    letterSpacing: .6,
+                                    color: Color(0xFF8B87A6),
+                                  ),
+                                ),
+                              ),
+                            const Text(
+                              'TTS PROVIDER',
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 11.5,
+                                letterSpacing: .6,
+                                color: Color(0xFF8B87A6),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [
+                                _premiumChip(
+                                  label: 'Fish Voice',
+                                  icon: Icons.waves_rounded,
+                                  selected: selectedProvider == 'fish',
+                                  onTap: () => setSheetState(() {
+                                    selectedProvider = 'fish';
+                                    selectedVoiceKey = 'female';
+                                  }),
+                                ),
+                                _premiumChip(
+                                  label: 'Qwen Voice',
+                                  icon: Icons.record_voice_over_rounded,
+                                  selected: selectedProvider == 'qwen',
+                                  onTap: () => setSheetState(() {
+                                    selectedProvider = 'qwen';
+                                    selectedVoiceKey = 'female';
+                                  }),
+                                ),
+                                _premiumChip(
+                                  label: 'Gemini Voice',
+                                  icon: Icons.auto_awesome_rounded,
+                                  selected: selectedProvider == 'gemini',
+                                  onTap: () => setSheetState(() {
+                                    selectedProvider = 'gemini';
+                                    selectedVoiceKey = 'warm';
+                                  }),
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 22),
+                            Text(
+                              selectedProvider == 'gemini' ? 'VOICE' : 'VOICE GENDER',
+                              style: const TextStyle(
+                                fontWeight: FontWeight.w800,
+                                fontSize: 11.5,
+                                letterSpacing: .6,
+                                color: Color(0xFF8B87A6),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              children: [
+                                if (selectedProvider == 'gemini') ...[
+                                  for (final voice in const [
+                                    ('warm', 'Warm', Icons.wb_sunny_rounded),
+                                    ('friendly', 'Friendly', Icons.emoji_emotions_rounded),
+                                    ('upbeat', 'Upbeat', Icons.bolt_rounded),
+                                  ])
+                                    _premiumChip(
+                                      label: voice.$2,
+                                      icon: voice.$3,
+                                      selected: selectedVoiceKey == voice.$1,
+                                      onTap: () => setSheetState(
+                                        () => selectedVoiceKey = voice.$1,
+                                      ),
+                                    ),
+                                ] else ...[
+                                  _premiumChip(
+                                    label: 'Female',
+                                    icon: Icons.face_3_rounded,
+                                    selected: selectedVoiceKey == 'female',
+                                    onTap: () => setSheetState(
+                                      () => selectedVoiceKey = 'female',
+                                    ),
+                                  ),
+                                  _premiumChip(
+                                    label: 'Male',
+                                    icon: Icons.face_rounded,
+                                    selected: selectedVoiceKey == 'male',
+                                    onTap: () => setSheetState(
+                                      () => selectedVoiceKey = 'male',
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            if (selectedProvider == 'fish') ...[
+                              const SizedBox(height: 22),
+                              const Text(
+                                'LANGUAGE',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 11.5,
+                                  letterSpacing: .6,
+                                  color: Color(0xFF8B87A6),
+                                ),
+                              ),
+                              const SizedBox(height: 10),
+                              Container(
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFF6F5FB),
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                                child: TextField(
+                                  controller: search,
+                                  onChanged: (value) => setSheetState(
+                                    () => query = value.trim().toLowerCase(),
+                                  ),
+                                  decoration: const InputDecoration(
+                                    prefixIcon: Icon(
+                                      Icons.search_rounded,
+                                      color: Color(0xFF8B87A6),
+                                    ),
+                                    hintText: 'Search language',
+                                    hintStyle: TextStyle(
+                                      color: Color(0xFFB0ADC4),
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                    border: InputBorder.none,
+                                    contentPadding: EdgeInsets.symmetric(vertical: 14),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 12),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  for (final language in filtered)
+                                    _premiumChip(
+                                      label: language,
+                                      icon: Icons.language_rounded,
+                                      selected: selectedLanguage == language,
+                                      onTap: () => setSheetState(
+                                        () => selectedLanguage = language,
+                                      ),
+                                      compact: true,
+                                    ),
+                                ],
+                              ),
+                            ],
+                            const SizedBox(height: 24),
+                            SizedBox(
+                              width: double.infinity,
+                              height: 54,
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  gradient: const LinearGradient(
+                                    colors: [Color(0xFF6F56FF), Color(0xFF3020BF)],
+                                  ),
+                                  boxShadow: const [
+                                    BoxShadow(
+                                      color: Color(0x445137ED),
+                                      blurRadius: 16,
+                                      offset: Offset(0, 6),
+                                    ),
+                                  ],
+                                ),
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(16),
+                                    onTap: () async {
+                                      await _saveVoicePreference(
+                                        selectedProvider,
+                                        selectedVoiceKey,
+                                        selectedLanguage,
+                                      );
+                                      if (widget.chatSessionId == null) {
+                                        _textModel = selectedTextModel;
+                                      }
+                                      if (sheetContext.mounted) {
+                                        Navigator.pop(sheetContext, selectedProvider);
+                                      }
+                                    },
+                                    child: const Center(
+                                      child: Text(
+                                        'Save and continue',
+                                        style: TextStyle(
+                                          color: Colors.white,
+                                          fontSize: 15.5,
+                                          fontWeight: FontWeight.w800,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
@@ -308,6 +528,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
           targetLanguage: widget.targetLanguage ?? _targetLanguage,
           nativeLanguage: widget.nativeLanguage ?? 'English',
           chatSessionId: widget.chatSessionId,
+          textModel: _textModel,
         ),
       ),
     );
@@ -324,6 +545,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
             targetLanguage: widget.targetLanguage ?? _targetLanguage,
             nativeLanguage: widget.nativeLanguage ?? 'English',
             chatSessionId: widget.chatSessionId,
+            textModel: _textModel,
           ),
         ),
       );
@@ -436,20 +658,20 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                     tooltip: 'Open menu',
                   ),
                 ),
+                const SizedBox(width: 8),
+                Text(
+                  'Roleplay',
+                  style: TextStyle(
+                    color: AppTheme.getPrimaryText(context),
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
                 const Spacer(),
                 IconButton(
                   onPressed: () => _openVoiceSettings(),
                   icon: const Icon(Icons.tune_rounded, size: 25),
                   tooltip: 'Roleplay voice',
-                ),
-                IconButton(
-                  onPressed: () => Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => const EnglishTeachingHistoryScreen(),
-                    ),
-                  ),
-                  icon: const Icon(Icons.history_rounded, size: 29),
                 ),
               ],
             ),
@@ -527,10 +749,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
             OutlinedButton.icon(
               onPressed: _savingVoice ? null : _openLanguagePicker,
               icon: const Icon(Icons.language_rounded, size: 20),
-              label: Text(
-                '${_languageLabel(_targetLanguage)} ▾',
-                style: const TextStyle(fontWeight: FontWeight.w700),
-              ),
+              label: const Text('Practice language'),
               style: OutlinedButton.styleFrom(
                 foregroundColor: _violet,
                 side: const BorderSide(color: _violet),
@@ -540,7 +759,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 16),
             Expanded(
               child: InkWell(
                 onTap: scenario == null ? null : _openSelectedScenario,
@@ -557,7 +776,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
                       const Text(
-                        'Tap to Start Roleplay',
+                        'Start Roleplay',
                         style: TextStyle(
                           color: Colors.white,
                           fontSize: 18,
@@ -602,27 +821,6 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                 ),
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.only(top: 14),
-              child: Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: () => Navigator.pop(context),
-                      child: const Text('Chat Mode'),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton(
-                      onPressed: () {},
-                      style: FilledButton.styleFrom(backgroundColor: _violet),
-                      child: const Text('Roleplay Mode'),
-                    ),
-                  ),
-                ],
-              ),
-            ),
           ],
         ),
       ),
@@ -653,11 +851,13 @@ class RoleplayVoiceScreen extends StatefulWidget {
     required this.targetLanguage,
     required this.nativeLanguage,
     this.chatSessionId,
+    this.textModel = 'qwen3',
   });
   final String scenario;
   final String targetLanguage;
   final String nativeLanguage;
   final String? chatSessionId;
+  final String textModel;
   @override
   State<RoleplayVoiceScreen> createState() => _RoleplayVoiceScreenState();
 }
@@ -759,6 +959,8 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
     _leaving = true;
     _sessionGeneration++;
     final id = sessionId;
+    final durationSeconds = elapsed.inSeconds;
+    final stoppingInProgress = _stopping;
     sessionId = null;
     if (mounted) {
       setState(() {
@@ -766,18 +968,29 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
         _listeningHint = null;
       });
     }
-    unawaited(_stopResources());
-    if (id != null) {
-      unawaited(_endRoleplayOnServer(id));
+    if (stoppingInProgress) {
+      unawaited(_stopResources());
+    } else {
+      unawaited(_finishExitCleanup(id, durationSeconds));
     }
     if (mounted) Navigator.pop(context);
   }
 
-  Future<void> _endRoleplayOnServer(String id) async {
+  Future<void> _finishExitCleanup(String? id, int durationSeconds) async {
+    await _stopResources();
+    if (id != null) {
+      await _endRoleplayOnServer(id, durationSeconds: durationSeconds);
+    }
+  }
+
+  Future<void> _endRoleplayOnServer(
+    String id, {
+    int? durationSeconds,
+  }) async {
     try {
       await LectureService.instance.endEnglishRoleplay(
         sessionId: id,
-        durationSeconds: elapsed.inSeconds,
+        durationSeconds: durationSeconds ?? elapsed.inSeconds,
       );
     } catch (_) {
       // Local cleanup and navigation still complete when the network is unavailable.
@@ -949,6 +1162,7 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
           nativeLanguage: widget.nativeLanguage,
           targetLanguage: widget.targetLanguage,
           chatSessionId: widget.chatSessionId,
+          textModel: widget.textModel,
         );
         final startedSessionId = started['session_id'] as String?;
         if (startedSessionId == null ||
@@ -1199,29 +1413,19 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
                   style: const TextStyle(color: Colors.white70),
                 ),
                 const SizedBox(height: 45),
-                ScaleTransition(
-                  scale: pulse,
-                  child: GestureDetector(
-                    onTap: toggle,
-                    child: Container(
-                      width: 260,
-                      height: 260,
-                      decoration: const BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Color(0xFFFEFEFF),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Color(0xFF9A6DFF),
-                            blurRadius: 35,
-                            spreadRadius: 12,
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        active ? Icons.mic_rounded : Icons.nights_stay_rounded,
-                        color: _violet,
-                        size: 100,
-                      ),
+                GestureDetector(
+                  onTap: toggle,
+                  child: Container(
+                    width: 220,
+                    height: 220,
+                    decoration: const BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Color(0xFFFEFEFF),
+                    ),
+                    child: Icon(
+                      active ? Icons.mic_rounded : Icons.nights_stay_rounded,
+                      color: _violet,
+                      size: 82,
                     ),
                   ),
                 ),

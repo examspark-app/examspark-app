@@ -9,6 +9,7 @@ import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_language_picker_screen.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_drawer.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/roleplay_screen.dart';
+import 'package:examspark_frontend/presentation/widgets/ai_model_selector.dart';
 
 class _Message {
   const _Message(this.text, this.isUser);
@@ -182,6 +183,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   String? _error;
   bool _longChatPromptShown = false;
   bool _resumeCancelled = false;
+  late String _selectedTextModel = widget.textModel;
 
   @override
   void initState() {
@@ -200,7 +202,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
 
   Future<void> _startFreshPracticeSession() async {
     final r = await LectureService.instance.startEnglishPractice(
-      model: widget.textModel,
+      model: _selectedTextModel,
     );
     if (!mounted) return;
     setState(() {
@@ -249,6 +251,12 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       _sessionId = r['id'] as String?;
       _nativeLanguage = language ?? '';
       _targetLanguage = '${r['target_language'] ?? 'English'}';
+      final savedModel = '${r['text_model'] ?? ''}';
+      if (savedModel == 'qwen3' ||
+          savedModel == 'gemini' ||
+          savedModel == 'claude') {
+        _selectedTextModel = savedModel;
+      }
       _messages
         ..clear()
         ..addAll(
@@ -482,7 +490,11 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => EnglishPracticeScreen(
-          textModel: selected['model'] == 'gemini' ? 'gemini' : 'qwen3',
+          textModel: selected['model'] == 'gemini'
+              ? 'gemini'
+              : selected['model'] == 'claude'
+              ? 'claude'
+              : 'qwen3',
         ),
       ),
     );
@@ -496,7 +508,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
         if (mounted) {
           setState(() => _recording = true);
           _voiceTurnLimitTimer?.cancel();
-          _voiceTurnLimitTimer = Timer(const Duration(seconds: 60), () {
+          _voiceTurnLimitTimer = Timer(const Duration(seconds: 40), () {
             if (mounted && _recording && !_sending) {
               _toggleVoiceInput();
             }
@@ -644,7 +656,6 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                 _suggestionPanel(),
                 _input(),
                 _practiceMcqPanel(),
-                _tabs(),
               ],
             ),
     ),
@@ -660,7 +671,20 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
             tooltip: 'Open menu',
           ),
         ),
+        const SizedBox(width: 8),
+        Text(
+          'Chat Practice',
+          style: TextStyle(
+            color: AppTheme.getPrimaryText(context),
+            fontSize: 18,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
         const Spacer(),
+        TextButton(
+          onPressed: _roleplay,
+          child: const Text('Roleplay'),
+        ),
       ],
     ),
   );
@@ -680,6 +704,24 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
               ),
             );
           final m = _messages[i];
+          if (!m.isUser) {
+            return Align(
+              alignment: Alignment.centerLeft,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
+                child: SelectionArea(
+                  child: Text(
+                    m.text,
+                    style: TextStyle(
+                      color: AppTheme.getPrimaryText(context),
+                      fontSize: 16,
+                      height: 1.45,
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }
           return Align(
             alignment: m.isUser ? Alignment.centerRight : Alignment.centerLeft,
             child: Container(
@@ -719,38 +761,6 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
             ),
           );
         },
-      ),
-      Positioned(
-        right: 20,
-        bottom: 0,
-        child: InkWell(
-          onTap: _roleplay,
-          borderRadius: BorderRadius.circular(50),
-          child: Container(
-            width: 94,
-            height: 94,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [Color(0xFF6F56FF), Color(0xFF3020BF)],
-              ),
-            ),
-            child: const Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.nights_stay_rounded, color: Colors.white, size: 36),
-                Text(
-                  'Roleplay',
-                  style: TextStyle(
-                    color: Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
       ),
     ],
   );
@@ -1046,6 +1056,11 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
           _toggleVoiceInput,
         ),
         const SizedBox(width: 8),
+        AiModelSelector(
+          selectedModel: _selectedTextModel,
+          onSelected: _changeTextModel,
+        ),
+        const SizedBox(width: 8),
         Expanded(
           child: TextField(
             controller: _text,
@@ -1071,6 +1086,73 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       ],
     ),
   );
+
+  Future<void> _changeTextModel(String model) async {
+    if (model == _selectedTextModel) return;
+    if (model == 'claude') {
+      final user = SupabaseClient.instance.currentUser;
+      final plan = user == null
+          ? 'free'
+          : await SupabaseClient.instance.getPlanTier(user.id);
+      if (plan != 'plan_499' && plan != 'plan_999') {
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Premium model'),
+            content: const Text(
+              'Claude Premium is available on the ₹499 or ₹999 plan.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Not now'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  Navigator.pushNamed(context, '/subscription');
+                },
+                child: const Text('View plans'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+    }
+    if (!mounted) return;
+    if (_sessionId != null) {
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Change AI model?'),
+          content: const Text(
+            'A new chat will use this text model. Your current chat will stay in History.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, true),
+              child: const Text('New chat'),
+            ),
+          ],
+        ),
+      );
+      if (!mounted || confirmed != true) return;
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => EnglishPracticeScreen(textModel: model),
+        ),
+      );
+      return;
+    }
+    setState(() => _selectedTextModel = model);
+  }
   Widget _circle(IconData icon, VoidCallback tap) => Material(
     color: violet,
     shape: const CircleBorder(),
@@ -1081,58 +1163,6 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
         padding: const EdgeInsets.all(14),
         child: Icon(icon, color: Colors.white, size: 27),
       ),
-    ),
-  );
-  Widget _tabs() => Container(
-    margin: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-    padding: const EdgeInsets.all(5),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(21),
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: Container(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            decoration: const BoxDecoration(
-              border: Border(bottom: BorderSide(color: violet, width: 3)),
-            ),
-            child: const Column(
-              children: [
-                Text(
-                  '☁  Chat Mode',
-                  style: TextStyle(color: violet, fontWeight: FontWeight.w800),
-                ),
-                Text(
-                  'Learn & Improve',
-                  style: TextStyle(color: violet, fontSize: 12),
-                ),
-              ],
-            ),
-          ),
-        ),
-        Expanded(
-          child: InkWell(
-            onTap: _roleplay,
-            child: const Padding(
-              padding: EdgeInsets.symmetric(vertical: 10),
-              child: Column(
-                children: [
-                  Text(
-                    '♧  Roleplay Mode',
-                    style: TextStyle(fontWeight: FontWeight.w800),
-                  ),
-                  Text(
-                    'Speak & Practice',
-                    style: TextStyle(color: Color(0xFF73738A), fontSize: 12),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        ),
-      ],
     ),
   );
 }

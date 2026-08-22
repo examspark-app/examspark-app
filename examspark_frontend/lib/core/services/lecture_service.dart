@@ -814,6 +814,7 @@ class LectureService {
     String? studyChip,
     String? parentResponseId,
     String? sessionId,
+    String textModel = 'qwen3',
   }) async {
     if (!AppConfig.isApiConfigured) {
       throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
@@ -837,6 +838,7 @@ class LectureService {
     if (sessionId != null && sessionId.isNotEmpty) {
       body['session_id'] = sessionId;
     }
+    body['text_model'] = textModel;
     final response = await http.post(
       uri,
       headers: {
@@ -860,6 +862,7 @@ class LectureService {
     required String filename,
     String? query,
     String? sessionId,
+    String visionModel = 'qwen-vl',
   }) async {
     if (!AppConfig.isApiConfigured) {
       throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
@@ -877,6 +880,7 @@ class LectureService {
     if (sessionId != null && sessionId.isNotEmpty) {
       request.fields['session_id'] = sessionId;
     }
+    request.fields['vision_model'] = visionModel;
 
     final streamed = await request.send();
     final response = await http.Response.fromStream(streamed);
@@ -895,6 +899,7 @@ class LectureService {
     String? studyChip,
     String? parentResponseId,
     String? sessionId,
+    String textModel = 'qwen3',
     required void Function(String delta) onToken,
     void Function(Map<String, dynamic> meta)? onMeta,
   }) async {
@@ -914,6 +919,7 @@ class LectureService {
     if (sessionId != null && sessionId.isNotEmpty) {
       body['session_id'] = sessionId;
     }
+    body['text_model'] = textModel;
     return _postSseAi(
       path: '/api/v1/home-ai/stream',
       body: body,
@@ -1299,6 +1305,7 @@ class LectureService {
     String nativeLanguage = 'English',
     String targetLanguage = 'English',
     String? chatSessionId,
+    String textModel = 'qwen3',
   }) async {
     final accessToken = await _requireAccessToken();
     final response = await http.post(
@@ -1313,6 +1320,7 @@ class LectureService {
         'scenario': scenario,
         'native_language': nativeLanguage,
         'target_language': targetLanguage,
+        'text_model': textModel,
         if (chatSessionId != null && chatSessionId.isNotEmpty)
           'chat_session_id': chatSessionId,
       }),

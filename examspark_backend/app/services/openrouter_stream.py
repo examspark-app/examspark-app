@@ -58,6 +58,7 @@ async def stream_chat_completions(
     *,
     temperature: float,
     max_tokens: int,
+    model: str | None = None,
     timeout: float = 90.0,
 ) -> AsyncIterator[str]:
     """Yield text deltas from OpenRouter with stream=true."""
@@ -73,7 +74,7 @@ async def stream_chat_completions(
         "Content-Type": "application/json",
     }
     body = {
-        "model": AIConfig.AI_CHAT_MODEL,
+        "model": model or AIConfig.AI_CHAT_MODEL,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,

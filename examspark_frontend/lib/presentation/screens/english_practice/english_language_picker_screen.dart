@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_screen.dart';
 
-enum _PickerStep { nativeLanguage, targetLanguage, textModel }
+enum _PickerStep { nativeLanguage, targetLanguage }
 
 class _LangOption {
   final String label;
@@ -101,19 +102,12 @@ class _EnglishLanguagePickerScreenState
     _LangOption('नेपाली', 'Nepali'),
   ];
 
-  static const List<_LangOption> _textModels = [
-    _LangOption('Qwen3', 'qwen3'),
-    _LangOption('Gemini', 'gemini'),
-  ];
-
   List<_LangOption> get _languages {
     switch (_step) {
       case _PickerStep.nativeLanguage:
         return _nativeLanguages;
       case _PickerStep.targetLanguage:
         return _targetLanguages;
-      case _PickerStep.textModel:
-        return _textModels;
     }
   }
 
@@ -123,8 +117,6 @@ class _EnglishLanguagePickerScreenState
         return 'What language do you speak?';
       case _PickerStep.targetLanguage:
         return 'What language do you want to learn?';
-      case _PickerStep.textModel:
-        return 'Choose your AI model';
     }
   }
 
@@ -134,8 +126,6 @@ class _EnglishLanguagePickerScreenState
         return 'This is the language you are most comfortable with. The AI will use it at first to explain things clearly.';
       case _PickerStep.targetLanguage:
         return 'Choose the language you want to practise. You can learn any language, not just English.';
-      case _PickerStep.textModel:
-        return 'Choose which text-generation model will power this Chat. You can change it only by starting a new chat.';
     }
   }
 
@@ -145,8 +135,6 @@ class _EnglishLanguagePickerScreenState
         return 'Search your native language…';
       case _PickerStep.targetLanguage:
         return 'Search a language to learn…';
-      case _PickerStep.textModel:
-        return 'Search a model…';
     }
   }
 
@@ -156,8 +144,6 @@ class _EnglishLanguagePickerScreenState
         return 'Type your native language name (e.g. Bhojpuri, Konkani, Haryanvi)';
       case _PickerStep.targetLanguage:
         return 'Type any language you want to learn (e.g. Swahili, Dutch, Persian)';
-      case _PickerStep.textModel:
-        return '';
     }
   }
 
@@ -190,9 +176,8 @@ class _EnglishLanguagePickerScreenState
   Future<void> _selectTarget(String language) async {
     setState(() {
       _targetLanguage = language.trim();
-      _step = _PickerStep.textModel;
-      _resetStepUI();
     });
+    await _saveAndNavigate('qwen3');
   }
 
   Future<void> _saveAndNavigate(String model) async {
@@ -209,6 +194,38 @@ class _EnglishLanguagePickerScreenState
       });
       return;
     }
+    if (model == 'claude') {
+      final user = SupabaseClient.instance.currentUser;
+      final plan = user == null
+          ? 'free'
+          : await SupabaseClient.instance.getPlanTier(user.id);
+      if (plan != 'plan_499' && plan != 'plan_999') {
+        if (!mounted) return;
+        await showDialog<void>(
+          context: context,
+          builder: (dialogContext) => AlertDialog(
+            title: const Text('Premium model'),
+            content: const Text(
+              'Claude Premium is available on the ₹499 or ₹999 plan. Upgrade to use it for Chat.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Not now'),
+              ),
+              FilledButton(
+                onPressed: () {
+                  Navigator.pop(dialogContext);
+                  Navigator.pushNamed(context, '/subscription');
+                },
+                child: const Text('View plans'),
+              ),
+            ],
+          ),
+        );
+        return;
+      }
+    }
     setState(() => _saving = true);
     try {
       await LectureService.instance.setEnglishPracticePreference(
@@ -224,7 +241,11 @@ class _EnglishLanguagePickerScreenState
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(
             builder: (_) => EnglishPracticeScreen(
-              textModel: model == 'gemini' ? 'gemini' : 'qwen3',
+              textModel: model == 'gemini'
+                  ? 'gemini'
+                  : model == 'claude'
+                  ? 'claude'
+                  : 'qwen3',
             ),
           ),
         );
@@ -248,9 +269,6 @@ class _EnglishLanguagePickerScreenState
       case _PickerStep.targetLanguage:
         await _selectTarget(trimmed);
         break;
-      case _PickerStep.textModel:
-        await _saveAndNavigate(trimmed);
-        break;
     }
   }
 
@@ -267,12 +285,6 @@ class _EnglishLanguagePickerScreenState
           _resetStepUI();
         });
         break;
-      case _PickerStep.textModel:
-        setState(() {
-          _step = _PickerStep.targetLanguage;
-          _resetStepUI();
-        });
-        break;
     }
   }
 
@@ -280,12 +292,8 @@ class _EnglishLanguagePickerScreenState
   Widget build(BuildContext context) {
     final showBack =
         _step != _PickerStep.nativeLanguage || widget.returnToPrevious;
-    final stepIndex = _step == _PickerStep.nativeLanguage
-        ? 1
-        : _step == _PickerStep.targetLanguage
-        ? 2
-        : 3;
-    final totalSteps = 3;
+    final stepIndex = _step == _PickerStep.nativeLanguage ? 1 : 2;
+    const totalSteps = 2;
 
     return Scaffold(
       appBar: AppBar(
@@ -362,31 +370,26 @@ class _EnglishLanguagePickerScreenState
                 ],
               ),
             ],
-            if (_step == _PickerStep.textModel && _targetLanguage != null) ...[
-              const SizedBox(height: 8),
-              Chip(label: Text('Target: $_targetLanguage')),
-            ],
             const SizedBox(height: 16),
-            if (_step != _PickerStep.textModel)
-              TextField(
-                controller: _search,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  hintText: _searchHint,
-                  prefixIcon: const Icon(Icons.search_rounded),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  isDense: true,
+            TextField(
+              controller: _search,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                hintText: _searchHint,
+                prefixIcon: const Icon(Icons.search_rounded),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
+                isDense: true,
               ),
-            if (_step != _PickerStep.textModel) const SizedBox(height: 12),
+            ),
+            const SizedBox(height: 12),
             Expanded(
               child: _saving
                   ? const Center(child: CircularProgressIndicator())
                   : ListView(
                       children: [
-                        for (final lang in _filtered)
+                        for (final lang in _filtered) ...[
                           Card(
                             margin: const EdgeInsets.only(bottom: 8),
                             child: ListTile(
@@ -398,28 +401,9 @@ class _EnglishLanguagePickerScreenState
                               onTap: () => _select(lang.englishName),
                             ),
                           ),
+                        ],
                         const SizedBox(height: 8),
-                        if (_step == _PickerStep.textModel)
-                          ..._filtered.map(
-                            (model) => Card(
-                              margin: const EdgeInsets.only(bottom: 8),
-                              child: ListTile(
-                                leading: Icon(
-                                  model.englishName == 'gemini'
-                                      ? Icons.auto_awesome
-                                      : Icons.smart_toy_outlined,
-                                ),
-                                title: Text(model.label),
-                                subtitle: Text(
-                                  model.englishName == 'gemini'
-                                      ? 'Gemini 2.5 Flash-Lite'
-                                      : 'Qwen3',
-                                ),
-                                onTap: () => _select(model.englishName),
-                              ),
-                            ),
-                          )
-                        else if (!_showCustom)
+                        if (!_showCustom)
                           OutlinedButton.icon(
                             onPressed: () => setState(() => _showCustom = true),
                             icon: const Icon(Icons.edit_outlined),

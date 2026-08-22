@@ -8,11 +8,11 @@ ALTER TABLE english_practice_sessions
 
 UPDATE english_practice_sessions
 SET text_model = 'qwen3'
-WHERE text_model IS NULL OR text_model NOT IN ('qwen3', 'gemini');
+WHERE text_model IS NULL OR text_model NOT IN ('qwen3', 'gemini', 'claude');
 
 ALTER TABLE english_practice_sessions
   DROP CONSTRAINT IF EXISTS english_practice_sessions_text_model_check;
 
 ALTER TABLE english_practice_sessions
   ADD CONSTRAINT english_practice_sessions_text_model_check
-  CHECK (text_model IN ('qwen3', 'gemini'));
+    CHECK (text_model IN ('qwen3', 'gemini', 'claude'));

@@ -25,7 +25,7 @@ from app.services.plan_tier_service import (
     feature_locked_payload,
     require_feature_unlocked,
 )
-from app.services.qwen_vision_service import QwenVisionError, analyze_image
+from app.services.home_ai_vision_model_service import analyze_image_with_fallback
 
 logger = logging.getLogger(__name__)
 
@@ -138,6 +138,7 @@ async def home_ai_vision(
     query: str | None = None,
     session_id: str | None = None,
     parent_response_id: str | None = None,
+    vision_model: str = "qwen-vl",
 ) -> dict[str, Any]:
     """Photo/diagram → Home chat answer. Does not create a lecture."""
     if not image_bytes:
@@ -193,13 +194,14 @@ async def home_ai_vision(
     display_query = user_q
 
     try:
-        vision = await analyze_image(
+        vision = await analyze_image_with_fallback(
             image_bytes,
             filename=filename,
             mime_type=mime_type,
             text_hint=hint,
+            selected_model=vision_model,
         )
-    except QwenVisionError as e:
+    except Exception as e:
         raise HomeAiError(
             f"Could not analyze image: {e}",
             status_code=502,

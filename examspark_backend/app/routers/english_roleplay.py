@@ -11,7 +11,7 @@ from app.services import roleplay_tts_service as tts
 from app.services.openrouter_stream import format_sse
 
 router = APIRouter(prefix='/api/v1/english-roleplay', tags=['english-roleplay'])
-class StartBody(BaseModel): scenario: str = Field(..., min_length=1, max_length=300); native_language: str = Field(default='English', max_length=60); target_language: str = Field(default='English', max_length=60); chat_session_id: str | None = None
+class StartBody(BaseModel): scenario: str = Field(..., min_length=1, max_length=300); native_language: str = Field(default='English', max_length=60); target_language: str = Field(default='English', max_length=60); chat_session_id: str | None = None; text_model: str = Field(default='qwen3', pattern='^(qwen3|gemini|claude)$')
 class TurnBody(BaseModel): session_id: str; transcript: str = Field(..., min_length=1, max_length=4000)
 class EndBody(BaseModel): duration_seconds: int | None = Field(default=None, ge=0)
 class VoicePreferenceBody(BaseModel):
@@ -28,6 +28,7 @@ async def start(body: StartBody, user: AuthenticatedUser = Depends(get_current_u
             body.native_language,
             target_language=body.target_language,
             chat_session_id=body.chat_session_id,
+            text_model=body.text_model,
         )
         audio = result.pop('audio_bytes', None)
         return {

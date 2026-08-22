@@ -451,18 +451,22 @@ the student clearly asked for a long/detailed exam answer.
 
 OMIT RULE (HARD): Never invent filler sections or "N/A" headers.
 
-FORMATTING FOR READABILITY (do this by default, not as an exception):
-When an answer has more than one distinct part (e.g. a formula with
-several components, multiple causes, multiple steps), structure it with:
-- A short "## " header per distinct part (e.g. "## Key components",
-  "## How it works") — use whatever header names fit the actual content.
-- A bulleted or numbered list for the components/steps, each starting
-  with the term in **bold** followed by a short explanation.
-- **Bold** the 2–4 most important terms/numbers per answer.
-This is the DEFAULT for any answer with multiple parts — not an
-exception case. A single-sentence factual answer does not need this;
-a multi-part explanation (like breaking down a formula, listing causes,
-or describing a process) always benefits from this structure.
+FORMATTING FOR READABILITY (choose the form that fits the actual answer):
+- Do not use a fixed template, repeated header sequence, or bold-term list by
+    default. The subject and the learner's question must drive the structure.
+- Use headers, bullets, or numbering only when there are genuinely distinct
+    parts, enumerable steps, alternatives, or items to compare. A short answer
+    should simply read as natural prose.
+- Math often works best as flowing step-by-step explanation with the formula
+    itself carrying the visual structure; do not force one bullet per term.
+- History and narrative topics usually work best as connected paragraphs that
+    explain sequence, cause, and context; do not force a bold bullet list.
+- Definitions, comparisons, procedures, and multiple answers may use bullets,
+    numbering, or a small table when that genuinely improves scanning.
+- Vary openings and structure across subjects. Two different topics should not
+    look like the same template with different words.
+- Use **bold** sparingly for a genuinely important term or number, not as a
+    mechanical prefix on every list item.
 
 Fixed section labels (Direct Answer · Easy Explanation · Key Points ·
 Important Formula · Related PYQ · Source · Exam Tip) are for
@@ -965,6 +969,7 @@ async def _generate_home_answer(
     used_web_search: bool = False,
     web_deferred_no_web: bool = False,
     history: list[dict[str, str]] | None = None,
+    text_model: str = "qwen3",
 ) -> str:
     max_tokens = max_tokens_for_mode(mode)
     temperature = 0.45 if mode == "deep" else 0.65
@@ -985,6 +990,11 @@ async def _generate_home_answer(
             ),
         }
     )
+
+    if text_model != "qwen3":
+        from app.services.english_practice_service import _call_chat_model
+
+        return await _call_chat_model(chat_messages, text_model)
 
     try:
         async with httpx.AsyncClient() as client:
@@ -1052,6 +1062,7 @@ async def home_ai(
     parent_response_id: str | None = None,
     session_id: str | None = None,
     charge_credits: bool = True,
+    text_model: str = "qwen3",
 ) -> dict:
     timer = PerformanceTimer("home_ai")
     timer.start("validation")
@@ -1060,6 +1071,14 @@ async def home_ai(
         raise HomeAiError("Question is empty.", status_code=400)
     if mode not in ("normal", "deep"):
         raise HomeAiError("mode must be 'normal' or 'deep'.", status_code=400)
+    if text_model not in {"qwen3", "gemini", "claude"}:
+        text_model = "qwen3"
+    if text_model == "claude":
+        from app.services.plan_tier_service import require_feature_unlocked
+        try:
+            require_feature_unlocked(user_id, GatedFeature.PREMIUM_CHAT_MODEL)
+        except Exception as error:
+            raise HomeAiError(str(error), status_code=403) from error
 
     try:
         require_feature_unlocked(user_id, GatedFeature.ASK_AI)
@@ -1091,12 +1110,6 @@ async def home_ai(
         study_chip=study_chip,
     )
     cached = None if force_new else get_cached_answer(cache_key)
-    if cached is None and not force_new:
-        cached = find_semantic_cached_answer(
-            user_id=user_id, query=query, feature="home_ai"
-        )
-        if cached:
-            timer.set(semantic_cache_hit=True)
     timer.end("validation")
     # Never replay a cached answer that omitted a required visual,
     # or that stored the old fake placeholder diagram.
@@ -1225,6 +1238,7 @@ async def home_ai(
         used_web_search=used_web_search,
         web_deferred_no_web=web_deferred_no_web and not used_web_search,
         history=history,
+        text_model=text_model,
     )
     raw_answer, suggested_questions = _extract_suggested_questions(raw_answer)
     raw_answer, practice_question = _extract_practice_question(raw_answer)
@@ -1312,6 +1326,7 @@ async def home_ai_stream(
     parent_response_id: str | None = None,
     session_id: str | None = None,
     charge_credits: bool = True,
+    text_model: str = "qwen3",
 ):
     """Async generator of SSE event dicts. Does not alter home_ai() JSON path."""
     timer = PerformanceTimer("home_ai_stream")
@@ -1331,6 +1346,15 @@ async def home_ai_stream(
             "message": "mode must be 'normal' or 'deep'.",
         }
         return
+    if text_model not in {"qwen3", "gemini", "claude"}:
+        text_model = "qwen3"
+    if text_model == "claude":
+        from app.services.plan_tier_service import require_feature_unlocked
+        try:
+            require_feature_unlocked(user_id, GatedFeature.PREMIUM_CHAT_MODEL)
+        except Exception as error:
+            yield {"type": "error", "status": "FEATURE_LOCKED", "message": str(error)}
+            return
 
     try:
         require_feature_unlocked(user_id, GatedFeature.ASK_AI)
@@ -1363,10 +1387,6 @@ async def home_ai_stream(
         study_chip=study_chip,
     )
     cached = None if force_new else get_cached_answer(cache_key)
-    if cached is None and not force_new:
-        cached = find_semantic_cached_answer(
-            user_id=user_id, query=query, feature="home_ai"
-        )
     timer.end("validation")
     # Never replay a cached answer that omitted a required visual,
     # or that stored the old fake placeholder diagram.
@@ -1553,11 +1573,22 @@ async def home_ai_stream(
     parser = VisualStreamParser()
     try:
         timer.start("llm")
-        async for delta in stream_chat_completions(
-            messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        ):
+        if text_model == "qwen3":
+            model_stream = stream_chat_completions(
+                messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                model=AIConfig.AI_CHAT_MODEL,
+            )
+        else:
+            from app.services.english_practice_service import _call_chat_model
+
+            async def model_stream():
+                yield await _call_chat_model(messages, text_model)
+
+            model_stream = model_stream()
+
+        async for delta in model_stream:
             safe = parser.feed(delta)
             if safe:
                 yield {"type": "token", "text": safe}

@@ -5,6 +5,7 @@ import 'package:examspark_frontend/presentation/widgets/ai/ai_typewriter_text.da
 import 'package:examspark_frontend/presentation/widgets/home/home_ai_visual_card.dart';
 import 'package:examspark_frontend/presentation/widgets/smart_educational_content.dart';
 import 'package:examspark_frontend/core/utils/dom_selection.dart';
+
 /// Left-aligned AI reply: Answer card → Visual card → study chips.
 /// Founder Lock: Home AI Mobile UX — no diagram dump inside chat text.
 /// No Ask/Explain/Simplify bar on the answer (same-reply spam removed).
@@ -15,6 +16,7 @@ class AiAssistantMessage extends StatefulWidget {
   final VoidCallback? onRevealComplete;
   final Widget? trailing;
   final Map<String, dynamic>? visualPayload;
+
   /// Called with the selected text when the user taps "Ask AI" from the
   /// text-selection toolbar.
   final Future<void> Function(String actionId, String selectedText)? onSelectAi;
@@ -82,33 +84,28 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
     );
 
     final body = widget.animate && !_revealDone
-    ? AiTypewriterText(
-        text: widget.text,
-        style: textStyle,
-        onComplete: _onTypewriterComplete,
-      )
+        ? AiTypewriterText(
+            text: widget.text,
+            style: textStyle,
+            onComplete: _onTypewriterComplete,
+          )
         : SelectionArea(
-        onSelectionChanged: (content) {
-          final text = (content?.plainText ?? '').trim();
-          if (text.isNotEmpty && text != _pendingReply) {
-            setState(() {
-              _selectedText = text;
-              _pendingReply = text;
-            });
-          }
-        },
-        child: Text(
-          widget.text,
-          style: textStyle,
-        ),
-      );
+            onSelectionChanged: (content) {
+              final text = (content?.plainText ?? '').trim();
+              if (text.isNotEmpty && text != _pendingReply) {
+                setState(() {
+                  _selectedText = text;
+                  _pendingReply = text;
+                });
+              }
+            },
+            child: Text(widget.text, style: textStyle),
+          );
 
     final maxW = MediaQuery.sizeOf(context).width;
     // Match ChatGPT Web's optimal reading width (~768px max for text blocks)
     // while keeping comfortable margins on mobile devices.
     final cardMax = maxW < 768 ? maxW - 20 : 760.0;
-    final isLight = Theme.of(context).brightness == Brightness.light;
-
     return Align(
       alignment: Alignment.centerLeft,
       child: ConstrainedBox(
@@ -116,20 +113,11 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
-              decoration: BoxDecoration(
-                color: AppTheme.getCardBackground(context),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: isLight ? const Color(0xFFECECEC) : const Color(0xFF383838),
-                  width: 1,
-                ),
-              ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
               child: body,
-              ),
-                        if (_pendingReply != null && _pendingReply!.isNotEmpty) ...[
+            ),
+            if (_pendingReply != null && _pendingReply!.isNotEmpty) ...[
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
@@ -147,7 +135,10 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
                   icon: const Icon(Icons.reply, size: 16),
                   label: const Text('Reply'),
                   style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 8,
+                    ),
                   ),
                 ),
               ),

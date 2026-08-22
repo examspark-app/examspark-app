@@ -163,6 +163,9 @@ async def synthesize_for_user(user_id: str, text: str) -> tuple[bytes, str]:
     preference = get_voice_preference(user_id)
     provider = preference["provider"]
     language = preference.get("language", _DEFAULT_LANGUAGE)
+    speed = _user_speed(user_id)    
+    # The saved preference remains primary. Fish is included explicitly in
+    ...    
     # The saved preference remains primary. Fish is included explicitly in
     # the fallback chain; previously a Qwen preference could only fall back
     # to Gemini, so Fish was never attempted.
@@ -188,6 +191,8 @@ async def synthesize_for_user(user_id: str, text: str) -> tuple[bytes, str]:
             }[selected_provider]
             adapter_parameters = inspect.signature(adapter).parameters
             adapter_kwargs = {"voice": selected_voice}
+            if "speed" in adapter_parameters:
+                adapter_kwargs["speed"] = speed
             if selected_provider == "fish" and "language" in adapter_parameters:
                 adapter_kwargs["language"] = language
             if "user_id" in adapter_parameters:

@@ -26,6 +26,7 @@ from app.services import english_learning_memory_service as learning_memory
 from app.services.credits_service import InsufficientCreditsError, deduct_credits
 from app.services.supabase_admin import get_supabase_admin
 from app.services.openrouter_stream import OpenRouterStreamError, stream_chat_completions
+from app.services.plan_tier_service import GatedFeature, require_feature_unlocked
 from app.services.whisper_service import WhisperTranscriptionError, transcribe_audio
 
 logger = logging.getLogger(__name__)
@@ -34,8 +35,8 @@ _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 _CONTEXT_MESSAGES = 8          # last N messages sent to the model
 _MAX_SESSION_MESSAGES = 500
 _NEW_CHAT_SUGGESTION_THRESHOLD = 100
-_CREDIT_COST = 2
-_CHAT_MODELS = {"qwen3", "gemini"}
+_CREDIT_COST = 3
+_CHAT_MODELS = {"qwen3", "gemini", "claude"}
 _MCQ_MAX_GAP_MESSAGES = 20
 
 
@@ -440,8 +441,67 @@ async def _call_gemini_model(messages: list[dict]) -> str:
         raise EnglishPracticeError(f"Gemini tutor network error: {e}", 502) from e
 
 
+async def _call_claude_model(messages: list[dict]) -> str:
+    if not AIConfig.CLAUDE_API_KEY:
+        raise EnglishPracticeError("CLAUDE_API_KEY not configured on the server.", 500)
+    system = "\n\n".join(
+        message.get("content", "")
+        for message in messages
+        if message.get("role") == "system"
+    )
+    turns = [
+        {
+            "role": message.get("role"),
+            "content": message.get("content", ""),
+        }
+        for message in messages
+        if message.get("role") != "system"
+    ]
+    payload = {
+        "model": AIConfig.CLAUDE_CHAT_MODEL,
+        "system": system,
+        "messages": turns,
+        "max_tokens": 900,
+        "temperature": 0.7,
+    }
+    try:
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": AIConfig.CLAUDE_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json=payload,
+            )
+            if response.status_code != 200:
+                raise EnglishPracticeError(
+                    f"Claude tutor call failed ({response.status_code}): "
+                    f"{response.text[:400]}",
+                    502,
+                )
+            content = response.json().get("content") or []
+            text = "".join(
+                block.get("text", "")
+                for block in content
+                if isinstance(block, dict) and block.get("type") == "text"
+            ).strip()
+            if not text:
+                raise EnglishPracticeError("Claude returned an empty response.", 502)
+            return text
+    except httpx.TimeoutException as e:
+        raise EnglishPracticeError("Claude tutor call timed out.", 504) from e
+    except httpx.RequestError as e:
+        raise EnglishPracticeError(f"Claude tutor network error: {e}", 502) from e
+
+
 async def _call_chat_model(messages: list[dict], selected_model: str) -> str:
     model = selected_model if selected_model in _CHAT_MODELS else "qwen3"
+    if model == "claude":
+        reply = await _call_claude_model(messages)
+        logger.info("english_practice_chat_model_selected=claude served=claude")
+        return reply
     fallback = "gemini" if model == "qwen3" else "qwen3"
     try:
         if model == "gemini":
@@ -477,7 +537,13 @@ async def _call_chat_model(messages: list[dict], selected_model: str) -> str:
             raise primary_error
 
 
-async def _stream_model(messages: list[dict]) -> AsyncIterator[str]:
+async def _stream_model(
+    messages: list[dict], selected_model: str = "qwen3"
+) -> AsyncIterator[str]:
+    model = selected_model if selected_model in _CHAT_MODELS else "qwen3"
+    if model in {"gemini", "claude"}:
+        yield await _call_chat_model(messages, model)
+        return
     temperature = _temperature_for_messages(len(messages))
     max_tokens = _max_tokens_for_messages(len(messages))
     try:
@@ -485,6 +551,7 @@ async def _stream_model(messages: list[dict]) -> AsyncIterator[str]:
             messages,
             temperature=temperature,
             max_tokens=max_tokens,
+            model=AIConfig.AI_CHAT_MODEL,
             timeout=90.0,
         ):
             yield delta
@@ -622,6 +689,9 @@ def restore_session(session_id: str, user_id: str) -> dict | None:
     session = _session_row(session_id, user_id)
     if not session:
         return None
+    get_supabase_admin().table("english_practice_sessions").update(
+        {"updated_at": _now()}
+    ).eq("id", session_id).eq("user_id", user_id).execute()
     messages = (
         get_supabase_admin()
         .table("english_practice_messages")
@@ -782,6 +852,8 @@ async def start_session(user_id: str, model: str = "qwen3") -> dict:
     db = get_supabase_admin()
     native = get_native_language(user_id) or "English"
     target = get_target_language(user_id) or "English"
+    if model == "claude":
+        require_feature_unlocked(user_id, GatedFeature.PREMIUM_CHAT_MODEL)
     if not native or native.strip() == "":
         native = "English"
     session = (
@@ -849,6 +921,11 @@ async def send_message(
     native = session.get("native_language") or get_native_language(user_id) or "English"
     target = session.get("target_language") or "English"
     model = session.get("text_model") or "qwen3"
+    if model == "claude":
+        try:
+            require_feature_unlocked(user_id, GatedFeature.PREMIUM_CHAT_MODEL)
+        except Exception as error:
+            raise EnglishPracticeError(str(error), 403) from error
     existing_count = _message_count_incremental(session_id, user_id)
     last_mcq_count = int(session.get("last_mcq_message_count") or 0)
     force_mcq = existing_count >= last_mcq_count + _MCQ_MAX_GAP_MESSAGES - 2

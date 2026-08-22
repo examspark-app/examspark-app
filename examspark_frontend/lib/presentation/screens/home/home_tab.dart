@@ -38,7 +38,9 @@ import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-typedef OpenWorkspace = void Function(String lectureId, String title, String? subject);
+
+typedef OpenWorkspace =
+    void Function(String lectureId, String title, String? subject);
 
 /// Home = Chat Screen. Home AI Study Coach (retrieval rules + 5 credits).
 /// When [openLectureId] is set (desktop Study Workspace open), Priority 1 RAG
@@ -47,8 +49,10 @@ class HomeTab extends StatefulWidget {
   final OpenWorkspace onOpenWorkspace;
   final ValueChanged<int> onGoToTab;
   final VoidCallback? onOpenDrawer;
+
   /// When Home becomes visible again (IndexedStack), reload recent history.
   final bool isActive;
+
   /// Open Study Workspace lecture — passed to Home AI as Priority 1 RAG.
   final String? openLectureId;
 
@@ -69,32 +73,44 @@ class _ChatBubble {
   final String id;
   final String text;
   final bool isUser;
+
   /// Show study-action chips under this AI reply (success answers only).
   final bool showStudyActions;
+
   /// Server trust line, e.g. "Source: Notes · Confidence: High".
   final String? trustLine;
+
   /// Typewriter reveal for AI success answers (off for errors / after stick).
   bool animateReveal;
+
   /// Once true, scroll rebuilds must not re-run typing animation.
   bool revealComplete;
   final Map<String, dynamic>? visualPayload;
+
   /// Phase 4C master response id (null until SQL migration / persist).
   final String? responseId;
+
   /// tool_type → Ready / Loading / Generated
   Map<String, HomeChipUiState> toolStates;
   String? activeToolType;
+
   /// Server-recommended tool types for this Knowledge Object.
   List<String> recommendedTools;
+
   /// Failed AI turn — show Retry instead of study chips.
   final bool isError;
+
   /// Text query to resend (Retry).
   final String? retryQuery;
+
   /// AI-suggested follow-up questions (sequential reveal chips).
   final List<String> suggestedQuestions;
   final String? practiceQuestion;
+
   /// In-memory photo for this session's user bubble (not persisted to disk).
   final Uint8List? imageBytes;
   final String? imageFilename;
+
   /// Vision retry payload (session memory only).
   final Uint8List? retryVisionBytes;
   final String? retryVisionFilename;
@@ -115,15 +131,15 @@ class _ChatBubble {
     this.retryQuery,
     List<String>? suggestedQuestions,
     this.practiceQuestion,
-    this.imageBytes, 
+    this.imageBytes,
     this.imageFilename,
     this.retryVisionBytes,
     this.retryVisionFilename,
-  })  : id = id ?? UniqueKey().toString(),
-        toolStates = toolStates ?? {},
-        recommendedTools = recommendedTools ?? [],
-        suggestedQuestions = suggestedQuestions ?? const [],
-        activeToolType = null;
+  }) : id = id ?? UniqueKey().toString(),
+       toolStates = toolStates ?? {},
+       recommendedTools = recommendedTools ?? [],
+       suggestedQuestions = suggestedQuestions ?? const [],
+       activeToolType = null;
 }
 
 class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
@@ -141,17 +157,22 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   bool _isRefreshing = false;
   bool _isSending = false;
+
   /// Locked after first successful turn (HINDI/BENGALI/ENGLISH/HINGLISH).
   String? _conversationLanguage;
+  String _visionModel = 'qwen-vl';
+  String _textModel = 'qwen3';
+
   /// Phase 4D — active Study Session (Supabase).
   String? _homeAiSessionId;
+
   /// Live SSE tokens while waiting (null = still thinking).
   String? _liveStreamText;
   String? _replyQuote;
   Uint8List? _pendingAttachmentBytes;
   String? _pendingAttachmentName;
   Timer? _persistDebounce;
-  
+
   bool _restoredDisk = false;
   bool _notificationsSheetOpen = false;
   bool _showQuote = false;
@@ -211,11 +232,6 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       _messages.addAll(_sessionMessages!);
       _conversationLanguage = _sessionLanguage;
       _homeAiSessionId = _sessionHomeAiId;
-    }
-    if (_sessionMessages != null && _sessionMessages!.isNotEmpty) {
-      _messages.addAll(_sessionMessages!);
-      _conversationLanguage = _sessionLanguage;
-      _homeAiSessionId = _sessionHomeAiId;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _scrollToBottom(instant: true);
       });
@@ -236,7 +252,8 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       if (mounted) setState(() => _showQuote = true);
     });
   }
-Future<void> _fetchDailyQuote() async {
+
+  Future<void> _fetchDailyQuote() async {
     if (!AppConfig.isApiConfigured) return;
     try {
       final res = await http.get(
@@ -250,6 +267,7 @@ Future<void> _fetchDailyQuote() async {
       }
     } catch (_) {}
   }
+
   void _onInboxChanged() {
     if (mounted) setState(() {});
   }
@@ -266,8 +284,7 @@ Future<void> _fetchDailyQuote() async {
   Future<void> _restoreChatFromDisk() async {
     if (_restoredDisk) return;
     _restoredDisk = true;
-    final storedSession =
-        await UiSessionStore.instance.loadHomeSessionId();
+    final storedSession = await UiSessionStore.instance.loadHomeSessionId();
     if (storedSession != null && storedSession.isNotEmpty) {
       _homeAiSessionId = storedSession;
       _sessionHomeAiId = storedSession;
@@ -324,7 +341,10 @@ Future<void> _fetchDailyQuote() async {
     _sessionMessages = List<_ChatBubble>.from(_messages);
     _sessionLanguage = _conversationLanguage;
     _persistDebounce?.cancel();
-    _persistDebounce = Timer(const Duration(milliseconds: 400), _persistChatNow);
+    _persistDebounce = Timer(
+      const Duration(milliseconds: 400),
+      _persistChatNow,
+    );
   }
 
   Future<void> _persistChatNow() async {
@@ -333,8 +353,8 @@ Future<void> _fetchDailyQuote() async {
     _sessionHomeAiId = _homeAiSessionId;
     const maxKeep = 30;
     final trimmedMessages = _messages.length > maxKeep
-    ? _messages.sublist(_messages.length - maxKeep)
-    : _messages;
+        ? _messages.sublist(_messages.length - maxKeep)
+        : _messages;
     final rows = trimmedMessages.map((m) {
       return <String, dynamic>{
         'id': m.id,
@@ -355,40 +375,36 @@ Future<void> _fetchDailyQuote() async {
   }
 
   void _onHomeAskBridge() {
-  final pendingSelection =
-      HomeAskBridge.instance.takePendingSelection();
+    final pendingSelection = HomeAskBridge.instance.takePendingSelection();
 
-  final pendingQuestion =
-      HomeAskBridge.instance.takePendingQuestion();
+    final pendingQuestion = HomeAskBridge.instance.takePendingQuestion();
 
-  if (!mounted) return;
+    if (!mounted) return;
 
-  if (pendingSelection != null &&
-      pendingSelection.trim().isNotEmpty) {
-    setState(() {
-      _replySelection = pendingSelection.trim();
-    });
+    if (pendingSelection != null && pendingSelection.trim().isNotEmpty) {
+      setState(() {
+        _replySelection = pendingSelection.trim();
+      });
 
-    return;
+      return;
+    }
+
+    if (pendingQuestion != null && pendingQuestion.trim().isNotEmpty) {
+      _handleSend(pendingQuestion);
+    }
   }
-
-  if (pendingQuestion != null &&
-      pendingQuestion.trim().isNotEmpty) {
-    _handleSend(pendingQuestion);
-  }
-}
 
   /// Select text → Ask AI → next Home chat question + reply (no sheet).
   Future<void> _onHomeSelectAi(String actionId, String selectedText) async {
-  final selected = selectedText.trim();
-  if (selected.isEmpty) return;
+    final selected = selectedText.trim();
+    if (selected.isEmpty) return;
 
-  if (!mounted) return;
+    if (!mounted) return;
 
-  setState(() {
-    _replySelection = selected;
-  });
-}
+    setState(() {
+      _replySelection = selected;
+    });
+  }
 
   @override
   void dispose() {
@@ -412,7 +428,8 @@ Future<void> _fetchDailyQuote() async {
       SessionLiveSync.instance.refreshAll();
     }
   }
-void _onHomeSessionBridge() {
+
+  void _onHomeSessionBridge() {
     if (!mounted) return;
     if (HomeSessionBridge.instance.takePendingNewChat()) {
       _startNewChat();
@@ -422,6 +439,7 @@ void _onHomeSessionBridge() {
       _restoreStudySession(id);
     }
   }
+
   void _onSessionLive() {
     if (!mounted) return;
     _applySessionLive();
@@ -466,8 +484,8 @@ void _onHomeSessionBridge() {
       if (!mounted) return;
       var preferredLang = 'English';
       try {
-        final bundle =
-            await SupabaseClient.instance.fetchStudentOnboardingBundle(user.id);
+        final bundle = await SupabaseClient.instance
+            .fetchStudentOnboardingBundle(user.id);
         final sp = bundle['student_profiles'];
         if (sp is Map && sp['preferred_language'] is String) {
           final raw = (sp['preferred_language'] as String).trim();
@@ -492,9 +510,7 @@ void _onHomeSessionBridge() {
 
   String? _lastAiResponseId() {
     for (final msg in _messages.reversed) {
-      if (!msg.isUser &&
-          msg.responseId != null &&
-          msg.responseId!.isNotEmpty) {
+      if (!msg.isUser && msg.responseId != null && msg.responseId!.isNotEmpty) {
         return msg.responseId;
       }
     }
@@ -519,7 +535,7 @@ void _onHomeSessionBridge() {
         q.contains('in detail');
   }
 
-    Future<void> _handleSend(
+  Future<void> _handleSend(
     String text, {
     String? studyChip,
     bool isRetry = false,
@@ -533,7 +549,8 @@ void _onHomeSessionBridge() {
         replyContext != null &&
         replyContext.isNotEmpty &&
         rawText.isNotEmpty) {
-      query = '''
+      query =
+          '''
 The user selected this text from the previous AI response:
 
 "$replyContext"
@@ -563,9 +580,7 @@ $rawText
 
     final parentId = replyContext != null && replyContext.isNotEmpty
         ? _lastAiResponseId()
-        : (_looksLikeFollowUp(query)
-            ? _lastAiResponseId()
-            : null);
+        : (_looksLikeFollowUp(query) ? _lastAiResponseId() : null);
 
     setState(() {
       _isSending = true;
@@ -575,12 +590,7 @@ $rawText
       if (isRetry) {
         _removeTrailingErrorBubbles();
       } else {
-        _messages.add(
-          _ChatBubble(
-            rawText,
-            true,
-          ),
-        );
+        _messages.add(_ChatBubble(rawText, true));
       }
     });
 
@@ -591,10 +601,7 @@ $rawText
           content: const Text(
             'This chat is getting long. Starting a New Chat keeps things fast.',
           ),
-          action: SnackBarAction(
-            label: 'New Chat',
-            onPressed: _startNewChat,
-          ),
+          action: SnackBarAction(label: 'New Chat', onPressed: _startNewChat),
           duration: const Duration(seconds: 6),
         ),
       );
@@ -623,10 +630,7 @@ $rawText
       } catch (e) {
         if (!mounted) return;
 
-        _addHomeAiErrorBubble(
-          e,
-          retryQuery: query,
-        );
+        _addHomeAiErrorBubble(e, retryQuery: query);
       }
     }
   }
@@ -694,6 +698,7 @@ $rawText
       studyChip: studyChip,
       parentResponseId: parentResponseId,
       sessionId: _homeAiSessionId,
+      textModel: _textModel,
       onToken: (delta) {
         if (!mounted) return;
         setState(() {
@@ -718,6 +723,7 @@ $rawText
       studyChip: studyChip,
       parentResponseId: parentResponseId,
       sessionId: _homeAiSessionId,
+      textModel: _textModel,
     );
     if (!mounted) return;
     _applyHomeAiSuccess(result, animateReveal: true);
@@ -745,8 +751,8 @@ $rawText
       final errRaw = hasAnswer
           ? answer
           : (result['error']?.toString() ??
-              result['message']?.toString() ??
-              'Home AI could not answer. Please try again.');
+                result['message']?.toString() ??
+                'Home AI could not answer. Please try again.');
       String? lastUser;
       Uint8List? visionBytes;
       String? visionName;
@@ -760,20 +766,22 @@ $rawText
       }
       _addHomeAiErrorBubble(
         errRaw,
-        retryQuery: (visionBytes == null || visionBytes.isEmpty) ? lastUser : null,
+        retryQuery: (visionBytes == null || visionBytes.isEmpty)
+            ? lastUser
+            : null,
         retryVisionBytes: visionBytes,
         retryVisionFilename: visionName,
       );
       return;
     }
 
-    final suggestedQuestions = (result['suggested_questions'] as List?)
+    final suggestedQuestions =
+        (result['suggested_questions'] as List?)
             ?.map((e) => e.toString())
             .where((q) => q.trim().isNotEmpty)
             .toList() ??
         const <String>[];
-        final practiceQuestion =
-        (result['practice_question'] as String?)?.trim();
+    final practiceQuestion = (result['practice_question'] as String?)?.trim();
 
     setState(() {
       if (convLang != null && convLang.isNotEmpty) {
@@ -783,23 +791,25 @@ $rawText
         _homeAiSessionId = sessionId;
         _sessionHomeAiId = sessionId;
       }
-      _messages.add(_ChatBubble(
-        answer,
-        false,
-        showStudyActions: true,
-        trustLine: trust,
-        suggestedQuestions: suggestedQuestions,
-        practiceQuestion: (practiceQuestion?.isNotEmpty ?? false)
-            ? practiceQuestion
-            : null,
-        // Stream path already showed tokens live — never re-animate on scroll.
-        animateReveal: animateReveal,
-        revealComplete: !animateReveal,
-        visualPayload: result['visual_payload'] is Map
-            ? Map<String, dynamic>.from(result['visual_payload'] as Map)
-            : null,
-        responseId: responseId,
-      ));
+      _messages.add(
+        _ChatBubble(
+          answer,
+          false,
+          showStudyActions: true,
+          trustLine: trust,
+          suggestedQuestions: suggestedQuestions,
+          practiceQuestion: (practiceQuestion?.isNotEmpty ?? false)
+              ? practiceQuestion
+              : null,
+          // Stream path already showed tokens live — never re-animate on scroll.
+          animateReveal: animateReveal,
+          revealComplete: !animateReveal,
+          visualPayload: result['visual_payload'] is Map
+              ? Map<String, dynamic>.from(result['visual_payload'] as Map)
+              : null,
+          responseId: responseId,
+        ),
+      );
       if (newBalance is int) {
         _creditsBalance = newBalance;
       }
@@ -815,12 +825,10 @@ $rawText
 
   Future<void> _hydrateToolStates(String responseId) async {
     try {
-      final data =
-          await LectureService.instance.homeAiToolStatuses(responseId);
+      final data = await LectureService.instance.homeAiToolStatuses(responseId);
       final tools = data['tools'];
-      final recommended = (data['recommended'] as List?)
-              ?.map((e) => e.toString())
-              .toList() ??
+      final recommended =
+          (data['recommended'] as List?)?.map((e) => e.toString()).toList() ??
           const <String>[];
       if (!mounted) return;
       setState(() {
@@ -868,9 +876,7 @@ $rawText
     Navigator.pushNamed(
       context,
       '/recorder',
-      arguments: {
-        if (_isTeacher) 'teacherRecordOnly': true,
-      },
+      arguments: {if (_isTeacher) 'teacherRecordOnly': true},
     );
   }
 
@@ -925,7 +931,8 @@ $rawText
   Future<void> _pickHomeVisionImage({required bool fromCamera}) async {
     if (!AppConfig.isApiConfigured) {
       if (!mounted) return;
-      AppToast.showSnackBar(context, 
+      AppToast.showSnackBar(
+        context,
         const SnackBar(content: Text('API not configured — see API_SETUP.md')),
       );
       return;
@@ -935,16 +942,20 @@ $rawText
       feature: GatedFeature.diagramAnalysis,
     )) {
       if (!mounted) return;
-      AppToast.showSnackBar(context, 
+      AppToast.showSnackBar(
+        context,
         SnackBar(
-          content: Text(PlanTierGating.lockMessage(GatedFeature.diagramAnalysis)),
+          content: Text(
+            PlanTierGating.lockMessage(GatedFeature.diagramAnalysis),
+          ),
         ),
       );
       return;
     }
     if (_creditsBalance < CreditCosts.homeAiVision) {
       if (!mounted) return;
-      AppToast.showSnackBar(context, 
+      AppToast.showSnackBar(
+        context,
         SnackBar(
           content: Text(
             'Need ${CreditCosts.homeAiVision} credits for Photo / Image Ask.',
@@ -956,6 +967,8 @@ $rawText
     if (_isSending) return;
 
     try {
+      await _chooseVisionModel();
+      if (!mounted) return;
       Uint8List? bytes;
       var filename = fromCamera ? 'camera.jpg' : 'photo.jpg';
 
@@ -999,14 +1012,16 @@ $rawText
 
       if (bytes == null || bytes.isEmpty) {
         if (!mounted) return;
-        AppToast.showSnackBar(context, 
+        AppToast.showSnackBar(
+          context,
           const SnackBar(content: Text('Could not read image. Try again.')),
         );
         return;
       }
       if (bytes.length > 8 * 1024 * 1024) {
         if (!mounted) return;
-        AppToast.showSnackBar(context, 
+        AppToast.showSnackBar(
+          context,
           const SnackBar(content: Text('Image too large (max 8 MB).')),
         );
         return;
@@ -1018,7 +1033,8 @@ $rawText
       });
     } catch (e) {
       if (!mounted) return;
-      AppToast.showSnackBar(context, 
+      AppToast.showSnackBar(
+        context,
         SnackBar(
           content: Text(
             fromCamera
@@ -1029,12 +1045,14 @@ $rawText
       );
     }
   }
-void _removePendingAttachment() {
+
+  void _removePendingAttachment() {
     setState(() {
       _pendingAttachmentBytes = null;
       _pendingAttachmentName = null;
     });
   }
+
   Future<void> _sendHomeVision(
     Uint8List bytes,
     String filename, {
@@ -1051,12 +1069,7 @@ void _removePendingAttachment() {
         _removeTrailingErrorBubbles();
       } else {
         _messages.add(
-          _ChatBubble(
-            label,
-            true,
-            imageBytes: bytes,
-            imageFilename: filename,
-          ),
+          _ChatBubble(label, true, imageBytes: bytes, imageFilename: filename),
         );
       }
     });
@@ -1068,6 +1081,7 @@ void _removePendingAttachment() {
         imageBytes: bytes,
         filename: filename,
         sessionId: _homeAiSessionId,
+        visionModel: _visionModel,
       );
       if (!mounted) return;
       _applyHomeAiSuccess(result, animateReveal: true);
@@ -1079,6 +1093,39 @@ void _removePendingAttachment() {
         retryVisionFilename: filename,
       );
     }
+  }
+
+  Future<void> _chooseVisionModel() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ListTile(
+              title: Text('Vision model'),
+              subtitle: Text('Choose how Home image questions are solved.'),
+            ),
+            RadioListTile<String>(
+              value: 'qwen-vl',
+              groupValue: _visionModel,
+              title: const Text('Qwen-VL'),
+              subtitle: const Text('Default vision model'),
+              onChanged: (value) => Navigator.pop(sheetContext, value),
+            ),
+            RadioListTile<String>(
+              value: 'gemini',
+              groupValue: _visionModel,
+              title: const Text('Gemini'),
+              subtitle: const Text('Gemini 2.5 Flash vision'),
+              onChanged: (value) => Navigator.pop(sheetContext, value),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || selected == null) return;
+    setState(() => _visionModel = selected);
   }
 
   void _showAudioLockedSheet() {
@@ -1101,9 +1148,9 @@ void _removePendingAttachment() {
               const SizedBox(height: 12),
               Text(
                 'Audio locked',
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 8),
               Text(
@@ -1137,16 +1184,14 @@ void _removePendingAttachment() {
 
   void _handleYoutube() {
     Posthog().capture(eventName: 'home_ai_youtube_tapped');
-    showYoutubeLinkDialog(
-      context,
-      onSubmit: (url) => _startYoutubeNotes(url),
-    );
+    showYoutubeLinkDialog(context, onSubmit: (url) => _startYoutubeNotes(url));
   }
 
   Future<void> _startYoutubeNotes(String url) async {
     if (!AppConfig.isApiConfigured) {
       if (!mounted) return;
-      AppToast.showSnackBar(context, 
+      AppToast.showSnackBar(
+        context,
         const SnackBar(content: Text('API not configured — see API_SETUP.md')),
       );
       return;
@@ -1157,8 +1202,11 @@ void _removePendingAttachment() {
       feature: GatedFeature.youtubeLink,
     )) {
       if (!mounted) return;
-      AppToast.showSnackBar(context, 
-        SnackBar(content: Text(PlanTierGating.lockMessage(GatedFeature.youtubeLink))),
+      AppToast.showSnackBar(
+        context,
+        SnackBar(
+          content: Text(PlanTierGating.lockMessage(GatedFeature.youtubeLink)),
+        ),
       );
       return;
     }
@@ -1166,7 +1214,8 @@ void _removePendingAttachment() {
     // Soft check: min YouTube band. Server charges 10/20/40 after duration.
     if (_creditsBalance < CreditCosts.youtubeUpTo30Min) {
       if (!mounted) return;
-      AppToast.showSnackBar(context, 
+      AppToast.showSnackBar(
+        context,
         SnackBar(
           content: Text(
             'Need at least ${CreditCosts.youtubeUpTo30Min} credits for YouTube Notes '
@@ -1204,7 +1253,8 @@ void _removePendingAttachment() {
       if (lectureId != null) {
         await LectureService.instance.markErrorUnlessDone(lectureId, msg);
       } else if (mounted) {
-        AppToast.showSnackBar(context, 
+        AppToast.showSnackBar(
+          context,
           SnackBar(content: Text(lectureUserMessage(e))),
         );
       }
@@ -1261,14 +1311,15 @@ void _removePendingAttachment() {
     });
     _scrollToBottom(instant: true);
 
-    
     try {
-      final data =
-          await LectureService.instance.homeAiRestoreSession(sessionId);
+      final data = await LectureService.instance.homeAiRestoreSession(
+        sessionId,
+      );
       if (!mounted) return;
       final msgs = data['messages'];
       if (msgs is! List) {
-        AppToast.showSnackBar(context, 
+        AppToast.showSnackBar(
+          context,
           const SnackBar(content: Text('Session has no messages.')),
         );
         return;
@@ -1316,8 +1367,7 @@ void _removePendingAttachment() {
             text,
             false,
             id: m['id']?.toString(),
-            showStudyActions:
-                responseId != null && responseId.isNotEmpty,
+            showStudyActions: responseId != null && responseId.isNotEmpty,
             trustLine: trust,
             animateReveal: false,
             revealComplete: true,
@@ -1348,14 +1398,16 @@ void _removePendingAttachment() {
       await _persistChatNow();
       _scrollToBottom(instant: true);
       if (!mounted) return;
-      AppToast.showSnackBar(context, 
+      AppToast.showSnackBar(
+        context,
         const SnackBar(
           content: Text('Session restored · 0 credits · no AI call'),
         ),
       );
     } catch (e) {
       if (!mounted) return;
-      AppToast.showSnackBar(context, 
+      AppToast.showSnackBar(
+        context,
         SnackBar(
           content: Text(
             e.toString().replaceFirst(RegExp(r'^Exception:\s*'), ''),
@@ -1379,9 +1431,9 @@ void _removePendingAttachment() {
         onSearchTap: Responsive.isMobile(context)
             ? null
             : () => showAppSearchOverlay(
-                  context,
-                  onOpenLecture: widget.onOpenWorkspace,
-                ),
+                context,
+                onOpenLecture: widget.onOpenWorkspace,
+              ),
         onNewChatTap: _startNewChat,
         onNotificationTap: _openNotifications,
         notificationUnreadCount:
@@ -1397,7 +1449,7 @@ void _removePendingAttachment() {
                   : _buildConversation(context),
             ),
           ),
-                    BottomInputBar(
+          BottomInputBar(
             onSend: _handleSend,
             onAttach: _handleAttach,
             onRecord: _handleRecord,
@@ -1408,6 +1460,8 @@ void _removePendingAttachment() {
             attachmentName: _pendingAttachmentName,
             attachmentIsImage: true,
             onRemoveAttachment: _removePendingAttachment,
+            selectedModel: _textModel,
+            onModelChanged: _changeTextModel,
             replyText: _replySelection,
             onClearReply: () {
               if (!mounted) return;
@@ -1419,6 +1473,11 @@ void _removePendingAttachment() {
         ],
       ),
     );
+  }
+
+  void _changeTextModel(String model) {
+    if (_isSending || !mounted) return;
+    setState(() => _textModel = model);
   }
 
   Widget _buildWelcome(BuildContext context) {
@@ -1433,9 +1492,9 @@ void _removePendingAttachment() {
           Text(
             'Got a doubt? Ask away. 🧠',
             style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w700,
-                ),
+              fontSize: 19,
+              fontWeight: FontWeight.w700,
+            ),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
@@ -1446,11 +1505,12 @@ void _removePendingAttachment() {
                     key: const ValueKey('quote'),
                     padding: const EdgeInsets.symmetric(horizontal: 12),
                     child: Text(
-                      _dailyQuote ?? 'Keep going — you\'re closer than you think.',
+                      _dailyQuote ??
+                          'Keep going — you\'re closer than you think.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            fontStyle: FontStyle.italic,
-                            color: AppTheme.getSecondaryText(context),
-                          ),
+                        fontStyle: FontStyle.italic,
+                        color: AppTheme.getSecondaryText(context),
+                      ),
                       textAlign: TextAlign.center,
                     ),
                   )
@@ -1462,7 +1522,6 @@ void _removePendingAttachment() {
                   ),
           ),
           const SizedBox(height: 28),
-          
         ],
       ),
     );
@@ -1475,8 +1534,8 @@ void _removePendingAttachment() {
     final timeGreeting = hour < 12
         ? 'Good morning'
         : hour < 17
-            ? 'Good afternoon'
-            : 'Good evening';
+        ? 'Good afternoon'
+        : 'Good evening';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -1507,9 +1566,9 @@ void _removePendingAttachment() {
                 Text(
                   '$timeGreeting, $name 👋',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w700,
-                      ),
+                    fontSize: 17,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 2),
                 Text(
@@ -1537,7 +1596,19 @@ void _removePendingAttachment() {
 
   /// Prefer topic-related chips; keep a stable Home set (no lecture required).
   List<String> _studyActionsFor(_ChatBubble bubble) {
-    // Same set for every Home reply — actions always run against THIS reply's topic.
+    final query = (_questionBefore(bubble) ?? '').toLowerCase();
+    if (query.contains('quiz') || query.contains('question')) {
+      return ['Learn More', 'Quiz', 'Important Questions', 'Revision Sheet'];
+    }
+    if (query.contains('formula') || query.contains('equation') || query.contains('calculate')) {
+      return ['Learn More', 'Cheat Sheet', 'Flashcards', 'Quiz'];
+    }
+    if (query.contains('compare') || query.contains('difference') || query.contains('vs')) {
+      return ['Learn More', 'Revision Sheet', 'Flashcards', 'Quiz'];
+    }
+    if (query.contains('remember') || query.contains('memorize')) {
+      return ['Learn More', 'Flashcards', 'Mind Map', 'Revision Sheet'];
+    }
     return _defaultStudyActions;
   }
 
@@ -1572,7 +1643,9 @@ void _removePendingAttachment() {
     final topic = (question != null && question.trim().isNotEmpty)
         ? question.trim()
         : 'the topic in your previous answer';
-    final clip = answer.length > 1200 ? '${answer.substring(0, 1200)}…' : answer;
+    final clip = answer.length > 1200
+        ? '${answer.substring(0, 1200)}…'
+        : answer;
 
     switch (label) {
       case 'Learn More':
@@ -1680,8 +1753,8 @@ void _removePendingAttachment() {
         studyChip: label == 'Mind Map'
             ? 'mind_map'
             : label == 'Important Questions'
-                ? 'important_questions'
-                : null,
+            ? 'important_questions'
+            : null,
         onCreditsUpdated: (balance) {
           if (!mounted) return;
           setState(() => _creditsBalance = balance);
@@ -1690,9 +1763,7 @@ void _removePendingAttachment() {
     } catch (e) {
       if (!mounted) return;
       final msg = e.toString().replaceFirst('Exception: ', '');
-      AppToast.showSnackBar(context, 
-        SnackBar(content: Text(msg)),
-      );
+      AppToast.showSnackBar(context, SnackBar(content: Text(msg)));
     }
   }
 
@@ -1707,10 +1778,7 @@ void _removePendingAttachment() {
           if (_liveStreamText != null && _liveStreamText!.isNotEmpty) {
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
-              child: AiAssistantMessage(
-                text: _liveStreamText!,
-                animate: false,
-              ),
+              child: AiAssistantMessage(text: _liveStreamText!, animate: false),
             );
           }
           return const Padding(
@@ -1734,28 +1802,34 @@ void _removePendingAttachment() {
                       children: [
                         if (bubble.imageBytes != null &&
                             bubble.imageBytes!.isNotEmpty) ...[
-                          Container(
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(18),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withValues(alpha: 0.12),
-                                  blurRadius: 14,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
+                          GestureDetector(
+                            onTap: () => _showAttachedImage(
+                              bubble.imageBytes!,
+                              bubble.imageFilename,
                             ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(18),
-                              child: ConstrainedBox(
-                                constraints: const BoxConstraints(
-                                  maxWidth: 260,
-                                  maxHeight: 220,
-                                ),
-                                child: Image.memory(
-                                  bubble.imageBytes!,
-                                  fit: BoxFit.cover,
-                                  gaplessPlayback: true,
+                            child: Container(
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(18),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withValues(alpha: 0.12),
+                                    blurRadius: 14,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(18),
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(
+                                    maxWidth: 260,
+                                    maxHeight: 220,
+                                  ),
+                                  child: Image.memory(
+                                    bubble.imageBytes!,
+                                    fit: BoxFit.cover,
+                                    gaplessPlayback: true,
+                                  ),
                                 ),
                               ),
                             ),
@@ -1763,264 +1837,331 @@ void _removePendingAttachment() {
                           const SizedBox(height: 8),
                         ],
                         _CollapsibleUserText(
-                         text: bubble.text,
-                         textColor: _userBubbleTextColor(context),
-                        bubbleColor: _userBubbleColor(context),
-                       ),
+                          text: bubble.text,
+                          textColor: _userBubbleTextColor(context),
+                          bubbleColor: _userBubbleColor(context),
+                        ),
                       ],
                     ),
                   ),
                 )
               : bubble.isError
-                  ? _buildHomeAiErrorBubble(context, bubble)
-                  : AiAssistantMessage(
-                      key: ValueKey('ai-${bubble.id}'),
-                      text: bubble.text,
-                      trustLine: bubble.trustLine,
-                      onSelectAi: _onHomeSelectAi,
-                      animate: bubble.animateReveal && !bubble.revealComplete,
-                      visualPayload: bubble.visualPayload,
-                      onRevealComplete: () {
-                        if (!mounted) return;
-                        setState(() {
-                          bubble.revealComplete = true;
-                          bubble.animateReveal = false;
-                        });
-                        _scrollToBottom();
-                      },
-                      trailing: (bubble.showStudyActions ||
-                              bubble.suggestedQuestions.isNotEmpty)
-                          ? Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                if (bubble.showStudyActions)
-                                  (bubble.responseId != null &&
-                                          bubble.responseId!.isNotEmpty
-                                      ? HomeStudyChipBar(
-                                          toolStates: bubble.toolStates,
-                                          activeToolType: bubble.activeToolType,
-                                          recommended: bubble.recommendedTools,
-                                          onTap: (chip) =>
-                                              _onPhase4cChip(chip, bubble),
-                                        )
-                                      : Wrap(
-                                          spacing: 6,
-                                          runSpacing: 6,
-                                          children: [
-                                            for (final label
-                                                in _studyActionsFor(bubble))
-                                              ActionChip(
-                                                label: Text(
-                                                  label,
-                                                  style: const TextStyle(
-                                                      fontSize: 12),
-                                                ),
-                                                onPressed: () {
-                                                  _onStudyAction(label, bubble);
-                                                },
-                                                visualDensity:
-                                                    VisualDensity.compact,
+              ? _buildHomeAiErrorBubble(context, bubble)
+              : AiAssistantMessage(
+                  key: ValueKey('ai-${bubble.id}'),
+                  text: bubble.text,
+                  trustLine: bubble.trustLine,
+                  onSelectAi: _onHomeSelectAi,
+                  animate: bubble.animateReveal && !bubble.revealComplete,
+                  visualPayload: bubble.visualPayload,
+                  onRevealComplete: () {
+                    if (!mounted) return;
+                    setState(() {
+                      bubble.revealComplete = true;
+                      bubble.animateReveal = false;
+                    });
+                    _scrollToBottom();
+                  },
+                  trailing:
+                      (bubble.showStudyActions ||
+                          bubble.suggestedQuestions.isNotEmpty)
+                      ? Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            if (bubble.showStudyActions)
+                              (bubble.responseId != null &&
+                                      bubble.responseId!.isNotEmpty
+                                  ? HomeStudyChipBar(
+                                      toolStates: bubble.toolStates,
+                                      activeToolType: bubble.activeToolType,
+                                      recommended: bubble.recommendedTools,
+                                      onTap: (chip) =>
+                                          _onPhase4cChip(chip, bubble),
+                                    )
+                                  : Wrap(
+                                      spacing: 6,
+                                      runSpacing: 6,
+                                      children: [
+                                        for (final label in _studyActionsFor(
+                                          bubble,
+                                        ))
+                                          ActionChip(
+                                            label: Text(
+                                              label,
+                                              style: const TextStyle(
+                                                fontSize: 12,
                                               ),
-                                          ],
-                                        )),
-                                // Pehle add kiya tha (Column ke andar):
-                                if (bubble.suggestedQuestions.isNotEmpty) ...[
-                                  const SizedBox(height: 10),
-                                  _SuggestedQuestionsRow(
-                                    questions: bubble.suggestedQuestions,
-                                    onTap: (q) => _handleSend(q),
-                                  ),
-                                ],
+                                            ),
+                                            onPressed: () {
+                                              _onStudyAction(label, bubble);
+                                            },
+                                            visualDensity:
+                                                VisualDensity.compact,
+                                          ),
+                                      ],
+                                    )),
+                            // Pehle add kiya tha (Column ke andar):
+                            if (bubble.suggestedQuestions.isNotEmpty) ...[
+                              const SizedBox(height: 10),
+                              _SuggestedQuestionsRow(
+                                questions: bubble.suggestedQuestions,
+                                onTap: (q) => _handleSend(q),
+                              ),
+                            ],
 
-// Iske turant baad, usi Column ke andar add karo:
-                                if (bubble.practiceQuestion != null) ...[
-                                  const SizedBox(height: 10),
-                                  _PracticeQuestionBox(
-                                    question: bubble.practiceQuestion!,
-                                    onSubmit: (studentAnswer) {
-                                      final wrapped =
-                                          'PRACTICE ANSWER CHECK — you asked '
-                                          'this practice question: "${bubble.practiceQuestion}" '
-                                          '(based on your explanation: '
-                                          '"${bubble.text.length > 600 ? bubble.text.substring(0, 600) : bubble.text}"). '
-                                          'The student answered: "$studentAnswer". '
-                                          'Judge it like a teacher per the '
-                                          'JUDGING MODE rules.';
-                                      _handleSend(wrapped);
-                                    },
-                                  ),
-                                ],
-                              ],
-                            )
-                          : null,
-                    ),
+                            // Iske turant baad, usi Column ke andar add karo:
+                            if (bubble.practiceQuestion != null) ...[
+                              const SizedBox(height: 10),
+                              _PracticeQuestionBox(
+                                question: bubble.practiceQuestion!,
+                                onSubmit: (studentAnswer) {
+                                  final wrapped =
+                                      'PRACTICE ANSWER CHECK — you asked '
+                                      'this practice question: "${bubble.practiceQuestion}" '
+                                      '(based on your explanation: '
+                                      '"${bubble.text.length > 600 ? bubble.text.substring(0, 600) : bubble.text}"). '
+                                      'The student answered: "$studentAnswer". '
+                                      'Judge it like a teacher per the '
+                                      'JUDGING MODE rules.';
+                                  _handleSend(wrapped);
+                                },
+                              ),
+                            ],
+                          ],
+                        )
+                      : null,
+                ),
         );
       },
     );
   }
 
-  Widget _buildHomeAiErrorBubble(BuildContext context, _ChatBubble bubble) {
-  final canRetry = (bubble.retryQuery != null &&
-          bubble.retryQuery!.trim().isNotEmpty) ||
-      (bubble.retryVisionBytes != null &&
-          bubble.retryVisionBytes!.isNotEmpty);
-
-  final isCreditError =
-      bubble.text.trim().toLowerCase() ==
-      "you don’t have enough credits for this action.";
-
-  return Align(
-    alignment: Alignment.centerLeft,
-    child: ConstrainedBox(
-      constraints: BoxConstraints(
-        maxWidth: MediaQuery.sizeOf(context).width * 0.92,
-      ),
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
-        decoration: BoxDecoration(
-          color: AppTheme.getCardBackground(context),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: AppTheme.getCardBorder(context),
-          ),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+  Future<void> _showAttachedImage(Uint8List bytes, String? filename) async {
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(12),
+        child: Stack(
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Icon(
-                  Icons.account_balance_wallet_outlined,
-                  size: 18,
-                  color: Theme.of(context).colorScheme.error,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    bubble.text,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          height: 1.45,
-                        ),
-                  ),
-                ),
-              ],
+            InteractiveViewer(
+              minScale: 0.8,
+              maxScale: 5,
+              child: Image.memory(bytes, fit: BoxFit.contain),
             ),
-            if (canRetry) ...[
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: _isSending
-                      ? null
-                      : isCreditError
-                          ? () => Navigator.pushNamed(
-                                context,
-                                '/subscription',
-                              )
-                          : () => _retryFailedBubble(bubble),
-                  icon: Icon(
-                    isCreditError
-                        ? Icons.workspace_premium_outlined
-                        : Icons.refresh,
-                    size: 18,
-                  ),
-                  label: Text(
-                    isCreditError ? 'View Plans' : 'Retry',
-                  ),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton(
+                tooltip: 'Close image',
+                onPressed: () => Navigator.pop(dialogContext),
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+              ),
+            ),
+            if (filename != null && filename.isNotEmpty)
+              Positioned(
+                left: 8,
+                bottom: 8,
+                child: Text(
+                  filename,
+                  style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ),
-            ],
           ],
         ),
       ),
-    ),
-  );
-}
+    );
+  }
+
+  Widget _buildHomeAiErrorBubble(BuildContext context, _ChatBubble bubble) {
+    final canRetry =
+        (bubble.retryQuery != null && bubble.retryQuery!.trim().isNotEmpty) ||
+        (bubble.retryVisionBytes != null &&
+            bubble.retryVisionBytes!.isNotEmpty);
+
+    final isCreditError =
+        bubble.text.trim().toLowerCase() ==
+        "you don’t have enough credits for this action.";
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: MediaQuery.sizeOf(context).width * 0.92,
+        ),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
+          decoration: BoxDecoration(
+            color: AppTheme.getCardBackground(context),
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppTheme.getCardBorder(context)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(
+                    Icons.account_balance_wallet_outlined,
+                    size: 18,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      bubble.text,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodyMedium?.copyWith(height: 1.45),
+                    ),
+                  ),
+                ],
+              ),
+              if (canRetry) ...[
+                const SizedBox(height: 8),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: TextButton.icon(
+                    onPressed: _isSending
+                        ? null
+                        : isCreditError
+                        ? () => Navigator.pushNamed(context, '/subscription')
+                        : () => _retryFailedBubble(bubble),
+                    icon: Icon(
+                      isCreditError
+                          ? Icons.workspace_premium_outlined
+                          : Icons.refresh,
+                      size: 18,
+                    ),
+                    label: Text(isCreditError ? 'View Plans' : 'Retry'),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 
   Future<void> _openNotifications() async {
     if (_notificationsSheetOpen) return;
     _notificationsSheetOpen = true;
     try {
-      await NotificationInboxController.instance.refresh(showDesktopIfHidden: false);
+      await NotificationInboxController.instance.refresh(
+        showDesktopIfHidden: false,
+      );
       final items = await NotificationService.instance.listNotifications();
       if (!mounted) return;
       await showModalBottomSheet<void>(
         context: context,
         isScrollControlled: true,
         builder: (ctx) {
-        return SafeArea(
-          child: SizedBox(
-            height: MediaQuery.of(ctx).size.height * 0.65,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const Padding(
-                  padding: EdgeInsets.all(16),
-                  child: Text(
-                    'Notifications',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
+          return SafeArea(
+            child: SizedBox(
+              height: MediaQuery.of(ctx).size.height * 0.65,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.all(16),
+                    child: Text(
+                      'Notifications',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
-                const Divider(height: 1),
-                Expanded(
-                  child: items.isEmpty
-                      ? const Center(child: Text('No notifications yet'))
-                      : ListView.separated(
-                          itemCount: items.length,
-                          separatorBuilder: (_, __) => const Divider(height: 1),
-                          itemBuilder: (_, i) {
-                            final n = items[i];
-                            final title = n['title'] as String? ?? 'Group';
-                            final body = n['body'] as String? ?? '';
-                            final classId = n['class_id'] as String?;
-                            final id = n['id'] as String?;
-                            final unread = n['read_at'] == null;
-                            return ListTile(
-                              leading: Icon(
-                                () {
-                                  final et = n['event_type'] as String? ?? '';
-                                  if (et.startsWith('join_')) {
-                                    return Icons.how_to_reg_outlined;
-                                  }
-                                  if (et == 'payment_success' ||
-                                      et == 'payment_failed') {
-                                    return Icons.payments_outlined;
-                                  }
-                                  if (et.startsWith('expiring_') ||
-                                      et == 'expired') {
-                                    return Icons.event_busy_outlined;
-                                  }
-                                  return Icons.groups_outlined;
-                                }(),
-                                color: unread ? AppTheme.accentColor : null,
-                              ),
-                              title: Text(
-                                title,
-                                style: TextStyle(
-                                  fontWeight:
-                                      unread ? FontWeight.w600 : FontWeight.w400,
+                  const Divider(height: 1),
+                  Expanded(
+                    child: items.isEmpty
+                        ? const Center(child: Text('No notifications yet'))
+                        : ListView.separated(
+                            itemCount: items.length,
+                            separatorBuilder: (_, __) =>
+                                const Divider(height: 1),
+                            itemBuilder: (_, i) {
+                              final n = items[i];
+                              final title = n['title'] as String? ?? 'Group';
+                              final body = n['body'] as String? ?? '';
+                              final classId = n['class_id'] as String?;
+                              final id = n['id'] as String?;
+                              final unread = n['read_at'] == null;
+                              return ListTile(
+                                leading: Icon(
+                                  () {
+                                    final et = n['event_type'] as String? ?? '';
+                                    if (et.startsWith('join_')) {
+                                      return Icons.how_to_reg_outlined;
+                                    }
+                                    if (et == 'payment_success' ||
+                                        et == 'payment_failed') {
+                                      return Icons.payments_outlined;
+                                    }
+                                    if (et.startsWith('expiring_') ||
+                                        et == 'expired') {
+                                      return Icons.event_busy_outlined;
+                                    }
+                                    return Icons.groups_outlined;
+                                  }(),
+                                  color: unread ? AppTheme.accentColor : null,
                                 ),
-                              ),
-                              subtitle: Text(
-                                body,
-                                maxLines: 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              onTap: () async {
-                                if (id != null) {
-                                  await NotificationService.instance.markRead(id);
-                                  await NotificationInboxController.instance
-                                      .markReadLocally(id);
-                                }
-                                if (!ctx.mounted) return;
-                                Navigator.pop(ctx);
-                                if (classId == null || classId.isEmpty) {
+                                title: Text(
+                                  title,
+                                  style: TextStyle(
+                                    fontWeight: unread
+                                        ? FontWeight.w600
+                                        : FontWeight.w400,
+                                  ),
+                                ),
+                                subtitle: Text(
+                                  body,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                onTap: () async {
+                                  if (id != null) {
+                                    await NotificationService.instance.markRead(
+                                      id,
+                                    );
+                                    await NotificationInboxController.instance
+                                        .markReadLocally(id);
+                                  }
+                                  if (!ctx.mounted) return;
+                                  Navigator.pop(ctx);
+                                  if (classId == null || classId.isEmpty) {
+                                    final eventType =
+                                        n['event_type'] as String? ?? '';
+                                    if (eventType.startsWith('expiring_') ||
+                                        eventType == 'expired' ||
+                                        eventType == 'payment_success' ||
+                                        eventType == 'payment_failed') {
+                                      Navigator.pushNamed(
+                                        context,
+                                        '/subscription',
+                                      );
+                                    }
+                                    return;
+                                  }
                                   final eventType =
                                       n['event_type'] as String? ?? '';
-                                  if (eventType.startsWith('expiring_') ||
+                                  if (eventType == 'join_pending_teacher') {
+                                    Navigator.pushNamed(
+                                      context,
+                                      '/group_dashboard',
+                                      arguments: {
+                                        'classId': classId,
+                                        'name': title,
+                                      },
+                                    );
+                                  } else if (eventType.startsWith(
+                                        'expiring_',
+                                      ) ||
                                       eventType == 'expired' ||
                                       eventType == 'payment_success' ||
                                       eventType == 'payment_failed') {
@@ -2028,55 +2169,35 @@ void _removePendingAttachment() {
                                       context,
                                       '/subscription',
                                     );
+                                  } else {
+                                    Navigator.pushNamed(
+                                      context,
+                                      '/group_info',
+                                      arguments: {'groupId': classId},
+                                    );
                                   }
-                                  return;
-                                }
-                                final eventType =
-                                    n['event_type'] as String? ?? '';
-                                if (eventType == 'join_pending_teacher') {
-                                  Navigator.pushNamed(
-                                    context,
-                                    '/group_dashboard',
-                                    arguments: {
-                                      'classId': classId,
-                                      'name': title,
-                                    },
-                                  );
-                                } else if (eventType.startsWith('expiring_') ||
-                                    eventType == 'expired' ||
-                                    eventType == 'payment_success' ||
-                                    eventType == 'payment_failed') {
-                                  Navigator.pushNamed(
-                                    context,
-                                    '/subscription',
-                                  );
-                                } else {
-                                  Navigator.pushNamed(
-                                    context,
-                                    '/group_info',
-                                    arguments: {'groupId': classId},
-                                  );
-                                }
-                              },
-                            );
-                          },
-                        ),
-                ),
-              ],
+                                },
+                              );
+                            },
+                          ),
+                  ),
+                ],
+              ),
             ),
-          ),
+          );
+        },
+      );
+      if (mounted) {
+        await NotificationInboxController.instance.refresh(
+          showDesktopIfHidden: false,
         );
-      },
-    );
-    if (mounted) {
-        await NotificationInboxController.instance
-            .refresh(showDesktopIfHidden: false);
       }
     } finally {
       _notificationsSheetOpen = false;
     }
   }
- Widget _buildAppDrawer(BuildContext context) {
+
+  Widget _buildAppDrawer(BuildContext context) {
     return Drawer(
       child: SafeArea(
         child: Column(
@@ -2107,9 +2228,9 @@ void _removePendingAttachment() {
                   Text(
                     'Sonaxia',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 15,
-                        ),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 15,
+                    ),
                   ),
                 ],
               ),
@@ -2134,6 +2255,17 @@ void _removePendingAttachment() {
                     onTap: () {
                       Navigator.pop(context);
                       _openStudyHistory();
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.visibility_outlined),
+                    title: const Text('Vision model'),
+                    subtitle: Text(
+                      _visionModel == 'gemini' ? 'Gemini' : 'Qwen-VL',
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      _chooseVisionModel();
                     },
                   ),
                   if (_isTeacher)
@@ -2178,9 +2310,9 @@ void _removePendingAttachment() {
               child: Text(
                 'Sonaxia can make mistakes. Check important info.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.getSecondaryText(context),
-                      fontSize: 11,
-                    ),
+                  color: AppTheme.getSecondaryText(context),
+                  fontSize: 11,
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -2189,6 +2321,7 @@ void _removePendingAttachment() {
       ),
     );
   }
+
   List<Map<String, dynamic>>? _recentSessions;
   bool _loadingSessions = false;
 
@@ -2196,7 +2329,9 @@ void _removePendingAttachment() {
     if (_loadingSessions) return;
     setState(() => _loadingSessions = true);
     try {
-      final sessions = await LectureService.instance.homeAiListSessions(limit: 15);
+      final sessions = await LectureService.instance.homeAiListSessions(
+        limit: 15,
+      );
       if (!mounted) return;
       setState(() {
         _recentSessions = sessions;
@@ -2247,9 +2382,9 @@ void _removePendingAttachment() {
                   Text(
                     'Sonaxia',
                     style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
                   ),
                 ],
               ),
@@ -2283,8 +2418,15 @@ void _removePendingAttachment() {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
-                    leading: Icon(Icons.folder_outlined, size: 20, color: iconColor),
-                    title: const Text('Library', style: TextStyle(fontSize: 14)),
+                    leading: Icon(
+                      Icons.folder_outlined,
+                      size: 20,
+                      color: iconColor,
+                    ),
+                    title: const Text(
+                      'Library',
+                      style: TextStyle(fontSize: 14),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       widget.onGoToTab(1);
@@ -2293,7 +2435,11 @@ void _removePendingAttachment() {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
-                    leading: Icon(Icons.groups_outlined, size: 20, color: iconColor),
+                    leading: Icon(
+                      Icons.groups_outlined,
+                      size: 20,
+                      color: iconColor,
+                    ),
                     title: const Text('Groups', style: TextStyle(fontSize: 14)),
                     onTap: () {
                       Navigator.pop(context);
@@ -2303,8 +2449,15 @@ void _removePendingAttachment() {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
-                    leading: Icon(Icons.trending_up_rounded, size: 20, color: iconColor),
-                    title: const Text('Progress', style: TextStyle(fontSize: 14)),
+                    leading: Icon(
+                      Icons.trending_up_rounded,
+                      size: 20,
+                      color: iconColor,
+                    ),
+                    title: const Text(
+                      'Progress',
+                      style: TextStyle(fontSize: 14),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       widget.onGoToTab(3);
@@ -2313,8 +2466,15 @@ void _removePendingAttachment() {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
-                    leading: Icon(Icons.person_outline, size: 20, color: iconColor),
-                    title: const Text('Profile', style: TextStyle(fontSize: 14)),
+                    leading: Icon(
+                      Icons.person_outline,
+                      size: 20,
+                      color: iconColor,
+                    ),
+                    title: const Text(
+                      'Profile',
+                      style: TextStyle(fontSize: 14),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       widget.onGoToTab(4);
@@ -2323,8 +2483,15 @@ void _removePendingAttachment() {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
-                    leading: Icon(Icons.bolt_outlined, size: 20, color: iconColor),
-                    title: Text('Credits — $_creditsBalance', style: const TextStyle(fontSize: 14)),
+                    leading: Icon(
+                      Icons.bolt_outlined,
+                      size: 20,
+                      color: iconColor,
+                    ),
+                    title: Text(
+                      'Credits — $_creditsBalance',
+                      style: const TextStyle(fontSize: 14),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.pushNamed(context, '/credits/history');
@@ -2334,8 +2501,15 @@ void _removePendingAttachment() {
                     ListTile(
                       dense: true,
                       visualDensity: VisualDensity.compact,
-                      leading: Icon(Icons.school_rounded, size: 20, color: iconColor),
-                      title: const Text('Teacher Dashboard', style: TextStyle(fontSize: 14)),
+                      leading: Icon(
+                        Icons.school_rounded,
+                        size: 20,
+                        color: iconColor,
+                      ),
+                      title: const Text(
+                        'Teacher Dashboard',
+                        style: TextStyle(fontSize: 14),
+                      ),
                       onTap: () {
                         Navigator.pop(context);
                         Navigator.pushNamed(context, '/teacher');
@@ -2347,11 +2521,11 @@ void _removePendingAttachment() {
                     child: Text(
                       'RECENT CHATS',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.getSecondaryText(context),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
+                        color: AppTheme.getSecondaryText(context),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
                   if (_loadingSessions)
@@ -2367,12 +2541,15 @@ void _removePendingAttachment() {
                     )
                   else if (_recentSessions == null || _recentSessions!.isEmpty)
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       child: Text(
                         'No chats yet',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.getSecondaryText(context),
-                            ),
+                          color: AppTheme.getSecondaryText(context),
+                        ),
                       ),
                     )
                   else
@@ -2380,7 +2557,11 @@ void _removePendingAttachment() {
                       ListTile(
                         dense: true,
                         visualDensity: VisualDensity.compact,
-                        leading: Icon(Icons.chat_bubble_outline, size: 18, color: iconColor),
+                        leading: Icon(
+                          Icons.chat_bubble_outline,
+                          size: 18,
+                          color: iconColor,
+                        ),
                         title: Text(
                           (s['title'] as String?)?.trim().isNotEmpty == true
                               ? s['title'] as String
@@ -2402,13 +2583,18 @@ void _removePendingAttachment() {
             ),
             const Divider(height: 1),
             Padding(
-              padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 10),
+              padding: const EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 8,
+                bottom: 10,
+              ),
               child: Text(
                 'Sonaxia can make mistakes. Check important info.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.getSecondaryText(context),
-                      fontSize: 10.5,
-                    ),
+                  color: AppTheme.getSecondaryText(context),
+                  fontSize: 10.5,
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -2417,8 +2603,10 @@ void _removePendingAttachment() {
       ),
     );
   }
+
   void _showComingSoon(String feature) {
-    AppToast.showSnackBar(context, 
+    AppToast.showSnackBar(
+      context,
       SnackBar(content: Text('$feature — coming soon')),
     );
   }
@@ -2427,12 +2615,15 @@ void _removePendingAttachment() {
 class _UploadOptionsSheet extends StatelessWidget {
   /// Workspace flows (PDF / audio) — recording setup.
   final ValueChanged<String> onOptionSelected;
+
   /// Home AI — camera photo → chat answer (not workspace).
   final VoidCallback onHomeVisionCamera;
+
   /// Home AI — gallery / file image → chat answer (not workspace).
   final VoidCallback onHomeVisionGallery;
   final bool audioLocked;
   final VoidCallback? onAudioLocked;
+
   /// Teachers: no audio-file upload into lecture pipeline.
   final bool hideAudioUpload;
 
@@ -2474,9 +2665,9 @@ class _UploadOptionsSheet extends StatelessWidget {
             ),
             Text(
               'Add content',
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 4),
             Text(
@@ -2564,8 +2755,9 @@ class _UploadOptionsSheet extends StatelessWidget {
       },
     );
   }
- }
-  /// User's long question collapses to 2 lines with a "more" toggle —
+}
+
+/// User's long question collapses to 2 lines with a "more" toggle —
 /// keeps long pasted questions from pushing the chat down (Claude-style).
 class _CollapsibleUserText extends StatefulWidget {
   final String text;
@@ -2640,21 +2832,18 @@ class _CollapsibleUserTextState extends State<_CollapsibleUserText> {
       },
     );
   }
- }
+}
+
 /// AI-suggested follow-up question chips — reveal one at a time
 /// (teacher-style "ek baat, phir agli"), not all at once.
 class _SuggestedQuestionsRow extends StatefulWidget {
   final List<String> questions;
   final ValueChanged<String> onTap;
 
-  const _SuggestedQuestionsRow({
-    required this.questions,
-    required this.onTap,
-  });
+  const _SuggestedQuestionsRow({required this.questions, required this.onTap});
 
   @override
-  State<_SuggestedQuestionsRow> createState() =>
-      _SuggestedQuestionsRowState();
+  State<_SuggestedQuestionsRow> createState() => _SuggestedQuestionsRowState();
 }
 
 class _SuggestedQuestionsRowState extends State<_SuggestedQuestionsRow> {
@@ -2668,14 +2857,11 @@ class _SuggestedQuestionsRowState extends State<_SuggestedQuestionsRow> {
 
   void _revealNext() {
     if (!mounted || _visibleCount >= widget.questions.length) return;
-    Future.delayed(
-      Duration(milliseconds: _visibleCount == 0 ? 200 : 350),
-      () {
-        if (!mounted) return;
-        setState(() => _visibleCount++);
-        _revealNext();
-      },
-    );
+    Future.delayed(Duration(milliseconds: _visibleCount == 0 ? 200 : 350), () {
+      if (!mounted) return;
+      setState(() => _visibleCount++);
+      _revealNext();
+    });
   }
 
   @override
@@ -2726,15 +2912,13 @@ class _SuggestedQuestionsRowState extends State<_SuggestedQuestionsRow> {
     );
   }
 }
+
 /// Teacher-style practice check — question + answer box + submit.
 class _PracticeQuestionBox extends StatefulWidget {
   final String question;
   final ValueChanged<String> onSubmit;
 
-  const _PracticeQuestionBox({
-    required this.question,
-    required this.onSubmit,
-  });
+  const _PracticeQuestionBox({required this.question, required this.onSubmit});
 
   @override
   State<_PracticeQuestionBox> createState() => _PracticeQuestionBoxState();
@@ -2772,7 +2956,11 @@ class _PracticeQuestionBoxState extends State<_PracticeQuestionBox> {
         children: [
           Row(
             children: [
-              Icon(Icons.school_outlined, size: 16, color: AppTheme.accentColor),
+              Icon(
+                Icons.school_outlined,
+                size: 16,
+                color: AppTheme.accentColor,
+              ),
               const SizedBox(width: 6),
               Text(
                 'Quick check',

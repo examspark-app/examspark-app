@@ -86,6 +86,7 @@ async def post_ask_ai(
             conversation_language=body.conversation_language,
             charge_credits=True,
             session_id=body.session_id,
+            text_model=body.text_model,
         )
     except AskAiError as e:
         raise HTTPException(
@@ -127,6 +128,7 @@ async def post_home_ai_vision(
     file: UploadFile = File(...),
     query: str = Form(""),
     session_id: str | None = Form(None),
+    vision_model: str = Form("qwen-vl"),
     parent_response_id: str | None = Form(None),
     user: AuthenticatedUser = Depends(get_current_user),
 ):
@@ -146,6 +148,7 @@ async def post_home_ai_vision(
             query=query,
             session_id=session_id,
             parent_response_id=parent_response_id,
+            vision_model=vision_model,
         )
     except HomeAiError as e:
         raise HTTPException(
@@ -172,6 +175,7 @@ async def post_ask_ai_stream(
                 conversation_language=body.conversation_language,
                 charge_credits=True,
                 session_id=body.session_id,
+                text_model=body.text_model,
             )
         ),
         media_type="text/event-stream",

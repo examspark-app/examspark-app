@@ -62,6 +62,13 @@ class AIConfig:
     GEMINI_CHAT_MODEL: str = os.getenv(
         "GEMINI_CHAT_MODEL", "gemini-2.5-flash-lite"
     )
+    GEMINI_VISION_MODEL: str = os.getenv(
+        "GEMINI_VISION_MODEL", "gemini-2.5-flash"
+    )
+    CLAUDE_API_KEY: str = os.getenv("CLAUDE_API_KEY", "")
+    CLAUDE_CHAT_MODEL: str = os.getenv(
+        "CLAUDE_CHAT_MODEL", "claude-3-5-haiku-latest"
+    )
     # Roleplay voice output reuses the same OpenRouter credential as Qwen3.
     # Keeping the model and voice configurable avoids embedding provider values
     # in the voice service.

@@ -51,12 +51,18 @@ _VISION_SYSTEM_PROMPT = (
     + "\nCRITICAL RULES:\n"
     "1. If contentType is question_paper or handwritten_work: cleanNotes MUST contain "
     "direct answers/solutions — NOT generic notes about the topic.\n"
-    "2. extractedText must contain the actual readable text — never paraphrase it.\n"
-    "3. Never invent text, objects, or context not visible in the image.\n"
-    "4. If text is blurry or unreadable, say so in extractedText.\n"
-    "5. Answer in the language of the user's query if provided; "
+    "2. Treat every worksheet, exercise, question paper, or activity as a task "
+    "to complete, not a picture to describe. First identify exactly what the "
+    "learner is being asked to do, then solve or complete it.\n"
+    "3. For empty boxes, blanks, matching exercises, picture clues, word banks, "
+    "or colored answer tabs: map each visible clue to its blank and provide "
+    "the completed answers in order. Do not stop at describing the layout.\n"
+    "4. extractedText must contain the actual readable text — never paraphrase it.\n"
+    "5. Never invent text, objects, or context not visible in the image.\n"
+    "6. If text is blurry or unreadable, say so in extractedText.\n"
+    "7. Answer in the language of the user's query if provided; "
     "otherwise use the image's dominant language.\n"
-    "Raw JSON only — no markdown fences. Keep response complete and compact."
+    "8. Raw JSON only — no markdown fences. Keep response complete and compact."
 )
 
 _MIN_NOTES_CHARS = 40
@@ -227,9 +233,10 @@ async def _call_vision_model(
     b64 = base64.b64encode(image_bytes).decode("ascii")
     data_url = f"data:{mime_type};base64,{b64}"
     user_text = text_hint or (
-    "Analyze this image carefully before deciding what it contains. "
-    "Do NOT assume that it is educational, a diagram, a textbook page, or an exam question. "
-    "Identify only what is actually visible or readable.\n\n"
+    "Treat this image as a possible learner task, not as an object to describe. "
+    "First identify what the learner is being asked to do: answer questions, "
+    "fill blanks, match items, complete a word bank, read labels, or solve a problem. "
+    "Then actually complete that task using every visible clue.\n\n"
 
     "FIRST determine:\n"
     "- what the image contains (question, notes, textbook page, diagram, chart, table, "
@@ -240,8 +247,10 @@ async def _call_vision_model(
 
     "RESPONSE RULES:\n"
     "- If there is a clear question/problem, answer it directly first, then explain it.\n"
+    "- If there are empty boxes/blanks beside letters, pictures, or colored word-tabs, "
+    "recognize the fill-in or matching exercise and list the answer for each blank in order.\n"
     "- If there are multiple questions, address them clearly in order.\n"
-    "- If there is no question, explain the actual content and give useful key points.\n"
+    "- If there is no question or solvable activity, explain the actual content and give useful key points.\n"
     "- If it is clearly study/exam material, make the explanation exam-useful.\n"
     "- If the user message requests a specific language or level, follow that request.\n"
     "- Do not invent text, objects, topics, class level, people, language, or context.\n"

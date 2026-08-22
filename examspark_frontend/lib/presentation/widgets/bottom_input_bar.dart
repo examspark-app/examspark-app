@@ -2,6 +2,7 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/widgets/ai_model_selector.dart';
 
 class BottomInputBar extends StatefulWidget {
   final ValueChanged<String> onSend;
@@ -10,6 +11,8 @@ class BottomInputBar extends StatefulWidget {
   final bool recordLocked;
   final bool isSending;
   final VoidCallback? onYoutube;
+  final String selectedModel;
+  final ValueChanged<String>? onModelChanged;
 
   /// Pinned attachment (set by parent after camera/gallery pick).
   final Uint8List? attachmentBytes;
@@ -28,6 +31,8 @@ class BottomInputBar extends StatefulWidget {
     required this.onRecord,
     this.recordLocked = false,
     this.onYoutube,
+    this.selectedModel = 'qwen3',
+    this.onModelChanged,
     this.isSending = false,
     this.attachmentBytes,
     this.attachmentName,
@@ -319,6 +324,12 @@ class _BottomInputBarState extends State<BottomInputBar> {
 
               Row(
                 children: [
+                  if (widget.onModelChanged != null)
+                    AiModelSelector(
+                      selectedModel: widget.selectedModel,
+                      onSelected: widget.onModelChanged!,
+                    ),
+                  if (widget.onModelChanged != null) const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.add_rounded, size: 26),
                     color: AppTheme.getSecondaryText(context),

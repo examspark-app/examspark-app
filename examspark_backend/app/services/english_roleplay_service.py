@@ -19,6 +19,7 @@ from app.services.whisper_service import (
     transcribe_audio,
 )
 from app.services import english_learning_memory_service as learning_memory
+from app.services.plan_tier_service import GatedFeature, require_feature_unlocked
 
 logger = logging.getLogger(__name__)
 
@@ -46,26 +47,60 @@ _GENERIC_OPENING_BLACKLIST = {
 }
 _SCENARIO_FALLBACK_OPENING = {
     'restaurant': (
-        'Good evening! Table for two this evening, or did you already book ahead? '
-        'I can grab you a menu as soon as you are seated.'
+        'Fresh soup today! Table for one?'
     ),
     'friends': (
-        'Hey! I got here two minutes ago — did you find the place okay? '
-        'I already ordered us two coffees while I waited.'
+        'Hey, you made it! Find the place okay?'
     ),
     'interview': (
-        'Thanks so much for coming in today. Could you start by telling me a little about yourself?'
+        'Thanks for coming! Ready to begin?'
     ),
     'market': (
-        'Hi there! Looking for something fresh today, or just browsing? These tomatoes just came in this morning.'
+        'Fresh mangoes today! Looking for something?'
     ),
     'party': (
-        'Hey! So glad you made it. Come on in — have you met anyone else here yet?'
+        'Hey, you made it! Like the music?'
     ),
     'travel': (
-        'This flight seems delayed, huh? Where are you heading to today?'
+        'Flight delayed again! Where are you heading?'
     ),
 }
+
+_PACING_WORD_LIMITS = (
+    (0, 6),
+    (2, 10),
+    (5, 14),
+    (999, 24),
+)
+
+
+def _word_limit_for_turn(turn_number: int) -> int:
+    for max_turn, limit in _PACING_WORD_LIMITS:
+        if turn_number <= max_turn:
+            return limit
+    return 24
+
+
+def _enforce_pacing_length(text: str, turn_number: int) -> str:
+    """Hard-cap a reply while preserving the last complete sentence possible."""
+    words = text.split()
+    limit = _word_limit_for_turn(turn_number)
+    if len(words) <= limit:
+        return text
+    boundaries = [
+        match.end()
+        for match in re.finditer(r'[.!?…]["\')]*\s', text)
+    ]
+    best = None
+    for boundary in boundaries:
+        piece = text[:boundary].strip()
+        if len(piece.split()) <= limit:
+            best = piece
+        else:
+            break
+    if best:
+        return best
+    return ' '.join(words[:limit]).rstrip(',;:') + '.'
 
 
 def _is_sentence_boundary(text: str, index: int) -> bool:
@@ -146,14 +181,17 @@ def _opening_looks_generic(text: str) -> bool:
     return any(phrase in lower for phrase in _GENERIC_OPENING_BLACKLIST)
 
 
+def _opening_is_too_long(text: str) -> bool:
+    return len(re.findall(r"\b[\w']+\b", text or "")) > 10
+
+
 def _fallback_opening(scenario: str) -> str:
     key = (scenario or '').lower()
     for k, v in _SCENARIO_FALLBACK_OPENING.items():
         if k in key:
             return v
     return (
-        'Hey! So glad you could make it today. '
-        'Have you done this kind of practice before, or is this your first time roleplaying?'
+        'Hey! Ready to begin?'
     )
 
 
@@ -163,6 +201,7 @@ async def start(
     native_language: str,
     target_language: str = 'English',
     chat_session_id: str | None = None,
+    text_model: str = 'qwen3',
 ) -> dict:
     """Create a session and let the in-character partner make the first move."""
 
@@ -181,7 +220,7 @@ async def start(
     if chat_session_id:
         chat_rows = (
             db.table('english_practice_sessions').select(
-                'id,native_language,target_language'
+                'id,native_language,target_language,text_model'
             ).eq('id', chat_session_id).eq('user_id', user_id).limit(1)
             .execute().data or []
         )
@@ -190,6 +229,15 @@ async def start(
         chat_session = chat_rows[0]
         native_language = chat_session.get('native_language') or native_language
         target_language = chat_session.get('target_language') or target_language
+        text_model = chat_session.get('text_model') or 'qwen3'
+    else:
+        text_model = text_model if text_model in {'qwen3', 'gemini', 'claude'} else 'qwen3'
+
+    if text_model == 'claude':
+        try:
+            require_feature_unlocked(user_id, GatedFeature.PREMIUM_CHAT_MODEL)
+        except Exception as error:
+            raise chat.EnglishPracticeError(str(error), 403) from error
 
     row = (
         db.table('english_roleplay_sessions')
@@ -199,6 +247,7 @@ async def start(
             'native_language': native_language,
             'target_language': target_language,
             'chat_session_id': chat_session_id,
+            'text_model': text_model,
             'status': 'active'
         })
         .execute()
@@ -346,7 +395,7 @@ async def start(
         + ')'
     )
 
-    opening_raw = await chat._call_model([
+    opening_raw = await chat._call_chat_model([
         {
             'role': 'system',
             'content': sys_prompt
@@ -355,7 +404,7 @@ async def start(
             'role': 'user',
             'content': opening_instruction
         },
-    ])
+    ], text_model)
 
     opening_clean, opening_suggestions, opening_mcq = (
         chat._split_and_extract(opening_raw)
@@ -366,7 +415,7 @@ async def start(
     if not opening:
         opening = _fallback_opening(scenario)
 
-    elif _opening_looks_generic(opening):
+    elif _opening_looks_generic(opening) or _opening_is_too_long(opening):
 
         retry_instruction = (
             '(system: Re-write the opening. The previous attempt was too '
@@ -374,7 +423,8 @@ async def start(
             'or too long. Make it sound like a real PERSON actually INSIDE '
             'this exact environment. Scenario: '
             + scenario
-            + '. 1-2 SHORT sentences MAX (never 4+). ONE reaction-beat '
+            + '. EXACTLY 2-6 words if possible, NEVER more than 10 words. '
+            'Use one tiny reaction-beat and one tiny question. '
             '(fresh invented scenario detail, DIFFERENT from the previous '
             'attempt) + ONE easy follow-up question folded naturally out '
             'of it. Target language only. '
@@ -390,12 +440,11 @@ async def start(
             'etc.). React to that new detail first, share a mini '
             'in-character opinion / tease / observation, THEN fold the '
             'follow-up question out of that reaction. '
-            'CRITICAL (3) LENGTH/PACING: one single beat, no stacking — '
-            '1-2 sentences only. '
+            'CRITICAL (3) LENGTH/PACING: one single beat, no stacking. '
+            'Do not ask the learner name in this opening. '
             'BAD (flat): "Hi! Welcome. How are you feeling today?" '
             'GOOD (alive, feel-only reference, do NOT copy words): '
-            '"Heyyy you made it! I was starting to think you\'d bail on me '
-            'lol — okay but this playlist though, you\'re gonna love it." '
+            '"Hey, you made it! Coffee?" '
             'Make the invented detail specific and tied to this exact '
             'scenario — a new restaurant menu item, a song at the party, '
             'a vendor\'s just-arrived produce, whatever fits.'
@@ -404,7 +453,7 @@ async def start(
         )
 
         try:
-            second_raw = await chat._call_model([
+            second_raw = await chat._call_chat_model([
                 {
                     'role': 'system',
                     'content': sys_prompt
@@ -413,13 +462,13 @@ async def start(
                     'role': 'user',
                     'content': retry_instruction
                 },
-            ])
+            ], text_model)
 
             second_clean, _, _ = chat._split_and_extract(second_raw)
 
             second = second_clean.strip()
 
-            if second and not _opening_looks_generic(second):
+            if second and not _opening_looks_generic(second) and not _opening_is_too_long(second):
                 opening = second
             else:
                 opening = _fallback_opening(scenario)
@@ -510,6 +559,11 @@ async def send_turn(user_id: str, session_id: str, transcript: str) -> dict:
     if not session: raise chat.EnglishPracticeError('Roleplay session not found.', 404)
     if session['status'] != 'active': raise chat.EnglishPracticeError('This roleplay has ended.', 409)
     if not text: raise chat.EnglishPracticeError('No speech detected. Please try again.', 400)
+    if session.get('text_model') == 'claude':
+        try:
+            require_feature_unlocked(user_id, GatedFeature.PREMIUM_CHAT_MODEL)
+        except Exception as error:
+            raise chat.EnglishPracticeError(str(error), 403) from error
     db = get_supabase_admin()
     db.table('english_roleplay_messages').insert({'session_id': session_id, 'user_id': user_id, 'role': 'user', 'message': text}).execute()
     rows = db.table('english_roleplay_messages').select('role,message').eq('session_id', session_id).order('created_at', desc=True).limit(8).execute().data or []
@@ -520,10 +574,13 @@ async def send_turn(user_id: str, session_id: str, transcript: str) -> dict:
     turn_number = len(rows)
     messages = [{'role': 'system', 'content': build_roleplay_prompt(scenario=session['scenario'], native_language=session['native_language'], target_language=session.get('target_language', 'English'), learning_memory=memory_context, turn_number=turn_number)}]
     messages += [{'role': r['role'], 'content': r['message']} for r in reversed(rows)]
-    reply_raw = await chat._call_model(messages)
+    reply_raw = await chat._call_chat_model(
+        messages, session.get('text_model') or 'qwen3'
+    )
     reply, suggestions, mcq = chat._split_and_extract(reply_raw)
     if not reply.strip():
         reply = 'Okay — let me think. Could you say that again a little more simply?'
+    reply = _enforce_pacing_length(reply, turn_number)
     assistant_insert = db.table('english_roleplay_messages').insert({'session_id': session_id, 'user_id': user_id, 'role': 'assistant', 'message': reply}).execute()
     assistant_id = ((assistant_insert.data or [{}])[0]).get('id')
     learning_memory.schedule_update(
@@ -583,7 +640,9 @@ async def reengage(user_id: str, session_id: str) -> dict:
             'Use one short sentence only.)'
         ),
     })
-    reply_raw = await chat._call_model(messages)
+    reply_raw = await chat._call_chat_model(
+        messages, session.get('text_model') or 'qwen3'
+    )
     reply, _, _ = chat._split_and_extract(reply_raw)
     reply = reply.strip() or 'Are you still there?'
     try:
@@ -621,7 +680,9 @@ async def send_audio_turn(
     return {**result, "audio_bytes": audio, "audio_mime_type": mime_type}
 
 
-def _stream_messages(session: dict, user_id: str, transcript: str) -> list[dict]:
+def _stream_messages(
+    session: dict, user_id: str, transcript: str, turn_number: int = 0
+) -> list[dict]:
     """Build the normal Roleplay context without persisting an in-flight turn."""
     db = get_supabase_admin()
     rows = (
@@ -636,7 +697,8 @@ def _stream_messages(session: dict, user_id: str, transcript: str) -> list[dict]
     )
     messages = [{'role': 'system', 'content': build_roleplay_prompt(
         scenario=session['scenario'], native_language=session['native_language'],
-        target_language=session.get('target_language', 'English'), learning_memory=memory_context,
+        target_language=session.get('target_language', 'English'),
+        learning_memory=memory_context, turn_number=turn_number,
     )}]
     messages += [{'role': row['role'], 'content': row['message']} for row in reversed(rows)]
     messages.append({'role': 'user', 'content': transcript})
@@ -658,6 +720,12 @@ async def stream_audio_turn(
         raise chat.EnglishPracticeError('Roleplay session not found.', 404)
     if session['status'] != 'active':
         raise chat.EnglishPracticeError('This roleplay has ended.', 409)
+    selected_model = session.get('text_model') or 'qwen3'
+    if selected_model == 'claude':
+        try:
+            require_feature_unlocked(user_id, GatedFeature.PREMIUM_CHAT_MODEL)
+        except Exception as error:
+            raise chat.EnglishPracticeError(str(error), 403) from error
     try:
         transcription = await transcribe_audio(audio_bytes, filename)
     except WhisperTranscriptionError as error:
@@ -667,13 +735,33 @@ async def stream_audio_turn(
     if not transcript:
         raise chat.EnglishPracticeError('No speech detected. Please try again.', 400)
 
+    db = get_supabase_admin()
+    messages_table = db.table('english_roleplay_messages')
+    turn_rows = []
+    if hasattr(messages_table, 'select'):
+        turn_rows = (
+            messages_table.select('role')
+            .eq('session_id', session_id).eq('user_id', user_id)
+            .order('created_at', desc=True).limit(8).execute().data or []
+        )
+    turn_number = len(turn_rows)
+    word_limit = _word_limit_for_turn(turn_number)
+
     yield {'type': 'transcript', 'transcript': transcript}
     reply_parts: list[str] = []
     pending: list[asyncio.Task[tuple[bytes, str]]] = []
     sequence = 0
     buffer = ''
     try:
-        async for delta in chat._stream_model(_stream_messages(session, user_id, transcript)):
+        stream_messages = _stream_messages(
+            session, user_id, transcript, turn_number
+        )
+        model_stream = (
+            chat._stream_model(stream_messages)
+            if selected_model == 'qwen3'
+            else chat._stream_model(stream_messages, selected_model)
+        )
+        async for delta in model_stream:
             reply_parts.append(delta)
             buffer += delta
             chunks, buffer = split_complete_speech_chunks(buffer)
@@ -688,6 +776,8 @@ async def stream_audio_turn(
                     'audio_mime_type': mime_type,
                 }
                 sequence += 1
+            if len(''.join(reply_parts).split()) >= word_limit:
+                break
         chunks, _ = split_complete_speech_chunks(buffer, final=True)
         for chunk in chunks:
             pending.append(asyncio.create_task(synthesize_for_user(user_id, chunk)))
@@ -709,6 +799,7 @@ async def stream_audio_turn(
 
     reply_raw = ''.join(reply_parts).strip()
     reply, suggestions, mcq = chat._split_and_extract(reply_raw)
+    reply = _enforce_pacing_length(reply, turn_number)
     if not reply or not pending:
         raise chat.EnglishPracticeError('Model returned an empty response.', 502)
     db = get_supabase_admin()

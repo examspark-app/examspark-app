@@ -71,6 +71,149 @@ class _EnglishTeachingHistoryScreenState
     if (mounted) _load();
   }
 
+  Future<void> _showChatActions(Map<String, dynamic> item) async {
+    final id = item['id'] as String?;
+    if (id == null || id.isEmpty) return;
+    final pinned = item['pinned'] == true;
+    final action = await showModalBottomSheet<String>(
+      context: context,
+      builder: (sheetContext) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ListTile(
+              leading: Icon(pinned ? Icons.push_pin : Icons.push_pin_outlined),
+              title: Text(pinned ? 'Unpin' : 'Pin to top'),
+              onTap: () => Navigator.pop(sheetContext, 'pin'),
+            ),
+            ListTile(
+              leading: const Icon(Icons.edit_outlined),
+              title: const Text('Rename'),
+              onTap: () => Navigator.pop(sheetContext, 'rename'),
+            ),
+            ListTile(
+              leading: Icon(
+                Icons.delete_outline,
+                color: Theme.of(sheetContext).colorScheme.error,
+              ),
+              title: Text(
+                'Delete',
+                style: TextStyle(color: Theme.of(sheetContext).colorScheme.error),
+              ),
+              onTap: () => Navigator.pop(sheetContext, 'delete'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || action == null) return;
+
+    if (action == 'pin') {
+      try {
+        await LectureService.instance.englishPracticePinSession(id, !pinned);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(pinned ? 'Unpinned' : 'Pinned to top')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not update chat: $e')),
+          );
+        }
+      }
+      await _load();
+      return;
+    }
+
+    if (action == 'rename') {
+      final controller = TextEditingController(
+        text: (item['title'] as String?)?.trim() ?? '',
+      );
+      final title = await showDialog<String>(
+        context: context,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Rename chat'),
+          content: TextField(
+            controller: controller,
+            autofocus: true,
+            maxLength: 120,
+            decoration: const InputDecoration(
+              hintText: 'Chat name',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () => Navigator.pop(dialogContext, controller.text.trim()),
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      );
+      controller.dispose();
+      if (title == null || title.isEmpty) return;
+      try {
+        await LectureService.instance.englishPracticeRenameSession(id, title);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Chat renamed')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not rename chat: $e')),
+          );
+        }
+      }
+      await _load();
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text('Delete chat?'),
+        content: const Text('This conversation will be permanently deleted.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(
+              backgroundColor: Theme.of(dialogContext).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(dialogContext, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true) return;
+    try {
+      await LectureService.instance.englishPracticeDeleteSession(id);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Chat deleted')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Could not delete chat: $e')),
+        );
+      }
+    }
+    await _load();
+  }
+
   String _date(String? source) {
     final value = source == null ? null : DateTime.tryParse(source)?.toLocal();
     if (value == null) return '';
@@ -252,7 +395,14 @@ class _EnglishTeachingHistoryScreenState
                   ],
                 ),
               ),
-              const Icon(Icons.chevron_right_rounded, color: Color(0xFF8F8C9D)),
+              if (!roleplay)
+                IconButton(
+                  tooltip: 'Chat options',
+                  icon: const Icon(Icons.more_vert, color: Color(0xFF8F8C9D)),
+                  onPressed: () => _showChatActions(item),
+                )
+              else
+                const Icon(Icons.chevron_right_rounded, color: Color(0xFF8F8C9D)),
             ],
           ),
         ),
