@@ -18,10 +18,7 @@ class SupabaseClient {
   }) async {
     if (_isInitialized) return;
 
-    await supabase.Supabase.initialize(
-      url: url,
-      anonKey: anonKey,
-    );
+    await supabase.Supabase.initialize(url: url, anonKey: anonKey);
 
     _client = supabase.Supabase.instance.client;
     _isInitialized = true;
@@ -29,7 +26,9 @@ class SupabaseClient {
 
   supabase.SupabaseClient get client {
     if (!_isInitialized) {
-      throw StateError('SupabaseClient not initialized. Call initialize() first.');
+      throw StateError(
+        'SupabaseClient not initialized. Call initialize() first.',
+      );
     }
     return _client;
   }
@@ -67,27 +66,28 @@ class SupabaseClient {
   }
 
   String? _oauthRedirectUrl() {
-  if (kIsWeb) return Uri.base.origin;
-  return 'sonaxia://login-callback';
-}
+    if (kIsWeb) return Uri.base.origin;
+    return 'sonaxia://login-callback';
+  }
 
   Future<supabase.AuthResponse> signInWithEmail({
     required String email,
     required String password,
   }) async {
-    return client.auth.signInWithPassword(
-      email: email,
-      password: password,
-    );
+    return client.auth.signInWithPassword(email: email, password: password);
   }
 
   Future<supabase.AuthResponse> signUpWithEmail({
     required String email,
     required String password,
+    String? referralCode,
   }) async {
     return client.auth.signUp(
       email: email,
       password: password,
+      data: referralCode == null || referralCode.trim().isEmpty
+          ? null
+          : {'referral_code': referralCode.trim().toUpperCase()},
     );
   }
 
@@ -130,10 +130,7 @@ class SupabaseClient {
     required String functionName,
     required Map<String, dynamic> body,
   }) async {
-    final response = await client.functions.invoke(
-      functionName,
-      body: body,
-    );
+    final response = await client.functions.invoke(functionName, body: body);
 
     if (response.status != 200) {
       throw Exception('Edge Function error: ${response.data}');
@@ -159,7 +156,9 @@ class SupabaseClient {
   /// anywhere in the app. Blocked at the database layer as of Phase 4
   /// (`trg_protect_credits_balance` in schema.sql) unless run with the
   /// service-role key. Use [deductCredits] for all new code.
-  @Deprecated('Use deductCredits(), which enforces server-side checks via fn_deduct_credits()')
+  @Deprecated(
+    'Use deductCredits(), which enforces server-side checks via fn_deduct_credits()',
+  )
   Future<void> updateCredits(String userId, int newBalance) async {
     await client
         .from('users')
@@ -179,13 +178,16 @@ class SupabaseClient {
     String? lectureId,
     String? action,
   }) async {
-    final response = await client.rpc('fn_deduct_credits', params: {
-      'p_user_id': userId,
-      'p_amount': amount,
-      'p_description': description,
-      'p_lecture_id': lectureId,
-      'p_action': action,
-    });
+    final response = await client.rpc(
+      'fn_deduct_credits',
+      params: {
+        'p_user_id': userId,
+        'p_amount': amount,
+        'p_description': description,
+        'p_lecture_id': lectureId,
+        'p_action': action,
+      },
+    );
     return response as int;
   }
 
@@ -194,9 +196,10 @@ class SupabaseClient {
   /// (`plan_tier_gating.dart`). FastAPI enforces the same Rule 6 server-side
   /// (Session 5 — 403 FEATURE_LOCKED).
   Future<String> getPlanTier(String userId) async {
-    final response = await client.rpc('fn_user_plan_tier', params: {
-      'p_user_id': userId,
-    });
+    final response = await client.rpc(
+      'fn_user_plan_tier',
+      params: {'p_user_id': userId},
+    );
     return response as String? ?? 'free';
   }
 
@@ -205,9 +208,10 @@ class SupabaseClient {
   /// §Teacher Commission) via `fn_teacher_estimated_commission`. Returns
   /// rupees (not paise). No real payout — Phase 5.
   Future<double> getEstimatedCommission(String teacherUserId) async {
-    final response = await client.rpc('fn_teacher_estimated_commission', params: {
-      'p_teacher_id': teacherUserId,
-    });
+    final response = await client.rpc(
+      'fn_teacher_estimated_commission',
+      params: {'p_teacher_id': teacherUserId},
+    );
     if (response == null) return 0;
     return (response as num).toDouble();
   }
@@ -215,9 +219,10 @@ class SupabaseClient {
   /// Paid students attributed to this teacher (primary Group = most recent
   /// join). Same base as Est. Commission 30%. Free joins are not counted.
   Future<int> getTeacherSubscriberCount(String teacherUserId) async {
-    final response = await client.rpc('fn_teacher_subscriber_count', params: {
-      'p_teacher_id': teacherUserId,
-    });
+    final response = await client.rpc(
+      'fn_teacher_subscriber_count',
+      params: {'p_teacher_id': teacherUserId},
+    );
     if (response == null) return 0;
     return (response as num).toInt();
   }
@@ -238,6 +243,7 @@ class SupabaseClient {
 
     return List<Map<String, dynamic>>.from(response as List);
   }
+
   /// Google Play generative-AI policy — single entry point for users to
   /// flag offensive/incorrect AI content (Profile → Report AI content).
   /// Inserts into `ai_content_reports` (see create_ai_content_reports_table.sql).
@@ -255,6 +261,7 @@ class SupabaseClient {
       'reference_note': referenceNote,
     });
   }
+
   /// Saves the student onboarding screen's answers: `username`/`avatar_color`
   /// go on `users`, `age`/`education_level`/`subjects` go on
   /// `student_profiles` (upsert — the row may not exist yet). Marks
@@ -272,11 +279,14 @@ class SupabaseClient {
     String? city,
     String? state,
   }) async {
-    await client.from('users').update({
-      'username': ?username,
-      'avatar_color': ?avatarColor,
-      'onboarding_completed': true,
-    }).eq('id', userId);
+    await client
+        .from('users')
+        .update({
+          'username': ?username,
+          'avatar_color': ?avatarColor,
+          'onboarding_completed': true,
+        })
+        .eq('id', userId);
 
     await client.from('student_profiles').upsert({
       'user_id': userId,
@@ -288,6 +298,14 @@ class SupabaseClient {
       'city': city,
       'state': state,
     }, onConflict: 'user_id');
+    try {
+      await client.rpc(
+        'claim_profile_setup_bonus',
+        params: {'p_user_id': userId},
+      );
+    } catch (_) {
+      // The profile remains saved if the bonus migration is not deployed yet.
+    }
   }
 
   /// "I'm a Teacher" on the role-selection screen. Every signup defaults to
@@ -296,10 +314,10 @@ class SupabaseClient {
   /// profile from the Teacher Dashboard's "Edit Teacher Profile" sheet
   /// instead of the student onboarding form.
   Future<void> chooseTeacherRole(String userId) async {
-    await client.from('users').update({
-      'role': 'teacher',
-      'onboarding_completed': true,
-    }).eq('id', userId);
+    await client
+        .from('users')
+        .update({'role': 'teacher', 'onboarding_completed': true})
+        .eq('id', userId);
   }
 
   /// Legal Consent (Task 2) — marks the First Login Legal Consent screen
@@ -308,24 +326,26 @@ class SupabaseClient {
   /// same way it reads `onboarding_completed`, and never shows the
   /// consent screen again once this is set.
   Future<void> acceptLegalPolicies(String userId) async {
-    await client.from('users').update({
-      'legal_accepted': true,
-      'legal_accepted_at': DateTime.now().toUtc().toIso8601String(),
-    }).eq('id', userId);
+    await client
+        .from('users')
+        .update({
+          'legal_accepted': true,
+          'legal_accepted_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', userId);
   }
 
   /// Load student profile fields for Edit Profile (users + student_profiles).
-  Future<Map<String, dynamic>> fetchStudentOnboardingBundle(String userId) async {
+  Future<Map<String, dynamic>> fetchStudentOnboardingBundle(
+    String userId,
+  ) async {
     final userRow = await getUserProfile(userId);
     final sp = await client
         .from('student_profiles')
         .select()
         .eq('user_id', userId)
         .maybeSingle();
-    return {
-      'users': userRow ?? <String, dynamic>{},
-      'student_profiles': sp,
-    };
+    return {'users': userRow ?? <String, dynamic>{}, 'student_profiles': sp};
   }
 
   /// Soft-delete account (Library kept until purge_after ≈ +30 days).

@@ -59,6 +59,9 @@ class AIConfig:
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
     AI_CHAT_MODEL: str = os.getenv("AI_CHAT_MODEL", "qwen/qwen3")
     AI_FALLBACK_MODEL: str = os.getenv("AI_FALLBACK_MODEL", "qwen/qwen3")
+    GEMINI_CHAT_MODEL: str = os.getenv(
+        "GEMINI_CHAT_MODEL", "gemini-2.5-flash-lite"
+    )
     # Roleplay voice output reuses the same OpenRouter credential as Qwen3.
     # Keeping the model and voice configurable avoids embedding provider values
     # in the voice service.

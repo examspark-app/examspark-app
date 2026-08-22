@@ -12,6 +12,14 @@ class InviteDeepLink {
     return _codeFromPath(uri.path);
   }
 
+  static String? referralCodeFromUri(Uri uri) {
+    final code =
+        uri.queryParameters['ref'] ??
+        Uri.tryParse(uri.fragment)?.queryParameters['ref'];
+    if (code == null || code.trim().length < 4) return null;
+    return code.trim().toUpperCase();
+  }
+
   static String? _codeFromPath(String raw) {
     var path = raw.trim();
     if (path.isEmpty) return null;

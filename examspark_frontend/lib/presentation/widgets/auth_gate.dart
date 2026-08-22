@@ -8,6 +8,8 @@ import 'package:examspark_frontend/core/services/fcm_push_service.dart';
 import 'package:examspark_frontend/core/services/notification_inbox_controller.dart';
 import 'package:examspark_frontend/core/services/pending_invite_store.dart';
 import 'package:examspark_frontend/core/services/app_update_service.dart';
+import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/services/device_identifier.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/presentation/screens/auth/update_password_screen.dart';
@@ -44,10 +46,13 @@ class _AuthGateState extends State<AuthGate> {
   // the profile row to unblock AppShell.
   bool _legalHandledLocally = false;
   bool _roleChosenAsStudent = false;
+
   /// Snapshot used for build — not replaced on token refresh.
   bool _hasSession = false;
+
   /// Once true, never swap AppShell for a profile spinner again (minimize-safe).
   bool _shellReady = false;
+
   /// Invite link after Sign Up / Google — open group once shell is ready.
   bool _pendingInviteRouted = false;
   bool _updateCheckDone = false;
@@ -64,7 +69,9 @@ class _AuthGateState extends State<AuthGate> {
       _profileFuture = SupabaseClient.instance.getUserProfile(uid);
     }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) => _maybeShowUpdateDialog());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _maybeShowUpdateDialog(),
+    );
     _authSub = SupabaseClient.instance.authStateChanges.listen((state) {
       if (!mounted) return;
 
@@ -124,10 +131,24 @@ class _AuthGateState extends State<AuthGate> {
           _profileFuture = SupabaseClient.instance.getUserProfile(userId);
         }
       });
+      final referralCode =
+          session.user.userMetadata?['referral_code'] as String?;
+      if (referralCode != null && referralCode.trim().isNotEmpty) {
+        unawaited(LectureService.instance.redeemReferral(referralCode));
+      }
+      unawaited(_registerDeviceForSignedInUser());
       // Register FCM token after login (phone). Start in-app + web desktop inbox.
       unawaited(FcmPushService.instance.registerTokenWithBackend());
       unawaited(NotificationInboxController.instance.start());
     });
+  }
+
+  Future<void> _registerDeviceForSignedInUser() async {
+    final deviceId = await getDeviceIdentifier();
+    if (deviceId == null) return;
+    try {
+      await LectureService.instance.registerDeviceAccount(deviceId);
+    } catch (_) {}
   }
 
   @override
@@ -246,8 +267,7 @@ class _AuthGateState extends State<AuthGate> {
     return FutureBuilder<Map<String, dynamic>?>(
       future: _profileFuture,
       builder: (context, profileSnapshot) {
-        final waiting =
-            profileSnapshot.connectionState != ConnectionState.done;
+        final waiting = profileSnapshot.connectionState != ConnectionState.done;
         // After shell once ready, never flash spinner (wipes chat / notes).
         if (waiting && !_shellReady) {
           return const Scaffold(
@@ -274,8 +294,7 @@ class _AuthGateState extends State<AuthGate> {
             purgeAfter: SupabaseClient.parsePurgeAfter(profile),
             onRecovered: () {
               setState(() {
-                _profileFuture =
-                    SupabaseClient.instance.getUserProfile(userId);
+                _profileFuture = SupabaseClient.instance.getUserProfile(userId);
                 _onboardingHandledLocally = false;
                 _shellReady = false;
               });
@@ -300,9 +319,11 @@ class _AuthGateState extends State<AuthGate> {
         // instead of the (possibly stale, not-yet-refetched) cached profile
         // future — otherwise accepting one gate while the other is still
         // pending would re-show a screen the user just cleared.
-        final legalAccepted = _legalHandledLocally ||
+        final legalAccepted =
+            _legalHandledLocally ||
             (profile?['legal_accepted'] as bool? ?? false);
-        final onboardingCompleted = _onboardingHandledLocally ||
+        final onboardingCompleted =
+            _onboardingHandledLocally ||
             (profile?['onboarding_completed'] as bool? ?? true);
 
         // ===== TASK 2 — First Login Consent Screen =====

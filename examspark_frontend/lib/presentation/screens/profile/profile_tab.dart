@@ -49,6 +49,7 @@ class _ProfileTabState extends State<ProfileTab> {
     return (metadata['avatar_url'] as String?) ??
         (metadata['picture'] as String?);
   }
+
   String get _planLabel {
     final def = SubscriptionPlans.byId(_planId);
     return def != null ? '${def.name} Plan' : 'Free Plan';
@@ -111,7 +112,7 @@ class _ProfileTabState extends State<ProfileTab> {
         _userName = (profile?['username'] as String?)?.trim().isNotEmpty == true
             ? (profile!['username'] as String)
             : ((profile?['full_name'] as String?) ??
-                (user.email?.split('@').first ?? 'User'));
+                  (user.email?.split('@').first ?? 'User'));
         _userEmail = user.email ?? '';
         _isTeacher = (profile?['role'] as String?) == 'teacher';
         _libraryLectureCount = lectureCount;
@@ -152,8 +153,7 @@ class _ProfileTabState extends State<ProfileTab> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setDialog) {
-            final typedOk =
-                controller.text.trim().toUpperCase() == 'DELETE';
+            final typedOk = controller.text.trim().toUpperCase() == 'DELETE';
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppTheme.borderRadius),
@@ -174,8 +174,8 @@ class _ProfileTabState extends State<ProfileTab> {
                     Text(
                       'Type DELETE to confirm',
                       style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     TextField(
@@ -234,14 +234,23 @@ class _ProfileTabState extends State<ProfileTab> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppTheme.borderRadius)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        ),
         title: const Text('Log out?'),
-        content: const Text('You will need to sign in again to access your lectures.'),
+        content: const Text(
+          'You will need to sign in again to access your lectures.',
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(context, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(context).colorScheme.error),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
             child: const Text('Log out'),
           ),
         ],
@@ -275,9 +284,20 @@ class _ProfileTabState extends State<ProfileTab> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text(title, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold, fontSize: 17)),
+              Text(
+                title,
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 17,
+                ),
+              ),
               const SizedBox(height: 10),
-              Text(body, style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5)),
+              Text(
+                body,
+                style: Theme.of(
+                  context,
+                ).textTheme.bodyMedium?.copyWith(height: 1.5),
+              ),
               const SizedBox(height: 16),
             ],
           ),
@@ -339,22 +359,21 @@ class _ProfileTabState extends State<ProfileTab> {
               ),
               actions: [
                 TextButton(
-                  onPressed:
-                      submitting ? null : () => Navigator.pop(ctx),
+                  onPressed: submitting ? null : () => Navigator.pop(ctx),
                   child: const Text('Cancel'),
                 ),
                 ElevatedButton(
                   onPressed: submitting
                       ? null
                       : () async {
-                          final description =
-                              descriptionController.text.trim();
+                          final description = descriptionController.text.trim();
                           if (description.isEmpty) {
                             AppToast.showSnackBar(
                               context,
                               const SnackBar(
-                                content:
-                                    Text('Please describe the issue first.'),
+                                content: Text(
+                                  'Please describe the issue first.',
+                                ),
                               ),
                             );
                             return;
@@ -365,8 +384,8 @@ class _ProfileTabState extends State<ProfileTab> {
                               description: description,
                               referenceNote:
                                   referenceController.text.trim().isEmpty
-                                      ? null
-                                      : referenceController.text.trim(),
+                                  ? null
+                                  : referenceController.text.trim(),
                             );
                             if (!ctx.mounted) return;
                             Navigator.pop(ctx);
@@ -424,15 +443,29 @@ class _ProfileTabState extends State<ProfileTab> {
         children: [
           Row(
             children: [
-              InitialsAvatar(name: _userName, photoUrl: _googlePhotoUrl, size: 56),
+              InitialsAvatar(
+                name: _userName,
+                photoUrl: _googlePhotoUrl,
+                size: 56,
+              ),
               const SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(_userName, style: Theme.of(context).textTheme.bodyLarge?.copyWith(fontSize: 17, fontWeight: FontWeight.w700)),
+                    Text(
+                      _userName,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                     if (_userEmail.isNotEmpty)
-                      Text(_userEmail, style: Theme.of(context).textTheme.bodySmall, overflow: TextOverflow.ellipsis),
+                      Text(
+                        _userEmail,
+                        style: Theme.of(context).textTheme.bodySmall,
+                        overflow: TextOverflow.ellipsis,
+                      ),
                   ],
                 ),
               ),
@@ -462,6 +495,12 @@ class _ProfileTabState extends State<ProfileTab> {
               label: 'Credits',
               trailingText: '$_creditsBalance',
               onTap: () => Navigator.pushNamed(context, '/credits/history'),
+            ),
+            _divider(context),
+            ProfileRow(
+              icon: Icons.card_giftcard_outlined,
+              label: 'Refer & Earn',
+              onTap: () => Navigator.pushNamed(context, '/refer-earn'),
             ),
             _divider(context),
             ProfileRow(

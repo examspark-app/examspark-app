@@ -8,7 +8,9 @@ starts automatically (old one stays visible in Recent history).
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import re
 import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
@@ -33,6 +35,8 @@ _CONTEXT_MESSAGES = 8          # last N messages sent to the model
 _MAX_SESSION_MESSAGES = 500
 _NEW_CHAT_SUGGESTION_THRESHOLD = 100
 _CREDIT_COST = 2
+_CHAT_MODELS = {"qwen3", "gemini"}
+_MCQ_MAX_GAP_MESSAGES = 20
 
 
 class EnglishPracticeError(Exception):
@@ -43,6 +47,19 @@ class EnglishPracticeError(Exception):
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _schedule_reply_tts(user_id: str, text: str) -> None:
+    """Warm the TTS cache without delaying the text chat response."""
+    async def synthesize() -> None:
+        try:
+            from app.services.gemini_tts_service import synthesize_for_user
+
+            await synthesize_for_user(user_id, text)
+        except Exception:
+            logger.debug("English Practice background TTS failed", exc_info=True)
+
+    asyncio.create_task(synthesize())
 
 
 def _extract_suggestions(text: str) -> tuple[str, list[str]]:
@@ -99,7 +116,7 @@ def _extract_mcq(text: str) -> tuple[str, dict | None]:
         or not question.strip()
         or not isinstance(options, list)
         or len(options) != 3
-        or not all(isinstance(o, str) and str(o).strip() for o in options)
+        or not all(_is_full_sentence_option(o) for o in options)
         or not isinstance(correct, int)
         or correct < 0
         or correct > 2
@@ -110,6 +127,13 @@ def _extract_mcq(text: str) -> tuple[str, dict | None]:
         "options": [str(o).strip() for o in options],
         "correct_option": int(correct),
     }
+
+
+def _is_full_sentence_option(option: object) -> bool:
+    if not isinstance(option, str):
+        return False
+    words = re.findall(r"[\w']+", option.strip(), flags=re.UNICODE)
+    return len(words) >= 3 and bool(re.search(r"[.!?]$", option.strip()))
 
 
 def _build_mcq_instruction(native_language: str, target_language: str) -> str:
@@ -133,6 +157,9 @@ WHEN TO INCLUDE IT:
   (the existing open-ended practice marker). Use one or the other per turn.
 - Skip it entirely if the same question structure (grammar vs vocab vs
   translation) was already used in either of the last 2 AI replies — vary it.
+- Every option MUST be a complete, natural sentence relevant to the situation
+    or grammar point. Never use an isolated word, phrase fragment, or single
+    vocabulary item as an option.
 
 OUTPUT FORMAT — if you include it, APPEND AFTER the normal reply EXACTLY:
 <<PRACTICE_MCQ>>
@@ -214,6 +241,43 @@ TEACHING RULES (once the level is known):
 - Be encouraging, never robotic, never repeat the same phrasing twice in a row.
 - Never break character or mention that you are an AI model or a prompt.
 
+THREE-STAGE LEARNING PROGRESSION — CHAT MODE:
+- Stage 1 is the existing foundation: language setup, level discovery,
+    beginner teaching, and learning-memory building. Do not skip or replace it.
+- Once the learner has a foundation and seems ready, move naturally into
+    Stage 2 practical situational learning. Teach one real-world situation at a
+    time, such as speaking with a taxi driver, asking a shop price, or asking
+    for directions. Give concrete, usable {tgt} phrases, not only an abstract
+    explanation. If {tgt} and {native_language} use different scripts, add the
+    natural {native_language}-script pronunciation guide in brackets immediately
+    after target-language phrases, using the same rule as the MCQ content.
+- Judge readiness from the learner's engagement and answers, not from a fixed
+    turn count. Keep the situation short and useful, then invite one small try.
+- At any point, if the learner says they have a doubt, asks a different
+    question, or requests another situation, pause the current example and
+    address the new request in the same chat. Never force completion of a lesson
+    topic and never require a New Chat for an in-language topic change.
+- After sufficient practical practice, explicitly ask whether the learner
+    wants to move into Roleplay Mode to practise the situation hands-on. This is
+    a real optional choice: never switch silently or force the handoff. If they
+    decline, continue Chat Mode help naturally.
+
+CORRECTION AND RETRY — USE WHENEVER THE LEARNER MAKES A GRAMMAR OR SPEAKING
+ERROR:
+- Stay warm and encouraging: briefly react first, then say the correction is
+    a small fix, never say only "wrong" and never shame the learner.
+- Show the correct {tgt} word or sentence. If the learner is a beginner,
+    explain the reason briefly in natural {native_language}.
+- Invite an actual retry in the next beat: ask the learner to say or type the
+    corrected phrase themselves. Do not correct and immediately move on without
+    giving them that chance.
+- Add a practical speaking tip when useful, such as speaking slowly, breaking
+    the phrase into two parts, or stressing one key word. Keep it short.
+- For a pronunciation mistake where audio is available, model the target
+    phrase, give the brief tip, and ask them to record it again. For text-only
+    input, treat likely spelling/grammar problems gently and still invite a
+    spoken or typed retry.
+
 {SUGGESTION_INSTRUCTION}
 {_build_mcq_instruction(native_language, tgt)}
 {build_conversation_flow_instruction(focus_selected=bool(target_focus))}
@@ -221,6 +285,20 @@ TEACHING RULES (once the level is known):
     if target_focus:
         base += f"\nThe student already chose to focus on: {target_focus}. Do not ask this again — teach it directly.\n"
     return base + (f"\n\n{memory_context}" if memory_context else '')
+
+
+def _mcq_cadence_instruction(force_mcq: bool) -> str:
+    if not force_mcq:
+        return ""
+    return """
+MCQ CADENCE GUARD — IMPORTANT:
+The conversation has reached the maximum allowed gap since the last MCQ.
+This reply MUST append exactly one <<PRACTICE_MCQ>> block after the normal
+reply. Make it a short grammar/context question based on this turn, with
+exactly three complete sentence options and one correct_option index. Do not
+skip it merely because the moment is conversational; keep the sentences easy
+and relevant. Do not use <<PRACTICE_QUESTION>> on this reply.
+"""
 
 
 def _temperature_for_messages(message_count: int) -> float:
@@ -239,7 +317,7 @@ def _max_tokens_for_messages(message_count: int) -> int:
     return 900
 
 
-async def _call_model(messages: list[dict]) -> str:
+async def _call_model(messages: list[dict], model: str | None = None) -> str:
     """Non-streaming OpenRouter call — used for turns that return JSON extras."""
     import httpx
     from app.config import AIConfig
@@ -257,7 +335,7 @@ async def _call_model(messages: list[dict]) -> str:
         "Content-Type": "application/json",
     }
     body = {
-        "model": AIConfig.AI_CHAT_MODEL,
+        "model": model or AIConfig.AI_CHAT_MODEL,
         "messages": messages,
         "temperature": temperature,
         "max_tokens": max_tokens,
@@ -296,6 +374,107 @@ async def _call_model(messages: list[dict]) -> str:
         raise
     except Exception as e:
         raise EnglishPracticeError(f"Tutor error: {e}", 500) from e
+
+
+async def _call_gemini_model(messages: list[dict]) -> str:
+    if not AIConfig.gemini_tts_configured():
+        raise EnglishPracticeError(
+            "GEMINI_API_KEY not configured on the server.", 500
+        )
+    system_parts = [
+        {"text": message["content"]}
+        for message in messages
+        if message.get("role") == "system"
+    ]
+    contents = [
+        {
+            "role": "model" if message.get("role") == "assistant" else "user",
+            "parts": [{"text": message.get("content", "")}],
+        }
+        for message in messages
+        if message.get("role") != "system"
+    ]
+    payload = {
+        "systemInstruction": {"parts": system_parts},
+        "contents": contents,
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 900,
+        },
+    }
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        f"{AIConfig.GEMINI_CHAT_MODEL}:generateContent"
+    )
+    try:
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            response = await client.post(
+                url,
+                headers={"x-goog-api-key": AIConfig.GEMINI_API_KEY},
+                json=payload,
+            )
+            if response.status_code != 200:
+                raise EnglishPracticeError(
+                    f"Gemini tutor call failed ({response.status_code}): "
+                    f"{response.text[:400]}",
+                    502,
+                )
+            try:
+                candidates = response.json().get("candidates") or []
+                parts = (candidates[0].get("content") or {}).get("parts") or []
+                text = "".join(
+                    part.get("text", "")
+                    for part in parts
+                    if isinstance(part, dict)
+                ).strip()
+            except (IndexError, KeyError, TypeError, ValueError) as error:
+                raise EnglishPracticeError(
+                    "Gemini returned an invalid response.", 502
+                ) from error
+            if not text:
+                raise EnglishPracticeError("Gemini returned an empty response.", 502)
+            return text
+    except httpx.TimeoutException as e:
+        raise EnglishPracticeError("Gemini tutor call timed out.", 504) from e
+    except httpx.RequestError as e:
+        raise EnglishPracticeError(f"Gemini tutor network error: {e}", 502) from e
+
+
+async def _call_chat_model(messages: list[dict], selected_model: str) -> str:
+    model = selected_model if selected_model in _CHAT_MODELS else "qwen3"
+    fallback = "gemini" if model == "qwen3" else "qwen3"
+    try:
+        if model == "gemini":
+            reply = await _call_gemini_model(messages)
+        else:
+            reply = await _call_model(messages)
+        logger.info("english_practice_chat_model_selected=%s served=%s", model, model)
+        return reply
+    except EnglishPracticeError as primary_error:
+        logger.warning(
+            "english_practice_chat_model_failed selected=%s fallback=%s error=%s",
+            model,
+            fallback,
+            type(primary_error).__name__,
+        )
+        try:
+            if fallback == "gemini":
+                reply = await _call_gemini_model(messages)
+            else:
+                reply = await _call_model(messages)
+            logger.info(
+                "english_practice_chat_model_selected=%s served=%s",
+                model,
+                fallback,
+            )
+            return reply
+        except EnglishPracticeError:
+            logger.exception(
+                "english_practice_chat_models_failed selected=%s fallback=%s",
+                model,
+                fallback,
+            )
+            raise primary_error
 
 
 async def _stream_model(messages: list[dict]) -> AsyncIterator[str]:
@@ -459,6 +638,7 @@ def restore_session(session_id: str, user_id: str) -> dict | None:
         "pinned": bool(session.get("pinned")),
         "native_language": session.get("native_language") or "English",
         "target_language": session.get("target_language") or "English",
+        "text_model": session.get("text_model") or "qwen3",
         "created_at": session.get("created_at"),
         "updated_at": session.get("updated_at"),
         "messages": list(messages),
@@ -527,6 +707,7 @@ def _build_context_messages(
     native_language: str,
     target_language: str,
     focus: str | None,
+    force_mcq: bool = False,
 ) -> tuple[list[dict], int]:
     db = get_supabase_admin()
     rows = (
@@ -549,6 +730,7 @@ def _build_context_messages(
         memory_context=memory_context,
         target_language=target_language,
     )
+    system_text += _mcq_cadence_instruction(force_mcq)
     messages: list[dict] = [{"role": "system", "content": system_text}]
     messages += [{"role": r["role"], "content": r["message"]} for r in reversed(rows)]
     return messages, message_count
@@ -583,6 +765,12 @@ def _message_count_incremental(session_id: str, user_id: str) -> int:
     return len(rows)
 
 
+def _mark_mcq_shown(session_id: str, user_id: str, message_count: int) -> None:
+    get_supabase_admin().table("english_practice_sessions").update(
+        {"last_mcq_message_count": message_count}
+    ).eq("id", session_id).eq("user_id", user_id).execute()
+
+
 def _split_and_extract(raw_reply: str) -> tuple[str, list[str], dict | None]:
     """Run extractors in order and return (clean_text, suggestions, mcq)."""
     clean, suggestions = _extract_suggestions(raw_reply)
@@ -590,7 +778,7 @@ def _split_and_extract(raw_reply: str) -> tuple[str, list[str], dict | None]:
     return clean.strip(), suggestions, mcq
 
 
-async def start_session(user_id: str) -> dict:
+async def start_session(user_id: str, model: str = "qwen3") -> dict:
     db = get_supabase_admin()
     native = get_native_language(user_id) or "English"
     target = get_target_language(user_id) or "English"
@@ -606,6 +794,7 @@ async def start_session(user_id: str) -> dict:
                 "status": "active",
                 "title": f"{target} Practice · {_now()[:10]}",
                 "message_count": 0,
+                "text_model": model if model in _CHAT_MODELS else "qwen3",
             }
         )
         .execute()
@@ -621,23 +810,20 @@ async def start_session(user_id: str) -> dict:
         memory_context=memory_context,
         target_language=target,
     )
-    raw = await _call_model(
+    raw = await _call_chat_model(
         [
             {"role": "system", "content": system_text},
             {
                 "role": "user",
                 "content": "(system: This is the very first greeting turn of a brand new conversation. Welcome the learner warmly in their native language, keep it short and EXCITED — like running into a friend who wants to finally learn something together, not a reception desk. FRIEND-ENERGY CALIBRATION: Do NOT just flatly say 'Welcome! What would you like to learn today?' Instead, give ONE tiny specific vibe/opinion first (e.g. a playful 'Great day to start speaking — way better than scrolling, trust me lol' or whatever feels natural in their native language, fresh every time), then fold the rest into that reaction. If you do NOT already know the learner's name (check the learner-memory block above), casually ask for it ONCE as part of your greeting — do NOT make it sound like a form field. Then ask them whether they want to start with basic speaking, grammar, or vocabulary. If you already know their name from the memory block, you may use it naturally once. Do NOT emit a PRACTICE_MCQ block on this opening turn. BAD flat example to AVOID: 'Namaste! Aapka swagat hai. Aap kya seekhna chahenge?' GOOD alive example (feel only, do NOT copy words — invent a fresh vibe): 'Wah! Aaj finally {tgt} सीखने का perfect day hai — honestly main bhi excited hoon shuru karne ke liye! 😊 Pehle to bataiye, aapka naam kya hai? Phir decide karte hain — start with bolna chahenge, ya thoda grammar, ya naye vocabulary words?')",
             },
-        ]
+        ],
+        model if model in _CHAT_MODELS else "qwen3",
     )
     clean, suggestions, mcq = _split_and_extract(raw)
     greeting = clean or f"Welcome! Let's start {target} practice — pick speaking, grammar, or vocabulary to begin."
     _persist_message(sid, user_id, "assistant", greeting)
-    try:
-        from app.services.gemini_tts_service import synthesize_for_user as _tts
-        audio_bytes, mime = await _tts(user_id, greeting)
-    except Exception:
-        audio_bytes, mime = None, None
+    _schedule_reply_tts(user_id, greeting)
     result: dict = {
         "session_id": sid,
         "native_language": native,
@@ -648,9 +834,6 @@ async def start_session(user_id: str) -> dict:
     }
     if mcq is not None:
         result["mcq"] = mcq
-    if audio_bytes is not None:
-        result["audio_bytes"] = audio_bytes
-        result["audio_mime_type"] = mime
     return result
 
 
@@ -665,7 +848,10 @@ async def send_message(
         raise EnglishPracticeError("Message cannot be empty.", 400)
     native = session.get("native_language") or get_native_language(user_id) or "English"
     target = session.get("target_language") or "English"
+    model = session.get("text_model") or "qwen3"
     existing_count = _message_count_incremental(session_id, user_id)
+    last_mcq_count = int(session.get("last_mcq_message_count") or 0)
+    force_mcq = existing_count >= last_mcq_count + _MCQ_MAX_GAP_MESSAGES - 2
     if existing_count >= _MAX_SESSION_MESSAGES:
         raise EnglishPracticeError(
             "This session has reached 100 messages. Please start a new chat.",
@@ -690,8 +876,9 @@ async def send_message(
         native_language=native,
         target_language=target,
         focus=focus,
+        force_mcq=force_mcq,
     )
-    raw_reply = await _call_model(messages)
+    raw_reply = await _call_chat_model(messages, model)
     clean, suggestions, mcq = _split_and_extract(raw_reply)
     reply = clean or "Okay, let's continue."
     _persist_message(session_id, user_id, "assistant", reply)
@@ -703,6 +890,7 @@ async def send_message(
         assistant_text=reply,
         target_language=target,
     )
+    _schedule_reply_tts(user_id, reply)
     result: dict = {
         "reply": reply,
         "suggestions": suggestions,
@@ -711,14 +899,7 @@ async def send_message(
     }
     if mcq is not None:
         result["mcq"] = mcq
-    try:
-        from app.services.gemini_tts_service import synthesize_for_user as _tts
-        audio_bytes, mime = await _tts(user_id, reply)
-        if audio_bytes is not None:
-            result["audio_bytes"] = audio_bytes
-            result["audio_mime_type"] = mime
-    except Exception:
-        pass
+        _mark_mcq_shown(session_id, user_id, existing_count + 2)
     return result
 
 

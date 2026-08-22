@@ -16,6 +16,7 @@ import 'package:examspark_frontend/core/services/home_session_bridge.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/presentation/widgets/brand_mark.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_entry.dart';
+
 /// The 5-tab app shell — single navigation root after login.
 /// Home · Library · Groups · Progress · Profile — nothing more.
 ///
@@ -160,7 +161,9 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
     if (_loadingSessions) return;
     setState(() => _loadingSessions = true);
     try {
-      final sessions = await LectureService.instance.homeAiListSessions(limit: 15);
+      final sessions = await LectureService.instance.homeAiListSessions(
+        limit: 15,
+      );
       if (!mounted) return;
       setState(() {
         _recentSessions = sessions;
@@ -171,7 +174,8 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
       setState(() => _loadingSessions = false);
     }
   }
-Future<void> _renameSession(Map<String, dynamic> s) async {
+
+  Future<void> _renameSession(Map<String, dynamic> s) async {
     final id = s['id']?.toString();
     if (id == null || id.isEmpty) return;
     final controller = TextEditingController(
@@ -188,7 +192,10 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
           decoration: const InputDecoration(hintText: 'Chat title'),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, controller.text.trim()),
             child: const Text('Save'),
@@ -231,10 +238,15 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
         title: const Text('Delete chat?'),
         content: const Text('This chat will be permanently deleted.'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Theme.of(ctx).colorScheme.error),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Theme.of(ctx).colorScheme.error,
+            ),
             child: const Text('Delete'),
           ),
         ],
@@ -276,8 +288,14 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
               },
             ),
             ListTile(
-              leading: Icon(Icons.delete_outline_rounded, color: Theme.of(ctx).colorScheme.error),
-              title: Text('Delete', style: TextStyle(color: Theme.of(ctx).colorScheme.error)),
+              leading: Icon(
+                Icons.delete_outline_rounded,
+                color: Theme.of(ctx).colorScheme.error,
+              ),
+              title: Text(
+                'Delete',
+                style: TextStyle(color: Theme.of(ctx).colorScheme.error),
+              ),
               onTap: () {
                 Navigator.pop(ctx);
                 _deleteSession(s);
@@ -289,6 +307,7 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
       ),
     );
   }
+
   Widget _buildAppDrawer(BuildContext context) {
     final iconColor = AppTheme.getPrimaryText(context);
     return Drawer(
@@ -329,7 +348,11 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
-                    leading: Icon(Icons.home_outlined, size: 20, color: iconColor),
+                    leading: Icon(
+                      Icons.home_outlined,
+                      size: 20,
+                      color: iconColor,
+                    ),
                     title: const Text('Home', style: TextStyle(fontSize: 14)),
                     onTap: () {
                       Navigator.pop(context);
@@ -339,8 +362,15 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
-                    leading: Icon(Icons.record_voice_over_outlined, size: 20, color: iconColor),
-                    title: const Text('English Practice', style: TextStyle(fontSize: 14)),
+                    leading: Icon(
+                      Icons.record_voice_over_outlined,
+                      size: 20,
+                      color: iconColor,
+                    ),
+                    title: const Text(
+                      'English Practice',
+                      style: TextStyle(fontSize: 14),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.push(
@@ -354,8 +384,15 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
-                    leading: Icon(Icons.folder_outlined, size: 20, color: iconColor),
-                    title: const Text('Library', style: TextStyle(fontSize: 14)),
+                    leading: Icon(
+                      Icons.folder_outlined,
+                      size: 20,
+                      color: iconColor,
+                    ),
+                    title: const Text(
+                      'Library',
+                      style: TextStyle(fontSize: 14),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       _goToTab(1);
@@ -364,7 +401,11 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
-                    leading: Icon(Icons.groups_outlined, size: 20, color: iconColor),
+                    leading: Icon(
+                      Icons.groups_outlined,
+                      size: 20,
+                      color: iconColor,
+                    ),
                     title: const Text('Groups', style: TextStyle(fontSize: 14)),
                     onTap: () {
                       Navigator.pop(context);
@@ -374,8 +415,15 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
-                    leading: Icon(Icons.trending_up_rounded, size: 20, color: iconColor),
-                    title: const Text('Progress', style: TextStyle(fontSize: 14)),
+                    leading: Icon(
+                      Icons.trending_up_rounded,
+                      size: 20,
+                      color: iconColor,
+                    ),
+                    title: const Text(
+                      'Progress',
+                      style: TextStyle(fontSize: 14),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       _goToTab(3);
@@ -384,8 +432,15 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
-                    leading: Icon(Icons.person_outline, size: 20, color: iconColor),
-                    title: const Text('Profile', style: TextStyle(fontSize: 14)),
+                    leading: Icon(
+                      Icons.person_outline,
+                      size: 20,
+                      color: iconColor,
+                    ),
+                    title: const Text(
+                      'Profile',
+                      style: TextStyle(fontSize: 14),
+                    ),
                     onTap: () {
                       Navigator.pop(context);
                       _goToTab(4);
@@ -394,7 +449,11 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
-                    leading: Icon(Icons.bolt_outlined, size: 20, color: iconColor),
+                    leading: Icon(
+                      Icons.bolt_outlined,
+                      size: 20,
+                      color: iconColor,
+                    ),
                     title: Text(
                       'Credits — ${SessionLiveSync.instance.creditsBalance}',
                       style: const TextStyle(fontSize: 14),
@@ -404,12 +463,36 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                       Navigator.pushNamed(context, '/credits/history');
                     },
                   ),
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
+                    leading: Icon(
+                      Icons.card_giftcard_outlined,
+                      size: 20,
+                      color: iconColor,
+                    ),
+                    title: const Text(
+                      'Refer & Earn',
+                      style: TextStyle(fontSize: 14),
+                    ),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/refer-earn');
+                    },
+                  ),
                   if (_isTeacher)
                     ListTile(
                       dense: true,
                       visualDensity: VisualDensity.compact,
-                      leading: Icon(Icons.school_rounded, size: 20, color: iconColor),
-                      title: const Text('Teacher Dashboard', style: TextStyle(fontSize: 14)),
+                      leading: Icon(
+                        Icons.school_rounded,
+                        size: 20,
+                        color: iconColor,
+                      ),
+                      title: const Text(
+                        'Teacher Dashboard',
+                        style: TextStyle(fontSize: 14),
+                      ),
                       onTap: () {
                         Navigator.pop(context);
                         Navigator.pushNamed(context, '/teacher');
@@ -421,11 +504,11 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                     child: Text(
                       'RECENT CHATS',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.getSecondaryText(context),
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            letterSpacing: 0.5,
-                          ),
+                        color: AppTheme.getSecondaryText(context),
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.5,
+                      ),
                     ),
                   ),
                   if (_loadingSessions)
@@ -441,12 +524,15 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                     )
                   else if (_recentSessions == null || _recentSessions!.isEmpty)
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
                       child: Text(
                         'No chats yet',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.getSecondaryText(context),
-                            ),
+                          color: AppTheme.getSecondaryText(context),
+                        ),
                       ),
                     )
                   else
@@ -470,7 +556,11 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                           overflow: TextOverflow.ellipsis,
                         ),
                         trailing: IconButton(
-                          icon: Icon(Icons.more_vert_rounded, size: 18, color: iconColor),
+                          icon: Icon(
+                            Icons.more_vert_rounded,
+                            size: 18,
+                            color: iconColor,
+                          ),
                           padding: EdgeInsets.zero,
                           constraints: const BoxConstraints(),
                           onPressed: () => _showChatOptions(s),
@@ -480,7 +570,9 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                           _goToTab(0);
                           final id = s['id']?.toString();
                           if (id != null && id.isNotEmpty) {
-                            HomeSessionBridge.instance.requestRestoreSession(id);
+                            HomeSessionBridge.instance.requestRestoreSession(
+                              id,
+                            );
                           }
                         },
                       ),
@@ -489,13 +581,18 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
             ),
             const Divider(height: 1),
             Padding(
-              padding: const EdgeInsets.only(left: 16, right: 16, top: 8, bottom: 10),
+              padding: const EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 8,
+                bottom: 10,
+              ),
               child: Text(
                 'Sonaxia can make mistakes. Check important info.',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: AppTheme.getSecondaryText(context),
-                      fontSize: 10.5,
-                    ),
+                  color: AppTheme.getSecondaryText(context),
+                  fontSize: 10.5,
+                ),
                 textAlign: TextAlign.center,
               ),
             ),
@@ -612,21 +709,21 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
       fullPage: useFullPage,
     );
     if (Responsive.useSideNav(context)) {
-  setState(() => _openWorkspace = req);
-} else {
-  showStudyWorkspaceFullScreen(
-    context,
-    lectureId: lectureId,
-    title: title,
-    subject: subject,
-  ).then((_) {
-    if (!mounted) return;
-    if (_persistedWorkspace?.lectureId != lectureId) return;
-    _persistedWorkspace = null;
-    UiSessionStore.instance.clearWorkspace();
-  });
-}
-}
+      setState(() => _openWorkspace = req);
+    } else {
+      showStudyWorkspaceFullScreen(
+        context,
+        lectureId: lectureId,
+        title: title,
+        subject: subject,
+      ).then((_) {
+        if (!mounted) return;
+        if (_persistedWorkspace?.lectureId != lectureId) return;
+        _persistedWorkspace = null;
+        UiSessionStore.instance.clearWorkspace();
+      });
+    }
+  }
 
   void _closeStudyWorkspace() {
     _persistedWorkspace = null;
@@ -727,9 +824,9 @@ Future<void> _renameSession(Map<String, dynamic> s) async {
                 child: Text(
                   'Sonaxia',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                      ),
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
                   textAlign: TextAlign.center,
                 ),
               ),

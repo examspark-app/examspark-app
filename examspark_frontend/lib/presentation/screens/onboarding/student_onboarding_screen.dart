@@ -56,8 +56,9 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
   @override
   void initState() {
     super.initState();
-    _ageController =
-        FixedExtentScrollController(initialItem: _defaultAge - _minAge);
+    _ageController = FixedExtentScrollController(
+      initialItem: _defaultAge - _minAge,
+    );
     if (widget.isEditing) {
       _loadExisting();
     }
@@ -66,8 +67,7 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
   Future<void> _loadExisting() async {
     setState(() => _loadingExisting = true);
     try {
-      final bundle =
-          await SupabaseClient.instance.fetchStudentOnboardingBundle(
+      final bundle = await SupabaseClient.instance.fetchStudentOnboardingBundle(
         widget.userId,
       );
       final users = bundle['users'] as Map<String, dynamic>? ?? {};
@@ -109,7 +109,9 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
       if (subjects is List) {
         _selectedSubjects
           ..clear()
-          ..addAll(subjects.map((e) => e.toString()).where((s) => s.isNotEmpty));
+          ..addAll(
+            subjects.map((e) => e.toString()).where((s) => s.isNotEmpty),
+          );
       }
       if (mounted) setState(() {});
     } catch (_) {
@@ -156,11 +158,41 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
     if (_selectedSubjects.isEmpty) {
       return 'Pick at least one subject';
     }
+    final exam = CustomFieldOption.resolve(
+      _examTarget.isEmpty ? null : _examTarget,
+      _customExamController.text,
+    );
+    if (exam == null || exam.isEmpty) {
+      return 'Pick your exam or board';
+    }
+    if (_cityController.text.trim().isEmpty) {
+      return 'Enter your city';
+    }
     if (_examTarget == CustomFieldOption.label &&
         _customExamController.text.trim().isEmpty) {
       return 'Enter custom exam / board, or pick another option';
     }
     return null;
+  }
+
+  double get _profileCompletion {
+    var complete = 0;
+    if (_usernameController.text.trim().isNotEmpty) complete++;
+    if (_selectedAge >= _minAge && _selectedAge <= _maxAge) complete++;
+    if (_educationLevel?.trim().isNotEmpty == true) complete++;
+    final language = CustomFieldOption.resolve(
+      _preferredLanguage.isEmpty ? null : _preferredLanguage,
+      _customLanguageController.text,
+    );
+    if (language?.isNotEmpty == true) complete++;
+    if (_selectedSubjects.isNotEmpty) complete++;
+    final exam = CustomFieldOption.resolve(
+      _examTarget.isEmpty ? null : _examTarget,
+      _customExamController.text,
+    );
+    if (exam?.isNotEmpty == true) complete++;
+    if (_cityController.text.trim().isNotEmpty) complete++;
+    return complete / 7;
   }
 
   Future<void> _finish() async {
@@ -213,9 +245,7 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
         : 'S';
 
     if (_loadingExisting) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     return Scaffold(
@@ -238,10 +268,9 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                   alignment: Alignment.centerLeft,
                   child: Text(
                     'Tell us about yourself',
-                    style: Theme.of(context)
-                        .textTheme
-                        .displayLarge
-                        ?.copyWith(fontSize: 22),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.displayLarge?.copyWith(fontSize: 22),
                   ),
                 ),
               ),
@@ -251,11 +280,18 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                 alignment: Alignment.centerLeft,
                 child: Text(
                   widget.isEditing
-                      ? 'Update your learning profile. Username, education, language & at least one subject are required.'
-                      : 'Required: username, education, language, and at least one subject. No skip.',
-                  style: Theme.of(context).textTheme.bodySmall,
+                      ? 'Keep your learning profile up to date. Required fields are marked *.'
+                      : 'Add a few details so Sonaxia can personalise your learning. Required fields are marked *.',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: AppTheme.getSecondaryText(context),
+                    height: 1.35,
+                  ),
                 ),
               ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              child: _completionCard(context),
             ),
             Expanded(
               child: SingleChildScrollView(
@@ -299,8 +335,7 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                                 shape: BoxShape.circle,
                                 border: isSelected
                                     ? Border.all(
-                                        color:
-                                            AppTheme.getPrimaryText(context),
+                                        color: AppTheme.getPrimaryText(context),
                                         width: 2,
                                       )
                                     : null,
@@ -326,16 +361,21 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                         filled: true,
                         fillColor: AppTheme.getCardBackground(context),
                         border: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(AppTheme.borderRadius),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.borderRadius,
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 28),
 
+                    Text('Age *', style: Theme.of(context).textTheme.bodyLarge),
+                    const SizedBox(height: 8),
                     Text(
-                      'How old are you?',
-                      style: Theme.of(context).textTheme.bodyLarge,
+                      'Choose your age to help us tailor examples and difficulty.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.getSecondaryText(context),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     _buildAgePicker(context),
@@ -362,8 +402,7 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                                 ? Colors.white
                                 : AppTheme.getPrimaryText(context),
                           ),
-                          backgroundColor:
-                              AppTheme.getCardBackground(context),
+                          backgroundColor: AppTheme.getCardBackground(context),
                           side: BorderSide(
                             color: AppTheme.getCardBorder(context),
                           ),
@@ -373,15 +412,15 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                     const SizedBox(height: 28),
 
                     Text(
-                      'Exam / board (optional — helps Discover)',
+                      'Exam / board *',
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      'Not listed? Choose Custom…',
+                      'Choose the exam or board you are preparing for.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.getSecondaryText(context),
-                          ),
+                        color: AppTheme.getSecondaryText(context),
+                      ),
                     ),
                     const SizedBox(height: 8),
                     DropdownButtonFormField<String>(
@@ -390,8 +429,9 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                         filled: true,
                         fillColor: AppTheme.getCardBackground(context),
                         border: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(AppTheme.borderRadius),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.borderRadius,
+                          ),
                         ),
                       ),
                       items: [
@@ -400,26 +440,26 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                           child: Text('Skip exam for now'),
                         ),
                         ...ExamBoards.withCustom.map(
-                          (e) =>
-                              DropdownMenuItem(value: e, child: Text(e)),
+                          (e) => DropdownMenuItem(value: e, child: Text(e)),
                         ),
                       ],
-                      onChanged: (v) =>
-                          setState(() => _examTarget = v ?? ''),
+                      onChanged: (v) => setState(() => _examTarget = v ?? ''),
                     ),
                     if (_examTarget == CustomFieldOption.label) ...[
                       const SizedBox(height: 12),
                       TextField(
                         controller: _customExamController,
                         textCapitalization: TextCapitalization.words,
+                        onChanged: (_) => setState(() {}),
                         decoration: InputDecoration(
                           labelText: 'Custom exam / board',
                           hintText: 'e.g. A-Levels, local board, SAT',
                           filled: true,
                           fillColor: AppTheme.getCardBackground(context),
                           border: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(AppTheme.borderRadius),
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.borderRadius,
+                            ),
                           ),
                         ),
                       ),
@@ -440,14 +480,14 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                         filled: true,
                         fillColor: AppTheme.getCardBackground(context),
                         border: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(AppTheme.borderRadius),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.borderRadius,
+                          ),
                         ),
                       ),
                       items: [
                         ...TeachingLanguages.withCustom.map(
-                          (l) =>
-                              DropdownMenuItem(value: l, child: Text(l)),
+                          (l) => DropdownMenuItem(value: l, child: Text(l)),
                         ),
                       ],
                       onChanged: (v) =>
@@ -458,13 +498,15 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                       TextField(
                         controller: _customLanguageController,
                         textCapitalization: TextCapitalization.words,
+                        onChanged: (_) => setState(() {}),
                         decoration: InputDecoration(
                           labelText: 'Custom language',
                           filled: true,
                           fillColor: AppTheme.getCardBackground(context),
                           border: OutlineInputBorder(
-                            borderRadius:
-                                BorderRadius.circular(AppTheme.borderRadius),
+                            borderRadius: BorderRadius.circular(
+                              AppTheme.borderRadius,
+                            ),
                           ),
                         ),
                       ),
@@ -472,7 +514,7 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                     const SizedBox(height: 28),
 
                     Text(
-                      'City (optional — better local matches)',
+                      'City *',
                       style: Theme.of(context).textTheme.bodyLarge,
                     ),
                     const SizedBox(height: 8),
@@ -484,10 +526,12 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                         filled: true,
                         fillColor: AppTheme.getCardBackground(context),
                         border: OutlineInputBorder(
-                          borderRadius:
-                              BorderRadius.circular(AppTheme.borderRadius),
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.borderRadius,
+                          ),
                         ),
                       ),
+                      onChanged: (_) => setState(() {}),
                     ),
                     const SizedBox(height: 28),
 
@@ -499,8 +543,8 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                     Text(
                       'Pick at least one — presets or Custom below.',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: AppTheme.getSecondaryText(context),
-                          ),
+                        color: AppTheme.getSecondaryText(context),
+                      ),
                     ),
                     const SizedBox(height: 10),
                     Wrap(
@@ -508,8 +552,9 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                       runSpacing: 8,
                       children: [
                         ...kSubjectOptions.map((subject) {
-                          final isSelected =
-                              _selectedSubjects.contains(subject);
+                          final isSelected = _selectedSubjects.contains(
+                            subject,
+                          );
                           return FilterChip(
                             label: Text(subject),
                             selected: isSelected,
@@ -526,8 +571,9 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                                   ? Colors.white
                                   : AppTheme.getPrimaryText(context),
                             ),
-                            backgroundColor:
-                                AppTheme.getCardBackground(context),
+                            backgroundColor: AppTheme.getCardBackground(
+                              context,
+                            ),
                             side: BorderSide(
                               color: AppTheme.getCardBorder(context),
                             ),
@@ -538,9 +584,8 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                             .map(
                               (s) => InputChip(
                                 label: Text(s),
-                                onDeleted: () => setState(
-                                  () => _selectedSubjects.remove(s),
-                                ),
+                                onDeleted: () =>
+                                    setState(() => _selectedSubjects.remove(s)),
                               ),
                             ),
                       ],
@@ -601,6 +646,58 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
     );
   }
 
+  Widget _completionCard(BuildContext context) {
+    final percent = (_profileCompletion * 100).round();
+    final complete = percent == 100;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppTheme.getAccentTint(context),
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        border: Border.all(color: AppTheme.getAccentTint(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  complete ? 'Full profile setup' : 'Profile setup progress',
+                  style: const TextStyle(fontWeight: FontWeight.w800),
+                ),
+              ),
+              Text(
+                '$percent%',
+                style: TextStyle(
+                  color: AppTheme.accentColor,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: _profileCompletion,
+              minHeight: 8,
+              backgroundColor: Colors.white.withValues(alpha: .65),
+              color: AppTheme.accentColor,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            complete
+                ? 'Great! Your profile is ready for a personalised experience.'
+                : 'Complete the required details for better recommendations.',
+            style: Theme.of(context).textTheme.bodySmall,
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildAgePicker(BuildContext context) {
     return Container(
       height: 120,
@@ -629,8 +726,9 @@ class _StudentOnboardingScreenState extends State<StudentOnboardingScreen> {
                     '$age',
                     style: TextStyle(
                       fontSize: isSelected ? 22 : 16,
-                      fontWeight:
-                          isSelected ? FontWeight.bold : FontWeight.normal,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
                       color: isSelected
                           ? AppTheme.accentColor
                           : AppTheme.getSecondaryText(context),

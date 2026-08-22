@@ -10,6 +10,7 @@ if (keystorePropertiesFile.exists()) {
 plugins {
     id("com.android.application")
     id("dev.flutter.flutter-gradle-plugin")
+    id("com.google.firebase.crashlytics")
 }
 
 val googleServicesFile = file("google-services.json")
@@ -49,6 +50,12 @@ android {
             signingConfig = signingConfigs.getByName("release")
         }
     }
+}
+
+dependencies {
+    implementation(platform("com.google.firebase:firebase-bom:34.2.0"))
+    implementation("com.google.firebase:firebase-analytics")
+    implementation("com.google.firebase:firebase-crashlytics")
 }
 
 kotlin {

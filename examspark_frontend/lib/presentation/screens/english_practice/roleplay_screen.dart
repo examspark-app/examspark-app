@@ -383,6 +383,12 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
     ('🍴', 'Restaurant'),
     ('💼', 'Interview'),
     ('✈️', 'Travel'),
+    ('🏢', 'Office / Citizen'),
+    ('💻', 'Online Client Meeting'),
+    ('🧑‍💼', 'Job Interview'),
+    ('📋', 'Job Test / Screening Chat'),
+    ('🗳️', 'Citizenship Test'),
+    ('🛂', 'Visa Interview'),
   ];
   Future<void> custom() async {
     final input = TextEditingController();

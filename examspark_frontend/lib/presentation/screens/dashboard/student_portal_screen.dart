@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/dashboard/teacher_dashboard_screen.dart';
 import 'package:examspark_frontend/presentation/screens/recording/widgets/extra_features_views.dart';
@@ -21,7 +20,8 @@ class _StudentPortalScreenState extends State<StudentPortalScreen> {
       date: 'Jan 15, 2026',
       duration: '45 min',
       className: 'Physics Class 12',
-      summary: 'Introduction to motion, displacement, velocity, and acceleration concepts.',
+      summary:
+          'Introduction to motion, displacement, velocity, and acceleration concepts.',
       keyPoints: [
         'Motion is relative to a reference frame',
         'Displacement is a vector quantity',
@@ -55,7 +55,8 @@ Acceleration is the rate of change of velocity with respect to time.
       date: 'Jan 18, 2026',
       duration: '52 min',
       className: 'Physics Class 12',
-      summary: 'Understanding the three fundamental laws governing motion and forces.',
+      summary:
+          'Understanding the three fundamental laws governing motion and forces.',
       keyPoints: [
         'First law: Law of inertia',
         'Second law: F = ma',
@@ -86,7 +87,8 @@ For every action, there is an equal and opposite reaction.
       date: 'Jan 20, 2026',
       duration: '38 min',
       className: 'NEET Batch A',
-      summary: 'Introduction to organic compounds, functional groups, and nomenclature.',
+      summary:
+          'Introduction to organic compounds, functional groups, and nomenclature.',
       keyPoints: [
         'Carbon forms four covalent bonds',
         'Functional groups determine chemical properties',
@@ -120,13 +122,9 @@ IUPAC system provides systematic naming for organic compounds based on their str
     _enableScreenshotProtection();
   }
 
-  void _enableScreenshotProtection() {
-    SystemChannels.platform.invokeMethod('SystemChrome.enableSecureUI');
-  }
+  void _enableScreenshotProtection() {}
 
-  void _disableScreenshotProtection() {
-    SystemChannels.platform.invokeMethod('SystemChrome.disableSecureUI');
-  }
+  void _disableScreenshotProtection() {}
 
   @override
   void dispose() {
@@ -144,19 +142,14 @@ IUPAC system provides systematic naming for organic compounds based on their str
         ),
         title: const Text(
           'Student Feed',
-          style: TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w500,
-          ),
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
         ),
         actions: [
           TextButton.icon(
             onPressed: () => showSimpleJoinDialog(context),
             icon: const Icon(Icons.add, size: 20),
             label: const Text('Join New Class'),
-            style: TextButton.styleFrom(
-              foregroundColor: AppTheme.accentColor,
-            ),
+            style: TextButton.styleFrom(foregroundColor: AppTheme.accentColor),
           ),
         ],
       ),
@@ -228,10 +221,7 @@ class _SharedLectureCard extends StatelessWidget {
   final SharedLecture lecture;
   final VoidCallback onTap;
 
-  const _SharedLectureCard({
-    required this.lecture,
-    required this.onTap,
-  });
+  const _SharedLectureCard({required this.lecture, required this.onTap});
 
   @override
   Widget build(BuildContext context) {
@@ -243,10 +233,7 @@ class _SharedLectureCard extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppTheme.getCardBackground(context),
           borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-          border: Border.all(
-            color: AppTheme.getCardBorder(context),
-            width: 1,
-          ),
+          border: Border.all(color: AppTheme.getCardBorder(context), width: 1),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -254,7 +241,10 @@ class _SharedLectureCard extends StatelessWidget {
             Row(
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 6,
+                  ),
                   decoration: BoxDecoration(
                     color: AppTheme.getAccentTint(context),
                     borderRadius: BorderRadius.circular(12),
@@ -335,10 +325,7 @@ class _SharedLectureCard extends StatelessWidget {
 class SecureNotesReaderView extends StatefulWidget {
   final SharedLecture lecture;
 
-  const SecureNotesReaderView({
-    super.key,
-    required this.lecture,
-  });
+  const SecureNotesReaderView({super.key, required this.lecture});
 
   @override
   State<SecureNotesReaderView> createState() => _SecureNotesReaderViewState();
@@ -351,13 +338,9 @@ class _SecureNotesReaderViewState extends State<SecureNotesReaderView> {
     _enableScreenshotProtection();
   }
 
-  void _enableScreenshotProtection() {
-    SystemChannels.platform.invokeMethod('SystemChrome.enableSecureUI');
-  }
+  void _enableScreenshotProtection() {}
 
-  void _disableScreenshotProtection() {
-    SystemChannels.platform.invokeMethod('SystemChrome.disableSecureUI');
-  }
+  void _disableScreenshotProtection() {}
 
   @override
   void dispose() {
@@ -370,9 +353,7 @@ class _SecureNotesReaderViewState extends State<SecureNotesReaderView> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => RagChatBottomSheet(
-        lectureId: widget.lecture.id,
-      ),
+      builder: (context) => RagChatBottomSheet(lectureId: widget.lecture.id),
     );
   }
 
@@ -386,10 +367,7 @@ class _SecureNotesReaderViewState extends State<SecureNotesReaderView> {
         ),
         title: Text(
           widget.lecture.title,
-          style: const TextStyle(
-            fontSize: 18,
-            fontWeight: FontWeight.w500,
-          ),
+          style: const TextStyle(fontSize: 18, fontWeight: FontWeight.w500),
         ),
         // SECURITY: No export, print, download, or share buttons
         actions: const [],
@@ -405,7 +383,10 @@ class _SecureNotesReaderViewState extends State<SecureNotesReaderView> {
                 children: [
                   // Class tag
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: AppTheme.getAccentTint(context),
                       borderRadius: BorderRadius.circular(12),
@@ -438,21 +419,27 @@ class _SecureNotesReaderViewState extends State<SecureNotesReaderView> {
                   _buildSectionCard(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
-                      children: widget.lecture.keyPoints.map((point) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text('• '),
-                            Expanded(
-                              child: Text(
-                                point,
-                                style: Theme.of(context).textTheme.bodyMedium,
+                      children: widget.lecture.keyPoints
+                          .map(
+                            (point) => Padding(
+                              padding: const EdgeInsets.only(bottom: 8),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text('• '),
+                                  Expanded(
+                                    child: Text(
+                                      point,
+                                      style: Theme.of(
+                                        context,
+                                      ).textTheme.bodyMedium,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                          ],
-                        ),
-                      )).toList(),
+                          )
+                          .toList(),
                     ),
                   ),
                   const SizedBox(height: 24),
@@ -473,7 +460,9 @@ class _SecureNotesReaderViewState extends State<SecureNotesReaderView> {
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: AppTheme.getAccentTint(context),
-                      borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+                      borderRadius: BorderRadius.circular(
+                        AppTheme.borderRadius,
+                      ),
                       border: Border.all(
                         color: AppTheme.accentColor.withOpacity(0.3),
                       ),
@@ -489,10 +478,11 @@ class _SecureNotesReaderViewState extends State<SecureNotesReaderView> {
                         Expanded(
                           child: Text(
                             'View-only mode. Content is protected.',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.accentColor,
-                              fontSize: 12,
-                            ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(
+                                  color: AppTheme.accentColor,
+                                  fontSize: 12,
+                                ),
                           ),
                         ),
                       ],
@@ -579,10 +569,7 @@ class _SecureNotesReaderViewState extends State<SecureNotesReaderView> {
       decoration: BoxDecoration(
         color: AppTheme.getCardBackground(context),
         borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-        border: Border.all(
-          color: AppTheme.getCardBorder(context),
-          width: 1,
-        ),
+        border: Border.all(color: AppTheme.getCardBorder(context), width: 1),
       ),
       child: child,
     );

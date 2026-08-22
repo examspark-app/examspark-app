@@ -2,7 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_teaching_history_screen.dart';
 
 class EnglishPracticeDrawer extends StatelessWidget {
-  const EnglishPracticeDrawer({super.key});
+  const EnglishPracticeDrawer({
+    super.key,
+    this.nativeLanguage = '',
+    this.targetLanguage = 'English',
+    this.onChangeLanguage,
+    this.onNewChat,
+  });
+
+  final String nativeLanguage;
+  final String targetLanguage;
+  final VoidCallback? onChangeLanguage;
+  final VoidCallback? onNewChat;
 
   @override
   Widget build(BuildContext context) {
@@ -19,6 +30,28 @@ class EnglishPracticeDrawer extends StatelessWidget {
                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w800),
                 ),
               ),
+            ),
+            ListTile(
+              leading: const Icon(Icons.language_rounded),
+              title: const Text('Current Language'),
+              subtitle: Text(
+                nativeLanguage.isEmpty
+                    ? 'Not selected'
+                    : '$targetLanguage · $nativeLanguage',
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                onChangeLanguage?.call();
+              },
+            ),
+            const Divider(),
+            ListTile(
+              leading: const Icon(Icons.add_comment_outlined),
+              title: const Text('New Chat'),
+              onTap: () {
+                Navigator.pop(context);
+                onNewChat?.call();
+              },
             ),
             ListTile(
               leading: const Icon(Icons.history_rounded),

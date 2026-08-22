@@ -19,6 +19,7 @@ import 'package:examspark_frontend/presentation/screens/subscription/subscriptio
 import 'package:examspark_frontend/presentation/screens/credits/credits_history_screen.dart';
 import 'package:examspark_frontend/presentation/screens/profile/help_screen.dart';
 import 'package:examspark_frontend/presentation/screens/profile/settings_screen.dart';
+import 'package:examspark_frontend/presentation/screens/referrals/refer_earn_screen.dart';
 import 'package:examspark_frontend/presentation/screens/admin/admin_payment_hub_screen.dart';
 import 'package:examspark_frontend/presentation/screens/admin/admin_payment_screens.dart';
 
@@ -121,6 +122,11 @@ class AppRouter {
       case '/credits/history':
         return MaterialPageRoute(
           builder: (_) => const CreditsHistoryScreen(),
+          settings: settings,
+        );
+      case '/refer-earn':
+        return MaterialPageRoute(
+          builder: (_) => const ReferEarnScreen(),
           settings: settings,
         );
       case '/settings':

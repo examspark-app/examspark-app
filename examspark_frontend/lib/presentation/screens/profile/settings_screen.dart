@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/notification_inbox_controller.dart';
 import 'package:examspark_frontend/core/services/session_live_sync.dart';
+import 'package:examspark_frontend/core/services/crashlytics_service.dart';
 import 'package:examspark_frontend/core/services/web_browser_notify.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/legal/legal_center_screen.dart';
@@ -51,7 +52,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  Future<void> _setBool(String key, bool value, void Function(bool) apply) async {
+  Future<void> _setBool(
+    String key,
+    bool value,
+    void Function(bool) apply,
+  ) async {
     apply(value);
     setState(() {});
     final prefs = await SharedPreferences.getInstance();
@@ -59,8 +64,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _enableDesktopAlerts() async {
-    final result =
-        await NotificationInboxController.instance.enableDesktopBrowserAlerts();
+    final result = await NotificationInboxController.instance
+        .enableDesktopBrowserAlerts();
     if (!mounted) return;
     setState(() => _browserPerm = result);
     final msg = switch (result) {
@@ -81,8 +86,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setDialog) {
-            final typedOk =
-                controller.text.trim().toUpperCase() == 'DELETE';
+            final typedOk = controller.text.trim().toUpperCase() == 'DELETE';
             return AlertDialog(
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(AppTheme.borderRadius),
@@ -102,8 +106,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     Text(
                       'Type DELETE to confirm',
                       style: Theme.of(ctx).textTheme.bodySmall?.copyWith(
-                            fontWeight: FontWeight.w600,
-                          ),
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     TextField(
@@ -168,9 +172,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
               children: [
                 Text(
                   'Notifications',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -185,11 +189,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     subtitle: const Text('Lecture ready, plan expiry'),
                     value: _notifyStudy,
                     activeThumbColor: AppTheme.accentColor,
-                    onChanged: (v) => _setBool(
-                      _kNotifyStudy,
-                      v,
-                      (x) => _notifyStudy = x,
-                    ),
+                    onChanged: (v) =>
+                        _setBool(_kNotifyStudy, v, (x) => _notifyStudy = x),
                   ),
                   Divider(height: 1, color: AppTheme.getCardBorder(context)),
                   SwitchListTile(
@@ -198,11 +199,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     subtitle: const Text('New shares & announcements'),
                     value: _notifyGroups,
                     activeThumbColor: AppTheme.accentColor,
-                    onChanged: (v) => _setBool(
-                      _kNotifyGroups,
-                      v,
-                      (x) => _notifyGroups = x,
-                    ),
+                    onChanged: (v) =>
+                        _setBool(_kNotifyGroups, v, (x) => _notifyGroups = x),
                   ),
                   if (kIsWeb) ...[
                     Divider(height: 1, color: AppTheme.getCardBorder(context)),
@@ -228,9 +226,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 const SizedBox(height: 24),
                 Text(
                   'Appearance',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -242,7 +240,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   ListTile(
                     contentPadding: EdgeInsets.zero,
                     title: const Text('Theme'),
-                    subtitle: const Text('Follows your phone / browser (system)'),
+                    subtitle: const Text(
+                      'Follows your phone / browser (system)',
+                    ),
                     trailing: Icon(
                       Icons.brightness_auto,
                       color: AppTheme.getSecondaryText(context),
@@ -253,9 +253,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 // ===== TASK 3 — Settings → Legal =====
                 Text(
                   'Legal',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
                 Text(
@@ -278,16 +278,37 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       color: AppTheme.getSecondaryText(context),
                     ),
                     onTap: () => Navigator.of(context).push(
-                      MaterialPageRoute(builder: (_) => const LegalCenterScreen()),
+                      MaterialPageRoute(
+                        builder: (_) => const LegalCenterScreen(),
+                      ),
                     ),
+                  ),
+                ]),
+                const SizedBox(height: 24),
+                Text(
+                  'Developer',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                _card([
+                  ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: const Icon(Icons.bug_report_outlined),
+                    title: const Text('Test Crashlytics'),
+                    subtitle: const Text(
+                      'Intentionally crash the app to verify reporting.',
+                    ),
+                    onTap: CrashlyticsService.instance.triggerTestCrash,
                   ),
                 ]),
                 const SizedBox(height: 32),
                 Text(
                   'Account',
-                  style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 8),
                 _card([

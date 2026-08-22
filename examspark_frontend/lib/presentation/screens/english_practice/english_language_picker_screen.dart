@@ -3,7 +3,7 @@ import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_screen.dart';
 
-enum _PickerStep { nativeLanguage, targetLanguage }
+enum _PickerStep { nativeLanguage, targetLanguage, textModel }
 
 class _LangOption {
   final String label;
@@ -34,6 +34,7 @@ class _EnglishLanguagePickerScreenState
     extends State<EnglishLanguagePickerScreen> {
   _PickerStep _step = _PickerStep.nativeLanguage;
   String? _nativeLanguage;
+  String? _targetLanguage;
 
   final _search = TextEditingController();
   final _customController = TextEditingController();
@@ -100,12 +101,19 @@ class _EnglishLanguagePickerScreenState
     _LangOption('नेपाली', 'Nepali'),
   ];
 
+  static const List<_LangOption> _textModels = [
+    _LangOption('Qwen3', 'qwen3'),
+    _LangOption('Gemini', 'gemini'),
+  ];
+
   List<_LangOption> get _languages {
     switch (_step) {
       case _PickerStep.nativeLanguage:
         return _nativeLanguages;
       case _PickerStep.targetLanguage:
         return _targetLanguages;
+      case _PickerStep.textModel:
+        return _textModels;
     }
   }
 
@@ -115,6 +123,8 @@ class _EnglishLanguagePickerScreenState
         return 'What language do you speak?';
       case _PickerStep.targetLanguage:
         return 'What language do you want to learn?';
+      case _PickerStep.textModel:
+        return 'Choose your AI model';
     }
   }
 
@@ -124,6 +134,8 @@ class _EnglishLanguagePickerScreenState
         return 'This is the language you are most comfortable with. The AI will use it at first to explain things clearly.';
       case _PickerStep.targetLanguage:
         return 'Choose the language you want to practise. You can learn any language, not just English.';
+      case _PickerStep.textModel:
+        return 'Choose which text-generation model will power this Chat. You can change it only by starting a new chat.';
     }
   }
 
@@ -133,6 +145,8 @@ class _EnglishLanguagePickerScreenState
         return 'Search your native language…';
       case _PickerStep.targetLanguage:
         return 'Search a language to learn…';
+      case _PickerStep.textModel:
+        return 'Search a model…';
     }
   }
 
@@ -142,6 +156,8 @@ class _EnglishLanguagePickerScreenState
         return 'Type your native language name (e.g. Bhojpuri, Konkani, Haryanvi)';
       case _PickerStep.targetLanguage:
         return 'Type any language you want to learn (e.g. Swahili, Dutch, Persian)';
+      case _PickerStep.textModel:
+        return '';
     }
   }
 
@@ -149,9 +165,11 @@ class _EnglishLanguagePickerScreenState
     final q = _search.text.trim().toLowerCase();
     if (q.isEmpty) return _languages;
     return _languages
-        .where((l) =>
-            l.label.toLowerCase().contains(q) ||
-            l.englishName.toLowerCase().contains(q))
+        .where(
+          (l) =>
+              l.label.toLowerCase().contains(q) ||
+              l.englishName.toLowerCase().contains(q),
+        )
         .toList();
   }
 
@@ -169,10 +187,22 @@ class _EnglishLanguagePickerScreenState
     });
   }
 
-  Future<void> _saveAndNavigate(String targetLanguage) async {
+  Future<void> _selectTarget(String language) async {
+    setState(() {
+      _targetLanguage = language.trim();
+      _step = _PickerStep.textModel;
+      _resetStepUI();
+    });
+  }
+
+  Future<void> _saveAndNavigate(String model) async {
     if (_saving) return;
     final native = _nativeLanguage;
-    if (native == null || native.trim().isEmpty) {
+    final target = _targetLanguage;
+    if (native == null ||
+        native.trim().isEmpty ||
+        target == null ||
+        target.isEmpty) {
       setState(() {
         _step = _PickerStep.nativeLanguage;
         _resetStepUI();
@@ -183,22 +213,28 @@ class _EnglishLanguagePickerScreenState
     try {
       await LectureService.instance.setEnglishPracticePreference(
         nativeLanguage: native,
-        targetLanguage: targetLanguage.trim(),
+        targetLanguage: target,
       );
       if (!mounted) return;
       if (widget.returnToPrevious) {
-        Navigator.of(context).pop<String>(targetLanguage.trim());
+        Navigator.of(
+          context,
+        ).pop<Map<String, String>>({'targetLanguage': target, 'model': model});
       } else {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => const EnglishPracticeScreen()),
+          MaterialPageRoute(
+            builder: (_) => EnglishPracticeScreen(
+              textModel: model == 'gemini' ? 'gemini' : 'qwen3',
+            ),
+          ),
         );
       }
     } catch (e) {
       if (!mounted) return;
       setState(() => _saving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not save languages: $e')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Could not save languages: $e')));
     }
   }
 
@@ -210,6 +246,9 @@ class _EnglishLanguagePickerScreenState
         await _selectNative(trimmed);
         break;
       case _PickerStep.targetLanguage:
+        await _selectTarget(trimmed);
+        break;
+      case _PickerStep.textModel:
         await _saveAndNavigate(trimmed);
         break;
     }
@@ -228,14 +267,25 @@ class _EnglishLanguagePickerScreenState
           _resetStepUI();
         });
         break;
+      case _PickerStep.textModel:
+        setState(() {
+          _step = _PickerStep.targetLanguage;
+          _resetStepUI();
+        });
+        break;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final showBack = _step == _PickerStep.targetLanguage || widget.returnToPrevious;
-    final stepIndex = _step == _PickerStep.nativeLanguage ? 1 : 2;
-    final totalSteps = 2;
+    final showBack =
+        _step != _PickerStep.nativeLanguage || widget.returnToPrevious;
+    final stepIndex = _step == _PickerStep.nativeLanguage
+        ? 1
+        : _step == _PickerStep.targetLanguage
+        ? 2
+        : 3;
+    final totalSteps = 3;
 
     return Scaffold(
       appBar: AppBar(
@@ -287,11 +337,11 @@ class _EnglishLanguagePickerScreenState
             Text(
               _stepSubtitle,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.getSecondaryText(context),
-                    height: 1.4,
-                  ),
+                color: AppTheme.getSecondaryText(context),
+                height: 1.4,
+              ),
             ),
-            if (_step == _PickerStep.targetLanguage &&
+            if (_step != _PickerStep.nativeLanguage &&
                 _nativeLanguage != null) ...[
               const SizedBox(height: 12),
               Wrap(
@@ -312,20 +362,25 @@ class _EnglishLanguagePickerScreenState
                 ],
               ),
             ],
+            if (_step == _PickerStep.textModel && _targetLanguage != null) ...[
+              const SizedBox(height: 8),
+              Chip(label: Text('Target: $_targetLanguage')),
+            ],
             const SizedBox(height: 16),
-            TextField(
-              controller: _search,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: _searchHint,
-                prefixIcon: const Icon(Icons.search_rounded),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
+            if (_step != _PickerStep.textModel)
+              TextField(
+                controller: _search,
+                onChanged: (_) => setState(() {}),
+                decoration: InputDecoration(
+                  hintText: _searchHint,
+                  prefixIcon: const Icon(Icons.search_rounded),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  isDense: true,
                 ),
-                isDense: true,
               ),
-            ),
-            const SizedBox(height: 12),
+            if (_step != _PickerStep.textModel) const SizedBox(height: 12),
             Expanded(
               child: _saving
                   ? const Center(child: CircularProgressIndicator())
@@ -344,10 +399,29 @@ class _EnglishLanguagePickerScreenState
                             ),
                           ),
                         const SizedBox(height: 8),
-                        if (!_showCustom)
+                        if (_step == _PickerStep.textModel)
+                          ..._filtered.map(
+                            (model) => Card(
+                              margin: const EdgeInsets.only(bottom: 8),
+                              child: ListTile(
+                                leading: Icon(
+                                  model.englishName == 'gemini'
+                                      ? Icons.auto_awesome
+                                      : Icons.smart_toy_outlined,
+                                ),
+                                title: Text(model.label),
+                                subtitle: Text(
+                                  model.englishName == 'gemini'
+                                      ? 'Gemini 2.5 Flash-Lite'
+                                      : 'Qwen3',
+                                ),
+                                onTap: () => _select(model.englishName),
+                              ),
+                            ),
+                          )
+                        else if (!_showCustom)
                           OutlinedButton.icon(
-                            onPressed: () =>
-                                setState(() => _showCustom = true),
+                            onPressed: () => setState(() => _showCustom = true),
                             icon: const Icon(Icons.edit_outlined),
                             label: const Text('Other / Type your own'),
                           )

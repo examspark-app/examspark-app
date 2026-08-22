@@ -3,6 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/constants/legal_urls.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/services/pending_referral_store.dart';
+import 'package:examspark_frontend/core/services/device_identifier.dart';
 import 'package:examspark_frontend/presentation/screens/auth/email_verification_screen.dart';
 import 'package:examspark_frontend/presentation/screens/auth/reset_password_screen.dart';
 import 'package:examspark_frontend/presentation/screens/legal/legal_webview_screen.dart';
@@ -38,6 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _referralController = TextEditingController();
   final _emailFocusNode = FocusNode();
   final _passwordFocusNode = FocusNode();
   late _AuthMode _mode;
@@ -54,11 +58,19 @@ class _LoginScreenState extends State<LoginScreen> {
     super.initState();
     _mode = widget.startInSignUp ? _AuthMode.signUp : _AuthMode.login;
     _switchModeRecognizer = TapGestureRecognizer()
-      ..onTap = () => _switchMode(_mode == _AuthMode.login ? _AuthMode.signUp : _AuthMode.login);
+      ..onTap = () => _switchMode(
+        _mode == _AuthMode.login ? _AuthMode.signUp : _AuthMode.login,
+      );
     _termsRecognizer = TapGestureRecognizer()
-      ..onTap = () => _openLegalDoc('Terms & Conditions', LegalUrls.termsAndConditions);
+      ..onTap = () =>
+          _openLegalDoc('Terms & Conditions', LegalUrls.termsAndConditions);
     _privacyRecognizer = TapGestureRecognizer()
       ..onTap = () => _openLegalDoc('Privacy Policy', LegalUrls.privacyPolicy);
+    PendingReferralStore.peek().then((code) {
+      if (mounted && code != null && _mode == _AuthMode.signUp) {
+        _referralController.text = code;
+      }
+    });
   }
 
   /// When this screen was pushed on top of something else (e.g.
@@ -75,6 +87,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _referralController.dispose();
     _emailFocusNode.dispose();
     _passwordFocusNode.dispose();
     _switchModeRecognizer.dispose();
@@ -116,7 +129,8 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        AppToast.showSnackBar(context, 
+        AppToast.showSnackBar(
+          context,
           SnackBar(content: Text('Login failed: ${e.toString()}')),
         );
       }
@@ -135,17 +149,44 @@ class _LoginScreenState extends State<LoginScreen> {
     final email = _emailController.text.trim();
 
     try {
+      final deviceId = await getDeviceIdentifier();
+      if (deviceId != null &&
+          !await LectureService.instance.checkDeviceAccountLimit(deviceId)) {
+        throw StateError('Maximum accounts reached for this device.');
+      }
       final response = await SupabaseClient.instance.signUpWithEmail(
         email: email,
         password: _passwordController.text,
+        referralCode: _referralController.text,
       );
 
       if (mounted) {
+        if (response.session != null &&
+            _referralController.text.trim().isNotEmpty) {
+          try {
+            await LectureService.instance.redeemReferral(
+              _referralController.text.trim(),
+            );
+            await PendingReferralStore.clear();
+          } catch (_) {
+            // Referral redemption is non-blocking for account creation.
+          }
+        }
+        if (response.session != null) {
+          final deviceId = await getDeviceIdentifier();
+          if (deviceId != null) {
+            try {
+              await LectureService.instance.registerDeviceAccount(deviceId);
+            } catch (_) {}
+          }
+        }
         if (response.session == null) {
           // Email confirmation required — no session yet. Take the user to
           // a real confirmation page instead of a snackbar they can miss.
           await Navigator.of(context).push(
-            MaterialPageRoute(builder: (_) => EmailVerificationScreen(email: email)),
+            MaterialPageRoute(
+              builder: (_) => EmailVerificationScreen(email: email),
+            ),
           );
         } else {
           // Session came back immediately (email confirmations off in
@@ -155,7 +196,8 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
-        AppToast.showSnackBar(context, 
+        AppToast.showSnackBar(
+          context,
           SnackBar(content: Text('Sign up failed: ${e.toString()}')),
         );
       }
@@ -174,7 +216,8 @@ class _LoginScreenState extends State<LoginScreen> {
       // Web: browser redirects to Google then back — AuthGate handles the rest.
     } catch (e) {
       if (mounted) {
-        AppToast.showSnackBar(context, 
+        AppToast.showSnackBar(
+          context,
           SnackBar(content: Text('Google sign-in failed: ${e.toString()}')),
         );
       }
@@ -186,9 +229,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   void _openResetPassword() {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ResetPasswordScreen()),
-    );
+    Navigator.of(
+      context,
+    ).push(MaterialPageRoute(builder: (_) => const ResetPasswordScreen()));
   }
 
   @override
@@ -224,12 +267,23 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? 'Sign in to open your teacher’s group'
                             : 'Create a free account to open your teacher’s group',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: AppTheme.getSecondaryText(context),
-                            ),
+                          color: AppTheme.getSecondaryText(context),
+                        ),
                         textAlign: TextAlign.center,
                       ),
                     ],
                     const SizedBox(height: 28),
+                    if (!isLogin) ...[
+                      TextFormField(
+                        controller: _referralController,
+                        textCapitalization: TextCapitalization.characters,
+                        decoration: const InputDecoration(
+                          labelText: 'Referral code (optional)',
+                          prefixIcon: Icon(Icons.card_giftcard_outlined),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                    ],
 
                     // Login / Sign Up segmented toggle — makes the two
                     // flows unmistakably distinct for old vs. new users.
@@ -237,8 +291,12 @@ class _LoginScreenState extends State<LoginScreen> {
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
                         color: AppTheme.getCardBackground(context),
-                        border: Border.all(color: AppTheme.getCardBorder(context)),
-                        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+                        border: Border.all(
+                          color: AppTheme.getCardBorder(context),
+                        ),
+                        borderRadius: BorderRadius.circular(
+                          AppTheme.borderRadius,
+                        ),
                       ),
                       child: Row(
                         children: [
@@ -267,17 +325,24 @@ class _LoginScreenState extends State<LoginScreen> {
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
                       autofillHints: const [AutofillHints.email],
-                      onFieldSubmitted: (_) => _passwordFocusNode.requestFocus(),
+                      onFieldSubmitted: (_) =>
+                          _passwordFocusNode.requestFocus(),
                       decoration: InputDecoration(
                         labelText: 'Email',
                         prefixIcon: const Icon(Icons.email_outlined),
                         filled: true,
                         fillColor: AppTheme.getCardBackground(context),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.borderRadius)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.borderRadius,
+                          ),
+                        ),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'Please enter your email';
-                        if (!value.contains('@')) return 'Please enter a valid email';
+                        if (value == null || value.isEmpty)
+                          return 'Please enter your email';
+                        if (!value.contains('@'))
+                          return 'Please enter a valid email';
                         return null;
                       },
                     ),
@@ -288,22 +353,37 @@ class _LoginScreenState extends State<LoginScreen> {
                       obscureText: _obscurePassword,
                       textInputAction: TextInputAction.done,
                       autofillHints: const [AutofillHints.password],
-                      onFieldSubmitted: (_) => isLogin ? _handleLogin() : _handleSignUp(),
+                      onFieldSubmitted: (_) =>
+                          isLogin ? _handleLogin() : _handleSignUp(),
                       decoration: InputDecoration(
                         labelText: 'Password',
                         prefixIcon: const Icon(Icons.lock_outline),
                         suffixIcon: IconButton(
-                          icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                          tooltip: _obscurePassword ? 'Show password' : 'Hide password',
-                          onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+                          icon: Icon(
+                            _obscurePassword
+                                ? Icons.visibility_outlined
+                                : Icons.visibility_off_outlined,
+                          ),
+                          tooltip: _obscurePassword
+                              ? 'Show password'
+                              : 'Hide password',
+                          onPressed: () => setState(
+                            () => _obscurePassword = !_obscurePassword,
+                          ),
                         ),
                         filled: true,
                         fillColor: AppTheme.getCardBackground(context),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(AppTheme.borderRadius)),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.borderRadius,
+                          ),
+                        ),
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty) return 'Please enter your password';
-                        if (value.length < 6) return 'Password must be at least 6 characters';
+                        if (value == null || value.isEmpty)
+                          return 'Please enter your password';
+                        if (value.length < 6)
+                          return 'Password must be at least 6 characters';
                         return null;
                       },
                     ),
@@ -322,13 +402,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
                     const SizedBox(height: 12),
                     ElevatedButton(
-                      onPressed: _isLoading ? null : (isLogin ? _handleLogin : _handleSignUp),
-                      style: ElevatedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                      onPressed: _isLoading
+                          ? null
+                          : (isLogin ? _handleLogin : _handleSignUp),
+                      style: ElevatedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(50),
+                      ),
                       child: _isLoading
                           ? const SizedBox(
                               height: 20,
                               width: 20,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
                             )
                           : Text(isLogin ? 'Sign In' : 'Create Account'),
                     ),
@@ -348,7 +435,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             style: Theme.of(context).textTheme.bodySmall,
                             children: [
                               const TextSpan(
-                                text: 'By creating an account, you agree to our ',
+                                text:
+                                    'By creating an account, you agree to our ',
                               ),
                               TextSpan(
                                 text: 'Terms & Conditions',
@@ -377,20 +465,37 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 20),
                     Row(
                       children: [
-                        Expanded(child: Divider(color: AppTheme.getCardBorder(context))),
+                        Expanded(
+                          child: Divider(
+                            color: AppTheme.getCardBorder(context),
+                          ),
+                        ),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 12),
-                          child: Text('or', style: Theme.of(context).textTheme.bodySmall),
+                          child: Text(
+                            'or',
+                            style: Theme.of(context).textTheme.bodySmall,
+                          ),
                         ),
-                        Expanded(child: Divider(color: AppTheme.getCardBorder(context))),
+                        Expanded(
+                          child: Divider(
+                            color: AppTheme.getCardBorder(context),
+                          ),
+                        ),
                       ],
                     ),
                     const SizedBox(height: 20),
                     OutlinedButton.icon(
                       onPressed: _isLoading ? null : _handleGoogleSignIn,
                       icon: const GoogleLogo(size: 20),
-                      label: Text(isLogin ? 'Continue with Google' : 'Sign up with Google'),
-                      style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(50)),
+                      label: Text(
+                        isLogin
+                            ? 'Continue with Google'
+                            : 'Sign up with Google',
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        minimumSize: const Size.fromHeight(50),
+                      ),
                     ),
                     const SizedBox(height: 24),
                     Center(
@@ -398,10 +503,17 @@ class _LoginScreenState extends State<LoginScreen> {
                         text: TextSpan(
                           style: Theme.of(context).textTheme.bodySmall,
                           children: [
-                            TextSpan(text: isLogin ? "New here? " : 'Already have an account? '),
+                            TextSpan(
+                              text: isLogin
+                                  ? "New here? "
+                                  : 'Already have an account? ',
+                            ),
                             TextSpan(
                               text: isLogin ? 'Create an account' : 'Sign in',
-                              style: const TextStyle(color: AppTheme.accentColor, fontWeight: FontWeight.w600),
+                              style: const TextStyle(
+                                color: AppTheme.accentColor,
+                                fontWeight: FontWeight.w600,
+                              ),
                               recognizer: _switchModeRecognizer,
                             ),
                           ],
@@ -421,7 +533,11 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 class _ModeTab extends StatelessWidget {
-  const _ModeTab({required this.label, required this.isActive, required this.onTap});
+  const _ModeTab({
+    required this.label,
+    required this.isActive,
+    required this.onTap,
+  });
 
   final String label;
   final bool isActive;

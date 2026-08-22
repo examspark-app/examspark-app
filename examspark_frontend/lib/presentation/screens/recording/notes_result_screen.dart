@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:examspark_frontend/core/constants/ai_answer_meta.dart';
 import 'package:examspark_frontend/core/errors/lecture_user_message.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
@@ -20,10 +19,7 @@ import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 class NotesResultScreen extends StatefulWidget {
   final String lectureId;
 
-  const NotesResultScreen({
-    super.key,
-    required this.lectureId,
-  });
+  const NotesResultScreen({super.key, required this.lectureId});
 
   @override
   State<NotesResultScreen> createState() => _NotesResultScreenState();
@@ -59,13 +55,9 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
     _enableScreenshotProtection();
   }
 
-  void _enableScreenshotProtection() {
-    SystemChannels.platform.invokeMethod('SystemChrome.enableSecureUI');
-  }
+  void _enableScreenshotProtection() {}
 
-  void _disableScreenshotProtection() {
-    SystemChannels.platform.invokeMethod('SystemChrome.disableSecureUI');
-  }
+  void _disableScreenshotProtection() {}
 
   Future<void> _fetchLectureData() async {
     try {
@@ -123,7 +115,7 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
 
   Future<void> _renameLecture() async {
     final controller = TextEditingController(text: _lectureTitle);
-    
+
     final result = await showDialog<String>(
       context: context,
       builder: (context) => AlertDialog(
@@ -133,9 +125,7 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
         title: const Text('Rename Lecture'),
         content: TextField(
           controller: controller,
-          decoration: const InputDecoration(
-            hintText: 'Enter new title',
-          ),
+          decoration: const InputDecoration(hintText: 'Enter new title'),
         ),
         actions: [
           TextButton(
@@ -165,7 +155,8 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
         }
       } catch (error) {
         if (mounted) {
-          AppToast.showSnackBar(context, 
+          AppToast.showSnackBar(
+            context,
             const SnackBar(content: Text('Failed to rename lecture')),
           );
         }
@@ -206,14 +197,16 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
       try {
         await LectureService.instance.deleteLecture(widget.lectureId);
         if (mounted) {
-          AppToast.showSnackBar(context, 
+          AppToast.showSnackBar(
+            context,
             const SnackBar(content: Text('Lecture deleted.')),
           );
           Navigator.pop(context);
         }
       } catch (error) {
         if (mounted) {
-          AppToast.showSnackBar(context, 
+          AppToast.showSnackBar(
+            context,
             SnackBar(content: Text(lectureUserMessage(error))),
           );
         }
@@ -259,7 +252,8 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
     } catch (error) {
       if (mounted) {
         setState(() => _extrasLoading = false);
-        AppToast.showSnackBar(context, 
+        AppToast.showSnackBar(
+          context,
           const SnackBar(content: Text('Failed to generate content')),
         );
       }
@@ -288,11 +282,14 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
     try {
       // Call backend to generate content
       final supabase = SupabaseClient.instance.client;
-      final response = await supabase.functions.invoke('process-lecture', body: {
-        'action': actionType,
-        'userId': supabase.auth.currentUser?.id,
-        'content': _notesData?['clean_notes'] ?? '',
-      });
+      final response = await supabase.functions.invoke(
+        'process-lecture',
+        body: {
+          'action': actionType,
+          'userId': supabase.auth.currentUser?.id,
+          'content': _notesData?['clean_notes'] ?? '',
+        },
+      );
 
       if (response.data['success'] == true) {
         // Mark as cached
@@ -310,7 +307,8 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
         setState(() {
           _actionLoadingStates[actionType] = false;
         });
-        AppToast.showSnackBar(context, 
+        AppToast.showSnackBar(
+          context,
           const SnackBar(content: Text('Failed to generate content')),
         );
       }
@@ -343,7 +341,9 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
           borderRadius: BorderRadius.circular(AppTheme.borderRadius),
         ),
         title: const Text('Not enough credits'),
-        content: const Text('You need at least 1 credit to generate this content.'),
+        content: const Text(
+          'You need at least 1 credit to generate this content.',
+        ),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),
@@ -387,10 +387,8 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => RAGChatModal(
-        lectureId: widget.lectureId,
-        initialQuery: initialQuery,
-      ),
+      builder: (context) =>
+          RAGChatModal(lectureId: widget.lectureId, initialQuery: initialQuery),
     );
   }
 
@@ -461,16 +459,25 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
                   actions: [
                     Container(
                       margin: const EdgeInsets.only(right: 8),
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.orange.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: Colors.orange.withValues(alpha: 0.4)),
+                        border: Border.all(
+                          color: Colors.orange.withValues(alpha: 0.4),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.security, size: 14, color: Colors.orange[700]),
+                          Icon(
+                            Icons.security,
+                            size: 14,
+                            color: Colors.orange[700],
+                          ),
                           const SizedBox(width: 6),
                           Text(
                             'Protected',
@@ -516,7 +523,9 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
                       ),
                       decoration: BoxDecoration(
                         border: Border(
-                          bottom: BorderSide(color: AppTheme.getCardBorder(context)),
+                          bottom: BorderSide(
+                            color: AppTheme.getCardBorder(context),
+                          ),
                         ),
                       ),
                       child: SingleChildScrollView(
@@ -539,14 +548,14 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
                 SliverToBoxAdapter(
                   child: Padding(
                     padding: const EdgeInsets.all(AppTheme.screenPadding),
-                    child: _isLoading ? _buildShimmerContent() : _buildContent(),
+                    child: _isLoading
+                        ? _buildShimmerContent()
+                        : _buildContent(),
                   ),
                 ),
 
                 // Bottom spacing for action bar
-                const SliverToBoxAdapter(
-                  child: SizedBox(height: 80),
-                ),
+                const SliverToBoxAdapter(child: SizedBox(height: 80)),
               ],
             ),
 
@@ -694,10 +703,7 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
             children: [
               Icon(Icons.summarize, color: AppTheme.accentColor, size: 20),
               const SizedBox(width: 8),
-              Text(
-                'Summary',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
+              Text('Summary', style: Theme.of(context).textTheme.bodyLarge),
             ],
           ),
           const SizedBox(height: 12),
@@ -705,7 +711,9 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
             text: content?.toString().isNotEmpty == true
                 ? content.toString()
                 : 'No summary available',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(height: 1.6),
             onAskAi: _askAiAbout,
           ),
         ],
@@ -750,7 +758,9 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
                 Expanded(
                   child: AskAiSelectableText(
                     text: points[index].toString(),
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.5),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(height: 1.5),
                     onAskAi: _askAiAbout,
                   ),
                 ),
@@ -771,10 +781,7 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
             children: [
               Icon(Icons.description, color: AppTheme.accentColor, size: 20),
               const SizedBox(width: 8),
-              Text(
-                'Clean Notes',
-                style: Theme.of(context).textTheme.bodyLarge,
-              ),
+              Text('Clean Notes', style: Theme.of(context).textTheme.bodyLarge),
             ],
           ),
           const SizedBox(height: 12),
@@ -782,7 +789,9 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
             text: content?.toString().isNotEmpty == true
                 ? content.toString()
                 : 'No clean notes available',
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.7),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(height: 1.7),
             onAskAi: _askAiAbout,
           ),
         ],
@@ -809,7 +818,11 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
             child: ExpansionTile(
               tilePadding: EdgeInsets.zero,
               childrenPadding: const EdgeInsets.only(top: 8),
-              leading: Icon(Icons.bookmark, color: AppTheme.accentColor, size: 18),
+              leading: Icon(
+                Icons.bookmark,
+                color: AppTheme.accentColor,
+                size: 18,
+              ),
               title: Text(
                 term?['term']?.toString() ?? 'Term ${index + 1}',
                 style: Theme.of(context).textTheme.bodyLarge,
@@ -819,7 +832,9 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
                   alignment: Alignment.centerLeft,
                   child: AskAiSelectableText(
                     text: term?['definition']?.toString() ?? 'No definition',
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(height: 1.6),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(height: 1.6),
                     onAskAi: _askAiAbout,
                   ),
                 ),
@@ -837,10 +852,7 @@ class _NotesResultScreenState extends State<NotesResultScreen> {
 class SectionCard extends StatelessWidget {
   final Widget child;
 
-  const SectionCard({
-    super.key,
-    required this.child,
-  });
+  const SectionCard({super.key, required this.child});
 
   @override
   Widget build(BuildContext context) {
@@ -849,10 +861,7 @@ class SectionCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: AppTheme.getCardBackground(context),
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: AppTheme.getCardBorder(context),
-          width: 1,
-        ),
+        border: Border.all(color: AppTheme.getCardBorder(context), width: 1),
       ),
       child: child,
     );
@@ -881,16 +890,13 @@ class TermChip extends StatelessWidget {
         decoration: BoxDecoration(
           color: AppTheme.getCardBackground(context),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: AppTheme.getCardBorder(context),
-            width: 1,
-          ),
+          border: Border.all(color: AppTheme.getCardBorder(context), width: 1),
         ),
         child: Text(
           term,
-          style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-            fontWeight: FontWeight.w500,
-          ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
         ),
       ),
     );
@@ -926,10 +932,7 @@ class ActionChipButton extends StatelessWidget {
               ? AppTheme.getAccentTint(context)
               : AppTheme.getCardBackground(context),
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: AppTheme.getCardBorder(context),
-            width: 1,
-          ),
+          border: Border.all(color: AppTheme.getCardBorder(context), width: 1),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
@@ -965,11 +968,7 @@ class ActionChipButton extends StatelessWidget {
             ),
             if (isCached) ...[
               const SizedBox(width: 4),
-              Icon(
-                Icons.check_circle,
-                size: 12,
-                color: AppTheme.accentColor,
-              ),
+              Icon(Icons.check_circle, size: 12, color: AppTheme.accentColor),
             ],
           ],
         ),
@@ -986,19 +985,16 @@ class RAGChatModal extends StatefulWidget {
   /// costs credits.
   final String? initialQuery;
 
-  const RAGChatModal({
-    super.key,
-    required this.lectureId,
-    this.initialQuery,
-  });
+  const RAGChatModal({super.key, required this.lectureId, this.initialQuery});
 
   @override
   State<RAGChatModal> createState() => _RAGChatModalState();
 }
 
 class _RAGChatModalState extends State<RAGChatModal> {
-  late final TextEditingController _messageController =
-      TextEditingController(text: widget.initialQuery ?? '');
+  late final TextEditingController _messageController = TextEditingController(
+    text: widget.initialQuery ?? '',
+  );
   final ScrollController _scrollController = ScrollController();
   final List<ChatMessage> _messages = [];
   bool _isLoading = false;
@@ -1040,10 +1036,7 @@ class _RAGChatModalState extends State<RAGChatModal> {
     if (message.isEmpty || _isLoading) return;
 
     setState(() {
-      _messages.add(ChatMessage(
-        text: message,
-        isUser: true,
-      ));
+      _messages.add(ChatMessage(text: message, isUser: true));
       _messageController.clear();
       _isLoading = true;
       _liveStreamText = null;
@@ -1060,11 +1053,13 @@ class _RAGChatModalState extends State<RAGChatModal> {
       } catch (error) {
         if (!mounted) return;
         setState(() {
-          _messages.add(ChatMessage(
-            text: 'Ask AI failed: $error',
-            isUser: false,
-            animateReveal: false,
-          ));
+          _messages.add(
+            ChatMessage(
+              text: 'Ask AI failed: $error',
+              isUser: false,
+              animateReveal: false,
+            ),
+          );
           _isLoading = false;
           _liveStreamText = null;
         });
@@ -1118,12 +1113,14 @@ class _RAGChatModalState extends State<RAGChatModal> {
       if (convLang != null && convLang.isNotEmpty) {
         _conversationLanguage = convLang;
       }
-      _messages.add(ChatMessage(
-        text: hasAnswer ? answer : 'No answer available',
-        isUser: false,
-        trustLine: trust,
-        animateReveal: hasAnswer && animateReveal,
-      ));
+      _messages.add(
+        ChatMessage(
+          text: hasAnswer ? answer : 'No answer available',
+          isUser: false,
+          trustLine: trust,
+          animateReveal: hasAnswer && animateReveal,
+        ),
+      );
       _isLoading = false;
       _liveStreamText = null;
     });
@@ -1145,19 +1142,14 @@ class _RAGChatModalState extends State<RAGChatModal> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               border: Border(
-                bottom: BorderSide(
-                  color: AppTheme.getCardBorder(context),
-                ),
+                bottom: BorderSide(color: AppTheme.getCardBorder(context)),
               ),
             ),
             child: Row(
               children: [
                 const Text(
                   'Ask about this lecture',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
                 IconButton(
@@ -1205,9 +1197,7 @@ class _RAGChatModalState extends State<RAGChatModal> {
             padding: const EdgeInsets.all(16),
             decoration: BoxDecoration(
               border: Border(
-                top: BorderSide(
-                  color: AppTheme.getCardBorder(context),
-                ),
+                top: BorderSide(color: AppTheme.getCardBorder(context)),
               ),
             ),
             child: Row(
@@ -1279,14 +1269,20 @@ class _RAGChatModalState extends State<RAGChatModal> {
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppTheme.getPrimaryText(context),
                   side: BorderSide(color: AppTheme.getCardBorder(context)),
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(20),
                   ),
                 ),
                 child: Text(
                   suggestion,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w500,
+                  ),
                 ),
               );
             }).toList(),

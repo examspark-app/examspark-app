@@ -1112,7 +1112,9 @@ class LectureService {
   }
 
   Future<void> englishPracticeRenameSession(
-      String sessionId, String title) async {
+    String sessionId,
+    String title,
+  ) async {
     if (!AppConfig.isApiConfigured) {
       throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
     }
@@ -1133,8 +1135,7 @@ class LectureService {
     }
   }
 
-  Future<void> englishPracticePinSession(
-      String sessionId, bool pinned) async {
+  Future<void> englishPracticePinSession(String sessionId, bool pinned) async {
     if (!AppConfig.isApiConfigured) {
       throw StateError('FASTAPI_BASE_URL not configured — see API_SETUP.md');
     }
@@ -1155,18 +1156,87 @@ class LectureService {
     }
   }
 
-  Future<Map<String, dynamic>> startEnglishPractice() async {
+  Future<Map<String, dynamic>> startEnglishPractice({
+    String model = 'qwen3',
+  }) async {
     final accessToken = await _requireAccessToken();
     final uri = Uri.parse(
       '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/start',
     );
     final response = await http.post(
       uri,
-      headers: {'Authorization': 'Bearer $accessToken'},
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'model': model}),
     );
     if (response.statusCode != 200) {
       throw Exception(_extractErrorDetail(response));
     }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<Map<String, dynamic>> getReferralSummary() async {
+    final token = await _requireAccessToken();
+    final response = await http.get(
+      Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/referrals/me'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode != 200)
+      throw Exception(_extractErrorDetail(response));
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<bool> checkDeviceAccountLimit(String deviceId) async {
+    try {
+      final response = await http
+          .post(
+            Uri.parse(
+              '${AppConfig.resolvedApiBaseUrl}/api/v1/device-accounts/check',
+            ),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'device_id': deviceId}),
+          )
+          .timeout(const Duration(seconds: 4));
+      if (response.statusCode != 200) return true;
+      final data = jsonDecode(response.body);
+      if (data is! Map<String, dynamic>) return true;
+      return data['allowed'] != false;
+    } catch (_) {
+      // Device enforcement must fail open so a service glitch never blocks signup.
+      return true;
+    }
+  }
+
+  Future<void> registerDeviceAccount(String deviceId) async {
+    final token = await _requireAccessToken();
+    final response = await http.post(
+      Uri.parse(
+        '${AppConfig.resolvedApiBaseUrl}/api/v1/device-accounts/register',
+      ),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'device_id': deviceId}),
+    );
+    if (response.statusCode != 200)
+      throw Exception(_extractErrorDetail(response));
+  }
+
+  Future<Map<String, dynamic>> redeemReferral(String code) async {
+    final token = await _requireAccessToken();
+    final response = await http.post(
+      Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/referrals/redeem'),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'code': code}),
+    );
+    if (response.statusCode != 200)
+      throw Exception(_extractErrorDetail(response));
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
@@ -1200,22 +1270,23 @@ class LectureService {
     required String filename,
   }) async {
     final accessToken = await _requireAccessToken();
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse(
-        '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/turn/audio',
-      ),
-    )
-      ..headers['Authorization'] = 'Bearer $accessToken'
-      ..fields['session_id'] = sessionId
-      ..files.add(
-        http.MultipartFile.fromBytes(
-          'audio',
-          audioBytes,
-          filename: filename,
-          contentType: MediaType('audio', 'mp4'),
-        ),
-      );
+    final request =
+        http.MultipartRequest(
+            'POST',
+            Uri.parse(
+              '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/turn/audio',
+            ),
+          )
+          ..headers['Authorization'] = 'Bearer $accessToken'
+          ..fields['session_id'] = sessionId
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'audio',
+              audioBytes,
+              filename: filename,
+              contentType: MediaType('audio', 'mp4'),
+            ),
+          );
     final response = await http.Response.fromStream(await request.send());
     if (response.statusCode != 200) {
       throw Exception(_extractErrorDetail(response));
@@ -1326,14 +1397,15 @@ class LectureService {
     required String sessionId,
   }) async {
     final accessToken = await _requireAccessToken();
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse(
-        '${AppConfig.resolvedApiBaseUrl}/api/v1/english-roleplay/reengage',
-      ),
-    )
-      ..headers['Authorization'] = 'Bearer $accessToken'
-      ..fields['session_id'] = sessionId;
+    final request =
+        http.MultipartRequest(
+            'POST',
+            Uri.parse(
+              '${AppConfig.resolvedApiBaseUrl}/api/v1/english-roleplay/reengage',
+            ),
+          )
+          ..headers['Authorization'] = 'Bearer $accessToken'
+          ..fields['session_id'] = sessionId;
     final response = await http.Response.fromStream(await request.send());
     if (response.statusCode != 200) {
       throw Exception(_extractErrorDetail(response));
@@ -1351,23 +1423,24 @@ class LectureService {
     required Future<void> Function(Map<String, dynamic> chunk) onAudioChunk,
   }) async {
     final accessToken = await _requireAccessToken();
-    final request = http.MultipartRequest(
-      'POST',
-      Uri.parse(
-        '${AppConfig.resolvedApiBaseUrl}/api/v1/english-roleplay/turn/audio/stream',
-      ),
-    )
-      ..headers['Authorization'] = 'Bearer $accessToken'
-      ..headers['Accept'] = 'text/event-stream'
-      ..fields['session_id'] = sessionId
-      ..files.add(
-        http.MultipartFile.fromBytes(
-          'audio',
-          audioBytes,
-          filename: filename,
-          contentType: MediaType('audio', 'mp4'),
-        ),
-      );
+    final request =
+        http.MultipartRequest(
+            'POST',
+            Uri.parse(
+              '${AppConfig.resolvedApiBaseUrl}/api/v1/english-roleplay/turn/audio/stream',
+            ),
+          )
+          ..headers['Authorization'] = 'Bearer $accessToken'
+          ..headers['Accept'] = 'text/event-stream'
+          ..fields['session_id'] = sessionId
+          ..files.add(
+            http.MultipartFile.fromBytes(
+              'audio',
+              audioBytes,
+              filename: filename,
+              contentType: MediaType('audio', 'mp4'),
+            ),
+          );
     final response = await request.send();
     if (response.statusCode != 200) {
       throw Exception(await _extractErrorDetailFromStream(response));
@@ -1408,14 +1481,17 @@ class LectureService {
         ..clear()
         ..write(raw);
     }
-    if (done == null) throw const RoleplayStreamException(
-      'Voice stream ended before completion.',
-      canFallback: true,
-    );
+    if (done == null)
+      throw const RoleplayStreamException(
+        'Voice stream ended before completion.',
+        canFallback: true,
+      );
     return done;
   }
 
-  Future<String> _extractErrorDetailFromStream(http.StreamedResponse response) async {
+  Future<String> _extractErrorDetailFromStream(
+    http.StreamedResponse response,
+  ) async {
     final body = await response.stream.bytesToString();
     return _extractErrorDetailFromBody(body, response.statusCode);
   }

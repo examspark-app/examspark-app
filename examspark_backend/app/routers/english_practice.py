@@ -23,6 +23,10 @@ class SendMessageRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=2000)
 
 
+class StartRequest(BaseModel):
+    model: str = Field("qwen3", min_length=1, max_length=20)
+
+
 class _RenameSessionBody(BaseModel):
     title: str = Field(..., min_length=1, max_length=120)
 
@@ -60,9 +64,15 @@ async def set_preference(
 
 
 @router.post("/start")
-async def start(user: AuthenticatedUser = Depends(get_current_user)):
+async def start(
+    body: StartRequest | None = None,
+    user: AuthenticatedUser = Depends(get_current_user),
+):
     try:
-        result = await eps.start_session(user.user_id)
+        result = await eps.start_session(
+            user.user_id,
+            model=body.model if body is not None else "qwen3",
+        )
         audio = result.pop("audio_bytes", None)
         return {
             **result,
