@@ -855,6 +855,63 @@ class LectureService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> glowGuideTurn({
+    required String text,
+    String? category,
+    String? sessionId,
+    Uint8List? imageBytes,
+    String? filename,
+  }) async {
+    final token = await _requireAccessToken();
+    final request = http.MultipartRequest(
+      'POST',
+      Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/glow-guide/turn'),
+    )
+      ..headers['Authorization'] = 'Bearer $token'
+      ..fields['text'] = text
+      ..fields['category'] = category ?? ''
+      ..fields['session_id'] = sessionId ?? '';
+    if (imageBytes != null && imageBytes.isNotEmpty) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'image',
+          imageBytes,
+          filename: filename ?? 'glow-guide-photo.jpg',
+        ),
+      );
+    }
+    final response = await http.Response.fromStream(await request.send());
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<List<Map<String, dynamic>>> listGlowGuideSessions() async {
+    final token = await _requireAccessToken();
+    final response = await http.get(
+      Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/glow-guide/sessions'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return List<Map<String, dynamic>>.from(data['sessions'] as List? ?? const []);
+  }
+
+  Future<Map<String, dynamic>> restoreGlowGuideSession(String sessionId) async {
+    final token = await _requireAccessToken();
+    final response = await http.get(
+      Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/glow-guide/sessions/$sessionId'),
+      headers: {'Authorization': 'Bearer $token'},
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   /// Home AI Camera / Image → chat answer (not Study Workspace).
   /// Credits: [CreditCosts.homeAiVision] (10) server-side after SUCCESS.
   Future<Map<String, dynamic>> homeAiVision({

@@ -384,6 +384,16 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                   ListTile(
                     dense: true,
                     visualDensity: VisualDensity.compact,
+                    leading: Icon(Icons.eco_outlined, size: 20, color: iconColor),
+                    title: const Text('GlowGuide 🌿', style: TextStyle(fontSize: 14)),
+                    onTap: () {
+                      Navigator.pop(context);
+                      Navigator.pushNamed(context, '/glow-guide');
+                    },
+                  ),
+                  ListTile(
+                    dense: true,
+                    visualDensity: VisualDensity.compact,
                     leading: Icon(
                       Icons.folder_outlined,
                       size: 20,

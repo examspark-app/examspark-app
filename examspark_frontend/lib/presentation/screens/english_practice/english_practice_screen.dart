@@ -10,6 +10,7 @@ import 'package:examspark_frontend/presentation/screens/english_practice/english
 import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_drawer.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/roleplay_screen.dart';
 import 'package:examspark_frontend/presentation/widgets/ai_model_selector.dart';
+import 'package:examspark_frontend/presentation/widgets/glow_guide_rotating_button.dart';
 
 class _Message {
   const _Message(this.text, this.isUser);
@@ -681,6 +682,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
           ),
         ),
         const Spacer(),
+        GlowGuideRotatingButton(
+          onTap: () => Navigator.pushNamed(context, '/glow-guide'),
+        ),
         TextButton(
           onPressed: _roleplay,
           child: const Text('Roleplay'),

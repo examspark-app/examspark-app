@@ -1,0 +1,166 @@
+"""GlowGuide isolated multimodal conversation service."""
+from __future__ import annotations
+
+import base64
+import json
+import logging
+from typing import Any
+
+import httpx
+
+from app.config import AIConfig
+from app.constants.glow_guide_prompt import system_prompt
+from app.services.credits_service import InsufficientCreditsError, deduct_credits, get_credits_balance
+from app.services.supabase_admin import get_supabase_admin
+
+logger = logging.getLogger(__name__)
+CREDIT_COST = 5
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
+class GlowGuideError(Exception):
+    def __init__(self, message: str, status_code: int = 500):
+        self.status_code = status_code
+        super().__init__(message)
+
+
+def _json(raw: str) -> dict[str, Any]:
+    text = (raw or "").strip().strip('`')
+    if text.lower().startswith("json"):
+        text = text[4:].strip()
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        start, end = text.find("{"), text.rfind("}")
+        if start < 0 or end <= start:
+            raise GlowGuideError("GlowGuide returned invalid JSON.", 502)
+        try:
+            value = json.loads(text[start:end + 1])
+        except json.JSONDecodeError as error:
+            raise GlowGuideError("GlowGuide returned invalid JSON.", 502) from error
+    if not isinstance(value, dict):
+        raise GlowGuideError("GlowGuide returned invalid JSON.", 502)
+    return value
+
+
+def _mime(filename: str | None) -> str:
+    name = (filename or "").lower()
+    return "image/png" if name.endswith(".png") else "image/jpeg"
+
+
+def _multimodal_messages(rows: list[dict[str, Any]], text: str, image: bytes | None, filename: str | None) -> list[dict[str, Any]]:
+    messages: list[dict[str, Any]] = [{"role": r.get("role", "user"), "content": r.get("message", "")} for r in rows]
+    content: Any = text or "Analyze this GlowGuide photo and ask the next necessary question."
+    if image:
+        content = [
+            {"type": "text", "text": content},
+            {"type": "image_url", "image_url": {"url": f"data:{_mime(filename)};base64,{base64.b64encode(image).decode('ascii')}"}},
+        ]
+    messages.append({"role": "user", "content": content})
+    return messages
+
+
+async def _call_gemini(messages: list[dict[str, Any]]) -> str:
+    if not AIConfig.gemini_tts_configured():
+        raise GlowGuideError("Gemini is not configured.", 500)
+    system_text = messages[0]["content"]
+    contents: list[dict[str, Any]] = []
+    for message in messages[1:]:
+        content = message["content"]
+        parts: list[dict[str, Any]] = []
+        if isinstance(content, list):
+            for item in content:
+                if item["type"] == "text":
+                    parts.append({"text": item["text"]})
+                else:
+                    header, data = item["image_url"]["url"].split(",", 1)
+                    parts.append({"inlineData": {"mimeType": header.split(";", 1)[0][5:], "data": data}})
+        else:
+            parts.append({"text": content})
+        contents.append({
+            "role": "model" if message["role"] == "assistant" else "user",
+            "parts": parts,
+        })
+    payload = {"systemInstruction": {"parts": [{"text": system_text}]}, "contents": contents, "generationConfig": {"temperature": 0.45, "maxOutputTokens": 1200, "responseMimeType": "application/json"}}
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post(f"https://generativelanguage.googleapis.com/v1beta/models/{AIConfig.GLOWGUIDE_GEMINI_MODEL}:generateContent", headers={"x-goog-api-key": AIConfig.GEMINI_API_KEY}, json=payload)
+    if response.status_code != 200:
+        raise GlowGuideError(f"Gemini failed: {response.status_code}", 502)
+    try:
+        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError, TypeError) as error:
+        raise GlowGuideError("Gemini returned no answer.", 502) from error
+
+
+async def _call_claude(messages: list[dict[str, Any]]) -> str:
+    if not AIConfig.CLAUDE_API_KEY:
+        raise GlowGuideError("Claude is not configured.", 500)
+    system_text = messages[0]["content"]
+    turns: list[dict[str, Any]] = []
+    for message in messages[1:]:
+        content = message["content"]
+        if isinstance(content, list):
+            blocks = []
+            for item in content:
+                if item["type"] == "text":
+                    blocks.append({"type": "text", "text": item["text"]})
+                else:
+                    header, data = item["image_url"]["url"].split(",", 1)
+                    blocks.append({"type": "image", "source": {"type": "base64", "media_type": header.split(";", 1)[0][5:], "data": data}})
+            content = blocks
+        turns.append({"role": message["role"], "content": content})
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post("https://api.anthropic.com/v1/messages", headers={"x-api-key": AIConfig.CLAUDE_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"}, json={"model": AIConfig.CLAUDE_CHAT_MODEL, "system": system_text, "messages": turns, "max_tokens": 1200, "temperature": 0.45})
+    if response.status_code != 200:
+        raise GlowGuideError(f"Claude failed: {response.status_code}", 502)
+    return "".join(block.get("text", "") for block in response.json().get("content", []) if block.get("type") == "text")
+
+
+async def _call_qwen(messages: list[dict[str, Any]]) -> str:
+    if not AIConfig.openrouter_configured():
+        raise GlowGuideError("Qwen is not configured.", 500)
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post(OPENROUTER_URL, headers={"Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}", "Content-Type": "application/json"}, json={"model": AIConfig.AI_VISION_FLASH_MODEL, "messages": messages, "temperature": 0.45, "max_tokens": 1200, "response_format": {"type": "json_object"}})
+    if response.status_code != 200:
+        raise GlowGuideError(f"Qwen failed: {response.status_code}", 502)
+    return response.json()["choices"][0]["message"]["content"]
+
+
+async def turn(user_id: str, session_id: str | None, category: str | None, text: str, image: bytes | None, filename: str | None) -> dict[str, Any]:
+    if not text.strip() and not image:
+        raise GlowGuideError("Add a question or photo.", 400)
+    db = get_supabase_admin()
+    if session_id:
+        found = db.table("glow_guide_sessions").select("*").eq("id", session_id).eq("user_id", user_id).limit(1).execute().data or []
+        if not found:
+            raise GlowGuideError("GlowGuide session not found.", 404)
+        current = found[0]
+    else:
+        current = db.table("glow_guide_sessions").insert({"user_id": user_id, "category_type": category, "status": "active"}).execute().data[0]
+        session_id = current["id"]
+    active_category = category or current.get("category_type")
+    if category and category != current.get("category_type"):
+        db.table("glow_guide_sessions").update({"category_type": category}).eq("id", session_id).eq("user_id", user_id).execute()
+    rows = db.table("glow_guide_messages").select("role,message").eq("session_id", session_id).eq("user_id", user_id).order("created_at", desc=False).limit(50).execute().data or []
+    messages = [{"role": "system", "content": system_prompt(active_category)}, *_multimodal_messages(rows, text, image, filename)]
+    parsed: dict[str, Any] | None = None
+    errors: list[str] = []
+    for tier, caller in (("gemini", _call_gemini), ("claude", _call_claude), ("qwen", _call_qwen)):
+        try:
+            parsed = _json(await caller(messages))
+            logger.info("glow_guide_model_served tier=%s user=%s", tier, user_id)
+            break
+        except GlowGuideError as error:
+            errors.append(f"{tier}: {error}")
+    if parsed is None:
+        raise GlowGuideError("GlowGuide unavailable. " + " | ".join(errors), 502)
+    if get_credits_balance(user_id) < CREDIT_COST:
+        raise GlowGuideError(f"Need {CREDIT_COST} credits for GlowGuide.", 402)
+    try:
+        balance = deduct_credits(user_id, CREDIT_COST, "GlowGuide turn", action="glow_guide")
+    except InsufficientCreditsError as error:
+        raise GlowGuideError(str(error), 402) from error
+    reply = str(parsed.get("reply") or "I need a little more detail before I can help.").strip()
+    db.table("glow_guide_messages").insert([{"session_id": session_id, "user_id": user_id, "role": "user", "message": text or "Photo attached"}, {"session_id": session_id, "user_id": user_id, "role": "assistant", "message": reply}]).execute()
+    db.table("glow_guide_sessions").update({"updated_at": "now()"}).eq("id", session_id).eq("user_id", user_id).execute()
+    return {"session_id": session_id, "reply": reply, "category": parsed.get("category") or active_category, "question_options": parsed.get("question_options") or [], "ready": bool(parsed.get("ready")), "verdict": parsed.get("verdict"), "category_label": parsed.get("category_label"), "confidence_note": parsed.get("confidence_note") or "", "credits_charged": CREDIT_COST, "new_balance": balance}

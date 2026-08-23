@@ -17,6 +17,7 @@ from app.routers import (
     english_roleplay,
     referrals,
     device_accounts,
+    glow_guide,
 )
 from app.services.supabase_admin import get_supabase_admin
 
@@ -50,6 +51,7 @@ app.include_router(english_practice.router)
 app.include_router(english_roleplay.router)
 app.include_router(referrals.router)
 app.include_router(device_accounts.router)
+app.include_router(glow_guide.router)
 app.include_router(webhooks_razorpay.router)
 app.include_router(webhooks_google_play.router)
 app.include_router(webhooks_phonepe.router)

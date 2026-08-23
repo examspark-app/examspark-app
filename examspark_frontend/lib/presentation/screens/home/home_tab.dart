@@ -35,6 +35,7 @@ import 'package:examspark_frontend/presentation/widgets/study_workspace/workspac
 import 'package:examspark_frontend/presentation/screens/search/search_overlay_screen.dart';
 import 'package:examspark_frontend/presentation/widgets/youtube_link_dialog.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
+import 'package:examspark_frontend/presentation/widgets/glow_guide_rotating_button.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
@@ -1438,6 +1439,11 @@ $rawText
         onNotificationTap: _openNotifications,
         notificationUnreadCount:
             NotificationInboxController.instance.unreadCount,
+        trailing: [
+          GlowGuideRotatingButton(
+            onTap: () => Navigator.pushNamed(context, '/glow-guide'),
+          ),
+        ],
       ),
       body: Column(
         children: [

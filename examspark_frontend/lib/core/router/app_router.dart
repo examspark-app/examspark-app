@@ -22,6 +22,7 @@ import 'package:examspark_frontend/presentation/screens/profile/settings_screen.
 import 'package:examspark_frontend/presentation/screens/referrals/refer_earn_screen.dart';
 import 'package:examspark_frontend/presentation/screens/admin/admin_payment_hub_screen.dart';
 import 'package:examspark_frontend/presentation/screens/admin/admin_payment_screens.dart';
+import 'package:examspark_frontend/presentation/screens/glow_guide/glow_guide_screen.dart';
 
 class AppRouter {
   AppRouter._();
@@ -58,6 +59,11 @@ class AppRouter {
       case '/home':
         return MaterialPageRoute(
           builder: (_) => const AppShell(),
+          settings: settings,
+        );
+      case '/glow-guide':
+        return MaterialPageRoute(
+          builder: (_) => const GlowGuideScreen(),
           settings: settings,
         );
       case '/recorder':

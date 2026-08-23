@@ -62,6 +62,9 @@ class AIConfig:
     GEMINI_CHAT_MODEL: str = os.getenv(
         "GEMINI_CHAT_MODEL", "gemini-2.5-flash-lite"
     )
+    GLOWGUIDE_GEMINI_MODEL: str = os.getenv(
+        "GLOWGUIDE_GEMINI_MODEL", "gemini-2.5-pro"
+    )
     GEMINI_VISION_MODEL: str = os.getenv(
         "GEMINI_VISION_MODEL", "gemini-2.5-flash"
     )
@@ -108,9 +111,10 @@ class AIConfig:
     FISH_VOICE_ENGLISH_MALE: str = os.getenv("FISH_VOICE_ENGLISH_MALE", "")
     # Default Roleplay voice: English Female. User preferences can still
     # switch to the existing English Male ID or another language/voice.
-    FISH_AUDIO_DEFAULT_VOICE_ID: str = os.getenv(
-        "FISH_AUDIO_DEFAULT_VOICE_ID"
-    ).strip() or FISH_VOICE_ENGLISH_FEMALE
+    FISH_AUDIO_DEFAULT_VOICE_ID: str = (
+        os.getenv("FISH_AUDIO_DEFAULT_VOICE_ID", "").strip()
+        or FISH_VOICE_ENGLISH_FEMALE
+    )
     FISH_VOICE_SPANISH_FEMALE: str = os.getenv("FISH_VOICE_SPANISH_FEMALE", "")
     FISH_VOICE_SPANISH_MALE: str = os.getenv("FISH_VOICE_SPANISH_MALE", "")
     FISH_VOICE_FRENCH_FEMALE: str = os.getenv("FISH_VOICE_FRENCH_FEMALE", "")
