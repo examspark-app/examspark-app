@@ -11,6 +11,7 @@ async def glow_guide_turn(
     text: str = Form(""),
     category: str | None = Form(None),
     session_id: str | None = Form(None),
+    language: str | None = Form(None),
     image: UploadFile | None = File(None),
     user: AuthenticatedUser = Depends(get_current_user),
 ):
@@ -22,7 +23,7 @@ async def glow_guide_turn(
         if len(image_bytes) > 8 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Photo is too large (max 8 MB).")
     try:
-        return await turn(user.user_id, session_id, category, text, image_bytes, filename)
+        return await turn(user.user_id, session_id, category, text, image_bytes, filename, language)
     except GlowGuideError as error:
         raise HTTPException(status_code=error.status_code, detail=str(error)) from error
 
@@ -37,7 +38,14 @@ async def restore_glow_guide_session(
     rows = db.table("glow_guide_sessions").select("*").eq("id", session_id).eq("user_id", user.user_id).limit(1).execute().data or []
     if not rows:
         raise HTTPException(status_code=404, detail="GlowGuide session not found.")
-    messages = db.table("glow_guide_messages").select("id,role,message,created_at").eq("session_id", session_id).eq("user_id", user.user_id).order("created_at", desc=False).execute().data or []
+    messages = db.table("glow_guide_messages").select("id,role,message,image_path,created_at").eq("session_id", session_id).eq("user_id", user.user_id).order("created_at", desc=False).execute().data or []
+    from app.services.r2_storage_service import R2StorageError, R2StorageService
+    for message in messages:
+        if message.get("image_path"):
+            try:
+                message["image_url"] = R2StorageService().signed_url(str(message["image_path"]))
+            except R2StorageError:
+                message["image_url"] = None
     return {"session_id": session_id, "category": rows[0].get("category_type"), "messages": messages}
 
 

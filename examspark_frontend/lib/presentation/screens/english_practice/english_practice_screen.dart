@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
@@ -13,9 +15,10 @@ import 'package:examspark_frontend/presentation/widgets/ai_model_selector.dart';
 import 'package:examspark_frontend/presentation/widgets/glow_guide_rotating_button.dart';
 
 class _Message {
-  const _Message(this.text, this.isUser);
+  const _Message(this.text, this.isUser, {this.imageUrl});
   final String text;
   final bool isUser;
+  final String? imageUrl;
 }
 
 class _ChatProcessingIndicator extends StatefulWidget {
@@ -176,6 +179,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   bool _loading = false;
   int _latestSessionRequestId = 0;
   bool _sending = false;
+  Uint8List? _photoBytes;
+  String? _photoName;
   bool _recording = false;
   bool _processingVoice = false;
   Timer? _voiceTurnLimitTimer;
@@ -262,7 +267,11 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
         ..clear()
         ..addAll(
           (r['messages'] as List? ?? const []).map(
-            (m) => _Message('${m['message'] ?? ''}', m['role'] == 'user'),
+            (m) => _Message(
+              '${m['message'] ?? ''}',
+              m['role'] == 'user',
+              imageUrl: m['image_url']?.toString(),
+            ),
           ),
         );
       _loading = false;
@@ -398,6 +407,35 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
           duration: const Duration(seconds: 6),
         ),
       );
+    }
+  }
+
+  Future<void> _pickPhoto() async {
+    if (_sending || _sessionId == null) return;
+    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
+    if (picked == null) return;
+    final bytes = await picked.readAsBytes();
+    if (!mounted) return;
+    setState(() {
+      _photoBytes = bytes;
+      _photoName = picked.name;
+    });
+    try {
+      setState(() => _sending = true);
+      final result = await LectureService.instance.englishPracticePhoto(
+        sessionId: _sessionId!, imageBytes: bytes, filename: picked.name,
+      );
+      if (!mounted) return;
+      setState(() {
+        _messages.add(_Message('Photo: ${result['reply'] ?? ''}', false));
+        _photoBytes = null;
+        _photoName = null;
+        _sending = false;
+      });
+      _bottom();
+    } catch (error) {
+      if (mounted) setState(() => _sending = false);
+      if (mounted) setState(() => _error = '$error');
     }
   }
 
@@ -685,10 +723,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
         GlowGuideRotatingButton(
           onTap: () => Navigator.pushNamed(context, '/glow-guide'),
         ),
-        TextButton(
-          onPressed: _roleplay,
-          child: const Text('Roleplay'),
-        ),
+        TextButton(onPressed: _roleplay, child: const Text('Roleplay')),
       ],
     ),
   );
@@ -750,17 +785,34 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                   ),
                 ],
               ),
-              child: SelectionArea(
-                child: Text(
-                  m.text,
-                  style: TextStyle(
-                    color: m.isUser
-                        ? Colors.white
-                        : AppTheme.getPrimaryText(context),
-                    fontSize: 16,
-                    height: 1.45,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  if (m.imageUrl != null && m.imageUrl!.isNotEmpty)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(12),
+                      child: Image.network(
+                        m.imageUrl!,
+                        width: 220,
+                        height: 160,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                  if (m.imageUrl != null && m.imageUrl!.isNotEmpty)
+                    const SizedBox(height: 8),
+                  SelectionArea(
+                    child: Text(
+                      m.text,
+                      style: TextStyle(
+                        color: m.isUser
+                            ? Colors.white
+                            : AppTheme.getPrimaryText(context),
+                        fontSize: 16,
+                        height: 1.45,
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           );
@@ -1055,6 +1107,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
     child: Row(
       children: [
+        _circle(Icons.photo_library_outlined, _pickPhoto),
+        const SizedBox(width: 8),
         _circle(
           _recording ? Icons.stop_rounded : Icons.mic_none_rounded,
           _toggleVoiceInput,
@@ -1157,6 +1211,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     }
     setState(() => _selectedTextModel = model);
   }
+
   Widget _circle(IconData icon, VoidCallback tap) => Material(
     color: violet,
     shape: const CircleBorder(),

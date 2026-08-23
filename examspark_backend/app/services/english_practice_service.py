@@ -11,11 +11,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
-import uuid
 from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 
 import httpx
+import uuid
 
 from app.config import AIConfig
 from app.constants.english_chat_prompt import build_chat_prompt
@@ -28,6 +28,8 @@ from app.services.supabase_admin import get_supabase_admin
 from app.services.openrouter_stream import OpenRouterStreamError, stream_chat_completions
 from app.services.plan_tier_service import GatedFeature, require_feature_unlocked
 from app.services.whisper_service import WhisperTranscriptionError, transcribe_audio
+from app.services.qwen_vision_service import analyze_image
+from app.services.r2_storage_service import R2StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -695,13 +697,20 @@ def restore_session(session_id: str, user_id: str) -> dict | None:
     messages = (
         get_supabase_admin()
         .table("english_practice_messages")
-        .select("role, message, created_at")
+        .select("role, message, image_path, created_at")
         .eq("session_id", session_id)
         .eq("user_id", user_id)
         .order("created_at", desc=False)
         .execute()
         .data or []
     )
+    r2 = R2StorageService()
+    for message in messages:
+        if message.get("image_path"):
+            try:
+                message["image_url"] = r2.signed_url(str(message["image_path"]))
+            except Exception:
+                logger.warning("Could not sign English Practice image path", exc_info=True)
     return {
         "id": session["id"],
         "title": session.get("title"),
@@ -807,16 +816,17 @@ def _build_context_messages(
 
 
 def _persist_message(
-    session_id: str, user_id: str, role: str, message: str
+    session_id: str, user_id: str, role: str, message: str, image_path: str | None = None
 ) -> None:
-    get_supabase_admin().table("english_practice_messages").insert(
-        {
+    row = {
             "session_id": session_id,
             "user_id": user_id,
             "role": role,
             "message": message,
         }
-    ).execute()
+    if image_path:
+        row["image_path"] = image_path
+    get_supabase_admin().table("english_practice_messages").insert(row).execute()
     get_supabase_admin().table("english_practice_sessions").update(
         {"updated_at": _now(), "message_count": _message_count_incremental(session_id, user_id)}
     ).eq("id", session_id).eq("user_id", user_id).execute()
@@ -910,7 +920,7 @@ async def start_session(user_id: str, model: str = "qwen3") -> dict:
 
 
 async def send_message(
-    user_id: str, session_id: str, message: str
+    user_id: str, session_id: str, message: str, image_path: str | None = None
 ) -> dict:
     session = _session_row(session_id, user_id)
     text = (message or "").strip()
@@ -937,7 +947,7 @@ async def send_message(
     focus: str | None = None
     if existing_count <= 1:
         focus = _focus_from_message(text)
-    _persist_message(session_id, user_id, "user", text)
+    _persist_message(session_id, user_id, "user", text, image_path=image_path)
     try:
         deduct_credits(
             user_id,
@@ -998,3 +1008,30 @@ async def send_audio_message(
     result = await send_message(user_id, session_id, transcript)
     result["transcript"] = transcript
     return result
+
+
+async def send_photo_message(
+    user_id: str,
+    session_id: str,
+    image_bytes: bytes,
+    filename: str,
+    mime_type: str | None = None,
+) -> dict:
+    if not image_bytes:
+        raise EnglishPracticeError("Photo is empty.", 400)
+    try:
+        vision = await analyze_image(
+            image_bytes,
+            filename=filename,
+            mime_type=mime_type,
+            text_hint="Read this image and explain it briefly for English practice. Extract readable English text.",
+        )
+    except Exception as error:
+        raise EnglishPracticeError(f"Could not analyze photo: {error}", 502) from error
+    notes = vision.notes or {}
+    prompt = (notes.get("extractedText") or notes.get("shortSummary") or notes.get("cleanNotes") or "Please describe what you see in this image.").strip()
+    path = R2StorageService().chat_image_path(
+        "english-practice", user_id, str(uuid.uuid4()), filename=filename
+    )
+    R2StorageService().upload_bytes(path, image_bytes, mime_type or "image/jpeg")
+    return await send_message(user_id, session_id, prompt, image_path=path)

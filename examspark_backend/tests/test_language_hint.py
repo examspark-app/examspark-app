@@ -41,18 +41,18 @@ def test_explicit_overrides():
     assert detect_question_language_hint("answer in spanish please") == "MATCH_QUESTION"
 
 
-def test_conversation_lock_holds_english_typed_followup():
+def test_conversation_lock_is_default_not_hard_lock():
     assert (
         resolve_answer_language("What is HOF?", conversation_language="HINDI")
-        == "HINDI"
+        == "ENGLISH"
     )
     assert (
         resolve_answer_language("What is HOF?", conversation_language="BENGALI")
-        == "BENGALI"
+        == "ENGLISH"
     )
     assert (
         resolve_answer_language("Qué es esto?", conversation_language="ENGLISH")
-        == "ENGLISH"
+        == "MATCH_QUESTION"
     )
 
 
@@ -70,8 +70,8 @@ def test_lock_note_in_user_line():
     line = language_hint_user_line(
         "What is photosynthesis?", conversation_language="HINDI"
     )
-    assert "LOCKED to HINDI" in line
-    assert "HINDI" in line
+    assert "switched to writing in ENGLISH" in line
+    assert "ENGLISH" in line
 
 
 def test_tamil_script_match_question():

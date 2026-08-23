@@ -4,18 +4,27 @@ from __future__ import annotations
 import base64
 import json
 import logging
+import uuid
 from typing import Any
 
 import httpx
 
 from app.config import AIConfig
 from app.constants.glow_guide_prompt import system_prompt
+from app.constants.language_hint import resolve_answer_language
 from app.services.credits_service import InsufficientCreditsError, deduct_credits, get_credits_balance
 from app.services.supabase_admin import get_supabase_admin
+from app.services.r2_storage_service import R2StorageService
 
 logger = logging.getLogger(__name__)
-CREDIT_COST = 5
+GLOW_GUIDE_TEXT_COST = 2
+GLOW_GUIDE_PHOTO_COST = 5
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+
+def glow_guide_credit_cost(has_photo: bool) -> int:
+    """GlowGuide charges 2 for text-only, 5 when a photo is attached."""
+    return GLOW_GUIDE_PHOTO_COST if has_photo else GLOW_GUIDE_TEXT_COST
 
 
 class GlowGuideError(Exception):
@@ -58,6 +67,12 @@ def _multimodal_messages(rows: list[dict[str, Any]], text: str, image: bytes | N
         ]
     messages.append({"role": "user", "content": content})
     return messages
+
+
+def glow_guide_language_for_turn(text: str, preferred_language: str | None = None) -> str:
+    """Follow the same answer-language detection contract used across the app."""
+    resolved = resolve_answer_language(text, conversation_language=preferred_language)
+    return resolved or "MATCH_QUESTION"
 
 
 async def _call_gemini(messages: list[dict[str, Any]]) -> str:
@@ -126,9 +141,18 @@ async def _call_qwen(messages: list[dict[str, Any]]) -> str:
     return response.json()["choices"][0]["message"]["content"]
 
 
-async def turn(user_id: str, session_id: str | None, category: str | None, text: str, image: bytes | None, filename: str | None) -> dict[str, Any]:
+async def turn(
+    user_id: str,
+    session_id: str | None,
+    category: str | None,
+    text: str,
+    image: bytes | None,
+    filename: str | None,
+    preferred_language: str | None = None,
+) -> dict[str, Any]:
     if not text.strip() and not image:
         raise GlowGuideError("Add a question or photo.", 400)
+    detected_language = glow_guide_language_for_turn(text, preferred_language)
     db = get_supabase_admin()
     if session_id:
         found = db.table("glow_guide_sessions").select("*").eq("id", session_id).eq("user_id", user_id).limit(1).execute().data or []
@@ -142,7 +166,7 @@ async def turn(user_id: str, session_id: str | None, category: str | None, text:
     if category and category != current.get("category_type"):
         db.table("glow_guide_sessions").update({"category_type": category}).eq("id", session_id).eq("user_id", user_id).execute()
     rows = db.table("glow_guide_messages").select("role,message").eq("session_id", session_id).eq("user_id", user_id).order("created_at", desc=False).limit(50).execute().data or []
-    messages = [{"role": "system", "content": system_prompt(active_category)}, *_multimodal_messages(rows, text, image, filename)]
+    messages = [{"role": "system", "content": system_prompt(active_category, text, preferred_language)}, *_multimodal_messages(rows, text, image, filename)]
     parsed: dict[str, Any] | None = None
     errors: list[str] = []
     for tier, caller in (("gemini", _call_gemini), ("claude", _call_claude), ("qwen", _call_qwen)):
@@ -154,13 +178,20 @@ async def turn(user_id: str, session_id: str | None, category: str | None, text:
             errors.append(f"{tier}: {error}")
     if parsed is None:
         raise GlowGuideError("GlowGuide unavailable. " + " | ".join(errors), 502)
-    if get_credits_balance(user_id) < CREDIT_COST:
-        raise GlowGuideError(f"Need {CREDIT_COST} credits for GlowGuide.", 402)
+    required_credits = glow_guide_credit_cost(bool(image))
+    if get_credits_balance(user_id) < required_credits:
+        raise GlowGuideError(f"Need {required_credits} credits for GlowGuide.", 402)
     try:
-        balance = deduct_credits(user_id, CREDIT_COST, "GlowGuide turn", action="glow_guide")
+        balance = deduct_credits(user_id, required_credits, "GlowGuide turn", action="glow_guide")
     except InsufficientCreditsError as error:
         raise GlowGuideError(str(error), 402) from error
     reply = str(parsed.get("reply") or "I need a little more detail before I can help.").strip()
-    db.table("glow_guide_messages").insert([{"session_id": session_id, "user_id": user_id, "role": "user", "message": text or "Photo attached"}, {"session_id": session_id, "user_id": user_id, "role": "assistant", "message": reply}]).execute()
+    image_path = None
+    if image:
+        image_path = R2StorageService().chat_image_path(
+            "glowguide", user_id, str(uuid.uuid4()), filename=filename, category=active_category
+        )
+        R2StorageService().upload_bytes(image_path, image, _mime(filename))
+    db.table("glow_guide_messages").insert([{"session_id": session_id, "user_id": user_id, "role": "user", "message": text or "Photo attached", "image_path": image_path}, {"session_id": session_id, "user_id": user_id, "role": "assistant", "message": reply}]).execute()
     db.table("glow_guide_sessions").update({"updated_at": "now()"}).eq("id", session_id).eq("user_id", user_id).execute()
-    return {"session_id": session_id, "reply": reply, "category": parsed.get("category") or active_category, "question_options": parsed.get("question_options") or [], "ready": bool(parsed.get("ready")), "verdict": parsed.get("verdict"), "category_label": parsed.get("category_label"), "confidence_note": parsed.get("confidence_note") or "", "credits_charged": CREDIT_COST, "new_balance": balance}
+    return {"session_id": session_id, "reply": reply, "category": parsed.get("category") or active_category, "question_options": parsed.get("question_options") or [], "ready": bool(parsed.get("ready")), "verdict": parsed.get("verdict"), "category_label": parsed.get("category_label"), "confidence_note": parsed.get("confidence_note") or "", "credits_charged": required_credits, "new_balance": balance}

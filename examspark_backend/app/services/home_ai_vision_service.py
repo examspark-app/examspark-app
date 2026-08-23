@@ -6,6 +6,7 @@ persists Phase 4C Knowledge Object when SQL is present, charges HOME_AI_VISION (
 from __future__ import annotations
 
 import logging
+import uuid
 from typing import Any
 
 from app.constants.ai_response_status import SUCCESS
@@ -26,6 +27,7 @@ from app.services.plan_tier_service import (
     require_feature_unlocked,
 )
 from app.services.home_ai_vision_model_service import analyze_image_with_fallback
+from app.services.r2_storage_service import R2StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -280,6 +282,10 @@ async def home_ai_vision(
 
     result_session_id = None
     if rid:
+        image_path = R2StorageService().chat_image_path(
+            "home-chat", user_id, str(uuid.uuid4()), filename=filename
+        )
+        R2StorageService().upload_bytes(image_path, image_bytes, mime_type or "image/jpeg")
         result_session_id = ensure_session_for_turn(
             user_id=user_id,
             query=display_query,
@@ -289,6 +295,7 @@ async def home_ai_vision(
             session_id=session_id,
             parent_response_id=parent_response_id,
             conversation_language=None,
+            image_path=image_path,
         )
 
     return {

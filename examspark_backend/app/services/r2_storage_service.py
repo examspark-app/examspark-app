@@ -96,6 +96,33 @@ class R2StorageService:
     def export_file_path(self, user_id: str, filename: str) -> str:
         return f"{self.export_folder_path(user_id)}/{_safe_filename(filename)}"
 
+    def chat_image_path(
+        self,
+        feature: str,
+        user_id: str,
+        message_id: str,
+        filename: str | None = None,
+        category: str | None = None,
+    ) -> str:
+        prefixes = {"home-chat": "home-chat", "english-practice": "english-practice", "glowguide": "glowguide"}
+        prefix = prefixes.get(feature)
+        if not prefix:
+            raise R2StorageError(f"Unsupported chat image feature: {feature}")
+        extension = _safe_filename(filename or "photo.jpg").rsplit(".", 1)[-1]
+        extension = extension if extension and len(extension) <= 8 else "jpg"
+        middle = f"/{_safe_filename(category)}" if category else ""
+        return f"{prefix}/{user_id}{middle}/{message_id}.{extension}"
+
+    def signed_url(self, path: str, expires_in: int = 3600) -> str:
+        try:
+            return self._get_client().generate_presigned_url(
+                "get_object",
+                Params={"Bucket": StorageConfig.R2_BUCKET_NAME, "Key": path},
+                ExpiresIn=expires_in,
+            )
+        except Exception as e:  # noqa: BLE001
+            raise R2StorageError(f"Could not create R2 display URL: {e}") from e
+
     def source_document_path(
         self, user_id: str, lecture_id: str, filename: str | None
     ) -> str:

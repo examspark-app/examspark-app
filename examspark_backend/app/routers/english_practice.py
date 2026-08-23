@@ -122,6 +122,23 @@ async def send_audio_message(
         raise _http(e) from e
 
 
+@router.post("/turn/photo")
+async def send_photo_message(
+    session_id: str = Form(...),
+    image: UploadFile = File(...),
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    payload = await image.read()
+    if len(payload) > 8 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="Photo is too large. Keep one photo under 8 MB.")
+    try:
+        return await eps.send_photo_message(
+            user.user_id, session_id, payload, image.filename or "english-practice-photo.jpg", image.content_type
+        )
+    except eps.EnglishPracticeError as e:
+        raise _http(e) from e
+
+
 @router.get("/sessions")
 async def sessions(
     user: AuthenticatedUser = Depends(get_current_user),

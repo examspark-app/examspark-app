@@ -3,7 +3,11 @@ import 'package:flutter/material.dart';
 /// ChatGPT-inspired theme configuration
 class AppTheme {
   AppTheme._();
-
+    // GlowGuide (Skin Care AI) feature accent — purple, kept separate from
+  // the app's main pink-orange accent since GlowGuide has its own
+  // black & white + purple visual identity.
+  static const Color glowGuidePurple = Color(0xFF7C4DFF);
+  static const Color glowGuidePurpleLighter = Color(0xFF9B7BFF); // lighter shade for gradient/glossy effect
   static const Color accentColor = Color(0xFF10A37F);
   static const Color lightBackground = Color(0xFFFFFFFF);
   static const Color lightPrimaryText = Color(0xFF0D0D0D);
@@ -21,7 +25,7 @@ class AppTheme {
   static const double screenPadding = 16.0;
   static const double elementSpacing = 12.0;
   static const double cardPadding = 16.0;
-
+  
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,

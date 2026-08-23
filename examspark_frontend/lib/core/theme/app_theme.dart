@@ -27,6 +27,12 @@ class AppTheme {
   // Dark mode accent (buttons) — brighter pink-orange for visibility on dark bg
   static const Color darkAccentColor = Color(0xFFFF5C7A);
 
+  // GlowGuide (Skin Care AI) feature accent — purple, kept separate from
+  // the app's main pink-orange accent since GlowGuide has its own
+  // black & white + purple visual identity.
+  static const Color glowGuidePurple = Color(0xFF7C4DFF);
+  static const Color glowGuidePurpleLighter = Color(0xFF9D75FF); // ~15% lighter for gradient
+
   // Logo gradient — use for primary CTA buttons via BoxDecoration
   static const LinearGradient accentGradient = LinearGradient(
     colors: [accentColorStart, accentColorEnd],

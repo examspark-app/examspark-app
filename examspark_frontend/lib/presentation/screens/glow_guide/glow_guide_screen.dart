@@ -2,6 +2,8 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:examspark_frontend/core/network/supabase_client.dart'
+    as app_supabase;
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 
@@ -35,6 +37,17 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   String? _category;
   String? _sessionId;
   bool _sending = false;
+  bool _processingPhoto = false;
+  bool _showLanguageStep = true;
+  String _preferredLanguage = 'MATCH_QUESTION';
+  bool _hasLoadedPreferredLanguage = false;
+  String? _lastSubmittedKey;
+  final List<String> _languageOptions = const [
+    'English',
+    'Hindi',
+    'Bengali',
+    'Auto-detect',
+  ];
 
   @override
   void initState() {
@@ -43,9 +56,71 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
       _GlowMessage(
         _openings[DateTime.now().millisecond % _openings.length],
         false,
-        chips: _categories.map((item) => item.$1).toList(),
       ),
     );
+    _loadPreferredLanguage();
+  }
+
+  Future<void> _loadPreferredLanguage() async {
+    if (!app_supabase.SupabaseClient.instance.isInitialized) {
+      if (!mounted) return;
+      setState(() => _hasLoadedPreferredLanguage = true);
+      return;
+    }
+    final user = app_supabase.SupabaseClient.instance.currentUser;
+    if (user == null) {
+      if (!mounted) return;
+      setState(() => _hasLoadedPreferredLanguage = true);
+      return;
+    }
+    try {
+      final bundle = await app_supabase.SupabaseClient.instance
+          .fetchStudentOnboardingBundle(user.id);
+      final sp = bundle['student_profiles'];
+      final raw = (sp is Map ? sp['preferred_language'] : null) as String?;
+      final value = (raw ?? '').trim();
+      if (value.isNotEmpty) {
+        if (!mounted) return;
+        setState(() {
+          _preferredLanguage = value;
+          _showLanguageStep = false;
+          _hasLoadedPreferredLanguage = true;
+        });
+        _showCategoryChoices();
+        return;
+      }
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _hasLoadedPreferredLanguage = true);
+  }
+
+  Future<void> _savePreferredLanguage(String value) async {
+    final clean = value.trim();
+    if (clean.isEmpty) return;
+    if (!app_supabase.SupabaseClient.instance.isInitialized) return;
+    final user = app_supabase.SupabaseClient.instance.currentUser;
+    if (user == null) return;
+    _preferredLanguage = clean;
+    await app_supabase.SupabaseClient.instance.saveGlowGuideLanguagePreference(
+      user.id,
+      clean,
+    );
+  }
+
+  void _showCategoryChoices() {
+    if (!mounted) return;
+    setState(() {
+      _showLanguageStep = false;
+      if (!_messages.any((message) => message.chips.isNotEmpty)) {
+        _messages.add(
+          _GlowMessage(
+            'Choose a guide:',
+            false,
+            chips: _categories.map((item) => item.$1).toList(),
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -166,14 +241,21 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     if ((text.isEmpty && _attachment == null) || _sending) return;
     final image = _attachment;
     final imageName = _attachmentName;
+    final languageForRequest = _preferredLanguage;
+    final submissionKey =
+        '${_sessionId ?? 'new'}:${image != null ? 'photo' : 'text'}:${text.isEmpty ? 'photo' : text}:${DateTime.now().microsecondsSinceEpoch}';
+    _lastSubmittedKey = submissionKey;
     setState(() {
       _sending = true;
-      _messages.add(_GlowMessage(
-        text.isEmpty ? 'Photo attached' : text,
-        true,
-        image: image,
-        imageName: imageName,
-      ));
+      _processingPhoto = image != null;
+      _messages.add(
+        _GlowMessage(
+          text.isEmpty ? 'Photo attached' : text,
+          true,
+          image: image,
+          imageName: imageName,
+        ),
+      );
       _text.clear();
       _attachment = null;
       _attachmentName = null;
@@ -186,9 +268,11 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
         sessionId: _sessionId,
         imageBytes: image,
         filename: imageName,
+        language: languageForRequest,
       );
-      if (!mounted) return;
-      final options = (result['question_options'] as List?)
+      if (!mounted || _lastSubmittedKey != submissionKey) return;
+      final options =
+          (result['question_options'] as List?)
               ?.map((item) => item.toString())
               .where((item) => item.trim().isNotEmpty)
               .toList() ??
@@ -196,22 +280,28 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
       setState(() {
         _sessionId = result['session_id'] as String? ?? _sessionId;
         _category = result['category'] as String? ?? _category;
-        _messages.add(_GlowMessage(
-          result['reply'] as String? ?? 'I need a little more detail.',
-          false,
-          chips: options,
-        ));
+        _messages.add(
+          _GlowMessage(
+            result['reply'] as String? ?? 'I need a little more detail.',
+            false,
+            chips: options,
+          ),
+        );
         _sending = false;
+        _processingPhoto = false;
       });
       _scrollToBottom();
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || _lastSubmittedKey != submissionKey) return;
       setState(() {
         _sending = false;
-        _messages.add(_GlowMessage(
-          'GlowGuide is unavailable right now. Please try again.',
-          false,
-        ));
+        _processingPhoto = false;
+        _messages.add(
+          _GlowMessage(
+            'Skin Care AI is unavailable right now. Please try again.',
+            false,
+          ),
+        );
       });
     }
   }
@@ -223,14 +313,18 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
       _category = null;
       _attachment = null;
       _attachmentName = null;
+      _showLanguageStep =
+          _preferredLanguage == 'MATCH_QUESTION' || _preferredLanguage.isEmpty;
       _messages
         ..clear()
-        ..add(_GlowMessage(
-          _openings[DateTime.now().millisecond % _openings.length],
-          false,
-          chips: _categories.map((item) => item.$1).toList(),
-        ));
+        ..add(
+          _GlowMessage(
+            _openings[DateTime.now().millisecond % _openings.length],
+            false,
+          ),
+        );
     });
+    if (!_showLanguageStep) _showCategoryChoices();
   }
 
   Future<void> _openHistory() async {
@@ -242,27 +336,35 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
         child: ListView(
           shrinkWrap: true,
           children: [
-            const ListTile(title: Text('GlowGuide History')),
+            const ListTile(title: Text('Skin Care AI History')),
             for (final session in sessions)
               ListTile(
                 leading: const Icon(Icons.eco_outlined),
-                title: Text((session['category_type'] as String?) ?? 'GlowGuide'),
+                title: Text(
+                  (session['category_type'] as String?) ?? 'Skin Care AI',
+                ),
                 subtitle: Text((session['updated_at'] as String?) ?? ''),
-                onTap: () => Navigator.pop(sheetContext, session['id'] as String?),
+                onTap: () =>
+                    Navigator.pop(sheetContext, session['id'] as String?),
               ),
           ],
         ),
       ),
     );
     if (!mounted || selected == null) return;
-    final restored = await LectureService.instance.restoreGlowGuideSession(selected);
+    final restored = await LectureService.instance.restoreGlowGuideSession(
+      selected,
+    );
     if (!mounted) return;
     final restoredMessages = (restored['messages'] as List? ?? const [])
         .whereType<Map>()
-        .map((message) => _GlowMessage(
-              message['message']?.toString() ?? '',
-              message['role'] == 'user',
-            ))
+        .map(
+          (message) => _GlowMessage(
+            message['message']?.toString() ?? '',
+            message['role'] == 'user',
+            imageUrl: message['image_url']?.toString(),
+          ),
+        )
         .toList();
     setState(() {
       _sessionId = selected;
@@ -291,18 +393,20 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          _category == null ? 'GlowGuide 🌿' : 'GlowGuide 🌿 · $_category',
+          _category == null
+              ? 'Skin Care AI 🌿'
+              : 'Skin Care AI 🌿 · $_category',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
           IconButton(
-            tooltip: 'New GlowGuide chat',
+            tooltip: 'New Skin Care AI chat',
             onPressed: _newChat,
             icon: const Icon(Icons.add_comment_outlined),
           ),
           IconButton(
-            tooltip: 'GlowGuide history',
+            tooltip: 'Skin Care AI history',
             onPressed: _sending ? null : _openHistory,
             icon: const Icon(Icons.history_outlined),
           ),
@@ -310,16 +414,74 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
       ),
       body: Column(
         children: [
+          if (!_hasLoadedPreferredLanguage) const SizedBox(height: 8),
+          if (_hasLoadedPreferredLanguage && _showLanguageStep)
+            _languageSelector(),
           Expanded(
             child: ListView.builder(
               controller: _scroll,
               padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) => _messageTile(_messages[index]),
+              itemCount: _messages.length + (_sending ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (_sending && index == _messages.length) {
+                  return Padding(
+                    padding: EdgeInsets.only(bottom: 18),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: _processingPhoto
+                          ? _PhotoAnalyzingBubble(
+                              image: _messages.isNotEmpty
+                                  ? _messages.last.image
+                                  : null,
+                            )
+                          : const _PurpleTypingDots(),
+                    ),
+                  );
+                }
+                return _messageTile(_messages[index]);
+              },
             ),
           ),
+          const SizedBox(height: 8),
           _inputBar(),
         ],
+      ),
+    );
+  }
+
+  Widget _languageSelector() {
+    final options = _languageOptions;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        children: options.map((option) {
+          final selected =
+              option == _preferredLanguage ||
+              (option == 'Auto-detect' &&
+                  _preferredLanguage == 'MATCH_QUESTION');
+          return ChoiceChip(
+            label: Text(option),
+            selected: selected,
+            labelStyle: TextStyle(
+              color: selected ? Colors.white : AppTheme.getPrimaryText(context),
+              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
+            ),
+            backgroundColor: AppTheme.getCardBackground(context),
+            selectedColor: AppTheme.glowGuidePurple,
+            onSelected: (_) async {
+              if (option == 'Auto-detect') {
+                _preferredLanguage = 'MATCH_QUESTION';
+                await _savePreferredLanguage('MATCH_QUESTION');
+              } else {
+                _preferredLanguage = option;
+                await _savePreferredLanguage(option);
+              }
+              if (mounted) _showCategoryChoices();
+            },
+          );
+        }).toList(),
       ),
     );
   }
@@ -328,13 +490,20 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 18),
       child: Align(
-        alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
+        alignment: message.isUser
+            ? Alignment.centerRight
+            : Alignment.centerLeft,
         child: ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: MediaQuery.sizeOf(context).width * .86),
+          constraints: BoxConstraints(
+            maxWidth: MediaQuery.sizeOf(context).width * .86,
+          ),
           child: Column(
-            crossAxisAlignment: message.isUser ? CrossAxisAlignment.end : CrossAxisAlignment.start,
+            crossAxisAlignment: message.isUser
+                ? CrossAxisAlignment.end
+                : CrossAxisAlignment.start,
             children: [
-              if (message.image != null)
+              if (message.image != null ||
+                  (message.imageUrl?.isNotEmpty ?? false))
                 GestureDetector(
                   onTap: () {
                     setState(() {
@@ -345,7 +514,21 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                   },
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(14),
-                    child: Image.memory(message.image!, width: 180, height: 140, fit: BoxFit.cover),
+                    child: message.image != null
+                        ? Image.memory(
+                            message.image!,
+                            width: 180,
+                            height: 140,
+                            fit: BoxFit.cover,
+                          )
+                        : (message.imageUrl != null
+                              ? Image.network(
+                                  message.imageUrl!,
+                                  width: 180,
+                                  height: 140,
+                                  fit: BoxFit.cover,
+                                )
+                              : const SizedBox.shrink()),
                   ),
                 ),
               if (message.text.isNotEmpty)
@@ -362,14 +545,44 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                 ),
               if (message.chips.isNotEmpty) ...[
                 const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: message.chips.map((chip) => ActionChip(
-                    label: Text(chip),
-                    avatar: Icon(_iconFor(chip), size: 16),
-                    onPressed: () => _selectCategory(chip),
-                  )).toList(),
+                Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(15),
+                    border: Border.all(
+                      color: AppTheme.getCardBorder(context),
+                      width: 1,
+                    ),
+                    color: AppTheme.getCardBackground(context),
+                  ),
+                  padding: const EdgeInsets.all(12),
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: message.chips
+                        .map(
+                          (chip) => ActionChip(
+                            label: Text(
+                              chip,
+                              style: TextStyle(
+                                color: AppTheme.getPrimaryText(context),
+                                fontSize: 14,
+                              ),
+                            ),
+                            avatar: Icon(
+                              _iconFor(chip),
+                              size: 16,
+                              color: AppTheme.glowGuidePurple,
+                            ),
+                            backgroundColor: AppTheme.getCardBackground(context),
+                            side: BorderSide(
+                              color: AppTheme.glowGuidePurple.withValues(alpha: 0.3),
+                              width: 1,
+                            ),
+                            onPressed: () => _selectCategory(chip),
+                          ),
+                        )
+                        .toList(),
+                  ),
                 ),
               ],
             ],
@@ -411,7 +624,12 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                       children: [
                         ClipRRect(
                           borderRadius: BorderRadius.circular(10),
-                          child: Image.memory(_attachment!, width: 72, height: 72, fit: BoxFit.cover),
+                          child: Image.memory(
+                            _attachment!,
+                            width: 72,
+                            height: 72,
+                            fit: BoxFit.cover,
+                          ),
                         ),
                         Positioned(
                           top: -7,
@@ -425,7 +643,9 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                             icon: const Icon(Icons.close_rounded, size: 18),
                             style: IconButton.styleFrom(
                               backgroundColor: AppTheme.getPrimaryText(context),
-                              foregroundColor: AppTheme.getCardBackground(context),
+                              foregroundColor: AppTheme.getCardBackground(
+                                context,
+                              ),
                             ),
                           ),
                         ),
@@ -456,7 +676,21 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                   IconButton(
                     tooltip: 'Send',
                     onPressed: _sending ? null : _send,
-                    icon: Icon(Icons.arrow_upward_rounded, color: AppTheme.accentColor),
+                     icon: ShaderMask(
+                       shaderCallback: (bounds) => LinearGradient(
+                         begin: Alignment.topLeft,
+                         end: Alignment.bottomRight,
+                         colors: [
+                           AppTheme.glowGuidePurpleLighter,
+                           AppTheme.glowGuidePurple,
+                         ],
+                       ).createShader(bounds),
+                       child: Icon(
+                         Icons.arrow_upward_rounded,
+                         color: Colors.white,
+                         size: 24,
+                       ),
+                     ),
                   ),
                 ],
               ),
@@ -469,16 +703,138 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
 }
 
 class _GlowMessage {
-  const _GlowMessage(this.text, this.isUser, {this.chips = const [], this.image, this.imageName});
+  const _GlowMessage(
+    this.text,
+    this.isUser, {
+    this.chips = const [],
+    this.image,
+    this.imageName,
+    this.imageUrl,
+  });
   final String text;
   final bool isUser;
   final List<String> chips;
   final Uint8List? image;
   final String? imageName;
+  final String? imageUrl;
+}
+
+class _PurpleTypingDots extends StatefulWidget {
+  const _PurpleTypingDots();
+
+  @override
+  State<_PurpleTypingDots> createState() => _PurpleTypingDotsState();
+}
+
+class _PurpleTypingDotsState extends State<_PurpleTypingDots>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 900),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, _) => Row(
+        mainAxisSize: MainAxisSize.min,
+        children: List.generate(3, (index) {
+          final phase = ((_controller.value * 3) - index).clamp(0.0, 1.0);
+          return Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3),
+            child: Opacity(
+              opacity: 0.35 + (phase * 0.65),
+              child: const CircleAvatar(
+                radius: 4,
+                backgroundColor: Color(0xFF7C4DFF),
+              ),
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+class _PhotoAnalyzingBubble extends StatefulWidget {
+  const _PhotoAnalyzingBubble({required this.image});
+
+  final Uint8List? image;
+
+  @override
+  State<_PhotoAnalyzingBubble> createState() => _PhotoAnalyzingBubbleState();
+}
+
+class _PhotoAnalyzingBubbleState extends State<_PhotoAnalyzingBubble>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.image == null) return const _PurpleTypingDots();
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, _) => SizedBox(
+        width: 120,
+        height: 92,
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(12),
+              child: Image.memory(
+                widget.image!,
+                fit: BoxFit.cover,
+                width: 120,
+                height: 92,
+              ),
+            ),
+            Positioned(
+              top: _controller.value * 88,
+              left: 0,
+              right: 0,
+              child: Container(height: 3, color: const Color(0xFF7C4DFF)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _PreviewAction extends StatelessWidget {
-  const _PreviewAction({required this.label, required this.icon, required this.onTap});
+  const _PreviewAction({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
   final String label;
   final IconData icon;
   final VoidCallback onTap;

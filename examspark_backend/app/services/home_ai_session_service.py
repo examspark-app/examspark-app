@@ -9,6 +9,7 @@ from typing import Any
 from app.services.home_ai_response_store import get_home_ai_response, list_tools_for_response
 from app.services.home_ai_tools_service import list_tool_statuses
 from app.services.supabase_admin import get_supabase_admin
+from app.services.r2_storage_service import R2StorageError, R2StorageService
 
 logger = logging.getLogger(__name__)
 
@@ -147,6 +148,7 @@ def ensure_session_for_turn(
     session_id: str | None = None,
     parent_response_id: str | None = None,
     conversation_language: str | None = None,
+    image_path: str | None = None,
 ) -> str | None:
     """
     Append user + assistant messages to a Study Session.
@@ -201,6 +203,7 @@ def ensure_session_for_turn(
                     "role": "user",
                     "message": q,
                     "credits_used": 0,
+                    **({"image_path": image_path} if image_path else {}),
                     "created_at": t_user.isoformat(),
                 },
                 {
@@ -318,7 +321,7 @@ def restore_session(session_id: str, user_id: str) -> dict[str, Any] | None:
         sb = get_supabase_admin()
         res = (
             sb.table("home_ai_messages")
-            .select("id,role,message,response_id,credits_used,created_at")
+            .select("id,role,message,response_id,credits_used,image_path,created_at")
             .eq("session_id", session_id)
             .eq("user_id", user_id)
             .order("created_at", desc=False)
@@ -339,6 +342,11 @@ def restore_session(session_id: str, user_id: str) -> dict[str, Any] | None:
             "credits_used": m.get("credits_used") or 0,
             "created_at": m.get("created_at"),
         }
+        if m.get("image_path"):
+            try:
+                item["image_url"] = R2StorageService().signed_url(str(m["image_path"]))
+            except R2StorageError:
+                logger.warning("Could not sign Home AI image path", exc_info=True)
         rid = m.get("response_id")
         if m.get("role") == "assistant" and rid:
             master = get_home_ai_response(str(rid), user_id)

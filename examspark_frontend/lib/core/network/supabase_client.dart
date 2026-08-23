@@ -348,6 +348,18 @@ class SupabaseClient {
     return {'users': userRow ?? <String, dynamic>{}, 'student_profiles': sp};
   }
 
+  Future<void> saveGlowGuideLanguagePreference(
+    String userId,
+    String language,
+  ) async {
+    final safe = language.trim();
+    if (safe.isEmpty) return;
+    await client.from('student_profiles').upsert({
+      'user_id': userId,
+      'preferred_language': safe,
+    }, onConflict: 'user_id');
+  }
+
   /// Soft-delete account (Library kept until purge_after ≈ +30 days).
   Future<Map<String, dynamic>> requestAccountDelete() async {
     final response = await client.rpc('fn_request_account_delete');

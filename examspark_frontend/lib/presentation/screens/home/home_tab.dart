@@ -111,6 +111,7 @@ class _ChatBubble {
   /// In-memory photo for this session's user bubble (not persisted to disk).
   final Uint8List? imageBytes;
   final String? imageFilename;
+  final String? imageUrl;
 
   /// Vision retry payload (session memory only).
   final Uint8List? retryVisionBytes;
@@ -134,6 +135,7 @@ class _ChatBubble {
     this.practiceQuestion,
     this.imageBytes,
     this.imageFilename,
+    this.imageUrl,
     this.retryVisionBytes,
     this.retryVisionFilename,
   }) : id = id ?? UniqueKey().toString(),
@@ -323,6 +325,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
               ? Map<String, dynamic>.from(row['visualPayload'] as Map)
               : null,
           responseId: row['responseId'] as String?,
+          imageUrl: row['imageUrl'] as String?,
           toolStates: toolStates,
           recommendedTools: rec is List
               ? rec.map((e) => e.toString()).toList()
@@ -365,6 +368,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         'trustLine': m.trustLine,
         'visualPayload': m.visualPayload,
         'responseId': m.responseId,
+        'imageUrl': m.imageUrl,
         'recommendedTools': m.recommendedTools,
         'toolStates': {
           for (final e in m.toolStates.entries) e.key: e.value.name,
@@ -1333,7 +1337,14 @@ $rawText
         final text = (m['message'] as String?)?.trim() ?? '';
         if (text.isEmpty) continue;
         if (role == 'user') {
-          bubbles.add(_ChatBubble(text, true, id: m['id']?.toString()));
+          bubbles.add(
+            _ChatBubble(
+              text,
+              true,
+              id: m['id']?.toString(),
+              imageUrl: m['image_url']?.toString(),
+            ),
+          );
           continue;
         }
         if (role != 'assistant') continue;
@@ -1606,10 +1617,14 @@ $rawText
     if (query.contains('quiz') || query.contains('question')) {
       return ['Learn More', 'Quiz', 'Important Questions', 'Revision Sheet'];
     }
-    if (query.contains('formula') || query.contains('equation') || query.contains('calculate')) {
+    if (query.contains('formula') ||
+        query.contains('equation') ||
+        query.contains('calculate')) {
       return ['Learn More', 'Cheat Sheet', 'Flashcards', 'Quiz'];
     }
-    if (query.contains('compare') || query.contains('difference') || query.contains('vs')) {
+    if (query.contains('compare') ||
+        query.contains('difference') ||
+        query.contains('vs')) {
       return ['Learn More', 'Revision Sheet', 'Flashcards', 'Quiz'];
     }
     if (query.contains('remember') || query.contains('memorize')) {
@@ -1838,6 +1853,21 @@ $rawText
                                   ),
                                 ),
                               ),
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                        ],
+                        if (bubble.imageUrl != null &&
+                            bubble.imageUrl!.isNotEmpty) ...[
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(18),
+                            child: Image.network(
+                              bubble.imageUrl!,
+                              width: 260,
+                              height: 220,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) =>
+                                  const SizedBox.shrink(),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -2249,7 +2279,7 @@ $rawText
                 children: [
                   ListTile(
                     leading: const Icon(Icons.bolt_outlined),
-                    title: Text('Credits — $_creditsBalance'),
+                    title: const Text('Credits'),
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.pushNamed(context, '/credits/history');
@@ -2494,9 +2524,9 @@ $rawText
                       size: 20,
                       color: iconColor,
                     ),
-                    title: Text(
-                      'Credits — $_creditsBalance',
-                      style: const TextStyle(fontSize: 14),
+                    title: const Text(
+                      'Credits',
+                      style: TextStyle(fontSize: 14),
                     ),
                     onTap: () {
                       Navigator.pop(context);
