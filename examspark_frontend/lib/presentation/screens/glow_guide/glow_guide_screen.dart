@@ -22,11 +22,35 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     ('Cloth Guide', Icons.checkroom_outlined),
   ];
 
-  static const _openings = [
-    'What would you like to understand today: skin, body, baby care, or cloth?',
-    'Let’s look at what you need help with: skin, body, baby care, or cloth.',
-    'I can help you reason through skin, body, baby care, or cloth questions.',
-  ];
+  static const _typeOwnOption = 'Something else — I\'ll type it';
+
+  static const _concernsByCategory = {
+    'skin': [
+      'Acne / pimples',
+      'Dark spots',
+      'Dryness',
+      'Oily skin',
+      'Check a product label',
+    ],
+    'body': [
+      'Body odor',
+      'Dryness / patches',
+      'Stretch marks',
+      'Check a product label',
+    ],
+    'baby': [
+      'Diaper rash',
+      'Dry / sensitive skin',
+      'New product check',
+      'Other concern',
+    ],
+    'cloth': [
+      'Check fabric composition',
+      'Baby-safe check',
+      'Season suitability',
+      'Care instructions',
+    ],
+  };
 
   final _text = TextEditingController();
   final _scroll = ScrollController();
@@ -52,25 +76,35 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   @override
   void initState() {
     super.initState();
-    _messages.add(
-      _GlowMessage(
-        _openings[DateTime.now().millisecond % _openings.length],
-        false,
-      ),
-    );
     _loadPreferredLanguage();
+  }
+
+  void _showLanguageChoice() {
+    if (!mounted) return;
+    setState(() {
+      _messages.add(
+        _GlowMessage(
+          'Which language would you like to chat in?',
+          false,
+          chips: _languageOptions,
+          isLanguageChips: true,
+        ),
+      );
+    });
   }
 
   Future<void> _loadPreferredLanguage() async {
     if (!app_supabase.SupabaseClient.instance.isInitialized) {
       if (!mounted) return;
       setState(() => _hasLoadedPreferredLanguage = true);
+      _showLanguageChoice();
       return;
     }
     final user = app_supabase.SupabaseClient.instance.currentUser;
     if (user == null) {
       if (!mounted) return;
       setState(() => _hasLoadedPreferredLanguage = true);
+      _showLanguageChoice();
       return;
     }
     try {
@@ -92,6 +126,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     } catch (_) {}
     if (!mounted) return;
     setState(() => _hasLoadedPreferredLanguage = true);
+    _showLanguageChoice();
   }
 
   Future<void> _savePreferredLanguage(String value) async {
@@ -221,24 +256,60 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     );
   }
 
+  static const _categoryMap = {
+    'Skin Care': 'skin',
+    'Body Care': 'body',
+    'Baby Skin Care': 'baby',
+    'Cloth Guide': 'cloth',
+  };
+
   Future<void> _selectCategory(String label) async {
-    const categoryMap = {
-      'Skin Care': 'skin',
-      'Body Care': 'body',
-      'Baby Skin Care': 'baby',
-      'Cloth Guide': 'cloth',
-    };
-    final selectedCategory = categoryMap[label];
-    if (selectedCategory != null) {
+    final selectedCategory = _categoryMap[label];
+    if (selectedCategory == null) return;
+    final concerns = [
+      ..._concernsByCategory[selectedCategory] ?? const <String>[],
+      _typeOwnOption,
+    ];
+    setState(() {
       _category = selectedCategory;
+      _messages.add(
+        _GlowMessage(
+          'What would you like to check about your $label? Choose one, or just type your own question below — any language works.',
+          false,
+          chips: concerns,
+          isConcernChips: true,
+        ),
+      );
+    });
+    _scrollToBottom();
+  }
+
+  Future<void> _selectConcern(String concern) async {
+    if (concern == _typeOwnOption) {
+      // No submission — the user is free to type their own concern, in
+      // their own words and language, in the input box below.
+      return;
     }
-    _text.text = label;
+    _text.text = concern;
     await _send();
   }
 
+  Future<void> _chooseLanguage(String option) async {
+    if (option == 'Auto-detect') {
+      _preferredLanguage = 'MATCH_QUESTION';
+      await _savePreferredLanguage('MATCH_QUESTION');
+    } else {
+      _preferredLanguage = option;
+      await _savePreferredLanguage(option);
+    }
+    if (mounted) _showCategoryChoices();
+  }
+
   Future<void> _send() async {
+    if (_sending) return;
     final text = _text.text.trim();
-    if ((text.isEmpty && _attachment == null) || _sending) return;
+    if (text.isEmpty && _attachment == null) return;
+    _sending = true; // synchronous lock — closes the gap before setState fires
     final image = _attachment;
     final imageName = _attachmentName;
     final languageForRequest = _preferredLanguage;
@@ -285,6 +356,8 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
             result['reply'] as String? ?? 'I need a little more detail.',
             false,
             chips: options,
+            verdict: result['verdict'] as String?,
+            confidenceNote: result['confidence_note'] as String?,
           ),
         );
         _sending = false;
@@ -315,16 +388,13 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
       _attachmentName = null;
       _showLanguageStep =
           _preferredLanguage == 'MATCH_QUESTION' || _preferredLanguage.isEmpty;
-      _messages
-        ..clear()
-        ..add(
-          _GlowMessage(
-            _openings[DateTime.now().millisecond % _openings.length],
-            false,
-          ),
-        );
+      _messages.clear();
     });
-    if (!_showLanguageStep) _showCategoryChoices();
+    if (_showLanguageStep) {
+      _showLanguageChoice();
+    } else {
+      _showCategoryChoices();
+    }
   }
 
   Future<void> _openHistory() async {
@@ -415,8 +485,6 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
       body: Column(
         children: [
           if (!_hasLoadedPreferredLanguage) const SizedBox(height: 8),
-          if (_hasLoadedPreferredLanguage && _showLanguageStep)
-            _languageSelector(),
           Expanded(
             child: ListView.builder(
               controller: _scroll,
@@ -425,7 +493,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
               itemBuilder: (context, index) {
                 if (_sending && index == _messages.length) {
                   return Padding(
-                    padding: EdgeInsets.only(bottom: 18),
+                    padding: const EdgeInsets.only(bottom: 18),
                     child: Align(
                       alignment: Alignment.centerLeft,
                       child: _processingPhoto
@@ -445,43 +513,6 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
           const SizedBox(height: 8),
           _inputBar(),
         ],
-      ),
-    );
-  }
-
-  Widget _languageSelector() {
-    final options = _languageOptions;
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: options.map((option) {
-          final selected =
-              option == _preferredLanguage ||
-              (option == 'Auto-detect' &&
-                  _preferredLanguage == 'MATCH_QUESTION');
-          return ChoiceChip(
-            label: Text(option),
-            selected: selected,
-            labelStyle: TextStyle(
-              color: selected ? Colors.white : AppTheme.getPrimaryText(context),
-              fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
-            ),
-            backgroundColor: AppTheme.getCardBackground(context),
-            selectedColor: AppTheme.glowGuidePurple,
-            onSelected: (_) async {
-              if (option == 'Auto-detect') {
-                _preferredLanguage = 'MATCH_QUESTION';
-                await _savePreferredLanguage('MATCH_QUESTION');
-              } else {
-                _preferredLanguage = option;
-                await _savePreferredLanguage(option);
-              }
-              if (mounted) _showCategoryChoices();
-            },
-          );
-        }).toList(),
       ),
     );
   }
@@ -531,9 +562,13 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                               : const SizedBox.shrink()),
                   ),
                 ),
+              if (message.verdict != null) ...[
+                const SizedBox(height: 8),
+                _verdictBadge(message.verdict!),
+              ],
               if (message.text.isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 4),
+                  padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
                   child: Text(
                     message.text,
                     style: TextStyle(
@@ -541,6 +576,31 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                       fontSize: 16,
                       height: 1.5,
                     ),
+                  ),
+                ),
+              if ((message.confidenceNote ?? '').trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.info_outline_rounded,
+                        size: 14,
+                        color: AppTheme.getSecondaryText(context),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          message.confidenceNote!,
+                          style: TextStyle(
+                            color: AppTheme.getSecondaryText(context),
+                            fontSize: 12.5,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               if (message.chips.isNotEmpty) ...[
@@ -558,30 +618,51 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                   child: Wrap(
                     spacing: 8,
                     runSpacing: 8,
-                    children: message.chips
-                        .map(
-                          (chip) => ActionChip(
-                            label: Text(
-                              chip,
-                              style: TextStyle(
-                                color: AppTheme.getPrimaryText(context),
-                                fontSize: 14,
-                              ),
-                            ),
-                            avatar: Icon(
-                              _iconFor(chip),
-                              size: 16,
-                              color: AppTheme.glowGuidePurple,
-                            ),
-                            backgroundColor: AppTheme.getCardBackground(context),
-                            side: BorderSide(
-                              color: AppTheme.glowGuidePurple.withValues(alpha: 0.3),
-                              width: 1,
-                            ),
-                            onPressed: () => _selectCategory(chip),
+                    children: message.chips.map((chip) {
+                      final isTypeOwn = chip == _typeOwnOption;
+                      return ActionChip(
+                        label: Text(
+                          chip,
+                          style: TextStyle(
+                            color: isTypeOwn
+                                ? AppTheme.glowGuidePurple
+                                : AppTheme.getPrimaryText(context),
+                            fontSize: 14,
+                            fontWeight: isTypeOwn
+                                ? FontWeight.w700
+                                : FontWeight.normal,
+                            fontStyle: isTypeOwn
+                                ? FontStyle.italic
+                                : FontStyle.normal,
                           ),
-                        )
-                        .toList(),
+                        ),
+                        backgroundColor: AppTheme.getCardBackground(context),
+                        side: BorderSide(
+                          color: AppTheme.glowGuidePurple.withValues(
+                            alpha: isTypeOwn ? 0.55 : 0.3,
+                          ),
+                          width: 1,
+                        ),
+                        avatar: message.isLanguageChips
+                            ? null
+                            : Icon(
+                                isTypeOwn
+                                    ? Icons.edit_outlined
+                                    : _iconFor(chip),
+                                size: 16,
+                                color: AppTheme.glowGuidePurple,
+                              ),
+                        onPressed: () {
+                          if (message.isLanguageChips) {
+                            _chooseLanguage(chip);
+                          } else if (message.isConcernChips) {
+                            _selectConcern(chip);
+                          } else {
+                            _selectCategory(chip);
+                          }
+                        },
+                      );
+                    }).toList(),
                   ),
                 ),
               ],
@@ -597,6 +678,54 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
       if (category.$1 == value) return category.$2;
     }
     return Icons.check_rounded;
+  }
+
+  Widget _verdictBadge(String verdict) {
+    final Color color;
+    final IconData icon;
+    final String label;
+    switch (verdict) {
+      case 'harmful':
+        color = const Color(0xFFE05252);
+        icon = Icons.warning_amber_rounded;
+        label = 'Use with caution';
+        break;
+      case 'good_fit':
+        color = const Color(0xFF40A85C);
+        icon = Icons.check_circle_outline_rounded;
+        label = 'Good fit';
+        break;
+      case 'careful':
+        color = const Color(0xFFCC9A2E);
+        icon = Icons.error_outline_rounded;
+        label = 'Proceed carefully';
+        break;
+      default:
+        return const SizedBox.shrink();
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _inputBar() {
@@ -676,21 +805,21 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                   IconButton(
                     tooltip: 'Send',
                     onPressed: _sending ? null : _send,
-                     icon: ShaderMask(
-                       shaderCallback: (bounds) => LinearGradient(
-                         begin: Alignment.topLeft,
-                         end: Alignment.bottomRight,
-                         colors: [
-                           AppTheme.glowGuidePurpleLighter,
-                           AppTheme.glowGuidePurple,
-                         ],
-                       ).createShader(bounds),
-                       child: Icon(
-                         Icons.arrow_upward_rounded,
-                         color: Colors.white,
-                         size: 24,
-                       ),
-                     ),
+                    icon: ShaderMask(
+                      shaderCallback: (bounds) => LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          AppTheme.glowGuidePurpleLighter,
+                          AppTheme.glowGuidePurple,
+                        ],
+                      ).createShader(bounds),
+                      child: const Icon(
+                        Icons.arrow_upward_rounded,
+                        color: Colors.white,
+                        size: 24,
+                      ),
+                    ),
                   ),
                 ],
               ),
@@ -710,6 +839,10 @@ class _GlowMessage {
     this.image,
     this.imageName,
     this.imageUrl,
+    this.isLanguageChips = false,
+    this.isConcernChips = false,
+    this.verdict,
+    this.confidenceNote,
   });
   final String text;
   final bool isUser;
@@ -717,6 +850,10 @@ class _GlowMessage {
   final Uint8List? image;
   final String? imageName;
   final String? imageUrl;
+  final bool isLanguageChips;
+  final bool isConcernChips;
+  final String? verdict;
+  final String? confidenceNote;
 }
 
 class _PurpleTypingDots extends StatefulWidget {
