@@ -4,6 +4,7 @@ import 'dart:math';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart' show debugPrint;
 import 'package:in_app_purchase/in_app_purchase.dart'; // Naya import
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:examspark_frontend/core/config/app_config.dart';
 import 'package:examspark_frontend/core/payments/gateways/google_play_billing_gateway.dart';
@@ -32,10 +33,13 @@ class PaymentService {
 
   // Background listener variable
   StreamSubscription<List<PurchaseDetails>>? _iapStreamSubscription;
+  bool _initialized = false;
+  static const _pendingOrderPrefix = 'play_pending_order_';
 
   // App start hone par background purchases sunne ke liye
   void initialize() {
-    if (!kIsWeb) {
+    if (!kIsWeb && !_initialized) {
+      _initialized = true;
       final Stream<List<PurchaseDetails>> purchaseUpdated =
           InAppPurchase.instance.purchaseStream;
       
@@ -55,13 +59,19 @@ class PaymentService {
       if (purchase.status == PurchaseStatus.purchased || 
           purchase.status == PurchaseStatus.restored) {
         
-        if (purchase.pendingCompletePurchase) {
+          if (purchase.pendingCompletePurchase) {
           final token = purchase.verificationData.serverVerificationData;
           final productId = purchase.productID;
+            final prefs = await SharedPreferences.getInstance();
+            final orderId = prefs.getString('$_pendingOrderPrefix$token');
+            if (orderId == null || orderId.isEmpty) {
+              debugPrint('Pending Play purchase has no local order mapping');
+              continue;
+            }
           
           try {
             final data = await PaymentRepository.instance.verifyPayment(
-              orderId: 'recovered_${DateTime.now().millisecondsSinceEpoch}',
+              orderId: orderId,
               gateway: PaymentGateway.googlePlay,
               idempotencyKey: 'recovery_$token',
               gatewayPaymentId: token,
@@ -75,6 +85,7 @@ class PaymentService {
             final status = '${data['status']}'.toLowerCase();
             if (status == 'verified') {
               await InAppPurchase.instance.completePurchase(purchase);
+              await prefs.remove('$_pendingOrderPrefix$token');
             }
           } catch (e) {
             debugPrint('Background verification failed: $e');
@@ -86,6 +97,8 @@ class PaymentService {
 
   void dispose() {
     _iapStreamSubscription?.cancel();
+    _iapStreamSubscription = null;
+    _initialized = false;
   }
 
   PaymentGatewayInterface get _activeGateway {
@@ -300,7 +313,13 @@ class PaymentService {
       return checkout;
     }
 
-    return gateway.verifyPayment(
+    final token = checkout.gatewayPaymentId;
+    if (token != null && token.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('$_pendingOrderPrefix$token', order.orderId);
+    }
+
+    final result = await gateway.verifyPayment(
       order: order,
       gatewayPaymentId: checkout.gatewayPaymentId,
       gatewayPayload: {
@@ -308,6 +327,13 @@ class PaymentService {
         'product_id': productId,
       },
     );
+    if (result.status == PaymentResultStatus.verified &&
+        token != null &&
+        token.isNotEmpty) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove('$_pendingOrderPrefix$token');
+    }
+    return result;
   }
 
   Future<PaymentResult> verifyAndActivate({

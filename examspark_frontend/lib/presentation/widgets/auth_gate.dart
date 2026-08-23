@@ -12,7 +12,6 @@ import 'package:examspark_frontend/core/services/app_update_service.dart';
 import 'package:examspark_frontend/core/services/web_reload.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/services/device_identifier.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/presentation/screens/auth/update_password_screen.dart';
 import 'package:examspark_frontend/presentation/screens/home/guest_home_screen.dart';
@@ -213,9 +212,15 @@ class _AuthGateState extends State<AuthGate> {
                 await hardReloadWebApp();
                 return;
               }
-              final uri = Uri.parse(AppUpdateService.playStoreUrl);
-              if (await canLaunchUrl(uri)) {
-                await launchUrl(uri, mode: LaunchMode.externalApplication);
+              final started = await AppUpdateService.instance.startInAppUpdate();
+              if (!started && ctx != null && ctx!.mounted) {
+                ScaffoldMessenger.of(ctx!).showSnackBar(
+                  const SnackBar(
+                    content: Text(
+                      'In-app update is not available for this installation yet.',
+                    ),
+                  ),
+                );
               }
             },
             child: Text(kIsWeb ? 'Refresh' : 'Update Now'),

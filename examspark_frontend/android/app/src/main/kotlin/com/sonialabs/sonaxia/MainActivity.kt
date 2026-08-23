@@ -4,10 +4,14 @@ import android.content.Intent
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
+import com.google.android.play.core.appupdate.AppUpdateManagerFactory
+import com.google.android.play.core.install.model.AppUpdateType
+import com.google.android.play.core.install.model.UpdateAvailability
 
 class MainActivity : FlutterActivity() {
 
     private val CHANNEL = "sonaxia/share"
+    private val UPDATE_REQUEST_CODE = 9101
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -16,10 +20,10 @@ class MainActivity : FlutterActivity() {
             flutterEngine.dartExecutor.binaryMessenger,
             CHANNEL
         ).setMethodCallHandler { call, result ->
-            if (call.method == "getSharedData") {
-                result.success(handleIntent(intent))
-            } else {
-                result.notImplemented()
+            when (call.method) {
+                "getSharedData" -> result.success(handleIntent(intent))
+                "startInAppUpdate" -> startInAppUpdate(result)
+                else -> result.notImplemented()
             }
         }
     }
@@ -48,5 +52,29 @@ class MainActivity : FlutterActivity() {
         }
 
         return null
+    }
+
+    private fun startInAppUpdate(result: MethodChannel.Result) {
+        val manager = AppUpdateManagerFactory.create(this)
+        manager.appUpdateInfo
+            .addOnSuccessListener { info ->
+                val available = info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+                val allowed = info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+                if (!available || !allowed) {
+                    result.success(false)
+                    return@addOnSuccessListener
+                }
+                manager.startUpdateFlowForResult(
+                    info,
+                    this,
+                    com.google.android.play.core.appupdate.AppUpdateOptions
+                        .newBuilder(AppUpdateType.IMMEDIATE)
+                        .build(),
+                    UPDATE_REQUEST_CODE,
+                )
+                    .addOnSuccessListener { result.success(true) }
+                    .addOnFailureListener { result.success(false) }
+            }
+            .addOnFailureListener { result.success(false) }
     }
 }

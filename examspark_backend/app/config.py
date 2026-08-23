@@ -106,6 +106,11 @@ class AIConfig:
     )
     FISH_VOICE_ENGLISH_FEMALE: str = os.getenv("FISH_VOICE_ENGLISH_FEMALE", "")
     FISH_VOICE_ENGLISH_MALE: str = os.getenv("FISH_VOICE_ENGLISH_MALE", "")
+    # Default Roleplay voice: English Female. User preferences can still
+    # switch to the existing English Male ID or another language/voice.
+    FISH_AUDIO_DEFAULT_VOICE_ID: str = os.getenv(
+        "FISH_AUDIO_DEFAULT_VOICE_ID"
+    ).strip() or FISH_VOICE_ENGLISH_FEMALE
     FISH_VOICE_SPANISH_FEMALE: str = os.getenv("FISH_VOICE_SPANISH_FEMALE", "")
     FISH_VOICE_SPANISH_MALE: str = os.getenv("FISH_VOICE_SPANISH_MALE", "")
     FISH_VOICE_FRENCH_FEMALE: str = os.getenv("FISH_VOICE_FRENCH_FEMALE", "")
@@ -140,7 +145,7 @@ class AIConfig:
     @classmethod
     def fish_audio_voice_ids(cls) -> dict[str, dict[str, str]]:
         return {
-            "English": {"female": cls.FISH_VOICE_ENGLISH_FEMALE, "male": cls.FISH_VOICE_ENGLISH_MALE},
+            "English": {"female": cls.FISH_AUDIO_DEFAULT_VOICE_ID, "male": cls.FISH_VOICE_ENGLISH_MALE},
             "Spanish": {"female": cls.FISH_VOICE_SPANISH_FEMALE, "male": cls.FISH_VOICE_SPANISH_MALE},
             "French": {"female": cls.FISH_VOICE_FRENCH_FEMALE, "male": cls.FISH_VOICE_FRENCH_MALE},
             "Japanese": {"female": cls.FISH_VOICE_JAPANESE_FEMALE, "male": cls.FISH_VOICE_JAPANESE_MALE},

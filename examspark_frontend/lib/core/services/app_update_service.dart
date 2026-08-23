@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart';
 import 'package:http/http.dart' as http;
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
@@ -11,6 +12,7 @@ class AppUpdateService {
 
   static const String playStoreUrl =
       'https://play.google.com/store/apps/details?id=com.sonialabs.sonaxia';
+  static const _channel = MethodChannel('sonaxia/share');
 
   bool _isNewer(String remote, String local) {
     List<int> parts(String value) => value
@@ -79,6 +81,17 @@ class AppUpdateService {
       };
     } catch (_) {
       return null;
+    }
+  }
+
+  Future<bool> startInAppUpdate() async {
+    if (kIsWeb) return false;
+    try {
+      return await _channel.invokeMethod<bool>('startInAppUpdate') ?? false;
+    } on MissingPluginException {
+      return false;
+    } catch (_) {
+      return false;
     }
   }
 }

@@ -8,6 +8,7 @@ import 'dart:async';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, debugPrint;
+import 'package:flutter/material.dart' show ScaffoldMessenger, SnackBar, Text;
 import 'package:examspark_frontend/core/router/app_navigation.dart';
 import 'package:examspark_frontend/core/services/notification_service.dart';
 
@@ -34,6 +35,7 @@ class FcmPushService {
   bool _started = false;
   StreamSubscription<RemoteMessage>? _onMessage;
   StreamSubscription<RemoteMessage>? _onOpened;
+  StreamSubscription<String>? _onTokenRefresh;
 
   bool get isStarted => _started;
 
@@ -88,7 +90,10 @@ class FcmPushService {
     }
 
     await registerTokenWithBackend();
-    messaging.onTokenRefresh.listen((_) => registerTokenWithBackend());
+    await _onTokenRefresh?.cancel();
+    _onTokenRefresh = messaging.onTokenRefresh.listen(
+      (_) => registerTokenWithBackend(),
+    );
 
     _started = true;
     debugPrint('FCM: started');
@@ -135,8 +140,21 @@ class FcmPushService {
 
   void _onForeground(RemoteMessage message) {
     debugPrint('FCM foreground: ${message.notification?.title}');
-    // System tray still shows on Android when notification payload present;
-    // in-app Groups list refreshes via SessionLiveSync / pull.
+    final context = AppNavigation.key.currentContext;
+    final notification = message.notification;
+    if (context != null && notification != null) {
+      final title = notification.title?.trim();
+      final body = notification.body?.trim();
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            [if (title != null && title.isNotEmpty) title, if (body != null && body.isNotEmpty) body]
+                .join('\n'),
+          ),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
   }
 
   void _openFromMessage(RemoteMessage message) {
@@ -168,6 +186,11 @@ class FcmPushService {
   Future<void> dispose() async {
     await _onMessage?.cancel();
     await _onOpened?.cancel();
+    await _onTokenRefresh?.cancel();
+    _onMessage = null;
+    _onOpened = null;
+    _onTokenRefresh = null;
+    _started = false;
   }
 }
 

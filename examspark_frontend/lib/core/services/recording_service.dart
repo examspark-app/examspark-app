@@ -7,9 +7,6 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:record/record.dart';
 import 'recording_alert_sound.dart';
 
-// Alert sound conditionally imported for Web/Mobile
-import 'recording_alert_sound.dart';
-
 // dart:io is NOT available on Flutter web — conditional so Chrome does not
 // fail library init with "Library not defined" on recording screens.
 import 'recording_io_stub.dart'
