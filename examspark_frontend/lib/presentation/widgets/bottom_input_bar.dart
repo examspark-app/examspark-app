@@ -273,7 +273,7 @@ class _BottomInputBarState extends State<BottomInputBar> {
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
         color: Theme.of(context).scaffoldBackgroundColor,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+          padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
           decoration: BoxDecoration(
             color: isLight ? Colors.white : const Color(0xFF1A1A1A),
             borderRadius: BorderRadius.circular(26),
@@ -295,7 +295,7 @@ class _BottomInputBarState extends State<BottomInputBar> {
                 constraints: const BoxConstraints(maxHeight: 160),
                 child: TextField(
                   controller: _controller,
-                  minLines: 1,
+                  minLines: 2,
                   maxLines: 6,
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _handleSend(),
@@ -311,7 +311,7 @@ class _BottomInputBarState extends State<BottomInputBar> {
                             : 'Ask sonaxia ...',
                     border: InputBorder.none,
                     isDense: true,
-                    contentPadding: const EdgeInsets.only(bottom: 10),
+                    contentPadding: const EdgeInsets.only(bottom: 14),
                     hintStyle: TextStyle(
                       color: isLight
                           ? Colors.grey.shade600
@@ -344,9 +344,9 @@ class _BottomInputBarState extends State<BottomInputBar> {
                     Padding(
                       padding: const EdgeInsets.only(right: 4),
                       child: IconButton(
-                        icon: const Icon(
+                        icon: Icon(
                           Icons.smart_display_rounded,
-                          color: Color(0xFFEA4335),
+                          color: AppTheme.getSecondaryText(context),
                           size: 22,
                         ),
                         padding: EdgeInsets.zero,

@@ -129,9 +129,19 @@ class _LoginScreenState extends State<LoginScreen> {
       }
     } catch (e) {
       if (mounted) {
+        final errorText = e.toString().toLowerCase();
+        final isInvalidCredentials =
+            errorText.contains('invalid_credentials') ||
+            errorText.contains('invalid login credentials');
         AppToast.showSnackBar(
           context,
-          SnackBar(content: Text('Login failed: ${e.toString()}')),
+          SnackBar(
+            content: Text(
+              isInvalidCredentials
+                  ? 'Incorrect email or password. Please check your credentials and try again.'
+                  : 'Login failed. Please try again.',
+            ),
+          ),
         );
       }
     } finally {

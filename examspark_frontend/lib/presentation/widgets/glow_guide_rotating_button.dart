@@ -40,7 +40,7 @@ class _GlowGuideRotatingButtonState extends State<GlowGuideRotatingButton> {
 
   @override
   Widget build(BuildContext context) {
-    return TextButton.icon(
+    return OutlinedButton.icon(
       onPressed: widget.onTap,
       icon: const Icon(Icons.eco_outlined, size: 17),
       label: AnimatedSwitcher(
@@ -62,10 +62,12 @@ class _GlowGuideRotatingButtonState extends State<GlowGuideRotatingButton> {
           overflow: TextOverflow.ellipsis,
         ),
       ),
-      style: TextButton.styleFrom(
-        foregroundColor: AppTheme.accentColor,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: AppTheme.glowGuidePurple,
+        side: const BorderSide(color: AppTheme.glowGuidePurple),
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         minimumSize: const Size(0, 40),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
     );
   }

@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -179,8 +178,6 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   bool _loading = false;
   int _latestSessionRequestId = 0;
   bool _sending = false;
-  Uint8List? _photoBytes;
-  String? _photoName;
   bool _recording = false;
   bool _processingVoice = false;
   Timer? _voiceTurnLimitTimer;
@@ -416,10 +413,6 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     if (picked == null) return;
     final bytes = await picked.readAsBytes();
     if (!mounted) return;
-    setState(() {
-      _photoBytes = bytes;
-      _photoName = picked.name;
-    });
     try {
       setState(() => _sending = true);
       final result = await LectureService.instance.englishPracticePhoto(
@@ -428,8 +421,6 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       if (!mounted) return;
       setState(() {
         _messages.add(_Message('Photo: ${result['reply'] ?? ''}', false));
-        _photoBytes = null;
-        _photoName = null;
         _sending = false;
       });
       _bottom();
@@ -711,19 +702,31 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
           ),
         ),
         const SizedBox(width: 8),
-        Text(
-          'Chat Practice',
-          style: TextStyle(
-            color: AppTheme.getPrimaryText(context),
-            fontSize: 18,
-            fontWeight: FontWeight.w800,
+        OutlinedButton(
+          onPressed: null,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: AppTheme.getPrimaryText(context),
+            side: const BorderSide(color: Color(0xFF7C4DFF)),
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            minimumSize: const Size(0, 38),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           ),
+          child: const Text('Chat Practice'),
         ),
         const Spacer(),
         GlowGuideRotatingButton(
           onTap: () => Navigator.pushNamed(context, '/glow-guide'),
         ),
-        TextButton(onPressed: _roleplay, child: const Text('Roleplay')),
+        OutlinedButton(
+          onPressed: _roleplay,
+          style: OutlinedButton.styleFrom(
+            foregroundColor: const Color(0xFF7C4DFF),
+            side: const BorderSide(color: Color(0xFF7C4DFF)),
+            minimumSize: const Size(0, 38),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+          ),
+          child: const Text('Roleplay'),
+        ),
       ],
     ),
   );

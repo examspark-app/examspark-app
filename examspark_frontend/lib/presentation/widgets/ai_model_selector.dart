@@ -10,7 +10,7 @@ class AiModelSelector extends StatelessWidget {
   final String selectedModel;
   final ValueChanged<String> onSelected;
 
-  static const _violet = Color(0xFF5137ED);
+  static const _neutral = Color(0xFF5F5F5F);
 
   static const models = <({String value, String label, IconData icon})>[
     (value: 'qwen3', label: 'Qwen3', icon: Icons.bolt_rounded),
@@ -54,8 +54,8 @@ class AiModelSelector extends StatelessWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: model.value == selectedModel
-                        ? _violet
-                        : _violet.withOpacity(.10),
+                        ? Colors.black
+                        : _neutral.withOpacity(.10),
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: Icon(
@@ -63,7 +63,7 @@ class AiModelSelector extends StatelessWidget {
                     size: 18,
                     color: model.value == selectedModel
                         ? Colors.white
-                        : _violet,
+                        : _neutral,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -77,7 +77,7 @@ class AiModelSelector extends StatelessWidget {
                   ),
                 ),
                 if (model.value == selectedModel)
-                  const Icon(Icons.check_rounded, color: _violet, size: 18),
+                  const Icon(Icons.check_rounded, color: Colors.black, size: 18),
               ],
             ),
           ),
@@ -86,28 +86,29 @@ class AiModelSelector extends StatelessWidget {
         height: 48,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
+          color: Colors.white,
           gradient: const LinearGradient(
-            colors: [Color(0xFFF6F3FF), Color(0xFFEFE9FF)],
+            colors: [Color(0xFFF7F7F7), Color(0xFFEDEDED)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFD8D1FF)),
+          border: Border.all(color: const Color(0xFFD0D0D0)),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(_iconFor(selectedModel), color: _violet, size: 17),
+            Icon(_iconFor(selectedModel), color: _neutral, size: 17),
             const SizedBox(width: 6),
             Text(
               labelFor(selectedModel),
               style: const TextStyle(
-                color: _violet,
+                color: Colors.black,
                 fontSize: 12.5,
                 fontWeight: FontWeight.w800,
               ),
             ),
-            const Icon(Icons.expand_more_rounded, color: _violet, size: 20),
+            const Icon(Icons.expand_more_rounded, color: Colors.black, size: 20),
           ],
         ),
       ),
