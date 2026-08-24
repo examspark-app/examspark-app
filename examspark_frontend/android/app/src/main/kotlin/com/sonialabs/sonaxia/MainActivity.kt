@@ -56,14 +56,14 @@ class MainActivity : FlutterActivity() {
 
     private fun startInAppUpdate(result: MethodChannel.Result) {
         val manager = AppUpdateManagerFactory.create(this)
-        manager.appUpdateInfo
-            .addOnSuccessListener { info ->
-                val available = info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
-                val allowed = info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
-                if (!available || !allowed) {
-                    result.success(false)
-                    return@addOnSuccessListener
-                }
+        manager.appUpdateInfo.addOnSuccessListener { info ->
+            val available = info.updateAvailability() == UpdateAvailability.UPDATE_AVAILABLE
+            val allowed = info.isUpdateTypeAllowed(AppUpdateType.IMMEDIATE)
+            if (!available || !allowed) {
+                result.success(false)
+                return@addOnSuccessListener
+            }
+            try {
                 manager.startUpdateFlowForResult(
                     info,
                     this,
@@ -72,9 +72,10 @@ class MainActivity : FlutterActivity() {
                         .build(),
                     UPDATE_REQUEST_CODE,
                 )
-                    .addOnSuccessListener { result.success(true) }
-                    .addOnFailureListener { result.success(false) }
+                result.success(true)
+            } catch (e: Exception) {
+                result.success(false)
             }
-            .addOnFailureListener { result.success(false) }
+        }.addOnFailureListener { result.success(false) }
     }
 }
