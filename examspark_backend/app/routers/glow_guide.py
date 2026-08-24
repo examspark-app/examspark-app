@@ -46,7 +46,14 @@ async def restore_glow_guide_session(
                 message["image_url"] = R2StorageService().signed_url(str(message["image_path"]))
             except R2StorageError:
                 message["image_url"] = None
-    return {"session_id": session_id, "category": rows[0].get("category_type"), "messages": messages}
+    session = rows[0]
+    return {
+        "session_id": session_id,
+        "category": session.get("category_type"),
+        "status": session.get("status"),
+        "exchange_count": session.get("exchange_count", 0),
+        "messages": messages,
+    }
 
 
 @router.get("/sessions")

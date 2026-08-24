@@ -16,6 +16,9 @@ import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/presentation/screens/auth/update_password_screen.dart';
 import 'package:examspark_frontend/presentation/screens/home/guest_home_screen.dart';
 import 'package:examspark_frontend/presentation/screens/legal/legal_consent_screen.dart';
+import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_entry.dart';
+import 'package:examspark_frontend/presentation/screens/glow_guide/glow_guide_screen.dart';
+import 'package:examspark_frontend/presentation/screens/onboarding/feature_onboarding_screen.dart';
 import 'package:examspark_frontend/presentation/screens/onboarding/role_selection_screen.dart';
 import 'package:examspark_frontend/presentation/screens/onboarding/student_onboarding_screen.dart';
 import 'package:examspark_frontend/presentation/screens/profile/account_recovery_screen.dart';
@@ -42,6 +45,7 @@ class _AuthGateState extends State<AuthGate> {
   String? _cachedUserId;
   Future<Map<String, dynamic>?>? _profileFuture;
   bool _onboardingHandledLocally = false;
+  bool _featureOnboardingHandledLocally = false;
   // Legal Consent (Task 2) — same "handled this session" pattern as
   // `_onboardingHandledLocally`, so accepting doesn't require refetching
   // the profile row to unblock AppShell.
@@ -101,6 +105,7 @@ class _AuthGateState extends State<AuthGate> {
             _shellReady = false;
             _cachedUserId = null;
             _onboardingHandledLocally = false;
+            _featureOnboardingHandledLocally = false;
             _legalHandledLocally = false;
             _roleChosenAsStudent = false;
             _profileFuture = null;
@@ -170,6 +175,7 @@ class _AuthGateState extends State<AuthGate> {
       _shellReady = false;
       _cachedUserId = null;
       _onboardingHandledLocally = false;
+      _featureOnboardingHandledLocally = false;
       _legalHandledLocally = false;
       _roleChosenAsStudent = false;
       _profileFuture = null;
@@ -336,6 +342,9 @@ class _AuthGateState extends State<AuthGate> {
         final onboardingCompleted =
             _onboardingHandledLocally ||
             (profile?['onboarding_completed'] as bool? ?? true);
+        final hasSeenFeatureOnboarding =
+            _featureOnboardingHandledLocally ||
+          (profile?['has_seen_onboarding'] as bool? ?? false);
 
         // ===== TASK 2 — First Login Consent Screen =====
         // Runs before onboarding: new signups see this immediately after
@@ -345,6 +354,45 @@ class _AuthGateState extends State<AuthGate> {
           return LegalConsentScreen(
             userId: userId,
             onDone: () => setState(() => _legalHandledLocally = true),
+          );
+        }
+
+        if (!hasSeenFeatureOnboarding && !_shellReady) {
+          return FeatureOnboardingScreen(
+            userId: userId,
+            onFeatureSelected: (feature) async {
+              await SupabaseClient.instance.markFeatureOnboardingSeen(userId);
+              if (!mounted) return;
+              setState(() => _featureOnboardingHandledLocally = true);
+              if (feature == 'ai') {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const AppShell()),
+                  (route) => false,
+                );
+                return;
+              }
+              if (feature == 'english') {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (_) => const AppShell()),
+                  (route) => false,
+                );
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const EnglishPracticeEntry(),
+                  ),
+                );
+                return;
+              }
+              Navigator.of(context).pushAndRemoveUntil(
+                MaterialPageRoute(builder: (_) => const AppShell()),
+                (route) => false,
+              );
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const GlowGuideScreen()),
+              );
+            },
           );
         }
 

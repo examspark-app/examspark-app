@@ -23,6 +23,10 @@ CREATE TABLE users (
     -- Teachers are marked onboarded immediately — they set up their profile
     -- from the Teacher Dashboard instead (see teacher_profiles below).
     onboarding_completed BOOLEAN NOT NULL DEFAULT false,
+    -- One-time feature selection card shown after first login; once marked
+    -- true, the user skips the introductory 3-card screen for the rest of
+    -- the app lifetime.
+    has_seen_onboarding BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

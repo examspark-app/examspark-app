@@ -62,17 +62,11 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   String? _category;
   String? _sessionId;
   bool _sending = false;
+  bool _sessionComplete = false;
   bool _processingPhoto = false;
-  bool _showLanguageStep = true;
   String _preferredLanguage = 'MATCH_QUESTION';
   bool _hasLoadedPreferredLanguage = false;
   String? _lastSubmittedKey;
-  final List<String> _languageOptions = const [
-    'English',
-    'Hindi',
-    'Bengali',
-    'Auto-detect',
-  ];
 
   @override
   void initState() {
@@ -80,54 +74,44 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     _loadPreferredLanguage();
   }
 
-  void _showLanguageChoice() {
+  Future<void> _showLanguageChoice() async {
     if (!mounted) return;
-    setState(() {
-      _messages.add(
-        _GlowMessage(
-          'Which language would you like to chat in?',
-          false,
-          chips: _languageOptions,
-          isLanguageChips: true,
+    final controller = TextEditingController();
+    final choice = await showDialog<String>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: const Text("What's your language choice?"),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          textInputAction: TextInputAction.done,
+          onSubmitted: (_) => Navigator.pop(dialogContext, controller.text),
+          decoration: const InputDecoration(
+            hintText: 'Type a language, or leave blank for English',
+          ),
         ),
-      );
+        actions: [
+          ElevatedButton(
+            onPressed: () => Navigator.pop(dialogContext, controller.text),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    controller.dispose();
+    if (!mounted) return;
+    final language = (choice ?? '').trim();
+    setState(() {
+      _preferredLanguage = language.isEmpty ? 'English' : language;
+      _hasLoadedPreferredLanguage = true;
     });
+    await _savePreferredLanguage(_preferredLanguage);
+    if (mounted) _showCategoryChoices();
   }
 
   Future<void> _loadPreferredLanguage() async {
-    if (!app_supabase.SupabaseClient.instance.isInitialized) {
-      if (!mounted) return;
-      setState(() => _hasLoadedPreferredLanguage = true);
-      _showLanguageChoice();
-      return;
-    }
-    final user = app_supabase.SupabaseClient.instance.currentUser;
-    if (user == null) {
-      if (!mounted) return;
-      setState(() => _hasLoadedPreferredLanguage = true);
-      _showLanguageChoice();
-      return;
-    }
-    try {
-      final bundle = await app_supabase.SupabaseClient.instance
-          .fetchStudentOnboardingBundle(user.id);
-      final sp = bundle['student_profiles'];
-      final raw = (sp is Map ? sp['preferred_language'] : null) as String?;
-      final value = (raw ?? '').trim();
-      if (value.isNotEmpty) {
-        if (!mounted) return;
-        setState(() {
-          _preferredLanguage = value;
-          _showLanguageStep = false;
-          _hasLoadedPreferredLanguage = true;
-        });
-        _showCategoryChoices();
-        return;
-      }
-    } catch (_) {}
-    if (!mounted) return;
-    setState(() => _hasLoadedPreferredLanguage = true);
-    _showLanguageChoice();
+    await _showLanguageChoice();
   }
 
   Future<void> _savePreferredLanguage(String value) async {
@@ -146,7 +130,6 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   void _showCategoryChoices() {
     if (!mounted) return;
     setState(() {
-      _showLanguageStep = false;
       if (!_messages.any((message) => message.chips.isNotEmpty)) {
         _messages.add(
           _GlowMessage(
@@ -306,19 +289,8 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     await _send();
   }
 
-  Future<void> _chooseLanguage(String option) async {
-    if (option == 'Auto-detect') {
-      _preferredLanguage = 'MATCH_QUESTION';
-      await _savePreferredLanguage('MATCH_QUESTION');
-    } else {
-      _preferredLanguage = option;
-      await _savePreferredLanguage(option);
-    }
-    if (mounted) _showCategoryChoices();
-  }
-
   Future<void> _send() async {
-    if (_sending) return;
+    if (_sending || _sessionComplete) return;
     final text = _text.text.trim();
     if (text.isEmpty && _attachment == null) return;
     _sending = true; // synchronous lock — closes the gap before setState fires
@@ -374,8 +346,10 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
         );
         _sending = false;
         _processingPhoto = false;
+        _sessionComplete = result['session_complete'] == true;
       });
       _scrollToBottom();
+      if (_sessionComplete) _promptNewChat();
     } catch (error) {
       if (!mounted || _lastSubmittedKey != submissionKey) return;
       setState(() {
@@ -395,18 +369,38 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     if (_sending) return;
     setState(() {
       _sessionId = null;
+      _sessionComplete = false;
       _category = null;
       _attachment = null;
       _attachmentName = null;
-      _showLanguageStep =
-          _preferredLanguage == 'MATCH_QUESTION' || _preferredLanguage.isEmpty;
       _messages.clear();
     });
-    if (_showLanguageStep) {
-      _showLanguageChoice();
-    } else {
-      _showCategoryChoices();
-    }
+    _showLanguageChoice();
+  }
+
+  void _promptNewChat() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_sessionComplete) return;
+      showDialog<void>(
+        context: context,
+        barrierDismissible: false,
+        builder: (dialogContext) => AlertDialog(
+          title: const Text('Chat complete'),
+          content: const Text(
+            'This chat reached 100 exchanges. Start a new chat to continue with a fresh context.',
+          ),
+          actions: [
+            ElevatedButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                _newChat();
+              },
+              child: const Text('New Chat'),
+            ),
+          ],
+        ),
+      );
+    });
   }
 
   Future<void> _openHistory() async {
@@ -451,6 +445,9 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     setState(() {
       _sessionId = selected;
       _category = restored['category'] as String?;
+      _sessionComplete =
+          restored['status'] == 'archived' ||
+          (restored['exchange_count'] as num? ?? 0) >= 100;
       _messages
         ..clear()
         ..addAll(restoredMessages);
@@ -655,19 +652,15 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                           ),
                           width: 1,
                         ),
-                        avatar: message.isLanguageChips
-                            ? null
-                            : Icon(
-                                isTypeOwn
-                                    ? Icons.edit_outlined
-                                    : _iconFor(chip),
-                                size: 16,
-                                color: AppTheme.glowGuidePurple,
-                              ),
-                        onPressed: _sending ? null : () {
-                          if (message.isLanguageChips) {
-                            _chooseLanguage(chip);
-                          } else if (message.isConcernChips) {
+                        avatar: Icon(
+                          isTypeOwn
+                              ? Icons.edit_outlined
+                              : _iconFor(chip),
+                          size: 16,
+                          color: AppTheme.glowGuidePurple,
+                        ),
+                        onPressed: _sending || _sessionComplete ? null : () {
+                          if (message.isConcernChips) {
                             _selectConcern(chip);
                           } else {
                             _selectCategory(chip);
@@ -817,7 +810,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                   ),
                   IconButton(
                     tooltip: 'Send',
-                    onPressed: _sending ? null : _send,
+                      onPressed: _sending || _sessionComplete ? null : _send,
                     icon: ShaderMask(
                       shaderCallback: (bounds) => LinearGradient(
                         begin: Alignment.topLeft,
@@ -852,7 +845,6 @@ class _GlowMessage {
     this.image,
     this.imageName,
     this.imageUrl,
-    this.isLanguageChips = false,
     this.isConcernChips = false,
     this.verdict,
     this.confidenceNote,
@@ -863,7 +855,6 @@ class _GlowMessage {
   final Uint8List? image;
   final String? imageName;
   final String? imageUrl;
-  final bool isLanguageChips;
   final bool isConcernChips;
   final String? verdict;
   final String? confidenceNote;

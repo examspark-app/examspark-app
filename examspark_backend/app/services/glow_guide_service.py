@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 GLOW_GUIDE_TEXT_COST = 2
 GLOW_GUIDE_PHOTO_COST = 5
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+MAX_GLOW_GUIDE_EXCHANGES = 100
 
 
 def glow_guide_credit_cost(has_photo: bool) -> int:
@@ -152,21 +153,37 @@ async def turn(
 ) -> dict[str, Any]:
     if not text.strip() and not image:
         raise GlowGuideError("Add a question or photo.", 400)
-    detected_language = glow_guide_language_for_turn(text, preferred_language)
     db = get_supabase_admin()
     if session_id:
         found = db.table("glow_guide_sessions").select("*").eq("id", session_id).eq("user_id", user_id).limit(1).execute().data or []
         if not found:
             raise GlowGuideError("GlowGuide session not found.", 404)
         current = found[0]
+        if current.get("status") == "archived":
+            raise GlowGuideError(
+                "This GlowGuide chat has reached 100 exchanges. Start a new chat.",
+                409,
+            )
     else:
         current = db.table("glow_guide_sessions").insert({"user_id": user_id, "category_type": category, "status": "active"}).execute().data[0]
         session_id = current["id"]
     active_category = category or current.get("category_type")
     if category and category != current.get("category_type"):
         db.table("glow_guide_sessions").update({"category_type": category}).eq("id", session_id).eq("user_id", user_id).execute()
-    rows = db.table("glow_guide_messages").select("role,message").eq("session_id", session_id).eq("user_id", user_id).order("created_at", desc=False).limit(50).execute().data or []
-    messages = [{"role": "system", "content": system_prompt(active_category, text, preferred_language)}, *_multimodal_messages(rows, text, image, filename)]
+    rows = db.table("glow_guide_messages").select("role,message").eq("session_id", session_id).eq("user_id", user_id).order("created_at", desc=False).execute().data or []
+    exchange_count = sum(1 for row in rows if row.get("role") == "user")
+    if exchange_count >= MAX_GLOW_GUIDE_EXCHANGES:
+        db.table("glow_guide_sessions").update({"status": "archived"}).eq("id", session_id).eq("user_id", user_id).execute()
+        raise GlowGuideError(
+            "This GlowGuide chat has reached 100 exchanges. Start a new chat.",
+            409,
+        )
+    context = current.get("context_json") or {}
+    context_line = ""
+    if isinstance(context, dict) and context:
+        context_line = "\nPERSISTED CONVERSATION CONTEXT (do not ask for these again): " + json.dumps(context, ensure_ascii=True)
+    prompt = system_prompt(active_category, text, preferred_language) + context_line
+    messages = [{"role": "system", "content": prompt}, *_multimodal_messages(rows, text, image, filename)]
     parsed: dict[str, Any] | None = None
     errors: list[str] = []
     for tier, caller in (("gemini", _call_gemini), ("claude", _call_claude), ("qwen", _call_qwen)):
@@ -193,5 +210,19 @@ async def turn(
         )
         R2StorageService().upload_bytes(image_path, image, _mime(filename))
     db.table("glow_guide_messages").insert([{"session_id": session_id, "user_id": user_id, "role": "user", "message": text or "Photo attached", "image_path": image_path}, {"session_id": session_id, "user_id": user_id, "role": "assistant", "message": reply}]).execute()
-    db.table("glow_guide_sessions").update({"updated_at": "now()"}).eq("id", session_id).eq("user_id", user_id).execute()
-    return {"session_id": session_id, "reply": reply, "category": parsed.get("category") or active_category, "question_options": parsed.get("question_options") or [], "ready": bool(parsed.get("ready")), "verdict": parsed.get("verdict"), "category_label": parsed.get("category_label"), "confidence_note": parsed.get("confidence_note") or "", "credits_charged": required_credits, "new_balance": balance}
+    new_exchange_count = exchange_count + 1
+    next_context = dict(context) if isinstance(context, dict) else {}
+    for key in ("category", "category_label", "season", "skin_type", "concern", "concern_details"):
+        value = parsed.get(key)
+        if value is not None and str(value).strip():
+            next_context[key] = value
+    next_context["category_type"] = parsed.get("category") or active_category
+    session_update: dict[str, Any] = {
+        "updated_at": "now()",
+        "exchange_count": new_exchange_count,
+        "context_json": next_context,
+    }
+    if new_exchange_count >= MAX_GLOW_GUIDE_EXCHANGES:
+        session_update["status"] = "archived"
+    db.table("glow_guide_sessions").update(session_update).eq("id", session_id).eq("user_id", user_id).execute()
+    return {"session_id": session_id, "reply": reply, "category": parsed.get("category") or active_category, "question_options": parsed.get("question_options") or [], "ready": bool(parsed.get("ready")), "verdict": parsed.get("verdict"), "category_label": parsed.get("category_label"), "confidence_note": parsed.get("confidence_note") or "", "credits_charged": required_credits, "new_balance": balance, "exchange_count": new_exchange_count, "session_complete": new_exchange_count >= MAX_GLOW_GUIDE_EXCHANGES}

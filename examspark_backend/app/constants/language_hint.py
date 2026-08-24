@@ -101,6 +101,11 @@ _HINGLISH_ROMAN = re.compile(
     r"woh|yeh|kaise|kitna|kitni|kahan|kab|kiya|kiye|bhai|yaar|pls\s+bata|"
     r"please\s+bata)\b"
 )
+_BENGLISH_ROMAN = re.compile(
+    r"(?i)\b(ami|amar|amader|tumi|tomar|tomader|apni|apnar|keno|ki|ache|"
+    r"nei|bhalo|valo|chai|korbo|hobe|eta|ota|ekhane|kothay|aache|"
+    r"bolun|bujhte|parchi|jabe|kemon)\b"
+)
 
 
 def normalize_lock(value: Optional[str]) -> Optional[LanguageHint]:
@@ -212,7 +217,32 @@ def language_hint_user_line(
     query: str,
     *,
     conversation_language: Optional[str] = None,
+    per_message: bool = False,
 ) -> str:
+    if per_message:
+        detected = detect_question_language_hint(query)
+        lang = detected or "MATCH_QUESTION"
+        roman_bengali = bool(_LATIN_LETTER.search(query)) and len(
+            _BENGLISH_ROMAN.findall(query)
+        ) >= 2
+        script = (
+            "Roman/Latin script"
+            if _LATIN_LETTER.search(query) and not _NON_LATIN_SCRIPT.search(query)
+            else "the script used in the message"
+        )
+        if roman_bengali:
+            return (
+                "PER-MESSAGE LANGUAGE RULE: The current message looks like Bengali "
+                "written in Roman/Latin script (Benglish). Reply in Benglish, not Bengali script. "
+                "Mirror the user's current language mix and Roman script exactly."
+            )
+        return (
+            f"PER-MESSAGE LANGUAGE RULE: Answer this message in {lang}, using {script}. "
+            "Re-detect language and script independently on every message; ignore earlier "
+            "turn language for output. Pure Devanagari means Hindi, pure Bengali script "
+            "means Bengali, and Roman Hindi/Hinglish must remain Roman. Mirror mixed-language "
+            "messages naturally in the same mix and script."
+        )
     lang = resolve_answer_language(query, conversation_language)
     locked = normalize_lock(conversation_language)
     is_explicit = bool(detect_explicit_override(query))

@@ -335,6 +335,15 @@ class SupabaseClient {
         .eq('id', userId);
   }
 
+  /// Marks the first-run feature card as seen so the user skips it on every
+  /// later login and lands directly in the normal app flow.
+  Future<void> markFeatureOnboardingSeen(String userId) async {
+    await client
+        .from('users')
+        .update({'has_seen_onboarding': true})
+        .eq('id', userId);
+  }
+
   /// Load student profile fields for Edit Profile (users + student_profiles).
   Future<Map<String, dynamic>> fetchStudentOnboardingBundle(
     String userId,

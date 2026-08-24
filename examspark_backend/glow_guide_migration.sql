@@ -4,9 +4,26 @@ CREATE TABLE IF NOT EXISTS glow_guide_sessions (
   user_id uuid NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
   category_type text CHECK (category_type IN ('skin', 'body', 'baby', 'cloth')),
   status text NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'archived')),
+  exchange_count integer NOT NULL DEFAULT 0 CHECK (exchange_count >= 0 AND exchange_count <= 100),
+  context_json jsonb NOT NULL DEFAULT '{}'::jsonb,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
+
+ALTER TABLE glow_guide_sessions
+  ADD COLUMN IF NOT EXISTS exchange_count integer NOT NULL DEFAULT 0;
+ALTER TABLE glow_guide_sessions
+  ADD COLUMN IF NOT EXISTS context_json jsonb NOT NULL DEFAULT '{}'::jsonb;
+
+UPDATE glow_guide_sessions
+SET exchange_count = LEAST(exchange_count, 100),
+    status = CASE WHEN exchange_count >= 100 THEN 'archived' ELSE status END;
+
+ALTER TABLE glow_guide_sessions
+  DROP CONSTRAINT IF EXISTS glow_guide_sessions_exchange_count_check;
+ALTER TABLE glow_guide_sessions
+  ADD CONSTRAINT glow_guide_sessions_exchange_count_check
+  CHECK (exchange_count >= 0 AND exchange_count <= 100);
 
 CREATE TABLE IF NOT EXISTS glow_guide_messages (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
