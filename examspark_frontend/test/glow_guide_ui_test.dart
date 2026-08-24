@@ -31,4 +31,21 @@ void main() {
 
     expect(find.text('Cloth Guide'), findsNWidgets(2));
   });
+
+  testWidgets('Typing-own-concern chip focuses the input instead of sending a dummy message', (tester) async {
+    await tester.pumpWidget(
+      const MaterialApp(home: GlowGuideScreen()),
+    );
+
+    await tester.tap(find.text('English'));
+    await tester.pump();
+    await tester.tap(find.text('Baby Skin Care'));
+    await tester.pump();
+    await tester.tap(find.text("Something else — I'll type it"));
+    await tester.pump();
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    expect(field.controller?.text, isEmpty);
+    expect(Focus.of(tester.element(find.byType(TextField))).hasPrimaryFocus, isTrue);
+  });
 }

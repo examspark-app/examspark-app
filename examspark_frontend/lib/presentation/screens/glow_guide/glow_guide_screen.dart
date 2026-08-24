@@ -53,6 +53,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   };
 
   final _text = TextEditingController();
+  final _textFocus = FocusNode();
   final _scroll = ScrollController();
   final _picker = ImagePicker();
   final _messages = <_GlowMessage>[];
@@ -161,8 +162,17 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   @override
   void dispose() {
     _text.dispose();
+    _textFocus.dispose();
     _scroll.dispose();
     super.dispose();
+  }
+
+  void _focusTextInput() {
+    if (!mounted) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      FocusScope.of(context).requestFocus(_textFocus);
+    });
   }
 
   Future<void> _choosePhoto() async {
@@ -285,12 +295,14 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   }
 
   Future<void> _selectConcern(String concern) async {
+    if (_sending) return;
     if (concern == _typeOwnOption) {
-      // No submission — the user is free to type their own concern, in
-      // their own words and language, in the input box below.
+      _text.clear();
+      _focusTextInput();
       return;
     }
     _text.text = concern;
+    _focusTextInput();
     await _send();
   }
 
@@ -652,7 +664,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                                 size: 16,
                                 color: AppTheme.glowGuidePurple,
                               ),
-                        onPressed: () {
+                        onPressed: _sending ? null : () {
                           if (message.isLanguageChips) {
                             _chooseLanguage(chip);
                           } else if (message.isConcernChips) {
@@ -792,6 +804,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                   Expanded(
                     child: TextField(
                       controller: _text,
+                      focusNode: _textFocus,
                       minLines: 1,
                       maxLines: 4,
                       textInputAction: TextInputAction.send,
