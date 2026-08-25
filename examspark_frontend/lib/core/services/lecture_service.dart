@@ -890,6 +890,82 @@ class LectureService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  Future<Map<String, dynamic>> glowGuideTurnStream({
+    required String text,
+    String? category,
+    String? sessionId,
+    Uint8List? imageBytes,
+    String? filename,
+    String? language,
+    void Function(String status)? onStatus,
+  }) async {
+    final token = await _requireAccessToken();
+    final request =
+        http.MultipartRequest(
+            'POST',
+            Uri.parse(
+              '${AppConfig.resolvedApiBaseUrl}/api/v1/glow-guide/turn/stream',
+            ),
+          )
+          ..headers['Authorization'] = 'Bearer $token'
+          ..headers['Accept'] = 'text/event-stream'
+          ..fields['text'] = text
+          ..fields['category'] = category ?? ''
+          ..fields['session_id'] = sessionId ?? ''
+          ..fields['language'] = language ?? '';
+    if (imageBytes != null && imageBytes.isNotEmpty) {
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'image',
+          imageBytes,
+          filename: filename ?? 'glow-guide-photo.jpg',
+        ),
+      );
+    }
+    final response = await request.send();
+    if (response.statusCode != 200) {
+      throw Exception(await _extractErrorDetailFromStream(response));
+    }
+
+    final buffer = StringBuffer();
+    Map<String, dynamic>? done;
+    await for (final chunk in response.stream.transform(utf8.decoder)) {
+      buffer.write(chunk);
+      var raw = buffer.toString();
+      var separator = raw.indexOf('\n\n');
+      while (separator >= 0) {
+        final event = _parseSseDataBlock(raw.substring(0, separator));
+        raw = raw.substring(separator + 2);
+        if (event != null) {
+          switch (event['type']) {
+            case 'web_search_started':
+              onStatus?.call('searching');
+              break;
+            case 'web_search_complete':
+              onStatus?.call('complete');
+              break;
+            case 'web_search_failed':
+              onStatus?.call('failed');
+              break;
+            case 'done':
+              done = event;
+              break;
+            case 'error':
+              throw Exception(event['message']?.toString() ?? 'GlowGuide stream failed.');
+          }
+        }
+        separator = raw.indexOf('\n\n');
+      }
+      buffer
+        ..clear()
+        ..write(raw);
+    }
+    if (done == null) {
+      throw Exception('GlowGuide stream ended without a result.');
+    }
+    return done;
+  }
+
   Future<List<Map<String, dynamic>>> listGlowGuideSessions() async {
     final token = await _requireAccessToken();
     final response = await http.get(

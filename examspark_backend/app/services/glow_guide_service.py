@@ -2,9 +2,11 @@
 from __future__ import annotations
 
 import base64
+import asyncio
 import json
 import logging
 import uuid
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 import httpx
@@ -15,12 +17,26 @@ from app.constants.language_hint import resolve_answer_language
 from app.services.credits_service import InsufficientCreditsError, deduct_credits, get_credits_balance
 from app.services.supabase_admin import get_supabase_admin
 from app.services.r2_storage_service import R2StorageService
+from app.services.glow_guide_research_service import (
+    save_tavily_research,
+    search_cached_research,
+    tavily_research,
+    is_targeted_research_query,
+)
 
 logger = logging.getLogger(__name__)
 GLOW_GUIDE_TEXT_COST = 2
 GLOW_GUIDE_PHOTO_COST = 5
+GLOW_GUIDE_RESEARCH_COST = 10
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MAX_GLOW_GUIDE_EXCHANGES = 100
+
+
+def _log_research_save_result(task: asyncio.Task[None]) -> None:
+    try:
+        task.result()
+    except Exception as error:  # noqa: BLE001
+        logger.warning("GlowGuide research cache save failed: %s", error)
 
 
 def glow_guide_credit_cost(has_photo: bool) -> int:
@@ -150,6 +166,7 @@ async def turn(
     image: bytes | None,
     filename: str | None,
     preferred_language: str | None = None,
+    on_event: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     if not text.strip() and not image:
         raise GlowGuideError("Add a question or photo.", 400)
@@ -183,6 +200,25 @@ async def turn(
     if isinstance(context, dict) and context:
         context_line = "\nPERSISTED CONVERSATION CONTEXT (do not ask for these again): " + json.dumps(context, ensure_ascii=True)
     prompt = system_prompt(active_category, text, preferred_language) + context_line
+    research = await search_cached_research(text)
+    if research is None:
+        if is_targeted_research_query(text) and on_event is not None:
+            await on_event({"type": "web_search_started"})
+        research = await tavily_research(text)
+        if is_targeted_research_query(text) and on_event is not None:
+            await on_event({
+                "type": "web_search_complete" if research else "web_search_failed",
+            })
+        if research is not None:
+            save_task = asyncio.create_task(
+                save_tavily_research(text, research["tavily_result"])
+            )
+            save_task.add_done_callback(_log_research_save_result)
+    if research:
+        prompt += (
+            "\n\nRESEARCH EVIDENCE (supplemental; cite uncertainty and do not diagnose):\n"
+            + "\n\n---\n\n".join(research["blocks"])
+        )
     messages = [{"role": "system", "content": prompt}, *_multimodal_messages(rows, text, image, filename)]
     parsed: dict[str, Any] | None = None
     errors: list[str] = []
@@ -195,7 +231,9 @@ async def turn(
             errors.append(f"{tier}: {error}")
     if parsed is None:
         raise GlowGuideError("GlowGuide unavailable. " + " | ".join(errors), 502)
-    required_credits = glow_guide_credit_cost(bool(image))
+    required_credits = glow_guide_credit_cost(bool(image)) + (
+        GLOW_GUIDE_RESEARCH_COST if research and research.get("used_web_search") else 0
+    )
     if get_credits_balance(user_id) < required_credits:
         raise GlowGuideError(f"Need {required_credits} credits for GlowGuide.", 402)
     try:
@@ -225,4 +263,4 @@ async def turn(
     if new_exchange_count >= MAX_GLOW_GUIDE_EXCHANGES:
         session_update["status"] = "archived"
     db.table("glow_guide_sessions").update(session_update).eq("id", session_id).eq("user_id", user_id).execute()
-    return {"session_id": session_id, "reply": reply, "category": parsed.get("category") or active_category, "question_options": parsed.get("question_options") or [], "ready": bool(parsed.get("ready")), "verdict": parsed.get("verdict"), "category_label": parsed.get("category_label"), "confidence_note": parsed.get("confidence_note") or "", "credits_charged": required_credits, "new_balance": balance, "exchange_count": new_exchange_count, "session_complete": new_exchange_count >= MAX_GLOW_GUIDE_EXCHANGES}
+    return {"session_id": session_id, "reply": reply, "category": parsed.get("category") or active_category, "question_options": parsed.get("question_options") or [], "ready": bool(parsed.get("ready")), "verdict": parsed.get("verdict"), "category_label": parsed.get("category_label"), "confidence_note": parsed.get("confidence_note") or "", "credits_charged": required_credits, "new_balance": balance, "exchange_count": new_exchange_count, "session_complete": new_exchange_count >= MAX_GLOW_GUIDE_EXCHANGES, "answer_source": research.get("answer_source") if research else "MODEL", "used_web_search": bool(research and research.get("used_web_search")), "web_search_status": "complete" if research and research.get("used_web_search") else "not_used", "sources": research.get("sources", []) if research else []}

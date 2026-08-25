@@ -67,6 +67,7 @@ async def tavily_search(
     feature: str = "unknown",
     search_depth: str = "basic",
     max_results: int = _DEFAULT_MAX_RESULTS,
+    include_domains: list[str] | None = None,
 ) -> TavilySearchResult:
     """Call Tavily Search API. Default depth=basic (cheaper)."""
     q = (query or "").strip()
@@ -102,16 +103,19 @@ async def tavily_search(
 
     try:
         async with httpx.AsyncClient(timeout=20.0) as client:
+            payload = {
+                "api_key": key,
+                "query": q,
+                "search_depth": depth,
+                "include_answer": False,
+                "include_raw_content": False,
+                "max_results": max(1, min(int(max_results or 5), 8)),
+            }
+            if include_domains:
+                payload["include_domains"] = include_domains
             resp = await client.post(
                 _TAVILY_URL,
-                json={
-                    "api_key": key,
-                    "query": q,
-                    "search_depth": depth,
-                    "include_answer": False,
-                    "include_raw_content": False,
-                    "max_results": max(1, min(int(max_results or 5), 8)),
-                },
+                json=payload,
             )
     except Exception as e:  # noqa: BLE001
         logger.warning("Tavily request failed: %s", e)

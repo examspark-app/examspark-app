@@ -63,6 +63,8 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   String? _sessionId;
   bool _sending = false;
   bool _sessionComplete = false;
+  bool _usedWebSearch = false;
+  String? _webSearchStatus;
   bool _processingPhoto = false;
   String _preferredLanguage = 'MATCH_QUESTION';
   bool _hasLoadedPreferredLanguage = false;
@@ -317,13 +319,17 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     });
     _scrollToBottom();
     try {
-      final result = await LectureService.instance.glowGuideTurn(
+      final result = await LectureService.instance.glowGuideTurnStream(
         text: text,
         category: _category,
         sessionId: _sessionId,
         imageBytes: image,
         filename: imageName,
         language: languageForRequest,
+        onStatus: (status) {
+          if (!mounted) return;
+          setState(() => _webSearchStatus = status);
+        },
       );
       if (!mounted || _lastSubmittedKey != submissionKey) return;
       final options =
@@ -347,14 +353,18 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
         _sending = false;
         _processingPhoto = false;
         _sessionComplete = result['session_complete'] == true;
+        _usedWebSearch = result['used_web_search'] == true;
+        _webSearchStatus = null;
       });
       _scrollToBottom();
+      if (_usedWebSearch) _showResearchSourceNotice();
       if (_sessionComplete) _promptNewChat();
     } catch (error) {
       if (!mounted || _lastSubmittedKey != submissionKey) return;
       setState(() {
         _sending = false;
         _processingPhoto = false;
+        _webSearchStatus = null;
         _messages.add(
           _GlowMessage(
             'Skin Care AI is unavailable right now. Please try again.',
@@ -370,12 +380,23 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     setState(() {
       _sessionId = null;
       _sessionComplete = false;
+      _usedWebSearch = false;
+      _webSearchStatus = null;
       _category = null;
       _attachment = null;
       _attachmentName = null;
       _messages.clear();
     });
     _showLanguageChoice();
+  }
+
+  void _showResearchSourceNotice() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_usedWebSearch) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Answer checked with live web research.')),
+      );
+    });
   }
 
   void _promptNewChat() {
@@ -445,6 +466,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     setState(() {
       _sessionId = selected;
       _category = restored['category'] as String?;
+      _usedWebSearch = false;
       _sessionComplete =
           restored['status'] == 'archived' ||
           (restored['exchange_count'] as num? ?? 0) >= 100;
@@ -505,7 +527,9 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                     padding: const EdgeInsets.only(bottom: 18),
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: _processingPhoto
+                        child: _webSearchStatus == 'searching'
+                          ? const _WebSearchBubble()
+                          : _processingPhoto
                           ? _PhotoAnalyzingBubble(
                               image: _messages.isNotEmpty
                                   ? _messages.last.image
@@ -858,6 +882,32 @@ class _GlowMessage {
   final bool isConcernChips;
   final String? verdict;
   final String? confidenceNote;
+}
+
+class _WebSearchBubble extends StatelessWidget {
+  const _WebSearchBubble();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        const SizedBox(
+          width: 16,
+          height: 16,
+          child: CircularProgressIndicator(strokeWidth: 2),
+        ),
+        const SizedBox(width: 10),
+        Text(
+          'Web search',
+          style: TextStyle(
+            color: AppTheme.getSecondaryText(context),
+            fontSize: 13,
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _PurpleTypingDots extends StatefulWidget {
