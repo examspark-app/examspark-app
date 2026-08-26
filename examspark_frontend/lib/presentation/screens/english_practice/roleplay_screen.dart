@@ -741,10 +741,10 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                   ),
                 ],
               ),
-              const SizedBox(height: 10),
+              const SizedBox(height: 14),
 
-              // 1) AI model row
-              _buildModelRow(cardBg, primaryText, subText),
+              // 1) TTS Voice Provider + Gender selector (permanently ABOVE mode select)
+              _buildTtsVoiceCard(cardBg, primaryText, subText),
               const SizedBox(height: 18),
 
               // 2) Scenario / Mode chips section
@@ -883,6 +883,153 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                 ],
               ),
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTtsVoiceCard(Color cardBg, Color primaryText, Color subText) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final sectionLabel = isDark ? Colors.white54 : Colors.black45;
+    final providers = <(String key, String label, IconData icon)>[
+      ('fish', 'Fish Voice', Icons.waves_rounded),
+      ('qwen', 'Qwen Voice', Icons.record_voice_over_rounded),
+      ('gemini', 'Gemini Voice', Icons.auto_awesome_rounded),
+    ];
+    final geminiVoices = const <(String key, String label, IconData icon)>[
+      ('warm', 'Warm', Icons.wb_sunny_rounded),
+      ('friendly', 'Friendly', Icons.emoji_emotions_rounded),
+      ('upbeat', 'Upbeat', Icons.bolt_rounded),
+    ];
+    final genderVoices = const <(String key, String label, IconData icon)>[
+      ('female', 'Female', Icons.face_3_rounded),
+      ('male', 'Male', Icons.face_rounded),
+    ];
+    final voiceOptions = _ttsProvider == 'gemini' ? geminiVoices : genderVoices;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: isDark ? const Color(0xFF2A2A2E) : const Color(0xFFEBE9F5),
+          width: 0.8,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6F56FF).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.graphic_eq_rounded,
+                  color: _violet,
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Voice Engine',
+                      style: TextStyle(
+                        color: primaryText,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'Pick TTS engine & tone — used for all Sonia replies',
+                      style: TextStyle(
+                        color: subText,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            'TTS PROVIDER',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 11.5,
+              letterSpacing: .6,
+              color: sectionLabel,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final p in providers)
+                _premiumChip(
+                  label: p.label,
+                  icon: p.icon,
+                  selected: _ttsProvider == p.key,
+                  compact: false,
+                  onTap: () async {
+                    final newVoiceKey = p.key == 'gemini' ? 'warm' : 'female';
+                    setState(() {
+                      _ttsProvider = p.key;
+                      _ttsVoiceKey = newVoiceKey;
+                    });
+                    await _saveVoicePreference(
+                      _ttsProvider,
+                      _ttsVoiceKey,
+                      _targetLanguage,
+                    );
+                  },
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Text(
+            _ttsProvider == 'gemini' ? 'VOICE' : 'VOICE GENDER',
+            style: TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 11.5,
+              letterSpacing: .6,
+              color: sectionLabel,
+            ),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              for (final v in voiceOptions)
+                _premiumChip(
+                  label: v.label,
+                  icon: v.icon,
+                  selected: _ttsVoiceKey == v.key,
+                  compact: false,
+                  onTap: () async {
+                    setState(() => _ttsVoiceKey = v.key);
+                    await _saveVoicePreference(
+                      _ttsProvider,
+                      _ttsVoiceKey,
+                      _targetLanguage,
+                    );
+                  },
+                ),
+            ],
           ),
         ],
       ),
@@ -1098,7 +1245,6 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
   }
 
   Widget _buildPersonaAndEnter(Color cardBg, Color primaryText, Color subText) {
-    final modelTag = _modelLabel();
     final isReady = scenario != null && scenario!.trim().isNotEmpty;
     return Container(
       width: double.infinity,
@@ -1123,24 +1269,34 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
           // Persona row
           Row(
             children: [
-              // Sonia avatar
-              Container(
+              // Sonia avatar (local asset first, falls back to network URL)
+              SizedBox(
                 width: 72,
                 height: 72,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  border: Border.all(color: Colors.white, width: 2.2),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x55FFFFFF),
-                      blurRadius: 12,
-                      spreadRadius: 1,
-                    ),
-                  ],
-                  image: const DecorationImage(
-                    fit: BoxFit.cover,
-                    image: NetworkImage(
-                      'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Professional%20friendly%20Indian%20female%20english%20tutor%20portrait%20called%20Sonia%20headshot%20warm%20smile%20clean%20studio%20light%20soft%20pink%20background&image_size=square_hd',
+                child: Container(
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 2.2),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: Color(0x55FFFFFF),
+                        blurRadius: 12,
+                        spreadRadius: 1,
+                      ),
+                    ],
+                  ),
+                  child: ClipOval(
+                    child: Image.asset(
+                      'assets/images/sonia_avatar.png',
+                      fit: BoxFit.cover,
+                      width: 72,
+                      height: 72,
+                      errorBuilder: (_, __, ___) => Image.network(
+                        'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Professional%20friendly%20Indian%20female%20english%20tutor%20portrait%20called%20Sonia%20headshot%20warm%20smile%20clean%20studio%20light%20soft%20pink%20background&image_size=square_hd',
+                        fit: BoxFit.cover,
+                        width: 72,
+                        height: 72,
+                      ),
                     ),
                   ),
                 ),
@@ -1149,8 +1305,8 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
+                  children: const [
+                    Row(
                       children: [
                         Text(
                           'Sonia',
@@ -1168,47 +1324,13 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                         ),
                       ],
                     ),
-                    const SizedBox(height: 3),
-                    const Text(
+                    SizedBox(height: 3),
+                    Text(
                       'Your English buddy',
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 12.5,
                         fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.fromLTRB(9, 5, 9, 5),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.18),
-                        ),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.memory_rounded,
-                            size: 13,
-                            color: Colors.white.withOpacity(0.8),
-                          ),
-                          const SizedBox(width: 5),
-                          Flexible(
-                            child: Text(
-                              modelTag,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: Colors.white.withOpacity(0.92),
-                                fontSize: 11,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                        ],
                       ),
                     ),
                   ],
@@ -1962,25 +2084,76 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
                   const SizedBox(height: 45),
                   GestureDetector(
                     onTap: toggle,
-                    child: Container(
+                    child: SizedBox(
                       width: 220,
                       height: 220,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: iconBg,
-                        boxShadow: [
-                          BoxShadow(
-                            color: const Color(0xFF5137ED)
-                                .withOpacity(isDark ? 0.30 : 0.15),
-                            blurRadius: isDark ? 28 : 20,
-                            offset: const Offset(0, 6),
-                          ),
-                        ],
-                      ),
-                      child: Icon(
-                        active ? Icons.mic_rounded : Icons.nights_stay_rounded,
-                        color: _violet,
-                        size: 82,
+                      child: Container(
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: iconBg,
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF5137ED)
+                                  .withOpacity(isDark ? 0.30 : 0.15),
+                              blurRadius: isDark ? 28 : 20,
+                              offset: const Offset(0, 6),
+                            ),
+                          ],
+                        ),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            ClipOval(
+                              child: Image.asset(
+                                'assets/images/sonia_avatar.png',
+                                fit: BoxFit.cover,
+                                width: 220,
+                                height: 220,
+                                errorBuilder: (_, __, ___) => Image.network(
+                                  'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Professional%20friendly%20Indian%20female%20english%20tutor%20portrait%20called%20Sonia%20headshot%20warm%20smile%20clean%20studio%20light%20soft%20pink%20background&image_size=square_hd',
+                                  fit: BoxFit.cover,
+                                  width: 220,
+                                  height: 220,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 14,
+                              left: 0,
+                              right: 0,
+                              child: Center(
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
+                                  padding: EdgeInsets.all(active ? 18 : 16),
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: active
+                                        ? _violet
+                                        : Colors.black.withOpacity(0.45),
+                                    boxShadow: active
+                                        ? [
+                                            BoxShadow(
+                                              color: _violet.withOpacity(0.35),
+                                              blurRadius: 20,
+                                              spreadRadius: 2,
+                                            ),
+                                          ]
+                                        : null,
+                                  ),
+                                  child: Icon(
+                                    active
+                                        ? Icons.mic_rounded
+                                        : Icons.nights_stay_rounded,
+                                    color: active
+                                        ? Colors.white
+                                        : Colors.white.withOpacity(0.92),
+                                    size: active ? 42 : 36,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   ),
