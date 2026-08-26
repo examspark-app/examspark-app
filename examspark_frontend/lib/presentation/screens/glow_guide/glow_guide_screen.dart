@@ -99,9 +99,20 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   }
 
   Future<bool> _tryRestoreLatestSession() async {
-    final sessions = await LectureService.instance.listGlowGuideSessions();
-    if (sessions.isEmpty) return false;
-    final latest = sessions.first;
+  final sessions = await LectureService.instance.listGlowGuideSessions();
+if (sessions.isEmpty) return false;
+final sorted = [...sessions]..sort((a, b) {
+  final aTime = DateTime.tryParse(
+        (a['updated_at'] ?? a['created_at'] ?? '').toString(),
+      ) ??
+      DateTime(1970);
+  final bTime = DateTime.tryParse(
+        (b['updated_at'] ?? b['created_at'] ?? '').toString(),
+      ) ??
+      DateTime(1970);
+  return bTime.compareTo(aTime);
+});
+final latest = sorted.first;
     final id = latest['id']?.toString();
     if (id == null || id.isEmpty) return false;
     final restored =
@@ -109,15 +120,23 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     if (!mounted) return true;
     final messageList = restored['messages'] as List? ?? const [];
     final restoredMessages = messageList
-        .whereType<Map>()
-        .map(
-          (message) => _GlowMessage(
-            message['message']?.toString() ?? '',
-            message['role'] == 'user',
-            imageUrl: message['image_url']?.toString(),
-          ),
-        )
-        .toList();
+    .whereType<Map>()
+    .map(
+      (message) => _GlowMessage(
+        message['message']?.toString() ?? '',
+        message['role'] == 'user',
+        imageUrl: message['image_url']?.toString(),
+        chips: (message['question_options'] as List?)
+                ?.map((c) => c.toString())
+                .where((c) => c.trim().isNotEmpty)
+                .toList() ??
+            const [],
+        verdict: message['verdict']?.toString(),
+        confidenceNote: message['confidence_note']?.toString(),
+        detailedBreakdown: message['detailed_breakdown']?.toString(),
+      ),
+    )
+    .toList();
     final computedTitle =
         (restored['title']?.toString().trim().isNotEmpty ?? false)
             ? restored['title'].toString()
@@ -565,13 +584,13 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   }
 
   void _newChat() {
-    if (_sending) return;
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => const GlowGuideScreen(startFresh: true),
-      ),
-    );
-  }
+  if (_sending) return;
+  Navigator.of(context).pushReplacement(
+    MaterialPageRoute(
+      builder: (_) => const GlowGuideScreen(startFresh: true),
+    ),
+  );
+}
 
   void _showResearchSourceNotice() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
