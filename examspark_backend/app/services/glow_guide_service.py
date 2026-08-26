@@ -166,6 +166,8 @@ async def turn(
     image: bytes | None,
     filename: str | None,
     preferred_language: str | None = None,
+    age: str | None = None,
+    weather: str | None = None,
     on_event: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
 ) -> dict[str, Any]:
     if not text.strip() and not image:
@@ -195,7 +197,11 @@ async def turn(
             "This GlowGuide chat has reached 100 exchanges. Start a new chat.",
             409,
         )
-    context = current.get("context_json") or {}
+    context = dict(current.get("context_json") or {})
+    if age and age.strip():
+        context["age"] = age.strip()
+    if weather and weather.strip():
+        context["weather"] = weather.strip()
     context_line = ""
     if isinstance(context, dict) and context:
         context_line = "\nPERSISTED CONVERSATION CONTEXT (do not ask for these again): " + json.dumps(context, ensure_ascii=True)
@@ -250,7 +256,16 @@ async def turn(
     db.table("glow_guide_messages").insert([{"session_id": session_id, "user_id": user_id, "role": "user", "message": text or "Photo attached", "image_path": image_path}, {"session_id": session_id, "user_id": user_id, "role": "assistant", "message": reply}]).execute()
     new_exchange_count = exchange_count + 1
     next_context = dict(context) if isinstance(context, dict) else {}
-    for key in ("category", "category_label", "season", "skin_type", "concern", "concern_details"):
+    for key in (
+        "category",
+        "category_label",
+        "age",
+        "season",
+        "weather",
+        "skin_type",
+        "concern",
+        "concern_details",
+    ):
         value = parsed.get(key)
         if value is not None and str(value).strip():
             next_context[key] = value

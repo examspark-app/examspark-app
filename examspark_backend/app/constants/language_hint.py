@@ -222,6 +222,14 @@ def language_hint_user_line(
     if per_message:
         detected = detect_question_language_hint(query)
         lang = detected or "MATCH_QUESTION"
+        selected = (conversation_language or "").strip()
+        selected_note = ""
+        if selected and selected.upper() != "MATCH_QUESTION":
+            selected_note = (
+                f" The user selected {selected} for this GlowGuide chat. Use {selected} "
+                "for your reply, follow-up question, and every question_options chip "
+                "unless the current user message clearly switches to another language."
+            )
         roman_bengali = bool(_LATIN_LETTER.search(query)) and len(
             _BENGLISH_ROMAN.findall(query)
         ) >= 2
@@ -235,6 +243,7 @@ def language_hint_user_line(
                 "PER-MESSAGE LANGUAGE RULE: The current message looks like Bengali "
                 "written in Roman/Latin script (Benglish). Reply in Benglish, not Bengali script. "
                 "Mirror the user's current language mix and Roman script exactly."
+                + selected_note
             )
         return (
             f"PER-MESSAGE LANGUAGE RULE: Answer this message in {lang}, using {script}. "
@@ -242,6 +251,7 @@ def language_hint_user_line(
             "turn language for output. Pure Devanagari means Hindi, pure Bengali script "
             "means Bengali, and Roman Hindi/Hinglish must remain Roman. Mirror mixed-language "
             "messages naturally in the same mix and script."
+            + selected_note
         )
     lang = resolve_answer_language(query, conversation_language)
     locked = normalize_lock(conversation_language)

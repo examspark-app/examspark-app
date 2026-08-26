@@ -18,6 +18,8 @@ async def _glow_guide_sse(
     category: str | None,
     session_id: str | None,
     language: str | None,
+    age: str | None,
+    weather: str | None,
     image_bytes: bytes | None,
     filename: str | None,
 ) -> AsyncIterator[str]:
@@ -36,6 +38,8 @@ async def _glow_guide_sse(
                 image_bytes,
                 filename,
                 language,
+                age,
+                weather,
                 on_event=on_event,
             )
             await events.put({"type": "done", **result})
@@ -66,6 +70,8 @@ async def glow_guide_turn(
     category: str | None = Form(None),
     session_id: str | None = Form(None),
     language: str | None = Form(None),
+    age: str | None = Form(None),
+    weather: str | None = Form(None),
     image: UploadFile | None = File(None),
     user: AuthenticatedUser = Depends(get_current_user),
 ):
@@ -77,7 +83,7 @@ async def glow_guide_turn(
         if len(image_bytes) > 8 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Photo is too large (max 8 MB).")
     try:
-        return await turn(user.user_id, session_id, category, text, image_bytes, filename, language)
+        return await turn(user.user_id, session_id, category, text, image_bytes, filename, language, age, weather)
     except GlowGuideError as error:
         raise HTTPException(status_code=error.status_code, detail=str(error)) from error
 
@@ -88,6 +94,8 @@ async def glow_guide_turn_stream(
     category: str | None = Form(None),
     session_id: str | None = Form(None),
     language: str | None = Form(None),
+    age: str | None = Form(None),
+    weather: str | None = Form(None),
     image: UploadFile | None = File(None),
     user: AuthenticatedUser = Depends(get_current_user),
 ):
@@ -105,6 +113,8 @@ async def glow_guide_turn_stream(
             category=category,
             session_id=session_id,
             language=language,
+            age=age,
+            weather=weather,
             image_bytes=image_bytes,
             filename=filename,
         ),

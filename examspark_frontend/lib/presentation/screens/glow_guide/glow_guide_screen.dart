@@ -9,7 +9,9 @@ import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 
 class GlowGuideScreen extends StatefulWidget {
-  const GlowGuideScreen({super.key});
+  const GlowGuideScreen({super.key, this.startFresh = false});
+
+  final bool startFresh;
 
   @override
   State<GlowGuideScreen> createState() => _GlowGuideScreenState();
@@ -61,6 +63,8 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   Uint8List? _attachment;
   String? _attachmentName;
   String? _category;
+  String? _age;
+  String? _seasonWeather;
   String? _sessionId;
   bool _sending = false;
   bool _sessionComplete = false;
@@ -76,7 +80,11 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   @override
   void initState() {
     super.initState();
-    _openLatestOrFresh();
+    if (widget.startFresh) {
+      _showLanguageChoice();
+    } else {
+      _openLatestOrFresh();
+    }
   }
 
   Future<void> _openLatestOrFresh() async {
@@ -272,21 +280,54 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   }
 
   void _continueAfterCategoryChoice(String key, String? display) {
-    final concerns = [
-      ..._concernsByCategory[key] ?? const <String>[],
-      _typeOwnOption,
-    ];
     setState(() {
       _category = key;
       _sessionTitle ??= display ?? key;
       _messages.add(
         _GlowMessage(
-          '${display ?? key} — got it. What would you like to check? Choose one, or just type your own question below.',
+          '${display ?? key} selected. What age should I consider for this guidance?',
           false,
-          chips: [
-            for (final c in _categories) c.$1,
-            ...concerns,
-          ],
+          chips: const ['Baby', 'Child', 'Teen', 'Adult'],
+          isAgeChips: true,
+          hasCustomInput: true,
+        ),
+      );
+    });
+    _scrollToBottom();
+  }
+
+  void _selectAge(String value) {
+    final clean = value.trim();
+    if (clean.isEmpty) return;
+    setState(() {
+      _age = clean;
+      _messages.add(
+        _GlowMessage(
+          'What season or weather should I consider?',
+          false,
+          chips: const ['Winter', 'Summer', 'Monsoon', 'Humid', 'Dry'],
+          isSeasonChips: true,
+          hasCustomInput: true,
+        ),
+      );
+    });
+    _scrollToBottom();
+  }
+
+  void _selectSeasonWeather(String value) {
+    final clean = value.trim();
+    if (clean.isEmpty) return;
+    final concerns = [
+      ..._concernsByCategory[_category] ?? const <String>[],
+      _typeOwnOption,
+    ];
+    setState(() {
+      _seasonWeather = clean;
+      _messages.add(
+        _GlowMessage(
+          'Thanks. What would you like to check?',
+          false,
+          chips: concerns,
           isConcernChips: true,
           categoryHeaderChips: [for (final c in _categories) c.$1],
         ),
@@ -468,6 +509,8 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
         text: text,
         category: _category,
         sessionId: _sessionId,
+        age: _age,
+        weather: _seasonWeather,
         imageBytes: image,
         filename: imageName,
         language: languageForRequest,
@@ -523,19 +566,11 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
 
   void _newChat() {
     if (_sending) return;
-    setState(() {
-      _sessionId = null;
-      _sessionComplete = false;
-      _usedWebSearch = false;
-      _webSearchStatus = null;
-      _category = null;
-      _sessionTitle = null;
-      _attachment = null;
-      _attachmentName = null;
-      _messages.clear();
-      _hasLoadedPreferredLanguage = false;
-    });
-    _showLanguageChoice();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => const GlowGuideScreen(startFresh: true),
+      ),
+    );
   }
 
   void _showResearchSourceNotice() {
@@ -896,6 +931,20 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                         setState(() => _lastCustomLanguageLabel = value);
                       } else if (message.isCategoryChips) {
                         setState(() => _lastCustomCategoryLabel = value);
+                      } else if (message.isAgeChips) {
+                        _age = value;
+                      } else if (message.isSeasonChips) {
+                        _seasonWeather = value;
+                      }
+                    },
+                    onSubmitted: (value) {
+                      if (_sending || _sessionComplete || value.trim().isEmpty) {
+                        return;
+                      }
+                      if (message.isLanguageChips) {
+                        _selectLanguage(value);
+                      } else if (message.isCategoryChips) {
+                        _chooseTopCategory(value);
                       }
                     },
                   ),
@@ -959,6 +1008,10 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                                   _selectLanguage(chip);
                                 } else if (message.isCategoryChips) {
                                   _chooseTopCategory(chip);
+                                } else if (message.isAgeChips) {
+                                  _selectAge(chip);
+                                } else if (message.isSeasonChips) {
+                                  _selectSeasonWeather(chip);
                                 } else if (message.isConcernChips) {
                                   if (isCatHeader) {
                                     _chooseTopCategory(chip);
@@ -1198,7 +1251,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
             IconButton(
               tooltip: 'New chat',
               onPressed: _newChat,
-              icon: Icon(Icons.edit_outlined, color: subText),
+              icon: Icon(Icons.add_comment_outlined, color: subText),
             ),
             IconButton(
               tooltip: 'Chat history',
@@ -1340,6 +1393,8 @@ class _GlowMessage {
     this.isLanguageChips = false,
     this.isConcernChips = false,
     this.isCategoryChips = false,
+    this.isAgeChips = false,
+    this.isSeasonChips = false,
     this.hasCustomInput = false,
     this.categoryHeaderChips = const [],
     this.verdict,
@@ -1355,6 +1410,8 @@ class _GlowMessage {
   final bool isLanguageChips;
   final bool isConcernChips;
   final bool isCategoryChips;
+  final bool isAgeChips;
+  final bool isSeasonChips;
   final bool hasCustomInput;
   final List<String> categoryHeaderChips;
   final String? verdict;
@@ -1619,10 +1676,12 @@ class _CustomTopicInput extends StatefulWidget {
     required this.hint,
     required this.label,
     required this.onSaved,
+    required this.onSubmitted,
   });
   final String hint;
   final String? label;
   final ValueChanged<String> onSaved;
+  final ValueChanged<String> onSubmitted;
 
   @override
   State<_CustomTopicInput> createState() => _CustomTopicInputState();
@@ -1685,7 +1744,9 @@ class _CustomTopicInputState extends State<_CustomTopicInput> {
               ),
               textInputAction: TextInputAction.done,
               onSubmitted: (value) {
-                widget.onSaved(value.trim());
+                final clean = value.trim();
+                widget.onSaved(clean);
+                widget.onSubmitted(clean);
               },
               onChanged: (value) {
                 widget.onSaved(value.trim());
@@ -1695,7 +1756,9 @@ class _CustomTopicInputState extends State<_CustomTopicInput> {
           if ((_ctrl.text.trim().isNotEmpty))
             TextButton(
               onPressed: () {
-                widget.onSaved(_ctrl.text.trim());
+                final clean = _ctrl.text.trim();
+                widget.onSaved(clean);
+                widget.onSubmitted(clean);
               },
               style: TextButton.styleFrom(
                 foregroundColor: accent,

@@ -897,6 +897,8 @@ class LectureService {
     Uint8List? imageBytes,
     String? filename,
     String? language,
+    String? age,
+    String? weather,
     void Function(String status)? onStatus,
   }) async {
     final token = await _requireAccessToken();
@@ -912,7 +914,9 @@ class LectureService {
           ..fields['text'] = text
           ..fields['category'] = category ?? ''
           ..fields['session_id'] = sessionId ?? ''
-          ..fields['language'] = language ?? '';
+          ..fields['language'] = language ?? ''
+          ..fields['age'] = age ?? ''
+          ..fields['weather'] = weather ?? '';
     if (imageBytes != null && imageBytes.isNotEmpty) {
       request.files.add(
         http.MultipartFile.fromBytes(
