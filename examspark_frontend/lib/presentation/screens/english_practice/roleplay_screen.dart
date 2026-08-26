@@ -980,14 +980,14 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
             children: [
               for (final p in providers)
                 _premiumChip(
-                  label: p.label,
-                  icon: p.icon,
-                  selected: _ttsProvider == p.key,
+                  label: p.$2,
+                  icon: p.$3,
+                  selected: _ttsProvider == p.$1,
                   compact: false,
                   onTap: () async {
-                    final newVoiceKey = p.key == 'gemini' ? 'warm' : 'female';
+                    final newVoiceKey = p.$1 == 'gemini' ? 'warm' : 'female';
                     setState(() {
-                      _ttsProvider = p.key;
+                      _ttsProvider = p.$1;
                       _ttsVoiceKey = newVoiceKey;
                     });
                     await _saveVoicePreference(
@@ -1016,12 +1016,12 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
             children: [
               for (final v in voiceOptions)
                 _premiumChip(
-                  label: v.label,
-                  icon: v.icon,
-                  selected: _ttsVoiceKey == v.key,
+                  label: v.$2,
+                  icon: v.$3,
+                  selected: _ttsVoiceKey == v.$1,
                   compact: false,
                   onTap: () async {
-                    setState(() => _ttsVoiceKey = v.key);
+                    setState(() => _ttsVoiceKey = v.$1);
                     await _saveVoicePreference(
                       _ttsProvider,
                       _ttsVoiceKey,

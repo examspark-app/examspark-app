@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:examspark_frontend/presentation/core/app_theme.dart';
+import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_teaching_history_screen.dart';
 
 class EnglishPracticeDrawer extends StatelessWidget {

@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
@@ -1275,6 +1276,54 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
             _restoring ? const SizedBox.shrink() : renderInput(),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _verdictBadge(String verdict) {
+    final Color color;
+    final IconData icon;
+    final String label;
+    switch (verdict) {
+      case 'harmful':
+        color = const Color(0xFFE05252);
+        icon = Icons.warning_amber_rounded;
+        label = 'Use with caution';
+        break;
+      case 'good_fit':
+        color = const Color(0xFF40A85C);
+        icon = Icons.check_circle_outline_rounded;
+        label = 'Good fit';
+        break;
+      case 'careful':
+        color = const Color(0xFFCC9A2E);
+        icon = Icons.error_outline_rounded;
+        label = 'Proceed carefully';
+        break;
+      default:
+        return const SizedBox.shrink();
+    }
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: color.withOpacity(0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
       ),
     );
   }
