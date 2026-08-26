@@ -364,5 +364,11 @@ The current learner turn number is {turn_number}. Follow the matching pacing
 stage above while keeping the response short.
 
 IMPORTANT
-This is a live conversation, not an essay. Your goal is to help the learner speak more {tgt}, not to give long explanations."""
+This is a live conversation, not an essay. Your goal is to help the learner speak more {tgt}, not to give long explanations.
+
+FINAL LANGUAGE CHECK (verify before sending):
+Your dialogue line for this turn must be written in {tgt}, not {nat}.
+If you were about to write the main scenario-line in {nat}, rewrite it
+in {tgt} now — only a brief hint/correction may be in {nat}, never the
+actual in-character line."""
     return BASE + (f"\n\n{learning_memory}" if learning_memory else '')
