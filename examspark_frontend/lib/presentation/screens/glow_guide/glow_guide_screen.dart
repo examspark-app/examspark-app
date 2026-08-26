@@ -151,18 +151,43 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
       _hasLoadedPreferredLanguage = true;
       _messages.add(
         _GlowMessage(
-          'Which language would you like to chat in?',
+          'Which language would you like to chat in?\nPick a preset below, or type your own (हिन्दी, বাংলা, anything).',
           false,
-          chips: const ['English', 'Hindi', 'Bengali', 'Auto-detect'],
+          chips: const [
+            'Auto-detect',
+            'English',
+            'Hindi',
+            'Bengali',
+            'Save & continue',
+          ],
           isLanguageChips: true,
+          hasCustomInput: true,
         ),
       );
     });
   }
 
+  String? _lastCustomLanguageLabel;
+
   Future<void> _selectLanguage(String label) async {
     if (_sending) return;
-    final lang = label == 'Auto-detect' ? 'MATCH_QUESTION' : label;
+    final trimmed = label.trim();
+    if (trimmed.isEmpty) return;
+    if (trimmed == 'Save & continue') {
+      final raw = _lastCustomLanguageLabel?.trim();
+      final useLang = raw != null && raw.isNotEmpty
+          ? raw
+          : _preferredLanguage == 'MATCH_QUESTION'
+          ? 'MATCH_QUESTION'
+          : (_preferredLanguage.isEmpty ? 'MATCH_QUESTION' : _preferredLanguage);
+      final code = useLang == 'Auto-detect' ? 'MATCH_QUESTION' : useLang;
+      setState(() => _preferredLanguage = code);
+      unawaited(_savePreferredLanguage(code));
+      if (mounted) _showCategoryChoices();
+      return;
+    }
+    final lang = trimmed == 'Auto-detect' ? 'MATCH_QUESTION' : trimmed;
+    _lastCustomLanguageLabel = trimmed == 'Auto-detect' ? null : trimmed;
     setState(() => _preferredLanguage = lang);
     await _savePreferredLanguage(lang);
     if (mounted) _showCategoryChoices();
@@ -181,19 +206,92 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     );
   }
 
+  String? _lastCustomCategoryLabel;
+
   void _showCategoryChoices() {
     if (!mounted) return;
     setState(() {
-      if (!_messages.any((message) => message.chips.isNotEmpty)) {
+      if (!_messages.any((message) => message.chips.isNotEmpty && !message.isLanguageChips)) {
         _messages.add(
           _GlowMessage(
-            'Choose a guide:',
+            'First, what do you need help with?\nPick a guide or type your own topic (e.g. hair care, kids dress).',
             false,
-            chips: _categories.map((item) => item.$1).toList(),
+            chips: [
+              ..._categories.map((item) => item.$1),
+              'Save & continue',
+            ],
+            isCategoryChips: true,
+            hasCustomInput: true,
           ),
         );
       }
     });
+  }
+
+  Future<void> _chooseTopCategory(String label) async {
+    final trimmed = label.trim();
+    if (trimmed.isEmpty) return;
+    if (trimmed == 'Save & continue') {
+      final raw = _lastCustomCategoryLabel?.trim();
+      final hasCustom = raw != null && raw.isNotEmpty;
+      if (!hasCustom && (_category == null || _category!.isEmpty)) return;
+      if (hasCustom) {
+        final key = _categoryKeyForLabel(raw) ?? raw.toLowerCase();
+        _continueAfterCategoryChoice(key, raw);
+        return;
+      }
+      // Preset category was already tapped — just move forward using it.
+      final display = _category != null
+          ? _prettyCategory(_category!)
+          : null;
+      _continueAfterCategoryChoice(_category!, display);
+      return;
+    }
+    _lastCustomCategoryLabel = trimmed;
+    final key = _categoryKeyForLabel(trimmed);
+    if (key == null) {
+      _continueAfterCategoryChoice(trimmed.toLowerCase(), trimmed);
+      return;
+    }
+    _continueAfterCategoryChoice(key, trimmed);
+  }
+
+  String? _categoryKeyForLabel(String label) {
+    for (final entry in _categoryMap.entries) {
+      if (entry.key.trim().toLowerCase() == label.trim().toLowerCase()) {
+        return entry.value;
+      }
+    }
+    for (final c in _categories) {
+      if (c.$1.trim().toLowerCase() == label.trim().toLowerCase()) {
+        return _categoryMap[c.$1];
+      }
+    }
+    return null;
+  }
+
+  void _continueAfterCategoryChoice(String key, String? display) {
+    final concerns = [
+      ..._concernsByCategory[key] ?? const <String>[],
+      _typeOwnOption,
+    ];
+    setState(() {
+      _category = key;
+      _sessionTitle ??= display ?? key;
+      _messages.add(
+        _GlowMessage(
+          '${display ?? key} — got it. What would you like to check? Choose one, or just type your own question below.',
+          false,
+          chips: [
+            for (final c in _categories) c.$1,
+            ...concerns,
+          ],
+          isConcernChips: true,
+          categoryHeaderChips: [for (final c in _categories) c.$1],
+        ),
+      );
+    });
+    _scrollToBottom();
   }
 
   @override
@@ -311,24 +409,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   };
 
   Future<void> _selectCategory(String label) async {
-    final selectedCategory = _categoryMap[label];
-    if (selectedCategory == null) return;
-    final concerns = [
-      ..._concernsByCategory[selectedCategory] ?? const <String>[],
-      _typeOwnOption,
-    ];
-    setState(() {
-      _category = selectedCategory;
-      _messages.add(
-        _GlowMessage(
-          'What would you like to check about your $label? Choose one, or just type your own question below — any language works.',
-          false,
-          chips: concerns,
-          isConcernChips: true,
-        ),
-      );
-    });
-    _scrollToBottom();
+    await _chooseTopCategory(label);
   }
 
   Future<void> _selectConcern(String concern) async {
@@ -593,29 +674,505 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final brightness = MediaQuery.platformBrightnessOf(context);
+    final isDark = brightness == Brightness.dark;
+    final background =
+        isDark ? AppTheme.darkBackground : const Color(0xFFFAF7FB);
+    final textColor =
+        isDark ? Colors.white : const Color(0xFF20182B);
+    final subText =
+        isDark ? Colors.white60 : Colors.black54;
+    final divider =
+        isDark ? const Color(0xFF2A2A2E) : const Color(0xFFE9E5F3);
+    final bubbleUser = isDark
+        ? const Color(0xFF5137ED)
+        : const Color(0xFF6F56FF);
+    final bubbleAi =
+        isDark ? const Color(0xFF1A1A1D) : Colors.white;
+    final bubbleAiBorder =
+        isDark ? const Color(0xFF2A2A2E) : const Color(0xFFE9E5F3);
+    final inputBg =
+        isDark ? const Color(0xFF1C1C1F) : const Color(0xFFF3EFFB);
+    final inputBorder =
+        isDark ? const Color(0xFF2A2A2E) : const Color(0xFFE4DEF4);
+    final chipBg =
+        isDark ? const Color(0xFF1C1C1F) : const Color(0xFFF6F3FB);
+    final chipBorder =
+        isDark ? const Color(0xFF2A2A2E) : const Color(0xFFE3DDF3);
+    final chipText =
+        isDark ? Colors.white : const Color(0xFF3C375A);
+
+    Widget renderTile(_GlowMessage message) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 18),
+        child: Align(
+          alignment: message.isUser
+              ? Alignment.centerRight
+              : Alignment.centerLeft,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width * .86,
+            ),
+            child: Column(
+              crossAxisAlignment: message.isUser
+                  ? CrossAxisAlignment.end
+                  : CrossAxisAlignment.start,
+              children: [
+                if (message.image != null ||
+                    (message.imageUrl?.isNotEmpty ?? false))
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 8),
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _attachment = message.image;
+                          _attachmentName = message.imageName;
+                        });
+                        _previewPhoto();
+                      },
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(14),
+                        child: message.image != null
+                            ? Image.memory(
+                                message.image!,
+                                width: 180,
+                                height: 140,
+                                fit: BoxFit.cover,
+                              )
+                            : (message.imageUrl != null
+                                  ? Image.network(
+                                      message.imageUrl!,
+                                      width: 180,
+                                      height: 140,
+                                      fit: BoxFit.cover,
+                                    )
+                                  : const SizedBox.shrink()),
+                      ),
+                    ),
+                  ),
+                if (message.verdict != null) ...[
+                  const SizedBox(height: 6),
+                  _verdictBadge(message.verdict!),
+                  const SizedBox(height: 6),
+                ],
+                if (message.text.isNotEmpty)
+                  message.isUser
+                      ? Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: bubbleUser,
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: bubbleUser.withOpacity(isDark ? 0.18 : 0.12),
+                                blurRadius: 10,
+                                offset: const Offset(0, 3),
+                              ),
+                            ],
+                          ),
+                          child: Text(
+                            message.text,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15.5,
+                              height: 1.45,
+                            ),
+                          ),
+                        )
+                      : Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: bubbleAi,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(
+                              color: bubbleAiBorder,
+                              width: 0.8,
+                            ),
+                            boxShadow: isDark
+                                ? null
+                                : [
+                                    BoxShadow(
+                                      color: const Color(0xFF000000)
+                                          .withOpacity(0.05),
+                                      blurRadius: 10,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                          ),
+                          child: SelectionArea(
+                            child: Text(
+                              message.text,
+                              style: TextStyle(
+                                color: isDark
+                                    ? Colors.white
+                                    : const Color(0xFF1E1B2C),
+                                fontSize: 15.5,
+                                height: 1.5,
+                              ),
+                            ),
+                          ),
+                        ),
+                if ((message.confidenceNote ?? '').trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          size: 14,
+                          color: subText,
+                        ),
+                        const SizedBox(width: 6),
+                        Expanded(
+                          child: Text(
+                            message.confidenceNote!,
+                            style: TextStyle(
+                              color: subText,
+                              fontSize: 12.5,
+                              fontStyle: FontStyle.italic,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                if ((message.detailedBreakdown ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _DetailedBreakdownExpander(
+                    breakdown: message.detailedBreakdown!,
+                  ),
+                ],
+                if (message.categoryHeaderChips.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 7,
+                    runSpacing: 7,
+                    children: message.categoryHeaderChips.map((c) {
+                      final active = _category != null &&
+                          (_categoryKeyForLabel(c) ?? c.toLowerCase()) ==
+                              _category;
+                      return ChoiceChip(
+                        label: Text(
+                          c,
+                          style: TextStyle(
+                            color: active ? Colors.white : chipText,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        selected: active,
+                        selectedColor: AppTheme.glowGuidePink,
+                        backgroundColor: chipBg,
+                        side: BorderSide(
+                          color: active
+                              ? AppTheme.glowGuidePink
+                              : chipBorder,
+                          width: 0.8,
+                        ),
+                        visualDensity: VisualDensity.compact,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: -3,
+                        ),
+                        onSelected: (_) => _chooseTopCategory(c),
+                      );
+                    }).toList(),
+                  ),
+                ],
+                if (message.hasCustomInput) ...[
+                  const SizedBox(height: 12),
+                  _CustomTopicInput(
+                    hint: message.isLanguageChips
+                        ? 'Or type your own language…'
+                        : 'Or type your own topic (e.g. hair care, kids dress)',
+                    label: message.isLanguageChips
+                        ? _lastCustomLanguageLabel
+                        : _lastCustomCategoryLabel,
+                    onSaved: (value) {
+                      if (_sending || _sessionComplete) return;
+                      if (message.isLanguageChips) {
+                        setState(() => _lastCustomLanguageLabel = value);
+                      } else if (message.isCategoryChips) {
+                        setState(() => _lastCustomCategoryLabel = value);
+                      }
+                    },
+                  ),
+                ],
+                if (message.chips.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: message.chips.map((chip) {
+                      final isTypeOwn = chip == _typeOwnOption;
+                      final isSave = chip == 'Save & continue';
+                      final isCatHeader = message.isConcernChips &&
+                          _categories.any((c) => c.$1 == chip);
+                      return ActionChip(
+                        label: Text(
+                          chip,
+                          style: TextStyle(
+                            color: isSave || isTypeOwn
+                                ? AppTheme.glowGuidePink
+                                : (isCatHeader
+                                    ? subText
+                                    : chipText),
+                            fontSize: 13.5,
+                            fontWeight: isSave || isTypeOwn
+                                ? FontWeight.w800
+                                : FontWeight.w600,
+                            fontStyle: isTypeOwn
+                                ? FontStyle.italic
+                                : FontStyle.normal,
+                          ),
+                        ),
+                        backgroundColor: isSave
+                            ? AppTheme.glowGuidePink.withOpacity(0.08)
+                            : (isCatHeader
+                                ? chipBg.withOpacity(0.8)
+                                : chipBg),
+                        side: BorderSide(
+                          color: isSave
+                              ? AppTheme.glowGuidePink.withOpacity(0.45)
+                              : chipBorder,
+                          width: 0.9,
+                        ),
+                        avatar: isTypeOwn
+                            ? Icon(
+                                Icons.edit_outlined,
+                                size: 15,
+                                color: AppTheme.glowGuidePink,
+                              )
+                            : (isSave
+                                ? Icon(
+                                    Icons.check_circle_outline_rounded,
+                                    size: 15,
+                                    color: AppTheme.glowGuidePink,
+                                  )
+                                : null),
+                        onPressed: _sending || _sessionComplete
+                            ? null
+                            : () {
+                                if (message.isLanguageChips) {
+                                  _selectLanguage(chip);
+                                } else if (message.isCategoryChips) {
+                                  _chooseTopCategory(chip);
+                                } else if (message.isConcernChips) {
+                                  if (isCatHeader) {
+                                    _chooseTopCategory(chip);
+                                  } else {
+                                    _selectConcern(chip);
+                                  }
+                                } else {
+                                  _selectCategory(chip);
+                                }
+                              },
+                      );
+                    }).toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    Widget renderInput() {
+      final hasPhoto = _attachment != null;
+      return SafeArea(
+        top: false,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+          child: Container(
+            decoration: BoxDecoration(
+              color: inputBg,
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: inputBorder,
+                width: 0.8,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: (isDark ? Colors.black : const Color(0xFF3A2B7B))
+                      .withOpacity(isDark ? 0.25 : 0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 3),
+                ),
+              ],
+            ),
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (hasPhoto)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(4, 4, 4, 2),
+                    child: GestureDetector(
+                      onTap: _previewPhoto,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          ClipRRect(
+                            borderRadius: BorderRadius.circular(10),
+                            child: Image.memory(
+                              _attachment!,
+                              width: 72,
+                              height: 72,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                          Positioned(
+                            top: -7,
+                            right: -7,
+                            child: IconButton(
+                              tooltip: 'Remove photo',
+                              onPressed: () => setState(() {
+                                _attachment = null;
+                                _attachmentName = null;
+                              }),
+                              constraints: const BoxConstraints(
+                                minWidth: 26,
+                                minHeight: 26,
+                              ),
+                              padding: EdgeInsets.zero,
+                              icon: Icon(
+                                Icons.close_rounded,
+                                size: 16,
+                                color: isDark ? Colors.white : Colors.black54,
+                              ),
+                              style: IconButton.styleFrom(
+                                backgroundColor: isDark
+                                    ? const Color(0xFF2A2A2E)
+                                    : Colors.white,
+                                foregroundColor:
+                                    isDark ? Colors.white : Colors.black54,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 2),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          onTap: _choosePhoto,
+                          borderRadius: BorderRadius.circular(12),
+                          child: Padding(
+                            padding: const EdgeInsets.all(10),
+                            child: Icon(
+                              Icons.camera_alt_outlined,
+                              color: subText,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Expanded(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 4,
+                        ),
+                        child: TextField(
+                          controller: _text,
+                          focusNode: _textFocus,
+                          minLines: 1,
+                          maxLines: 6,
+                          textInputAction: TextInputAction.newline,
+                          onSubmitted: (_) => _send(),
+                          style: TextStyle(
+                            color: isDark ? Colors.white : const Color(0xFF1E1B2C),
+                            fontSize: 15,
+                            height: 1.4,
+                          ),
+                          decoration: InputDecoration(
+                            hintText:
+                                'Ask about skin, body care, or cloth...',
+                            hintStyle: TextStyle(
+                              color: subText,
+                              fontSize: 15,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding:
+                                const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 8,
+                            ),
+                            isCollapsed: true,
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 2),
+                      child: Material(
+                        color: AppTheme.glowGuidePink,
+                        borderRadius: BorderRadius.circular(12),
+                        child: InkWell(
+                          borderRadius: BorderRadius.circular(12),
+                          onTap:
+                              _sending || _sessionComplete ? null : _send,
+                          child: const Padding(
+                            padding: EdgeInsets.all(10),
+                            child: Icon(
+                              Icons.arrow_upward_rounded,
+                              color: Colors.white,
+                              size: 22,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Theme(
       data: Theme.of(context).copyWith(
-        scaffoldBackgroundColor: AppTheme.darkBackground,
-        canvasColor: AppTheme.darkBackground,
+        scaffoldBackgroundColor: background,
+        canvasColor: background,
         splashColor: AppTheme.babyPink.withValues(alpha: 0.35),
         highlightColor: AppTheme.babyPink.withValues(alpha: 0.2),
+        appBarTheme: AppBarTheme(
+          backgroundColor: background,
+          foregroundColor: textColor,
+          elevation: 0,
+          centerTitle: true,
+          surfaceTintColor: Colors.transparent,
+        ),
+        iconTheme: IconThemeData(color: subText),
+        dividerTheme: DividerThemeData(color: divider),
       ),
       child: Scaffold(
-        backgroundColor: AppTheme.darkBackground,
+        backgroundColor: background,
         appBar: AppBar(
-          backgroundColor: AppTheme.darkBackground,
-          foregroundColor: Colors.white,
+          backgroundColor: background,
+          foregroundColor: textColor,
           elevation: 0,
           centerTitle: true,
           title: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                (_sessionTitle ?? 'GlowGuide ✨'),
+                _sessionTitle ?? 'GlowGuide ✨',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: textColor,
                   fontSize: 17,
                   fontWeight: FontWeight.w700,
                 ),
@@ -627,33 +1184,33 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                   _prettyCategory(_category!),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: Colors.white60,
+                  style: TextStyle(
+                    color: subText,
                     fontSize: 11.5,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
             ],
           ),
-          iconTheme: const IconThemeData(color: Colors.white70),
+          iconTheme: IconThemeData(color: subText),
           actions: [
             IconButton(
               tooltip: 'New chat',
               onPressed: _newChat,
-              icon: const Icon(Icons.edit_outlined, color: Colors.white70),
+              icon: Icon(Icons.edit_outlined, color: subText),
             ),
             IconButton(
               tooltip: 'Chat history',
               onPressed: _sending || _restoring ? null : _openHistory,
-              icon: const Icon(Icons.history_outlined, color: Colors.white70),
+              icon: Icon(Icons.history_outlined, color: subText),
             ),
           ],
-          bottom: const PreferredSize(
-            preferredSize: Size.fromHeight(0.5),
+          bottom: PreferredSize(
+            preferredSize: const Size.fromHeight(0.5),
             child: Divider(
               height: 0.5,
               thickness: 0.5,
-              color: Color(0xFF2A2A2E),
+              color: divider,
             ),
           ),
         ),
@@ -661,7 +1218,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
           children: [
             if (!_hasLoadedPreferredLanguage) const SizedBox(height: 8),
             if (_restoring)
-              const Expanded(
+              Expanded(
                 child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -674,11 +1231,11 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                           color: AppTheme.glowGuidePink,
                         ),
                       ),
-                      SizedBox(height: 12),
+                      const SizedBox(height: 12),
                       Text(
                         'Opening last chat…',
                         style: TextStyle(
-                          color: Colors.white70,
+                          color: subText,
                           fontSize: 13.5,
                         ),
                       ),
@@ -690,7 +1247,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
               Expanded(
                 child: ListView.builder(
                   controller: _scroll,
-                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
                   itemCount: _messages.length + (_sending ? 1 : 0),
                   itemBuilder: (context, index) {
                     if (_sending && index == _messages.length) {
@@ -698,7 +1255,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                         padding: const EdgeInsets.only(bottom: 18),
                         child: Align(
                           alignment: Alignment.centerLeft,
-                            child: _webSearchStatus == 'searching'
+                          child: _webSearchStatus == 'searching'
                               ? const _WebSearchBubble()
                               : _processingPhoto
                               ? _PhotoAnalyzingBubble(
@@ -710,404 +1267,13 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                         ),
                       );
                     }
-                    return _messageTile(_messages[index]);
+                    return renderTile(_messages[index]);
                   },
                 ),
               ),
-            const SizedBox(height: 8),
-            _restoring
-                ? const SizedBox.shrink()
-                : _inputBar(),
+            const SizedBox(height: 6),
+            _restoring ? const SizedBox.shrink() : renderInput(),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _messageTile(_GlowMessage message) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 18),
-      child: Align(
-        alignment: message.isUser
-            ? Alignment.centerRight
-            : Alignment.centerLeft,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: MediaQuery.sizeOf(context).width * .82,
-          ),
-          child: Column(
-            crossAxisAlignment: message.isUser
-                ? CrossAxisAlignment.end
-                : CrossAxisAlignment.start,
-            children: [
-              if (message.image != null ||
-                  (message.imageUrl?.isNotEmpty ?? false))
-                Padding(
-                  padding: const EdgeInsets.only(bottom: 8),
-                  child: GestureDetector(
-                    onTap: () {
-                      setState(() {
-                        _attachment = message.image;
-                        _attachmentName = message.imageName;
-                      });
-                      _previewPhoto();
-                    },
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(14),
-                      child: message.image != null
-                          ? Image.memory(
-                              message.image!,
-                              width: 180,
-                              height: 140,
-                              fit: BoxFit.cover,
-                            )
-                          : (message.imageUrl != null
-                                ? Image.network(
-                                    message.imageUrl!,
-                                    width: 180,
-                                    height: 140,
-                                    fit: BoxFit.cover,
-                                  )
-                                : const SizedBox.shrink()),
-                    ),
-                  ),
-                ),
-              if (message.verdict != null) ...[
-                const SizedBox(height: 6),
-                _verdictBadge(message.verdict!),
-                const SizedBox(height: 6),
-              ],
-              if (message.text.isNotEmpty)
-                message.isUser
-                    ? Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF5137ED),
-                          borderRadius: BorderRadius.circular(16),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: Color(0x225137ED),
-                              blurRadius: 10,
-                              offset: Offset(0, 3),
-                            ),
-                          ],
-                        ),
-                        child: Text(
-                          message.text,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 15.5,
-                            height: 1.45,
-                          ),
-                        ),
-                      )
-                    : Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1A1A1D),
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: const Color(0xFF2A2A2E),
-                            width: 0.8,
-                          ),
-                        ),
-                        child: SelectionArea(
-                          child: Text(
-                            message.text,
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 15.5,
-                              height: 1.5,
-                            ),
-                          ),
-                        ),
-                      ),
-              if ((message.confidenceNote ?? '').trim().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Icon(
-                        Icons.info_outline_rounded,
-                        size: 14,
-                        color: Colors.white60,
-                      ),
-                      const SizedBox(width: 6),
-                      Expanded(
-                        child: Text(
-                          message.confidenceNote!,
-                          style: const TextStyle(
-                            color: Colors.white60,
-                            fontSize: 12.5,
-                            fontStyle: FontStyle.italic,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              if ((message.detailedBreakdown ?? '').trim().isNotEmpty) ...[
-                const SizedBox(height: 10),
-                _DetailedBreakdownExpander(
-                  breakdown: message.detailedBreakdown!,
-                ),
-              ],
-              // Chips — no Container wrapper, direct inline
-              if (message.chips.isNotEmpty) ...[
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: message.chips.map((chip) {
-                    final isTypeOwn = chip == _typeOwnOption;
-                    return ActionChip(
-                      label: Text(
-                        chip,
-                        style: TextStyle(
-                          color: isTypeOwn
-                              ? AppTheme.glowGuidePink
-                              : Colors.white,
-                          fontSize: 14,
-                          fontWeight: isTypeOwn
-                              ? FontWeight.w700
-                              : FontWeight.normal,
-                          fontStyle: isTypeOwn
-                              ? FontStyle.italic
-                              : FontStyle.normal,
-                        ),
-                      ),
-                      backgroundColor: const Color(0xFF1C1C1F),
-                      side: const BorderSide(
-                        color: Color(0xFF2A2A2E),
-                        width: 1,
-                      ),
-                      avatar: isTypeOwn
-                          ? Icon(
-                              Icons.edit_outlined,
-                              size: 16,
-                              color: AppTheme.glowGuidePink,
-                            )
-                          : null,
-                      onPressed: _sending || _sessionComplete ? null : () {
-                        if (message.isLanguageChips) {
-                          _selectLanguage(chip);
-                        } else if (message.isConcernChips) {
-                          _selectConcern(chip);
-                        } else {
-                          _selectCategory(chip);
-                        }
-                      },
-                    );
-                  }).toList(),
-                ),
-              ],
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-
-  Widget _verdictBadge(String verdict) {
-    final Color color;
-    final IconData icon;
-    final String label;
-    switch (verdict) {
-      case 'harmful':
-        color = const Color(0xFFE05252);
-        icon = Icons.warning_amber_rounded;
-        label = 'Use with caution';
-        break;
-      case 'good_fit':
-        color = const Color(0xFF40A85C);
-        icon = Icons.check_circle_outline_rounded;
-        label = 'Good fit';
-        break;
-      case 'careful':
-        color = const Color(0xFFCC9A2E);
-        icon = Icons.error_outline_rounded;
-        label = 'Proceed carefully';
-        break;
-      default:
-        return const SizedBox.shrink();
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withValues(alpha: 0.35)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _inputBar() {
-    final hasPhoto = _attachment != null;
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFF1C1C1F),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(
-              color: const Color(0xFF2A2A2E),
-              width: 0.8,
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.25),
-                blurRadius: 12,
-                offset: const Offset(0, 3),
-              ),
-            ],
-          ),
-          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (hasPhoto)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 4, 4, 2),
-                  child: GestureDetector(
-                    onTap: _previewPhoto,
-                    child: Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        ClipRRect(
-                          borderRadius: BorderRadius.circular(10),
-                          child: Image.memory(
-                            _attachment!,
-                            width: 72,
-                            height: 72,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                        Positioned(
-                          top: -7,
-                          right: -7,
-                          child: IconButton(
-                            tooltip: 'Remove photo',
-                            onPressed: () => setState(() {
-                              _attachment = null;
-                              _attachmentName = null;
-                            }),
-                            constraints: const BoxConstraints(
-                              minWidth: 26,
-                              minHeight: 26,
-                            ),
-                            padding: EdgeInsets.zero,
-                            icon: const Icon(
-                              Icons.close_rounded,
-                              size: 16,
-                              color: Colors.white,
-                            ),
-                            style: IconButton.styleFrom(
-                              backgroundColor: const Color(0xFF2A2A2E),
-                              foregroundColor: Colors.white,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 2),
-                    child: Material(
-                      color: Colors.transparent,
-                      child: InkWell(
-                        onTap: _choosePhoto,
-                        borderRadius: BorderRadius.circular(12),
-                        child: const Padding(
-                          padding: EdgeInsets.all(10),
-                          child: Icon(
-                            Icons.camera_alt_outlined,
-                            color: Colors.white70,
-                            size: 22,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 4,
-                        vertical: 4,
-                      ),
-                      child: TextField(
-                        controller: _text,
-                        focusNode: _textFocus,
-                        minLines: 1,
-                        maxLines: 6,
-                        textInputAction: TextInputAction.newline,
-                        onSubmitted: (_) => _send(),
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 15,
-                          height: 1.4,
-                        ),
-                        decoration: const InputDecoration(
-                          hintText: 'Ask about skin, body care, or cloth...',
-                          hintStyle: TextStyle(
-                            color: Colors.white38,
-                            fontSize: 15,
-                          ),
-                          border: InputBorder.none,
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 8,
-                          ),
-                          isCollapsed: true,
-                        ),
-                      ),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.only(left: 2),
-                    child: Material(
-                      color: AppTheme.glowGuidePink,
-                      borderRadius: BorderRadius.circular(12),
-                      child: InkWell(
-                        borderRadius: BorderRadius.circular(12),
-                        onTap: _sending || _sessionComplete ? null : _send,
-                        child: const Padding(
-                          padding: EdgeInsets.all(10),
-                          child: Icon(
-                            Icons.arrow_upward_rounded,
-                            color: Colors.white,
-                            size: 22,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
         ),
       ),
     );
@@ -1124,6 +1290,9 @@ class _GlowMessage {
     this.imageUrl,
     this.isLanguageChips = false,
     this.isConcernChips = false,
+    this.isCategoryChips = false,
+    this.hasCustomInput = false,
+    this.categoryHeaderChips = const [],
     this.verdict,
     this.confidenceNote,
     this.detailedBreakdown,
@@ -1136,6 +1305,9 @@ class _GlowMessage {
   final String? imageUrl;
   final bool isLanguageChips;
   final bool isConcernChips;
+  final bool isCategoryChips;
+  final bool hasCustomInput;
+  final List<String> categoryHeaderChips;
   final String? verdict;
   final String? confidenceNote;
   final String? detailedBreakdown;
@@ -1388,6 +1560,109 @@ class _PreviewAction extends StatelessWidget {
       style: FilledButton.styleFrom(
         backgroundColor: AppTheme.babyPink,
         foregroundColor: AppTheme.babyPinkMaroon,
+      ),
+    );
+  }
+}
+
+class _CustomTopicInput extends StatefulWidget {
+  const _CustomTopicInput({
+    required this.hint,
+    required this.label,
+    required this.onSaved,
+  });
+  final String hint;
+  final String? label;
+  final ValueChanged<String> onSaved;
+
+  @override
+  State<_CustomTopicInput> createState() => _CustomTopicInputState();
+}
+
+class _CustomTopicInputState extends State<_CustomTopicInput> {
+  late final TextEditingController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = TextEditingController(text: widget.label ?? '');
+  }
+
+  @override
+  void didUpdateWidget(covariant _CustomTopicInput oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.label != oldWidget.label &&
+        widget.label != _ctrl.text) {
+      _ctrl.text = widget.label ?? '';
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF1C1C1F) : const Color(0xFFF6F3FB);
+    final border = isDark ? const Color(0xFF2A2A2E) : const Color(0xFFE3DDF3);
+    final textColor = isDark ? Colors.white : const Color(0xFF3C375A);
+    final hintColor = isDark ? Colors.white38 : Colors.black38;
+    final accent = AppTheme.glowGuidePink;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: border, width: 0.9),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 2, 8, 2),
+      child: Row(
+        children: [
+          Icon(Icons.edit_outlined, size: 16, color: accent),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _ctrl,
+              style: TextStyle(color: textColor, fontSize: 14),
+              decoration: InputDecoration(
+                hintText: widget.hint,
+                hintStyle: TextStyle(color: hintColor, fontSize: 13.5),
+                border: InputBorder.none,
+                isCollapsed: true,
+                contentPadding: const EdgeInsets.symmetric(vertical: 12),
+              ),
+              textInputAction: TextInputAction.done,
+              onSubmitted: (value) {
+                widget.onSaved(value.trim());
+              },
+              onChanged: (value) {
+                widget.onSaved(value.trim());
+              },
+            ),
+          ),
+          if ((_ctrl.text.trim().isNotEmpty))
+            TextButton(
+              onPressed: () {
+                widget.onSaved(_ctrl.text.trim());
+              },
+              style: TextButton.styleFrom(
+                foregroundColor: accent,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 6,
+                ),
+                minimumSize: const Size(0, 0),
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text(
+                'Save',
+                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+              ),
+            ),
+        ],
       ),
     );
   }

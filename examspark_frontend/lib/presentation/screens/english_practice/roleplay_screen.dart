@@ -1913,112 +1913,127 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: const Color(0xFF190A5C),
-    body: SafeArea(
-      child: Stack(
-        children: [
-          Positioned(
-            left: 14,
-            top: 8,
-            child: IconButton(
-              onPressed: _leave,
-              icon: const Icon(
-                Icons.arrow_back_ios_new_rounded,
-                color: Colors.white70,
-              ),
-            ),
-          ),
-          Positioned(
-            right: 14,
-            top: 8,
-            child: TextButton.icon(
-              onPressed: _leave,
-              icon: const Icon(Icons.close_rounded, color: Colors.white),
-              label: const Text(
-                'Exit',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? const Color(0xFF190A5C) : const Color(0xFFF0EBFF);
+    final primaryText = isDark ? Colors.white : const Color(0xFF2A1F66);
+    final subText = isDark ? Colors.white70 : const Color(0xFF594AA8);
+    final iconBg = isDark ? const Color(0xFFFEFEFF) : const Color(0xFFFFFFFF);
+    return Scaffold(
+      backgroundColor: bg,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned(
+              left: 14,
+              top: 8,
+              child: IconButton(
+                onPressed: _leave,
+                icon: Icon(
+                  Icons.arrow_back_ios_new_rounded,
+                  color: subText,
                 ),
               ),
             ),
-          ),
-          Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  _openingReply ?? widget.scenario,
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white70),
-                ),
-                const SizedBox(height: 45),
-                GestureDetector(
-                  onTap: toggle,
-                  child: Container(
-                    width: 220,
-                    height: 220,
-                    decoration: const BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: Color(0xFFFEFEFF),
-                    ),
-                    child: Icon(
-                      active ? Icons.mic_rounded : Icons.nights_stay_rounded,
-                      color: _violet,
-                      size: 82,
-                    ),
+            Positioned(
+              right: 14,
+              top: 8,
+              child: TextButton.icon(
+                onPressed: _leave,
+                icon: Icon(Icons.close_rounded, color: primaryText),
+                label: Text(
+                  'Exit',
+                  style: TextStyle(
+                    color: primaryText,
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
-                const SizedBox(height: 80),
-                GestureDetector(
-                  onTap: () => setState(() => showTimer = !showTimer),
-                  child: Text(
-                    showTimer
-                        ? '${elapsed.inMinutes.remainder(60).toString().padLeft(2, '0')}:${elapsed.inSeconds.remainder(60).toString().padLeft(2, '0')}'
-                        : 'Tap to show time',
-                    style: const TextStyle(color: Colors.white, fontSize: 20),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  _listeningHint ??
-                      (!_micEnabled
-                          ? 'Microphone off'
-                          : state == RoleplayVoiceState.aiSpeaking
-                          ? 'AI is speaking…'
-                          : active
-                          ? 'Listening… speak naturally'
-                          : state == RoleplayVoiceState.error
-                          ? 'Tap the moon to retry'
-                          : 'Starting conversation…'),
-                  style: const TextStyle(color: Colors.white70),
-                ),
-                const SizedBox(height: 80),
-                TextButton.icon(
-                  onPressed: sessionId == null ? null : _toggleMic,
-                  icon: Icon(
-                    _micEnabled ? Icons.mic_rounded : Icons.mic_off_rounded,
-                    color: Colors.white,
-                  ),
-                  label: Text(
-                    _micEnabled ? 'Mic ON' : 'Mic OFF',
-                    style: const TextStyle(color: Colors.white),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  active
-                      ? 'Listening automatically\nTap the moon to stop the session'
-                      : 'I’ll listen and reply',
-                  textAlign: TextAlign.center,
-                  style: const TextStyle(color: Colors.white70, fontSize: 16),
-                ),
-              ],
+              ),
             ),
-          ),
-        ],
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Text(
+                    _openingReply ?? widget.scenario,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: subText),
+                  ),
+                  const SizedBox(height: 45),
+                  GestureDetector(
+                    onTap: toggle,
+                    child: Container(
+                      width: 220,
+                      height: 220,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: iconBg,
+                        boxShadow: [
+                          BoxShadow(
+                            color: const Color(0xFF5137ED)
+                                .withOpacity(isDark ? 0.30 : 0.15),
+                            blurRadius: isDark ? 28 : 20,
+                            offset: const Offset(0, 6),
+                          ),
+                        ],
+                      ),
+                      child: Icon(
+                        active ? Icons.mic_rounded : Icons.nights_stay_rounded,
+                        color: _violet,
+                        size: 82,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 80),
+                  GestureDetector(
+                    onTap: () => setState(() => showTimer = !showTimer),
+                    child: Text(
+                      showTimer
+                          ? '${elapsed.inMinutes.remainder(60).toString().padLeft(2, '0')}:${elapsed.inSeconds.remainder(60).toString().padLeft(2, '0')}'
+                          : 'Tap to show time',
+                      style: TextStyle(color: primaryText, fontSize: 20),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    _listeningHint ??
+                        (!_micEnabled
+                            ? 'Microphone off'
+                            : state == RoleplayVoiceState.aiSpeaking
+                            ? 'AI is speaking…'
+                            : active
+                            ? 'Listening… speak naturally'
+                            : state == RoleplayVoiceState.error
+                            ? 'Tap the moon to retry'
+                            : 'Starting conversation…'),
+                    style: TextStyle(color: subText),
+                  ),
+                  const SizedBox(height: 80),
+                  TextButton.icon(
+                    onPressed: sessionId == null ? null : _toggleMic,
+                    icon: Icon(
+                      _micEnabled ? Icons.mic_rounded : Icons.mic_off_rounded,
+                      color: primaryText,
+                    ),
+                    label: Text(
+                      _micEnabled ? 'Mic ON' : 'Mic OFF',
+                      style: TextStyle(color: primaryText),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Text(
+                    active
+                        ? 'Listening automatically\nTap the moon to stop the session'
+                        : 'I’ll listen and reply',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(color: subText, fontSize: 16),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 }

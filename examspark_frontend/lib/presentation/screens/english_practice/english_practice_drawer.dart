@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:examspark_frontend/presentation/core/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_teaching_history_screen.dart';
 
 class EnglishPracticeDrawer extends StatelessWidget {
@@ -19,7 +20,11 @@ class EnglishPracticeDrawer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bg = backgroundColor ?? const Color(0xFF141417);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = backgroundColor ?? (isDark ? const Color(0xFF141417) : const Color(0xFFF7F5F9));
+    final primaryText = AppTheme.getPrimaryText(context);
+    final subText = AppTheme.getSecondaryText(context);
+    final divider = AppTheme.getCardBorder(context);
     return Drawer(
       backgroundColor: bg,
       child: SafeArea(
@@ -29,45 +34,45 @@ class EnglishPracticeDrawer extends StatelessWidget {
             DrawerHeader(
               decoration: BoxDecoration(
                 color: bg,
-                border: const Border(
-                  bottom: BorderSide(color: Color(0xFF2A2A2E), width: 0.5),
+                border: Border(
+                  bottom: BorderSide(color: divider, width: 0.5),
                 ),
               ),
-              child: const Align(
+              child: Align(
                 alignment: Alignment.bottomLeft,
                 child: Text(
                   'English Practice',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.w800,
-                    color: Colors.white,
+                    color: primaryText,
                   ),
                 ),
               ),
             ),
             ListTile(
-              leading: const Icon(Icons.language_rounded, color: Colors.white70),
-              title: const Text(
+              leading: Icon(Icons.language_rounded, color: subText),
+              title: Text(
                 'Current Language',
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(color: primaryText),
               ),
               subtitle: Text(
                 nativeLanguage.isEmpty
                     ? 'Not selected'
                     : '$targetLanguage · $nativeLanguage',
-                style: const TextStyle(color: Colors.white60),
+                style: TextStyle(color: subText),
               ),
               onTap: () {
                 Navigator.pop(context);
                 onChangeLanguage?.call();
               },
             ),
-            const Divider(color: Color(0xFF2A2A2E)),
+            Divider(color: divider),
             ListTile(
-              leading: const Icon(Icons.add_comment_outlined, color: Colors.white70),
-              title: const Text(
+              leading: Icon(Icons.add_comment_outlined, color: subText),
+              title: Text(
                 'New Chat',
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(color: primaryText),
               ),
               onTap: () {
                 Navigator.pop(context);
@@ -75,10 +80,10 @@ class EnglishPracticeDrawer extends StatelessWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.history_rounded, color: Colors.white70),
-              title: const Text(
+              leading: Icon(Icons.history_rounded, color: subText),
+              title: Text(
                 'History',
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(color: primaryText),
               ),
               onTap: () {
                 Navigator.pop(context);
@@ -91,10 +96,10 @@ class EnglishPracticeDrawer extends StatelessWidget {
               },
             ),
             ListTile(
-              leading: const Icon(Icons.close_rounded, color: Colors.white70),
-              title: const Text(
+              leading: Icon(Icons.close_rounded, color: subText),
+              title: Text(
                 'Close',
-                style: TextStyle(color: Colors.white),
+                style: TextStyle(color: primaryText),
               ),
               onTap: () => Navigator.pop(context),
             ),

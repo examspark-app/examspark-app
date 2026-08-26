@@ -53,6 +53,7 @@ class _ChatProcessingIndicatorState extends State<_ChatProcessingIndicator>
   @override
   Widget build(BuildContext context) {
     const color = Color(0xFF5137ED);
+    final subText = AppTheme.getSecondaryText(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
       child: Align(
@@ -74,8 +75,8 @@ class _ChatProcessingIndicatorState extends State<_ChatProcessingIndicator>
                 const SizedBox(width: 8),
                 Text(
                   widget.voice ? 'Converting speech' : 'Thinking',
-                  style: const TextStyle(
-                    color: Colors.white60,
+                  style: TextStyle(
+                    color: subText,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
@@ -170,10 +171,6 @@ class EnglishPracticeScreen extends StatefulWidget {
 class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
     with TickerProviderStateMixin {
   static const violet = Color(0xFF5137ED);
-  static const darkBg = Color(0xFF0F0F0F);
-  static const cardBg = Color(0xFF1A1A1D);
-  static const inputBg = Color(0xFF1C1C1F);
-  static const borderDark = Color(0xFF2A2A2E);
 
   final _text = TextEditingController();
   final _scroll = ScrollController();
@@ -677,209 +674,237 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
   }
 
   @override
-  Widget build(BuildContext context) => Theme(
-    data: Theme.of(context).copyWith(
-      scaffoldBackgroundColor: darkBg,
-      canvasColor: darkBg,
-    ),
-    child: Scaffold(
-      backgroundColor: darkBg,
-      drawer: EnglishPracticeDrawer(
-        nativeLanguage: _nativeLanguage,
-        targetLanguage: _targetLanguage,
-        onChangeLanguage: _changeHelpLanguage,
-        onNewChat: _newChat,
-        backgroundColor: const Color(0xFF141417),
+  Widget build(BuildContext context) {
+    final brightness = Theme.of(context).brightness;
+    final isDark = brightness == Brightness.dark;
+    final scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
+    final drawerBg = isDark ? const Color(0xFF141417) : const Color(0xFFF7F5F9);
+    return Theme(
+      data: Theme.of(context).copyWith(
+        scaffoldBackgroundColor: scaffoldBg,
+        canvasColor: scaffoldBg,
       ),
-      body: SafeArea(
-        child: _loading
-            ? const Center(child: CircularProgressIndicator(color: violet))
-            : _error != null
-            ? Center(
-                child: ElevatedButton(
-                  onPressed: _load,
-                  child: const Text('Retry'),
+      child: Scaffold(
+        backgroundColor: scaffoldBg,
+        drawer: EnglishPracticeDrawer(
+          nativeLanguage: _nativeLanguage,
+          targetLanguage: _targetLanguage,
+          onChangeLanguage: _changeHelpLanguage,
+          onNewChat: _newChat,
+          backgroundColor: drawerBg,
+        ),
+        body: SafeArea(
+          child: _loading
+              ? const Center(child: CircularProgressIndicator(color: violet))
+              : _error != null
+              ? Center(
+                  child: ElevatedButton(
+                    onPressed: _load,
+                    child: const Text('Retry'),
+                  ),
+                )
+              : Column(
+                  children: [
+                    _header(isDark),
+                    Expanded(child: _chat(isDark)),
+                    if (_recording) _soundWaveBar(isDark),
+                    _suggestionPanel(isDark),
+                    _input(isDark),
+                    _practiceMcqPanel(isDark),
+                  ],
                 ),
-              )
-            : Column(
-                children: [
-                  _header(),
-                  Expanded(child: _chat()),
-                  if (_recording) _soundWaveBar(),
-                  _suggestionPanel(),
-                  _input(),
-                  _practiceMcqPanel(),
-                ],
-              ),
+        ),
       ),
-    ),
-  );
+    );
+  }
 
-  Widget _header() => Container(
-    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-    decoration: const BoxDecoration(
-      color: darkBg,
-      border: Border(bottom: BorderSide(color: borderDark, width: 0.5)),
-    ),
-    child: Row(
+  Widget _header(bool isDark) {
+    final primaryText = AppTheme.getPrimaryText(context);
+    final subText = AppTheme.getSecondaryText(context);
+    final divider = AppTheme.getCardBorder(context);
+    final scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      decoration: BoxDecoration(
+        color: scaffoldBg,
+        border: Border(bottom: BorderSide(color: divider, width: 0.5)),
+      ),
+      child: Row(
+        children: [
+          Builder(
+            builder: (context) => IconButton(
+              onPressed: () => Scaffold.of(context).openDrawer(),
+              icon: Icon(Icons.menu_rounded, size: 26, color: subText),
+              tooltip: 'Open menu',
+            ),
+          ),
+          const SizedBox(width: 4),
+          Text(
+            'English Practice',
+            style: TextStyle(
+              color: primaryText,
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const Spacer(),
+          FilledButton.icon(
+            onPressed: () => Navigator.pushNamed(context, '/glow-guide'),
+            style: FilledButton.styleFrom(
+              backgroundColor: violet,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              minimumSize: const Size(0, 38),
+            ),
+            icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+            label: const Text(
+              'Skin Care',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+          const SizedBox(width: 8),
+          FilledButton(
+            onPressed: _roleplay,
+            style: FilledButton.styleFrom(
+              backgroundColor: violet,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+              minimumSize: const Size(0, 38),
+            ),
+            child: const Text(
+              'Roleplay',
+              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _chat(bool isDark) {
+    final cardBg = AppTheme.getCardBackground(context);
+    final cardBorder = AppTheme.getCardBorder(context);
+    final primaryText = AppTheme.getPrimaryText(context);
+    return Stack(
       children: [
-        Builder(
-          builder: (context) => IconButton(
-            onPressed: () => Scaffold.of(context).openDrawer(),
-            icon: const Icon(Icons.menu_rounded, size: 26, color: Colors.white70),
-            tooltip: 'Open menu',
-          ),
-        ),
-        const SizedBox(width: 4),
-        const Text(
-          'English Practice',
-          style: TextStyle(
-            color: Colors.white,
-            fontSize: 17,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const Spacer(),
-        FilledButton.icon(
-          onPressed: () => Navigator.pushNamed(context, '/glow-guide'),
-          style: FilledButton.styleFrom(
-            backgroundColor: violet,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            minimumSize: const Size(0, 38),
-          ),
-          icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-          label: const Text(
-            'Skin Care',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-          ),
-        ),
-        const SizedBox(width: 8),
-        FilledButton(
-          onPressed: _roleplay,
-          style: FilledButton.styleFrom(
-            backgroundColor: violet,
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(12),
-            ),
-            minimumSize: const Size(0, 38),
-          ),
-          child: const Text(
-            'Roleplay',
-            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-          ),
+        ListView.builder(
+          controller: _scroll,
+          padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
+          itemCount: _messages.length + (_sending ? 1 : 0),
+          itemBuilder: (_, i) {
+            if (i == _messages.length)
+              return Padding(
+                padding: const EdgeInsets.all(12),
+                child: Align(
+                  alignment: Alignment.centerLeft,
+                  child: _ChatProcessingIndicator(voice: _processingVoice),
+                ),
+              );
+            final m = _messages[i];
+            if (!m.isUser) {
+              return Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+                  child: Container(
+                    constraints: BoxConstraints(
+                      maxWidth: MediaQuery.sizeOf(context).width * .80,
+                    ),
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: cardBg,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: cardBorder, width: 0.8),
+                      boxShadow: isDark
+                          ? null
+                          : [
+                              BoxShadow(
+                                color: const Color(0xFF000000).withOpacity(0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                    ),
+                    child: SelectionArea(
+                      child: Text(
+                        m.text,
+                        style: TextStyle(
+                          color: primaryText,
+                          fontSize: 15.5,
+                          height: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }
+            return Align(
+              alignment: Alignment.centerRight,
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.sizeOf(context).width * .76,
+                ),
+                margin: const EdgeInsets.only(bottom: 16),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: violet,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: violet.withOpacity(isDark ? 0.22 : 0.14),
+                      blurRadius: 12,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (m.imageUrl != null && m.imageUrl!.isNotEmpty)
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.network(
+                          m.imageUrl!,
+                          width: 220,
+                          height: 160,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    if (m.imageUrl != null && m.imageUrl!.isNotEmpty)
+                      const SizedBox(height: 8),
+                    SelectionArea(
+                      child: Text(
+                        m.text,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15.5,
+                          height: 1.45,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         ),
       ],
-    ),
-  );
+    );
+  }
 
-  Widget _chat() => Stack(
-    children: [
-      ListView.builder(
-        controller: _scroll,
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
-        itemCount: _messages.length + (_sending ? 1 : 0),
-        itemBuilder: (_, i) {
-          if (i == _messages.length)
-            return Padding(
-              padding: const EdgeInsets.all(12),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: _ChatProcessingIndicator(voice: _processingVoice),
-              ),
-            );
-          final m = _messages[i];
-          if (!m.isUser) {
-            return Align(
-              alignment: Alignment.centerLeft,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
-                child: Container(
-                  constraints: BoxConstraints(
-                    maxWidth: MediaQuery.sizeOf(context).width * .80,
-                  ),
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: cardBg,
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: borderDark, width: 0.8),
-                  ),
-                  child: SelectionArea(
-                    child: Text(
-                      m.text,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15.5,
-                        height: 1.5,
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            );
-          }
-          return Align(
-            alignment: Alignment.centerRight,
-            child: Container(
-              constraints: BoxConstraints(
-                maxWidth: MediaQuery.sizeOf(context).width * .76,
-              ),
-              margin: const EdgeInsets.only(bottom: 16),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: violet,
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: const [
-                  BoxShadow(
-                    color: Color(0x225137ED),
-                    blurRadius: 12,
-                    offset: Offset(0, 4),
-                  ),
-                ],
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (m.imageUrl != null && m.imageUrl!.isNotEmpty)
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(12),
-                      child: Image.network(
-                        m.imageUrl!,
-                        width: 220,
-                        height: 160,
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  if (m.imageUrl != null && m.imageUrl!.isNotEmpty)
-                    const SizedBox(height: 8),
-                  SelectionArea(
-                    child: Text(
-                      m.text,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 15.5,
-                        height: 1.45,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    ],
-  );
-
-  Widget _soundWaveBar() => AnimatedBuilder(
+  Widget _soundWaveBar(bool isDark) => AnimatedBuilder(
     animation: _waveController,
     builder: (context, _) {
       final intensity = _voiceActive ? 1.0 : 0.35;
+      final subText = isDark ? Colors.white60 : Colors.black54;
+      final idleBar = isDark ? Colors.white24 : Colors.black26;
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
         child: Row(
@@ -900,7 +925,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                 decoration: BoxDecoration(
                   color: _voiceActive
                       ? HSLColor.fromAHSL(1, (i * 12 + 280) % 360, 0.7, 0.6).toColor()
-                      : Colors.white30,
+                      : idleBar,
                   borderRadius: BorderRadius.circular(2),
                 ),
               ),
@@ -909,8 +934,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             const SizedBox(width: 6),
             Text(
               RecordingService.instance.formattedDuration,
-              style: const TextStyle(
-                color: Colors.white60,
+              style: TextStyle(
+                color: subText,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -921,7 +946,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
     },
   );
 
-  Widget _suggestionPanel() {
+  Widget _suggestionPanel(bool isDark) {
     if (_suggestions.isEmpty) return const SizedBox.shrink();
     final count = _suggestions.length > 2 ? 2 : _suggestions.length;
     final icons = [
@@ -931,13 +956,17 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       Icons.chat_bubble_outline_rounded,
       Icons.record_voice_over_outlined,
     ];
+    final cardBg = AppTheme.getCardBackground(context);
+    final cardBorder = AppTheme.getCardBorder(context);
+    final inputBg = AppTheme.getInputBackground(context);
+    final primaryText = AppTheme.getPrimaryText(context);
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderDark),
+        border: Border.all(color: cardBorder),
       ),
       child: Wrap(
         spacing: 8,
@@ -958,7 +987,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                 decoration: BoxDecoration(
                   color: inputBg,
                   borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: borderDark),
+                  border: Border.all(color: cardBorder),
                 ),
                 child: Row(
                   children: [
@@ -967,8 +996,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                     Expanded(
                       child: Text(
                         _suggestions[i],
-                        style: const TextStyle(
-                          color: Colors.white,
+                        style: TextStyle(
+                          color: primaryText,
                           fontWeight: FontWeight.w500,
                           fontSize: 13,
                           overflow: TextOverflow.ellipsis,
@@ -984,18 +1013,32 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
     );
   }
 
-  Widget _practiceMcqPanel() {
+  Widget _practiceMcqPanel(bool isDark) {
     final mcq = _currentMcq;
     if (mcq == null || _sending) return const SizedBox.shrink();
     final selectedIndex = _mcqSelectedIndex;
     final optionLetters = ['A', 'B', 'C'];
+    final cardBg = AppTheme.getCardBackground(context);
+    final cardBorder = AppTheme.getCardBorder(context);
+    final inputBg = AppTheme.getInputBackground(context);
+    final primaryText = AppTheme.getPrimaryText(context);
+    final subText = AppTheme.getSecondaryText(context);
+    final correctBg = isDark ? const Color(0xFF1B3A26) : const Color(0xFFE6F6EA);
+    final correctBorder = const Color(0xFF40A85C);
+    final correctLetterBg = isDark ? const Color(0xFF26603A) : const Color(0xFFC8ECD4);
+    final correctLetter = isDark ? const Color(0xFF7BD99C) : const Color(0xFF26603A);
+    final wrongBg = isDark ? const Color(0xFF3A1B1B) : const Color(0xFFFBE9E9);
+    final wrongBorder = const Color(0xFFE05252);
+    final wrongLetterBg = isDark ? const Color(0xFF602626) : const Color(0xFFF5CCCC);
+    final wrongLetter = isDark ? const Color(0xFFFF8A8A) : const Color(0xFFA42121);
+    final feedbackSub = isDark ? Colors.white54 : Colors.black54;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderDark),
+        border: Border.all(color: cardBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1005,7 +1048,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: violet.withOpacity(.18),
+                  color: violet.withOpacity(isDark ? .22 : .12),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
@@ -1016,7 +1059,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                     Text(
                       'Practice Question',
                       style: TextStyle(
-                        color: violet.withOpacity(.95),
+                        color: violet.withOpacity(isDark ? .95 : 1),
                         fontWeight: FontWeight.w800,
                         fontSize: 12,
                       ),
@@ -1028,11 +1071,11 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
               InkWell(
                 onTap: () => setState(() => _currentMcq = null),
                 borderRadius: BorderRadius.circular(14),
-                child: const Padding(
-                  padding: EdgeInsets.all(5),
+                child: Padding(
+                  padding: const EdgeInsets.all(5),
                   child: Icon(
                     Icons.close_rounded,
-                    color: Colors.white54,
+                    color: subText,
                     size: 19,
                   ),
                 ),
@@ -1044,10 +1087,10 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             padding: const EdgeInsets.symmetric(horizontal: 3),
             child: Text(
               mcq.question,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w600,
-                color: Colors.white,
+                color: primaryText,
                 height: 1.4,
               ),
             ),
@@ -1068,19 +1111,19 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                   color: selectedIndex == null
                       ? inputBg
                       : i == mcq.correctOption
-                      ? const Color(0xFF1B3A26)
+                      ? correctBg
                       : i == selectedIndex
-                      ? const Color(0xFF3A1B1B)
+                      ? wrongBg
                       : inputBg,
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: selectedIndex == null
-                        ? borderDark
+                        ? cardBorder
                         : i == mcq.correctOption
-                        ? const Color(0xFF40A85C)
+                        ? correctBorder
                         : i == selectedIndex
-                        ? const Color(0xFFE05252)
-                        : borderDark,
+                        ? wrongBorder
+                        : cardBorder,
                     width: i == mcq.correctOption || i == selectedIndex ? 1.3 : 0.8,
                   ),
                 ),
@@ -1092,12 +1135,12 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: selectedIndex == null
-                            ? violet.withOpacity(.14)
+                            ? violet.withOpacity(isDark ? .18 : .12)
                             : i == mcq.correctOption
-                            ? const Color(0xFF26603A)
+                            ? correctLetterBg
                             : i == selectedIndex
-                            ? const Color(0xFF602626)
-                            : violet.withOpacity(.14),
+                            ? wrongLetterBg
+                            : violet.withOpacity(isDark ? .18 : .12),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -1106,9 +1149,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                           color: selectedIndex == null
                               ? violet
                               : i == mcq.correctOption
-                              ? const Color(0xFF7BD99C)
+                              ? correctLetter
                               : i == selectedIndex
-                              ? const Color(0xFFFF8A8A)
+                              ? wrongLetter
                               : violet,
                           fontSize: 13,
                           fontWeight: FontWeight.w900,
@@ -1119,10 +1162,10 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                     Expanded(
                       child: Text(
                         mcq.options[i],
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: Colors.white,
+                          color: primaryText,
                           height: 1.3,
                         ),
                       ),
@@ -1136,8 +1179,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                               ? Icons.check_circle_outline
                               : Icons.cancel_outlined,
                           color: i == mcq.correctOption
-                              ? const Color(0xFF7BD99C)
-                              : const Color(0xFFFF8A8A),
+                              ? correctBorder
+                              : wrongBorder,
                           size: 20,
                         ),
                       ),
@@ -1156,20 +1199,20 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                     : 'Not quite. The highlighted green sentence is correct.',
                 style: TextStyle(
                   color: selectedIndex == mcq.correctOption
-                      ? const Color(0xFF7BD99C)
-                      : const Color(0xFFFF8A8A),
+                      ? correctBorder
+                      : wrongBorder,
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                 ),
               ),
             ),
           if (selectedIndex != null) const SizedBox(height: 5),
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 3),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 3),
             child: Text(
               'Tap an option above, or type your own answer below · Always optional',
               style: TextStyle(
-                color: Colors.white54,
+                color: feedbackSub,
                 fontSize: 11.5,
                 fontWeight: FontWeight.w600,
               ),
@@ -1180,73 +1223,82 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
     );
   }
 
-  Widget _input() => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-    child: Container(
-      decoration: BoxDecoration(
-        color: inputBg,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(
-          color: _recording ? Colors.redAccent.withOpacity(0.5) : borderDark,
-          width: _recording ? 1.2 : 0.8,
+  Widget _input(bool isDark) {
+    final inputBg = AppTheme.getInputBackground(context);
+    final cardBorder = AppTheme.getCardBorder(context);
+    final primaryText = AppTheme.getPrimaryText(context);
+    final subText = AppTheme.getSecondaryText(context);
+    final shadowColor = isDark ? Colors.black : const Color(0xFF3A2B7B);
+    final shadowOpacity = isDark ? 0.25 : 0.06;
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      child: Container(
+        decoration: BoxDecoration(
+          color: inputBg,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: _recording ? Colors.redAccent.withOpacity(0.5) : cardBorder,
+            width: _recording ? 1.2 : 0.8,
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: shadowColor.withOpacity(shadowOpacity),
+              blurRadius: 12,
+              offset: const Offset(0, 3),
+            ),
+          ],
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.25),
-            blurRadius: 12,
-            offset: const Offset(0, 3),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          _smallIconBtn(
-            Icons.photo_library_outlined,
-            _pickPhoto,
-            tooltip: 'Attach photo',
-          ),
-          _pressHoldMicBtn(),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-              child: TextField(
-                controller: _text,
-                onSubmitted: (_) => _send(),
-                textInputAction: TextInputAction.newline,
-                minLines: 1,
-                maxLines: 6,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  height: 1.4,
-                ),
-                decoration: const InputDecoration(
-                  hintText: 'Message...',
-                  hintStyle: TextStyle(color: Colors.white38, fontSize: 15),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 8,
+        padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: [
+            _smallIconBtn(
+              Icons.photo_library_outlined,
+              _pickPhoto,
+              tooltip: 'Attach photo',
+              subText: subText,
+            ),
+            _pressHoldMicBtn(isDark, subText),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                child: TextField(
+                  controller: _text,
+                  onSubmitted: (_) => _send(),
+                  textInputAction: TextInputAction.newline,
+                  minLines: 1,
+                  maxLines: 6,
+                  style: TextStyle(
+                    color: primaryText,
+                    fontSize: 15,
+                    height: 1.4,
                   ),
-                  isCollapsed: true,
+                  decoration: InputDecoration(
+                    hintText: 'Message...',
+                    hintStyle: TextStyle(color: subText, fontSize: 15),
+                    border: InputBorder.none,
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 8,
+                    ),
+                    isCollapsed: true,
+                  ),
                 ),
               ),
             ),
-          ),
-          AiModelSelector(
-            selectedModel: _selectedTextModel,
-            onSelected: _changeTextModel,
-          ),
-          const SizedBox(width: 4),
-          _sendBtn(),
-        ],
+            AiModelSelector(
+              selectedModel: _selectedTextModel,
+              onSelected: _changeTextModel,
+            ),
+            const SizedBox(width: 4),
+            _sendBtn(),
+          ],
+        ),
       ),
-    ),
-  );
+    );
+  }
 
-  Widget _smallIconBtn(IconData icon, VoidCallback? tap, {String? tooltip}) =>
+  Widget _smallIconBtn(IconData icon, VoidCallback? tap, {String? tooltip, Color? subText}) =>
     Padding(
       padding: const EdgeInsets.symmetric(horizontal: 2),
       child: Material(
@@ -1258,7 +1310,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             padding: const EdgeInsets.all(10),
             child: Icon(
               icon,
-              color: Colors.white70,
+              color: subText ?? Colors.white70,
               size: 22,
             ),
           ),
@@ -1266,7 +1318,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       ),
     );
 
-  Widget _pressHoldMicBtn() => Listener(
+  Widget _pressHoldMicBtn(bool isDark, Color subText) => Listener(
     onPointerDown: (_) {
       unawaited(_startRecording());
     },
@@ -1302,7 +1354,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             ),
             child: Icon(
               _recording ? Icons.mic_rounded : Icons.mic_none_rounded,
-              color: _recording ? Colors.redAccent.shade200 : Colors.white70,
+              color: _recording ? Colors.redAccent.shade200 : subText,
               size: 22,
             ),
           ),
