@@ -33,6 +33,10 @@ class AppTheme {
   static const Color glowGuidePurple = Color(0xFF7C4DFF);
   static const Color glowGuidePurpleLighter = Color(0xFF9D75FF); // ~15% lighter for gradient
 
+  // GlowGuide chat screen — baby-pink accent (same in light & dark mode)
+  static const Color glowGuidePink = Color(0xFFF48FB1);       // Material pink 300
+  static const Color glowGuidePinkLight = Color(0xFFF8BBD0);  // Material pink 200
+
   // Logo gradient — use for primary CTA buttons via BoxDecoration
   static const LinearGradient accentGradient = LinearGradient(
     colors: [accentColorStart, accentColorEnd],

@@ -51,17 +51,22 @@ class SupabaseClient {
   }
 
   /// Google OAuth.
+  ///
   /// Web: redirects the SAME browser tab to Google, then back — never opens
   /// a new tab (that was the earlier bug causing a "white page" on the old
   /// tab while a second tab reloaded the app from scratch).
-  /// Mobile: opens the external browser/app, as required by OAuth on native.
+  ///
+  /// Mobile: uses `inAppBrowserView` = Chrome Custom Tabs (Android) /
+  /// SFSafariViewController (iOS). The user never "leaves" the app — the
+  /// auth page overlays the app, and the deep-link callback returns
+  /// directly back into the same app session (no external browser switch).
   Future<void> signInWithGoogle() async {
     await client.auth.signInWithOAuth(
       supabase.OAuthProvider.google,
       redirectTo: _oauthRedirectUrl(),
       authScreenLaunchMode: kIsWeb
           ? supabase.LaunchMode.platformDefault
-          : supabase.LaunchMode.externalApplication,
+          : supabase.LaunchMode.inAppBrowserView,
     );
   }
 

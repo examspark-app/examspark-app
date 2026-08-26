@@ -38,36 +38,69 @@ class _GlowGuideRotatingButtonState extends State<GlowGuideRotatingButton> {
     super.dispose();
   }
 
+  static const Color _purpleBrand = Color(0xFF7C4DFF);
+  static const Color _purpleBrandDeep = Color(0xFF651FFF);
+
   @override
   Widget build(BuildContext context) {
-    return OutlinedButton.icon(
-      onPressed: widget.onTap,
-      icon: const Icon(Icons.eco_outlined, size: 17),
-      label: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 280),
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, .35),
-              end: Offset.zero,
-            ).animate(animation),
-            child: child,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [_purpleBrand, _purpleBrandDeep],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        boxShadow: [
+          BoxShadow(
+            color: _purpleBrand.withValues(alpha: 0.25),
+            blurRadius: 8,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(18),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: widget.onTap,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 9),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.eco_outlined, size: 16, color: Colors.white),
+                const SizedBox(width: 6),
+                AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 280),
+                  transitionBuilder: (child, animation) => FadeTransition(
+                    opacity: animation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: const Offset(0, .35),
+                        end: Offset.zero,
+                      ).animate(animation),
+                      child: child,
+                    ),
+                  ),
+                  child: Text(
+                    labels[_index],
+                    key: ValueKey(labels[_index]),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12.5,
+                      height: 1.15,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
-        child: Text(
-          labels[_index],
-          key: ValueKey(labels[_index]),
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-      ),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: AppTheme.glowGuidePurple,
-        side: const BorderSide(color: AppTheme.glowGuidePurple),
-        padding: const EdgeInsets.symmetric(horizontal: 10),
-        minimumSize: const Size(0, 40),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       ),
     );
   }

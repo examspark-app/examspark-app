@@ -73,47 +73,30 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   @override
   void initState() {
     super.initState();
-    _loadPreferredLanguage();
+    _showLanguageChoice();
   }
 
-  Future<void> _showLanguageChoice() async {
+  void _showLanguageChoice() {
     if (!mounted) return;
-    final controller = TextEditingController();
-    final choice = await showDialog<String>(
-      context: context,
-      barrierDismissible: false,
-      builder: (dialogContext) => AlertDialog(
-        title: const Text("What's your language choice?"),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          textInputAction: TextInputAction.done,
-          onSubmitted: (_) => Navigator.pop(dialogContext, controller.text),
-          decoration: const InputDecoration(
-            hintText: 'Type a language, or leave blank for English',
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () => Navigator.pop(dialogContext, controller.text),
-            child: const Text('Continue'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (!mounted) return;
-    final language = (choice ?? '').trim();
     setState(() {
-      _preferredLanguage = language.isEmpty ? 'English' : language;
       _hasLoadedPreferredLanguage = true;
+      _messages.add(
+        _GlowMessage(
+          'Which language would you like to chat in?',
+          false,
+          chips: const ['English', 'Hindi', 'Bengali', 'Auto-detect'],
+          isLanguageChips: true,
+        ),
+      );
     });
-    await _savePreferredLanguage(_preferredLanguage);
-    if (mounted) _showCategoryChoices();
   }
 
-  Future<void> _loadPreferredLanguage() async {
-    await _showLanguageChoice();
+  Future<void> _selectLanguage(String label) async {
+    if (_sending) return;
+    final lang = label == 'Auto-detect' ? 'MATCH_QUESTION' : label;
+    setState(() => _preferredLanguage = lang);
+    await _savePreferredLanguage(lang);
+    if (mounted) _showCategoryChoices();
   }
 
   Future<void> _savePreferredLanguage(String value) async {
@@ -348,6 +331,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
             chips: options,
             verdict: result['verdict'] as String?,
             confidenceNote: result['confidence_note'] as String?,
+            detailedBreakdown: result['detailed_breakdown'] as String?,
           ),
         );
         _sending = false;
@@ -495,19 +479,19 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
       appBar: AppBar(
         title: Text(
           _category == null
-              ? 'Skin Care AI 🌿'
-              : 'Skin Care AI 🌿 · $_category',
+              ? 'GlowGuide ✨'
+              : 'GlowGuide ✨ · ${_category!}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
         ),
         actions: [
           IconButton(
-            tooltip: 'New Skin Care AI chat',
+            tooltip: 'New chat',
             onPressed: _newChat,
-            icon: const Icon(Icons.add_comment_outlined),
+            icon: const Icon(Icons.edit_outlined),
           ),
           IconButton(
-            tooltip: 'Skin Care AI history',
+            tooltip: 'Chat history',
             onPressed: _sending ? null : _openHistory,
             icon: const Icon(Icons.history_outlined),
           ),
@@ -600,17 +584,41 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                 _verdictBadge(message.verdict!),
               ],
               if (message.text.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-                  child: Text(
-                    message.text,
-                    style: TextStyle(
-                      color: AppTheme.getPrimaryText(context),
-                      fontSize: 16,
-                      height: 1.5,
-                    ),
-                  ),
-                ),
+                message.isUser
+                    // User message — light grey pill
+                    ? Container(
+                        margin: const EdgeInsets.only(top: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 14,
+                          vertical: 10,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white.withValues(alpha: 0.1)
+                              : Colors.black.withValues(alpha: 0.06),
+                          borderRadius: BorderRadius.circular(18),
+                        ),
+                        child: Text(
+                          message.text,
+                          style: TextStyle(
+                            color: AppTheme.getPrimaryText(context),
+                            fontSize: 15,
+                            height: 1.45,
+                          ),
+                        ),
+                      )
+                    // AI message — plain text, no background
+                    : Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
+                        child: Text(
+                          message.text,
+                          style: TextStyle(
+                            color: AppTheme.getPrimaryText(context),
+                            fontSize: 16,
+                            height: 1.5,
+                          ),
+                        ),
+                      ),
               if ((message.confidenceNote ?? '').trim().isNotEmpty)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
@@ -636,63 +644,61 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                     ],
                   ),
                 ),
+              if ((message.detailedBreakdown ?? '').trim().isNotEmpty) ...[
+                const SizedBox(height: 10),
+                _DetailedBreakdownExpander(
+                  breakdown: message.detailedBreakdown!,
+                ),
+              ],
+              // Chips — no Container wrapper, direct inline
               if (message.chips.isNotEmpty) ...[
                 const SizedBox(height: 10),
-                Container(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(15),
-                    border: Border.all(
-                      color: AppTheme.getCardBorder(context),
-                      width: 1,
-                    ),
-                    color: AppTheme.getCardBackground(context),
-                  ),
-                  padding: const EdgeInsets.all(12),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: message.chips.map((chip) {
-                      final isTypeOwn = chip == _typeOwnOption;
-                      return ActionChip(
-                        label: Text(
-                          chip,
-                          style: TextStyle(
-                            color: isTypeOwn
-                                ? AppTheme.glowGuidePurple
-                                : AppTheme.getPrimaryText(context),
-                            fontSize: 14,
-                            fontWeight: isTypeOwn
-                                ? FontWeight.w700
-                                : FontWeight.normal,
-                            fontStyle: isTypeOwn
-                                ? FontStyle.italic
-                                : FontStyle.normal,
-                          ),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: message.chips.map((chip) {
+                    final isTypeOwn = chip == _typeOwnOption;
+                    return ActionChip(
+                      label: Text(
+                        chip,
+                        style: TextStyle(
+                          color: isTypeOwn
+                              ? AppTheme.glowGuidePink
+                              : AppTheme.getPrimaryText(context),
+                          fontSize: 14,
+                          fontWeight: isTypeOwn
+                              ? FontWeight.w700
+                              : FontWeight.normal,
+                          fontStyle: isTypeOwn
+                              ? FontStyle.italic
+                              : FontStyle.normal,
                         ),
-                        backgroundColor: AppTheme.getCardBackground(context),
-                        side: BorderSide(
-                          color: AppTheme.glowGuidePurple.withValues(
-                            alpha: isTypeOwn ? 0.55 : 0.3,
-                          ),
-                          width: 1,
-                        ),
-                        avatar: Icon(
-                          isTypeOwn
-                              ? Icons.edit_outlined
-                              : _iconFor(chip),
-                          size: 16,
-                          color: AppTheme.glowGuidePurple,
-                        ),
-                        onPressed: _sending || _sessionComplete ? null : () {
-                          if (message.isConcernChips) {
-                            _selectConcern(chip);
-                          } else {
-                            _selectCategory(chip);
-                          }
-                        },
-                      );
-                    }).toList(),
-                  ),
+                      ),
+                      backgroundColor: Colors.transparent,
+                      side: BorderSide(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white.withValues(alpha: 0.2)
+                            : Colors.black.withValues(alpha: 0.12),
+                        width: 1,
+                      ),
+                      avatar: isTypeOwn
+                          ? Icon(
+                              Icons.edit_outlined,
+                              size: 16,
+                              color: AppTheme.glowGuidePink,
+                            )
+                          : null,
+                      onPressed: _sending || _sessionComplete ? null : () {
+                        if (message.isLanguageChips) {
+                          _selectLanguage(chip);
+                        } else if (message.isConcernChips) {
+                          _selectConcern(chip);
+                        } else {
+                          _selectCategory(chip);
+                        }
+                      },
+                    );
+                  }).toList(),
                 ),
               ],
             ],
@@ -702,12 +708,6 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     );
   }
 
-  IconData _iconFor(String value) {
-    for (final category in _categories) {
-      if (category.$1 == value) return category.$2;
-    }
-    return Icons.check_rounded;
-  }
 
   Widget _verdictBadge(String verdict) {
     final Color color;
@@ -835,19 +835,17 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                   IconButton(
                     tooltip: 'Send',
                       onPressed: _sending || _sessionComplete ? null : _send,
-                    icon: ShaderMask(
-                      shaderCallback: (bounds) => LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          AppTheme.glowGuidePurpleLighter,
-                          AppTheme.glowGuidePurple,
-                        ],
-                      ).createShader(bounds),
+                    icon: Container(
+                      width: 36,
+                      height: 36,
+                      decoration: const BoxDecoration(
+                        color: AppTheme.glowGuidePink,
+                        shape: BoxShape.circle,
+                      ),
                       child: const Icon(
                         Icons.arrow_upward_rounded,
                         color: Colors.white,
-                        size: 24,
+                        size: 20,
                       ),
                     ),
                   ),
@@ -869,9 +867,11 @@ class _GlowMessage {
     this.image,
     this.imageName,
     this.imageUrl,
+    this.isLanguageChips = false,
     this.isConcernChips = false,
     this.verdict,
     this.confidenceNote,
+    this.detailedBreakdown,
   });
   final String text;
   final bool isUser;
@@ -879,9 +879,100 @@ class _GlowMessage {
   final Uint8List? image;
   final String? imageName;
   final String? imageUrl;
+  final bool isLanguageChips;
   final bool isConcernChips;
   final String? verdict;
   final String? confidenceNote;
+  final String? detailedBreakdown;
+}
+
+class _DetailedBreakdownExpander extends StatefulWidget {
+  const _DetailedBreakdownExpander({required this.breakdown});
+
+  final String breakdown;
+
+  @override
+  State<_DetailedBreakdownExpander> createState() =>
+      _DetailedBreakdownExpanderState();
+}
+
+class _DetailedBreakdownExpanderState
+    extends State<_DetailedBreakdownExpander>
+    with SingleTickerProviderStateMixin {
+  bool _expanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        InkWell(
+          onTap: () => setState(() => _expanded = !_expanded),
+          borderRadius: BorderRadius.circular(10),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(
+                color: AppTheme.glowGuidePink.withValues(alpha: 0.5),
+              ),
+              color: AppTheme.glowGuidePink.withValues(alpha: 0.06),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  _expanded
+                      ? Icons.expand_less_rounded
+                      : Icons.manage_search_rounded,
+                  size: 16,
+                  color: AppTheme.glowGuidePink,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  _expanded ? 'Hide breakdown' : '  See detailed breakdown',
+                  style: const TextStyle(
+                    color: AppTheme.glowGuidePink,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        AnimatedCrossFade(
+          duration: const Duration(milliseconds: 250),
+          crossFadeState: _expanded
+              ? CrossFadeState.showSecond
+              : CrossFadeState.showFirst,
+          firstChild: const SizedBox.shrink(),
+          secondChild: Padding(
+            padding: const EdgeInsets.only(top: 10),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(12),
+                color: AppTheme.glowGuidePink.withValues(alpha: 0.04),
+                border: Border.all(
+                  color: AppTheme.glowGuidePink.withValues(alpha: 0.2),
+                ),
+              ),
+              child: Text(
+                widget.breakdown,
+                style: TextStyle(
+                  color: AppTheme.getPrimaryText(context),
+                  fontSize: 14,
+                  height: 1.6,
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
 }
 
 class _WebSearchBubble extends StatelessWidget {
@@ -950,7 +1041,7 @@ class _PurpleTypingDotsState extends State<_PurpleTypingDots>
               opacity: 0.35 + (phase * 0.65),
               child: const CircleAvatar(
                 radius: 4,
-                backgroundColor: Color(0xFF7C4DFF),
+                backgroundColor: AppTheme.glowGuidePink,
               ),
             ),
           );
@@ -1011,7 +1102,7 @@ class _PhotoAnalyzingBubbleState extends State<_PhotoAnalyzingBubble>
               top: _controller.value * 88,
               left: 0,
               right: 0,
-              child: Container(height: 3, color: const Color(0xFF7C4DFF)),
+              child: Container(height: 3, color: AppTheme.glowGuidePink),
             ),
           ],
         ),

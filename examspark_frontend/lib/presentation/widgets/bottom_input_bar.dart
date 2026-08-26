@@ -263,26 +263,36 @@ class _BottomInputBarState extends State<BottomInputBar> {
     final isLight = Theme.of(context).brightness == Brightness.light;
     final actionColor = _actionColor(context);
     final actionIconColor = _actionIconColor(context);
+    final muted = isLight ? Colors.black54 : Colors.white60;
 
     final canSend =
         (_hasText || _hasAttachment || _hasReply) && !widget.isSending;
 
+    final pillBg = isLight ? Colors.white : const Color(0xFF1C1C1E);
+    final pillBorder =
+        isLight ? const Color(0xFFDDDDDD) : const Color(0xFF3A3A3C);
+
     return SafeArea(
       top: false,
       child: Container(
-        padding: const EdgeInsets.fromLTRB(12, 10, 12, 14),
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
         color: Theme.of(context).scaffoldBackgroundColor,
         child: Container(
-          padding: const EdgeInsets.fromLTRB(16, 16, 12, 12),
+          padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
           decoration: BoxDecoration(
-            color: isLight ? Colors.white : const Color(0xFF1A1A1A),
-            borderRadius: BorderRadius.circular(26),
+            color: pillBg,
+            borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: isLight
-                  ? const Color(0xFFD9D9D9)
-                  : const Color(0xFF333333),
-              width: 1.2,
+              color: pillBorder,
+              width: 1.1,
             ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isLight ? 0.04 : 0.30),
+                blurRadius: 14,
+                offset: const Offset(0, -2),
+              ),
+            ],
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -291,37 +301,125 @@ class _BottomInputBarState extends State<BottomInputBar> {
 
               if (_hasAttachment) _buildAttachmentChip(context),
 
-              ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 160),
-                child: TextField(
-                  controller: _controller,
-                  minLines: 2,
-                  maxLines: 6,
-                  textInputAction: TextInputAction.send,
-                  onSubmitted: (_) => _handleSend(),
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: AppTheme.getPrimaryText(context),
-                  ),
-                  decoration: InputDecoration(
-                    hintText: _hasAttachment
-                        ? 'Add a caption (optional)...'
-                        : _hasReply
-                            ? 'Ask about the selected text...'
-                            : 'Ask sonaxia ...',
-                    border: InputBorder.none,
-                    isDense: true,
-                    contentPadding: const EdgeInsets.only(bottom: 14),
-                    hintStyle: TextStyle(
-                      color: isLight
-                          ? Colors.grey.shade600
-                          : Colors.grey.shade500,
-                      fontSize: 16,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: IconButton(
+                      icon: const Icon(Icons.add_rounded, size: 23),
+                      color: muted,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 38,
+                        minHeight: 38,
+                      ),
+                      onPressed: widget.onAttach,
                     ),
                   ),
-                ),
+                  Expanded(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 160),
+                      child: TextField(
+                        controller: _controller,
+                        minLines: 2,
+                        maxLines: 6,
+                        textInputAction: TextInputAction.send,
+                        onSubmitted: (_) => _handleSend(),
+                        style: TextStyle(
+                          fontSize: 15.5,
+                          color: AppTheme.getPrimaryText(context),
+                          height: 1.35,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: _hasAttachment
+                              ? 'Add a caption (optional)...'
+                              : _hasReply
+                                  ? 'Ask about the selected text...'
+                                  : 'Ask sonaxia ...',
+                          border: InputBorder.none,
+                          isDense: true,
+                          contentPadding:
+                              const EdgeInsets.symmetric(vertical: 12),
+                          hintStyle: TextStyle(
+                            color: muted,
+                            fontSize: 15.5,
+                            fontWeight: FontWeight.w400,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  if (widget.onYoutube != null)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: IconButton(
+                        icon: Icon(
+                          Icons.smart_display_rounded,
+                          color: muted,
+                          size: 22,
+                        ),
+                        padding: EdgeInsets.zero,
+                        constraints: const BoxConstraints(
+                          minWidth: 38,
+                          minHeight: 38,
+                        ),
+                        onPressed: widget.onYoutube,
+                        tooltip: 'YouTube Notes',
+                      ),
+                    ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: IconButton(
+                      icon: Icon(
+                        widget.recordLocked
+                            ? Icons.lock_outline_rounded
+                            : Icons.mic_none_rounded,
+                        color: muted,
+                        size: 22,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 38,
+                        minHeight: 38,
+                      ),
+                      onPressed: widget.onRecord,
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: SizedBox(
+                      width: 34,
+                      height: 34,
+                      child: ElevatedButton(
+                        onPressed: canSend ? _handleSend : null,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: actionColor,
+                          foregroundColor: actionIconColor,
+                          elevation: 0,
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          disabledBackgroundColor: isLight
+                              ? const Color(0xFFE5E5EA)
+                              : const Color(0xFF2C2C2E),
+                          disabledForegroundColor: isLight
+                              ? const Color(0xFF8E8E93)
+                              : Colors.white38,
+                        ),
+                        child: Icon(
+                          Icons.arrow_upward_rounded,
+                          color: canSend ? actionIconColor : null,
+                          size: 17,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
 
+              const SizedBox(height: 6),
               Row(
                 children: [
                   if (widget.onModelChanged != null)
@@ -329,62 +427,7 @@ class _BottomInputBarState extends State<BottomInputBar> {
                       selectedModel: widget.selectedModel,
                       onSelected: widget.onModelChanged!,
                     ),
-                  if (widget.onModelChanged != null) const SizedBox(width: 8),
-                  IconButton(
-                    icon: const Icon(Icons.add_rounded, size: 26),
-                    color: AppTheme.getSecondaryText(context),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                    onPressed: widget.onAttach,
-                  ),
-
                   const Spacer(),
-
-                  if (widget.onYoutube != null)
-                    Padding(
-                      padding: const EdgeInsets.only(right: 4),
-                      child: IconButton(
-                        icon: Icon(
-                          Icons.smart_display_rounded,
-                          color: AppTheme.getSecondaryText(context),
-                          size: 22,
-                        ),
-                        padding: EdgeInsets.zero,
-                        constraints: const BoxConstraints(),
-                        onPressed: widget.onYoutube,
-                      ),
-                    ),
-
-                  Padding(
-                    padding: const EdgeInsets.only(right: 4),
-                    child: IconButton(
-                      icon: Icon(
-                        widget.recordLocked
-                            ? Icons.lock_outline_rounded
-                            : Icons.mic_none_rounded,
-                        color: AppTheme.getSecondaryText(context),
-                        size: 22,
-                      ),
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      onPressed: widget.onRecord,
-                    ),
-                  ),
-
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: actionColor,
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      constraints: const BoxConstraints(),
-                      icon: Icon(
-                        Icons.arrow_upward_rounded,
-                        color: actionIconColor,
-                        size: 16,
-                      ),
-                      onPressed: canSend ? _handleSend : null,
-                    ),
-                  ),
                 ],
               ),
             ],

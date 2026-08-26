@@ -35,9 +35,24 @@ def _normalized_query(query: str) -> str:
 
 
 def _domains_for_query(query: str) -> list[str]:
+    # Trusted scientific / regulatory sources ONLY — no random blogs, forums, or SEO spam
+    _TRUSTED_DOMAINS = [
+        "pubmed.ncbi.nlm.nih.gov",  # Medical literature
+        "nih.gov",                   # National Institutes of Health
+        "fda.gov",                   # US FDA (safety, recalls)
+        "who.int",                   # World Health Organization
+        "dermnetnz.org",             # DermNet NZ (dermatology reference)
+        "cir-safety.org",            # Cosmetic Ingredient Review
+        "ewg.org",                   # Environmental Working Group (Skin Deep)
+        "ncbi.nlm.nih.gov",          # National Library of Medicine
+        "mayoclinic.org",            # Mayo Clinic (consumer health)
+        "aad.org",                   # American Academy of Dermatology
+        "oeko-tex.com",              # Textile safety certification
+        "textileworld.com",          # Textile industry reference
+    ]
     if _CURRENT_TERMS.search(query):
-        return ["fda.gov", "nih.gov", "pubmed.ncbi.nlm.nih.gov"]
-    return ["pubmed.ncbi.nlm.nih.gov", "nih.gov", "fda.gov"]
+        return ["fda.gov", "nih.gov", "pubmed.ncbi.nlm.nih.gov", "who.int", "aad.org"]
+    return _TRUSTED_DOMAINS
 
 
 def _cache_is_fresh(row: dict[str, Any]) -> bool:

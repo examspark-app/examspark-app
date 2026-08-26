@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/brand/app_brand.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/core/theme/responsive.dart';
 import 'package:examspark_frontend/presentation/widgets/brand_mark.dart';
 import 'package:examspark_frontend/presentation/widgets/credits_pill.dart';
 import 'package:examspark_frontend/presentation/widgets/initials_avatar.dart';
@@ -44,79 +45,100 @@ class AppTopBar extends StatelessWidget implements PreferredSizeWidget {
   });
 
   @override
-  Size get preferredSize => const Size.fromHeight(48);
+  Size get preferredSize => Size.fromHeight(Responsive.isMobile(context) ? 52 : 56);
 
   @override
   Widget build(BuildContext context) {
+    final isMobile = Responsive.isMobile(context);
+    final topPad = MediaQuery.paddingOf(context).top;
+    final barHeight = isMobile ? 52.0 : 56.0;
+
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16),
+      padding: EdgeInsets.fromLTRB(isMobile ? 12 : 16, topPad + 2, isMobile ? 8 : 16, 2),
       decoration: const BoxDecoration(
         color: Colors.transparent,
       ),
       child: SafeArea(
         bottom: false,
+        top: false,
         child: SizedBox(
-          height: 48,
+          height: barHeight,
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               if (leading != null) ...[
-                leading!,
-                const SizedBox(width: 4),
+                SizedBox(
+                  width: 40,
+                  height: 40,
+                  child: leading!,
+                ),
+                const SizedBox(width: 2),
               ],
               if (showLogo) ...[
-                const BrandMark(tileSize: 30, fontSize: 17),
+                Expanded(
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: MediaQuery.sizeOf(context).width * 0.40,
+                      ),
+                      child: BrandMark(
+                        tileSize: isMobile ? 28 : 32,
+                        fontSize: isMobile ? 15.5 : 17,
+                      ),
+                    ),
+                  ),
+                ),
               ] else if (title != null)
                 Expanded(
                   child: Text(
                     title!,
-                    style: AppBrand.wordmarkStyle(context, fontSize: 17),
+                    style: AppBrand.wordmarkStyle(context, fontSize: isMobile ? 15.5 : 17),
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              if (showLogo || title == null) const Spacer(),
+              if (showLogo || title == null) const Spacer(flex: 1),
               if (onSearchTap != null)
                 IconButton(
                   icon: const Icon(Icons.search),
                   onPressed: onSearchTap,
                   tooltip: 'Search',
                 ),
-              if (onNewChatTap != null)
-                IconButton(
-                  icon: const Icon(Icons.add_comment_outlined),
-                  onPressed: onNewChatTap,
-                  tooltip: 'New chat',
-                ),
+              if (onCreditsTap != null || creditsBalance > 0) ...[
+                CreditsPill(balance: creditsBalance, onTap: onCreditsTap),
+                const SizedBox(width: 8),
+              ],
+              ...?trailing,
+              if (trailing != null && trailing!.isNotEmpty) const SizedBox(width: 6),
               if (onNotificationTap != null)
-                IconButton(
-                  tooltip: 'Notifications',
-                  onPressed: onNotificationTap,
-                  icon: Badge(
-                    isLabelVisible: notificationUnreadCount > 0,
-                    backgroundColor: Colors.redAccent,
-                    label: Text(
-                      notificationUnreadCount > 99
-                          ? '99+'
-                          : '$notificationUnreadCount',
-                      style: const TextStyle(fontSize: 10, color: Colors.white),
-                    ),
-                    child: Icon(
-                      notificationUnreadCount > 0
-                          ? Icons.notifications_rounded
-                          : Icons.notifications_none_rounded,
+                Padding(
+                  padding: const EdgeInsets.only(right: 2),
+                  child: IconButton(
+                    tooltip: 'Notifications',
+                    onPressed: onNotificationTap,
+                    icon: Badge(
+                      isLabelVisible: notificationUnreadCount > 0,
+                      backgroundColor: Colors.redAccent,
+                      label: Text(
+                        notificationUnreadCount > 99
+                            ? '99+'
+                            : '$notificationUnreadCount',
+                        style: const TextStyle(fontSize: 10, color: Colors.white),
+                      ),
+                      child: Icon(
+                        notificationUnreadCount > 0
+                            ? Icons.notifications_rounded
+                            : Icons.notifications_none_rounded,
+                      ),
                     ),
                   ),
                 ),
-              if (onCreditsTap != null || creditsBalance > 0) ...[
-                CreditsPill(balance: creditsBalance, onTap: onCreditsTap),
-                const SizedBox(width: 10),
-              ],
-              ...?trailing,
               if (onProfileTap != null)
                 InkWell(
                   onTap: onProfileTap,
                   borderRadius: BorderRadius.circular(20),
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 4),
+                    padding: const EdgeInsets.only(left: 2),
                     child: InitialsAvatar(
                       name: userName,
                       photoUrl: userPhotoUrl,

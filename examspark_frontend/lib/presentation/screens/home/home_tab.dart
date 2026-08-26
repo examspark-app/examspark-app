@@ -1446,7 +1446,6 @@ $rawText
                 context,
                 onOpenLecture: widget.onOpenWorkspace,
               ),
-        onNewChatTap: _startNewChat,
         onNotificationTap: _openNotifications,
         notificationUnreadCount:
             NotificationInboxController.instance.unreadCount,

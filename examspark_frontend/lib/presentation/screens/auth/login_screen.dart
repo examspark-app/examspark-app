@@ -244,30 +244,49 @@ class _LoginScreenState extends State<LoginScreen> {
     ).push(MaterialPageRoute(builder: (_) => const ResetPasswordScreen()));
   }
 
+  static const Color _babyPink = Color(0xFFFFC1D9);
+  static const Color _babyPinkDeep = Color(0xFFF48FB1);
+  static const Color _babyPinkBg = Color(0xFFFFF5F9);
+  static const Color _textOnPink = Color(0xFF4A1230);
+
   @override
   Widget build(BuildContext context) {
     final isLogin = _mode == _AuthMode.login;
+    final inputBorder = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+      borderSide: const BorderSide(color: _babyPinkDeep, width: 1.2),
+    );
+    final inputBorderDisabled = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+      borderSide: BorderSide(
+        color: _babyPink.withValues(alpha: 0.65),
+        width: 1,
+      ),
+    );
 
     return Scaffold(
+      backgroundColor: _babyPinkBg,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
             child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 400),
+              constraints: const BoxConstraints(maxWidth: 420),
               child: Form(
                 key: _formKey,
                 child: Column(
                   mainAxisAlignment: MainAxisAlignment.center,
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 28),
                     const BrandHero(),
                     const SizedBox(height: 6),
                     Text(
                       isLogin ? 'Welcome back' : 'Create your account',
-                      style: Theme.of(context).textTheme.bodySmall,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: _textOnPink.withValues(alpha: 0.75),
+                          ),
                       textAlign: TextAlign.center,
                     ),
                     if (widget.inviteJoinHint) ...[
@@ -277,8 +296,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             ? 'Sign in to open your teacher’s group'
                             : 'Create a free account to open your teacher’s group',
                         style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                          color: AppTheme.getSecondaryText(context),
-                        ),
+                              color: _textOnPink.withValues(alpha: 0.65),
+                            ),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -287,26 +306,41 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextFormField(
                         controller: _referralController,
                         textCapitalization: TextCapitalization.characters,
-                        decoration: const InputDecoration(
+                        cursorColor: _babyPinkDeep,
+                        decoration: InputDecoration(
                           labelText: 'Referral code (optional)',
-                          prefixIcon: Icon(Icons.card_giftcard_outlined),
+                          labelStyle: TextStyle(
+                            color: _textOnPink.withValues(alpha: 0.7),
+                          ),
+                          prefixIcon: const Icon(
+                            Icons.card_giftcard_outlined,
+                            color: _babyPinkDeep,
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          enabledBorder: inputBorderDisabled,
+                          focusedBorder: inputBorder,
+                          border: inputBorderDisabled,
                         ),
                       ),
                       const SizedBox(height: 12),
                     ],
 
-                    // Login / Sign Up segmented toggle — makes the two
-                    // flows unmistakably distinct for old vs. new users.
                     Container(
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
-                        color: AppTheme.getCardBackground(context),
-                        border: Border.all(
-                          color: AppTheme.getCardBorder(context),
-                        ),
+                        color: Colors.white,
+                        border: Border.all(color: _babyPink, width: 1.2),
                         borderRadius: BorderRadius.circular(
                           AppTheme.borderRadius,
                         ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: _babyPinkDeep.withValues(alpha: 0.08),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
                       ),
                       child: Row(
                         children: [
@@ -334,19 +368,24 @@ class _LoginScreenState extends State<LoginScreen> {
                       focusNode: _emailFocusNode,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
+                      cursorColor: _babyPinkDeep,
                       autofillHints: const [AutofillHints.email],
                       onFieldSubmitted: (_) =>
                           _passwordFocusNode.requestFocus(),
                       decoration: InputDecoration(
                         labelText: 'Email',
-                        prefixIcon: const Icon(Icons.email_outlined),
-                        filled: true,
-                        fillColor: AppTheme.getCardBackground(context),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(
-                            AppTheme.borderRadius,
-                          ),
+                        labelStyle: TextStyle(
+                          color: _textOnPink.withValues(alpha: 0.7),
                         ),
+                        prefixIcon: const Icon(
+                          Icons.email_outlined,
+                          color: _babyPinkDeep,
+                        ),
+                        filled: true,
+                        fillColor: Colors.white,
+                        enabledBorder: inputBorderDisabled,
+                        focusedBorder: inputBorder,
+                        border: inputBorderDisabled,
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty)
@@ -362,17 +401,25 @@ class _LoginScreenState extends State<LoginScreen> {
                       focusNode: _passwordFocusNode,
                       obscureText: _obscurePassword,
                       textInputAction: TextInputAction.done,
+                      cursorColor: _babyPinkDeep,
                       autofillHints: const [AutofillHints.password],
                       onFieldSubmitted: (_) =>
                           isLogin ? _handleLogin() : _handleSignUp(),
                       decoration: InputDecoration(
                         labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline),
+                        labelStyle: TextStyle(
+                          color: _textOnPink.withValues(alpha: 0.7),
+                        ),
+                        prefixIcon: const Icon(
+                          Icons.lock_outline,
+                          color: _babyPinkDeep,
+                        ),
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
+                            color: _babyPinkDeep,
                           ),
                           tooltip: _obscurePassword
                               ? 'Show password'
@@ -382,12 +429,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         filled: true,
-                        fillColor: AppTheme.getCardBackground(context),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(
-                            AppTheme.borderRadius,
-                          ),
-                        ),
+                        fillColor: Colors.white,
+                        enabledBorder: inputBorderDisabled,
+                        focusedBorder: inputBorder,
+                        border: inputBorderDisabled,
                       ),
                       validator: (value) {
                         if (value == null || value.isEmpty)
@@ -403,7 +448,11 @@ class _LoginScreenState extends State<LoginScreen> {
                         alignment: Alignment.centerRight,
                         child: TextButton(
                           onPressed: _isLoading ? null : _openResetPassword,
-                          style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                          style: TextButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            foregroundColor: _babyPinkDeep,
+                            textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
                           child: const Text('Forgot password?'),
                         ),
                       ),
@@ -416,25 +465,33 @@ class _LoginScreenState extends State<LoginScreen> {
                           ? null
                           : (isLogin ? _handleLogin : _handleSignUp),
                       style: ElevatedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(50),
+                        backgroundColor: _babyPinkDeep,
+                        foregroundColor: Colors.white,
+                        elevation: 0,
+                        shadowColor: _babyPinkDeep.withValues(alpha: 0.3),
+                        minimumSize: const Size.fromHeight(52),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.borderRadius,
+                          ),
+                        ),
+                        textStyle: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
                       ),
                       child: _isLoading
                           ? const SizedBox(
                               height: 20,
                               width: 20,
                               child: CircularProgressIndicator(
-                                strokeWidth: 2,
+                                strokeWidth: 2.2,
                                 color: Colors.white,
                               ),
                             )
                           : Text(isLogin ? 'Sign In' : 'Create Account'),
                     ),
 
-                    // ===== TASK 1 — Signup Consent =====
-                    // Shown only in Sign Up mode, directly below the
-                    // "Create Account" button. Terms & Conditions / Privacy
-                    // Policy each open inside the in-app WebView (Task 4) —
-                    // never an external browser (except on Web platform).
                     if (!isLogin) ...[
                       const SizedBox(height: 16),
                       Padding(
@@ -442,7 +499,9 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: RichText(
                           textAlign: TextAlign.center,
                           text: TextSpan(
-                            style: Theme.of(context).textTheme.bodySmall,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: _textOnPink.withValues(alpha: 0.7),
+                                ),
                             children: [
                               const TextSpan(
                                 text:
@@ -451,8 +510,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               TextSpan(
                                 text: 'Terms & Conditions',
                                 style: const TextStyle(
-                                  color: AppTheme.accentColor,
-                                  fontWeight: FontWeight.w600,
+                                  color: _babyPinkDeep,
+                                  fontWeight: FontWeight.w700,
                                 ),
                                 recognizer: _termsRecognizer,
                               ),
@@ -460,8 +519,8 @@ class _LoginScreenState extends State<LoginScreen> {
                               TextSpan(
                                 text: 'Privacy Policy',
                                 style: const TextStyle(
-                                  color: AppTheme.accentColor,
-                                  fontWeight: FontWeight.w600,
+                                  color: _babyPinkDeep,
+                                  fontWeight: FontWeight.w700,
                                 ),
                                 recognizer: _privacyRecognizer,
                               ),
@@ -477,19 +536,24 @@ class _LoginScreenState extends State<LoginScreen> {
                       children: [
                         Expanded(
                           child: Divider(
-                            color: AppTheme.getCardBorder(context),
+                            color: _babyPink.withValues(alpha: 0.7),
+                            thickness: 1,
                           ),
                         ),
                         Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 12),
+                          padding: const EdgeInsets.symmetric(horizontal: 14),
                           child: Text(
                             'or',
-                            style: Theme.of(context).textTheme.bodySmall,
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: _textOnPink.withValues(alpha: 0.55),
+                                  fontWeight: FontWeight.w600,
+                                ),
                           ),
                         ),
                         Expanded(
                           child: Divider(
-                            color: AppTheme.getCardBorder(context),
+                            color: _babyPink.withValues(alpha: 0.7),
+                            thickness: 1,
                           ),
                         ),
                       ],
@@ -502,16 +566,30 @@ class _LoginScreenState extends State<LoginScreen> {
                         isLogin
                             ? 'Continue with Google'
                             : 'Sign up with Google',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w600,
+                          color: _textOnPink,
+                        ),
                       ),
                       style: OutlinedButton.styleFrom(
-                        minimumSize: const Size.fromHeight(50),
+                        side: const BorderSide(color: _babyPinkDeep, width: 1.3),
+                        backgroundColor: Colors.white,
+                        foregroundColor: _babyPinkDeep,
+                        minimumSize: const Size.fromHeight(52),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(
+                            AppTheme.borderRadius,
+                          ),
+                        ),
                       ),
                     ),
                     const SizedBox(height: 24),
                     Center(
                       child: RichText(
                         text: TextSpan(
-                          style: Theme.of(context).textTheme.bodySmall,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: _textOnPink.withValues(alpha: 0.7),
+                              ),
                           children: [
                             TextSpan(
                               text: isLogin
@@ -521,8 +599,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             TextSpan(
                               text: isLogin ? 'Create an account' : 'Sign in',
                               style: const TextStyle(
-                                color: AppTheme.accentColor,
-                                fontWeight: FontWeight.w600,
+                                color: _babyPinkDeep,
+                                fontWeight: FontWeight.w700,
                               ),
                               recognizer: _switchModeRecognizer,
                             ),
@@ -560,17 +638,27 @@ class _ModeTab extends StatelessWidget {
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 11),
         decoration: BoxDecoration(
-          color: isActive ? AppTheme.accentColor : Colors.transparent,
+          color: isActive ? const Color(0xFFF48FB1) : Colors.transparent,
           borderRadius: BorderRadius.circular(AppTheme.borderRadius - 2),
+          boxShadow: isActive
+              ? [
+                  BoxShadow(
+                    color: const Color(0xFFF48FB1).withValues(alpha: 0.25),
+                    blurRadius: 8,
+                    offset: const Offset(0, 1),
+                  ),
+                ]
+              : null,
         ),
         alignment: Alignment.center,
         child: Text(
           label,
           style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: isActive ? Colors.white : AppTheme.getSecondaryText(context),
+            fontWeight: FontWeight.w700,
+            color: isActive ? Colors.white : const Color(0xFF4A1230).withValues(alpha: 0.6),
+            fontSize: 14.5,
           ),
         ),
       ),
