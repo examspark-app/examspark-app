@@ -69,11 +69,80 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   String _preferredLanguage = 'MATCH_QUESTION';
   bool _hasLoadedPreferredLanguage = false;
   String? _lastSubmittedKey;
+  String? _sessionTitle;
+  bool _restoring = false;
 
   @override
   void initState() {
     super.initState();
+    _openLatestOrFresh();
+  }
+
+  Future<void> _openLatestOrFresh() async {
+    setState(() => _restoring = true);
+    try {
+      final didRestore = await _tryRestoreLatestSession();
+      if (didRestore) return;
+    } catch (_) {}
+    if (!mounted) return;
+    setState(() => _restoring = false);
     _showLanguageChoice();
+  }
+
+  Future<bool> _tryRestoreLatestSession() async {
+    final sessions = await LectureService.instance.listGlowGuideSessions();
+    if (sessions.isEmpty) return false;
+    final latest = sessions.first;
+    final id = latest['id']?.toString();
+    if (id == null || id.isEmpty) return false;
+    final restored =
+        await LectureService.instance.restoreGlowGuideSession(id);
+    if (!mounted) return true;
+    final messageList = restored['messages'] as List? ?? const [];
+    final restoredMessages = messageList
+        .whereType<Map>()
+        .map(
+          (message) => _GlowMessage(
+            message['message']?.toString() ?? '',
+            message['role'] == 'user',
+            imageUrl: message['image_url']?.toString(),
+          ),
+        )
+        .toList();
+    final computedTitle =
+        (restored['title']?.toString().trim().isNotEmpty ?? false)
+            ? restored['title'].toString()
+            : _deriveTitleFromMessages(restoredMessages);
+    setState(() {
+      _restoring = false;
+      _sessionId = id;
+      _category = restored['category'] as String?;
+      _sessionTitle = computedTitle;
+      _usedWebSearch = false;
+      _sessionComplete =
+          restored['status'] == 'archived' ||
+          (restored['exchange_count'] as num? ?? 0) >= 100;
+      _hasLoadedPreferredLanguage = true;
+      _messages
+        ..clear()
+        ..addAll(restoredMessages);
+    });
+    _scrollToBottom();
+    return true;
+  }
+
+  String _deriveTitleFromMessages(List<_GlowMessage> list) {
+    _GlowMessage? firstUserMessage;
+    for (final m in list) {
+      if (m.isUser && m.text.trim().isNotEmpty) {
+        firstUserMessage = m;
+        break;
+      }
+    }
+    final raw = firstUserMessage?.text.trim() ?? '';
+    if (raw.isEmpty) return 'Skin Care AI';
+    if (raw.length <= 56) return raw;
+    return '${raw.substring(0, 53)}…';
   }
 
   void _showLanguageChoice() {
@@ -269,9 +338,17 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
       _focusTextInput();
       return;
     }
+    _sessionTitle ??= _niceTitleFromConcern(concern);
     _text.text = concern;
     _focusTextInput();
     await _send();
+  }
+
+  String _niceTitleFromConcern(String text) {
+    final t = text.trim();
+    if (t.isEmpty) return 'Skin Care AI';
+    if (t.length <= 56) return t;
+    return '${t.substring(0, 53)}…';
   }
 
   Future<void> _send() async {
@@ -285,6 +362,9 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     final submissionKey =
         '${_sessionId ?? 'new'}:${image != null ? 'photo' : 'text'}:${text.isEmpty ? 'photo' : text}:${DateTime.now().microsecondsSinceEpoch}';
     _lastSubmittedKey = submissionKey;
+    if (_sessionTitle == null && text.trim().isNotEmpty) {
+      _sessionTitle = _niceTitleFromConcern(text);
+    }
     setState(() {
       _sending = true;
       _processingPhoto = image != null;
@@ -367,9 +447,11 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
       _usedWebSearch = false;
       _webSearchStatus = null;
       _category = null;
+      _sessionTitle = null;
       _attachment = null;
       _attachmentName = null;
       _messages.clear();
+      _hasLoadedPreferredLanguage = false;
     });
     _showLanguageChoice();
   }
@@ -422,7 +504,9 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
               ListTile(
                 leading: const Icon(Icons.eco_outlined),
                 title: Text(
-                  (session['category_type'] as String?) ?? 'Skin Care AI',
+                  _deriveHistoryTitle(session),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
                 ),
                 subtitle: Text((session['updated_at'] as String?) ?? ''),
                 onTap: () =>
@@ -447,18 +531,52 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
           ),
         )
         .toList();
+    final computedTitle =
+        (restored['title']?.toString().trim().isNotEmpty ?? false)
+            ? restored['title'].toString()
+            : _deriveTitleFromMessages(restoredMessages);
     setState(() {
       _sessionId = selected;
       _category = restored['category'] as String?;
+      _sessionTitle = computedTitle;
       _usedWebSearch = false;
       _sessionComplete =
           restored['status'] == 'archived' ||
           (restored['exchange_count'] as num? ?? 0) >= 100;
+      _hasLoadedPreferredLanguage = true;
       _messages
         ..clear()
         ..addAll(restoredMessages);
     });
     _scrollToBottom();
+  }
+
+  String _deriveHistoryTitle(Map session) {
+    final title = session['title']?.toString().trim();
+    if (title != null && title.isNotEmpty) return title;
+    final category = (session['category_type'] as String?)?.trim();
+    final preview = (session['first_message_preview'] as String?)?.trim();
+    if (preview != null && preview.isNotEmpty) {
+      final nice = preview.length <= 60 ? preview : '${preview.substring(0, 57)}…';
+      return nice;
+    }
+    if (category != null && category.isNotEmpty) return category;
+    return 'Skin Care AI';
+  }
+
+  static const _reverseCategoryMap = {
+    'skin': 'Skin Care',
+    'body': 'Body Care',
+    'baby': 'Baby Skin Care',
+    'cloth': 'Cloth Guide',
+  };
+
+  String _prettyCategory(String raw) {
+    final r = raw.trim();
+    if (r.isEmpty) return 'Skin Care AI';
+    if (_reverseCategoryMap.containsKey(r)) return _reverseCategoryMap[r]!;
+    // fallback: sentence case first letter
+    return '${r[0].toUpperCase()}${r.substring(1)}';
   }
 
   void _scrollToBottom() {
@@ -489,17 +607,33 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
           foregroundColor: Colors.white,
           elevation: 0,
           centerTitle: true,
-          title: Text(
-            _category == null
-                ? 'GlowGuide ✨'
-                : 'GlowGuide ✨ · ${_category!}',
-            maxLines: 1,
-            overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-            ),
+          title: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                (_sessionTitle ?? 'GlowGuide ✨'),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              if ((_category ?? '').trim().isNotEmpty &&
+                  (_sessionTitle ?? '').trim().isNotEmpty &&
+                  _sessionTitle != _category)
+                Text(
+                  _prettyCategory(_category!),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: Colors.white60,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+            ],
           ),
           iconTheme: const IconThemeData(color: Colors.white70),
           actions: [
@@ -510,7 +644,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
             ),
             IconButton(
               tooltip: 'Chat history',
-              onPressed: _sending ? null : _openHistory,
+              onPressed: _sending || _restoring ? null : _openHistory,
               icon: const Icon(Icons.history_outlined, color: Colors.white70),
             ),
           ],
@@ -526,35 +660,64 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
         body: Column(
           children: [
             if (!_hasLoadedPreferredLanguage) const SizedBox(height: 8),
-            Expanded(
-              child: ListView.builder(
-                controller: _scroll,
-                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-                itemCount: _messages.length + (_sending ? 1 : 0),
-                itemBuilder: (context, index) {
-                  if (_sending && index == _messages.length) {
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 18),
-                      child: Align(
-                        alignment: Alignment.centerLeft,
-                          child: _webSearchStatus == 'searching'
-                            ? const _WebSearchBubble()
-                            : _processingPhoto
-                            ? _PhotoAnalyzingBubble(
-                                image: _messages.isNotEmpty
-                                    ? _messages.last.image
-                                    : null,
-                              )
-                            : const _PurpleTypingDots(),
+            if (_restoring)
+              const Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: AppTheme.glowGuidePink,
+                        ),
                       ),
-                    );
-                  }
-                  return _messageTile(_messages[index]);
-                },
+                      SizedBox(height: 12),
+                      Text(
+                        'Opening last chat…',
+                        style: TextStyle(
+                          color: Colors.white70,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else
+              Expanded(
+                child: ListView.builder(
+                  controller: _scroll,
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                  itemCount: _messages.length + (_sending ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (_sending && index == _messages.length) {
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 18),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                            child: _webSearchStatus == 'searching'
+                              ? const _WebSearchBubble()
+                              : _processingPhoto
+                              ? _PhotoAnalyzingBubble(
+                                  image: _messages.isNotEmpty
+                                      ? _messages.last.image
+                                      : null,
+                                )
+                              : const _PurpleTypingDots(),
+                        ),
+                      );
+                    }
+                    return _messageTile(_messages[index]);
+                  },
+                ),
               ),
-            ),
             const SizedBox(height: 8),
-            _inputBar(),
+            _restoring
+                ? const SizedBox.shrink()
+                : _inputBar(),
           ],
         ),
       ),
