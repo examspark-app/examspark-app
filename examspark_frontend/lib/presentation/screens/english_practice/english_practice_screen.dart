@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
@@ -73,8 +74,8 @@ class _ChatProcessingIndicatorState extends State<_ChatProcessingIndicator>
                 const SizedBox(width: 8),
                 Text(
                   widget.voice ? 'Converting speech' : 'Thinking',
-                  style: TextStyle(
-                    color: AppTheme.getSecondaryText(context),
+                  style: const TextStyle(
+                    color: Colors.white60,
                     fontSize: 13,
                     fontWeight: FontWeight.w700,
                   ),
@@ -166,8 +167,14 @@ class EnglishPracticeScreen extends StatefulWidget {
   State<EnglishPracticeScreen> createState() => _EnglishPracticeScreenState();
 }
 
-class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
+class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
+    with TickerProviderStateMixin {
   static const violet = Color(0xFF5137ED);
+  static const darkBg = Color(0xFF0F0F0F);
+  static const cardBg = Color(0xFF1A1A1D);
+  static const inputBg = Color(0xFF1C1C1F);
+  static const borderDark = Color(0xFF2A2A2E);
+
   final _text = TextEditingController();
   final _scroll = ScrollController();
   final _messages = <_Message>[];
@@ -188,9 +195,22 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   bool _resumeCancelled = false;
   late String _selectedTextModel = widget.textModel;
 
+  bool _voiceActive = false;
+  late AnimationController _waveController;
+  final Random _random = Random();
+
   @override
   void initState() {
     super.initState();
+    _waveController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 300),
+    )..repeat();
+    RecordingService.instance.setVoiceActivityListener((active) {
+      if (mounted) {
+        setState(() => _voiceActive = active);
+      }
+    });
     _load(initial: true);
   }
 
@@ -199,6 +219,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     _text.dispose();
     _scroll.dispose();
     _voiceTurnLimitTimer?.cancel();
+    _waveController.dispose();
+    RecordingService.instance.setVoiceActivityListener(null);
     RecordingService.instance.releaseForScreen();
     super.dispose();
   }
@@ -513,9 +535,6 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       ),
     );
     if (!mounted || selected == null) return;
-    // A Chat session stores its explanation language. Create a fresh session
-    // so the next model turn immediately uses the newly selected language;
-    // the previous conversation remains available in History.
     await Navigator.pushReplacement(
       context,
       MaterialPageRoute(
@@ -530,30 +549,30 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     );
   }
 
-  Future<void> _toggleVoiceInput() async {
-    if (_sending || _sessionId == null) return;
-    if (!_recording) {
-      try {
-        await RecordingService.instance.start();
-        if (mounted) {
-          setState(() => _recording = true);
-          _voiceTurnLimitTimer?.cancel();
-          _voiceTurnLimitTimer = Timer(const Duration(seconds: 40), () {
-            if (mounted && _recording && !_sending) {
-              _toggleVoiceInput();
-            }
-          });
-        }
-      } catch (error) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Microphone could not start: $error')),
-          );
-        }
+  Future<void> _startRecording() async {
+    if (_sending || _sessionId == null || _recording) return;
+    try {
+      await RecordingService.instance.start();
+      if (mounted) {
+        setState(() => _recording = true);
+        _voiceTurnLimitTimer?.cancel();
+        _voiceTurnLimitTimer = Timer(const Duration(seconds: 40), () {
+          if (mounted && _recording && !_sending) {
+            _stopRecording();
+          }
+        });
       }
-      return;
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Microphone could not start: $error')),
+        );
+      }
     }
+  }
 
+  Future<void> _stopRecording() async {
+    if (!_recording) return;
     setState(() {
       _recording = false;
       _sending = true;
@@ -562,9 +581,6 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     _voiceTurnLimitTimer?.cancel();
     _voiceTurnLimitTimer = null;
     try {
-      // When amplitude monitoring is available, reject silence locally before
-      // an upload. On platforms without amplitude support the server performs
-      // the same transcript validation before any credit/Qwen call.
       final detectedVoice = RecordingService.instance.heardAnyVoice;
       final canMeasureVoice =
           RecordingService.instance.amplitudeMonitoringActive;
@@ -661,85 +677,117 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-    drawer: EnglishPracticeDrawer(
-      nativeLanguage: _nativeLanguage,
-      targetLanguage: _targetLanguage,
-      onChangeLanguage: _changeHelpLanguage,
-      onNewChat: _newChat,
+  Widget build(BuildContext context) => Theme(
+    data: Theme.of(context).copyWith(
+      scaffoldBackgroundColor: darkBg,
+      canvasColor: darkBg,
     ),
-    body: SafeArea(
-      child: _loading
-          ? const Center(child: CircularProgressIndicator(color: violet))
-          : _error != null
-          ? Center(
-              child: ElevatedButton(
-                onPressed: _load,
-                child: const Text('Retry'),
+    child: Scaffold(
+      backgroundColor: darkBg,
+      drawer: EnglishPracticeDrawer(
+        nativeLanguage: _nativeLanguage,
+        targetLanguage: _targetLanguage,
+        onChangeLanguage: _changeHelpLanguage,
+        onNewChat: _newChat,
+        backgroundColor: const Color(0xFF141417),
+      ),
+      body: SafeArea(
+        child: _loading
+            ? const Center(child: CircularProgressIndicator(color: violet))
+            : _error != null
+            ? Center(
+                child: ElevatedButton(
+                  onPressed: _load,
+                  child: const Text('Retry'),
+                ),
+              )
+            : Column(
+                children: [
+                  _header(),
+                  Expanded(child: _chat()),
+                  if (_recording) _soundWaveBar(),
+                  _suggestionPanel(),
+                  _input(),
+                  _practiceMcqPanel(),
+                ],
               ),
-            )
-          : Column(
-              children: [
-                _header(),
-                Expanded(child: _chat()),
-                _suggestionPanel(),
-                _input(),
-                _practiceMcqPanel(),
-              ],
-            ),
+      ),
     ),
   );
-  Widget _header() => Padding(
+
+  Widget _header() => Container(
     padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+    decoration: const BoxDecoration(
+      color: darkBg,
+      border: Border(bottom: BorderSide(color: borderDark, width: 0.5)),
+    ),
     child: Row(
       children: [
         Builder(
           builder: (context) => IconButton(
             onPressed: () => Scaffold.of(context).openDrawer(),
-            icon: const Icon(Icons.menu_rounded, size: 30),
+            icon: const Icon(Icons.menu_rounded, size: 26, color: Colors.white70),
             tooltip: 'Open menu',
           ),
         ),
-        const SizedBox(width: 8),
-        OutlinedButton(
-          onPressed: null,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: AppTheme.getPrimaryText(context),
-            side: const BorderSide(color: Color(0xFF7C4DFF)),
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            minimumSize: const Size(0, 38),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+        const SizedBox(width: 4),
+        const Text(
+          'English Practice',
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 17,
+            fontWeight: FontWeight.w700,
           ),
-          child: const Text('Chat Practice'),
         ),
         const Spacer(),
-        GlowGuideRotatingButton(
-          onTap: () => Navigator.pushNamed(context, '/glow-guide'),
-        ),
-        OutlinedButton(
-          onPressed: _roleplay,
-          style: OutlinedButton.styleFrom(
-            foregroundColor: const Color(0xFF7C4DFF),
-            side: const BorderSide(color: Color(0xFF7C4DFF)),
+        FilledButton.icon(
+          onPressed: () => Navigator.pushNamed(context, '/glow-guide'),
+          style: FilledButton.styleFrom(
+            backgroundColor: violet,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
             minimumSize: const Size(0, 38),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
           ),
-          child: const Text('Roleplay'),
+          icon: const Icon(Icons.auto_awesome_rounded, size: 18),
+          label: const Text(
+            'Skin Care',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+        ),
+        const SizedBox(width: 8),
+        FilledButton(
+          onPressed: _roleplay,
+          style: FilledButton.styleFrom(
+            backgroundColor: violet,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            minimumSize: const Size(0, 38),
+          ),
+          child: const Text(
+            'Roleplay',
+            style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+          ),
         ),
       ],
     ),
   );
+
   Widget _chat() => Stack(
     children: [
       ListView.builder(
         controller: _scroll,
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 90),
+        padding: const EdgeInsets.fromLTRB(20, 18, 20, 20),
         itemCount: _messages.length + (_sending ? 1 : 0),
         itemBuilder: (_, i) {
           if (i == _messages.length)
             return Padding(
-              padding: EdgeInsets.all(12),
+              padding: const EdgeInsets.all(12),
               child: Align(
                 alignment: Alignment.centerLeft,
                 child: _ChatProcessingIndicator(voice: _processingVoice),
@@ -750,14 +798,25 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
             return Align(
               alignment: Alignment.centerLeft,
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(8, 4, 8, 12),
-                child: SelectionArea(
-                  child: Text(
-                    m.text,
-                    style: TextStyle(
-                      color: AppTheme.getPrimaryText(context),
-                      fontSize: 16,
-                      height: 1.45,
+                padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.sizeOf(context).width * .80,
+                  ),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: cardBg,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: borderDark, width: 0.8),
+                  ),
+                  child: SelectionArea(
+                    child: Text(
+                      m.text,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15.5,
+                        height: 1.5,
+                      ),
                     ),
                   ),
                 ),
@@ -765,26 +824,21 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
             );
           }
           return Align(
-            alignment: m.isUser ? Alignment.centerRight : Alignment.centerLeft,
+            alignment: Alignment.centerRight,
             child: Container(
               constraints: BoxConstraints(
                 maxWidth: MediaQuery.sizeOf(context).width * .76,
               ),
-              margin: const EdgeInsets.only(bottom: 18),
-              padding: const EdgeInsets.all(17),
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: m.isUser ? violet : AppTheme.getCardBackground(context),
-                borderRadius: BorderRadius.only(
-                  topLeft: const Radius.circular(20),
-                  topRight: const Radius.circular(20),
-                  bottomLeft: Radius.circular(m.isUser ? 20 : 6),
-                  bottomRight: Radius.circular(m.isUser ? 6 : 20),
-                ),
+                color: violet,
+                borderRadius: BorderRadius.circular(16),
                 boxShadow: const [
                   BoxShadow(
-                    color: Color(0x12000000),
-                    blurRadius: 14,
-                    offset: Offset(0, 6),
+                    color: Color(0x225137ED),
+                    blurRadius: 12,
+                    offset: Offset(0, 4),
                   ),
                 ],
               ),
@@ -806,11 +860,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                   SelectionArea(
                     child: Text(
                       m.text,
-                      style: TextStyle(
-                        color: m.isUser
-                            ? Colors.white
-                            : AppTheme.getPrimaryText(context),
-                        fontSize: 16,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 15.5,
                         height: 1.45,
                       ),
                     ),
@@ -823,6 +875,52 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       ),
     ],
   );
+
+  Widget _soundWaveBar() => AnimatedBuilder(
+    animation: _waveController,
+    builder: (context, _) {
+      final intensity = _voiceActive ? 1.0 : 0.35;
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 6),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.mic_rounded,
+              color: Colors.redAccent.shade200,
+              size: 16,
+            ),
+            const SizedBox(width: 8),
+            for (var i = 0; i < 24; i++) ...[
+              Container(
+                width: 3,
+                height: 8 +
+                    (_random.nextDouble() * 14 * intensity) +
+                    (_voiceActive ? sin((i * 0.6) + _waveController.value * 12).abs() * 10 : 0),
+                decoration: BoxDecoration(
+                  color: _voiceActive
+                      ? HSLColor.fromAHSL(1, (i * 12 + 280) % 360, 0.7, 0.6).toColor()
+                      : Colors.white30,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(width: 2),
+            ],
+            const SizedBox(width: 6),
+            Text(
+              RecordingService.instance.formattedDuration,
+              style: const TextStyle(
+                color: Colors.white60,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
+      );
+    },
+  );
+
   Widget _suggestionPanel() {
     if (_suggestions.isEmpty) return const SizedBox.shrink();
     final count = _suggestions.length > 2 ? 2 : _suggestions.length;
@@ -837,53 +935,50 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       padding: const EdgeInsets.all(8),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFE6E5F2)),
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderDark),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 8,
         children: [
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              for (var i = 0; i < count; i++)
-                InkWell(
-                  onTap: () => _send(_suggestions[i]),
-                  borderRadius: BorderRadius.circular(15),
-                  child: Container(
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.sizeOf(context).width * .43,
-                    ),
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 10,
-                    ),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: const Color(0xFFE2E1ED)),
-                      borderRadius: BorderRadius.circular(15),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(icons[i], color: violet, size: 20),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            _suggestions[i],
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+          for (var i = 0; i < count; i++)
+            InkWell(
+              onTap: () => _send(_suggestions[i]),
+              borderRadius: BorderRadius.circular(12),
+              child: Container(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.sizeOf(context).width * .43,
                 ),
-            ],
-          ),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  color: inputBg,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: borderDark),
+                ),
+                child: Row(
+                  children: [
+                    Icon(icons[i], color: violet, size: 18),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        _suggestions[i],
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
         ],
       ),
     );
@@ -898,21 +993,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
       margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF3F0FF),
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: const Color(0xFFD8D1FF)),
-        gradient: const LinearGradient(
-          colors: [Color(0xFFF6F3FF), Color(0xFFEFE9FF)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x1A5137ED),
-            blurRadius: 14,
-            offset: Offset(0, 5),
-          ),
-        ],
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: borderDark),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -922,7 +1005,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: violet.withOpacity(.12),
+                  color: violet.withOpacity(.18),
                   borderRadius: BorderRadius.circular(10),
                 ),
                 child: Row(
@@ -933,7 +1016,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                     Text(
                       'Practice Question',
                       style: TextStyle(
-                        color: violet,
+                        color: violet.withOpacity(.95),
                         fontWeight: FontWeight.w800,
                         fontSize: 12,
                       ),
@@ -945,11 +1028,11 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
               InkWell(
                 onTap: () => setState(() => _currentMcq = null),
                 borderRadius: BorderRadius.circular(14),
-                child: Padding(
-                  padding: const EdgeInsets.all(5),
+                child: const Padding(
+                  padding: EdgeInsets.all(5),
                   child: Icon(
                     Icons.close_rounded,
-                    color: const Color(0xFF948FB0),
+                    color: Colors.white54,
                     size: 19,
                   ),
                 ),
@@ -961,10 +1044,10 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 3),
             child: Text(
               mcq.question,
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 15,
-                fontWeight: FontWeight.w700,
-                color: AppTheme.getPrimaryText(context),
+                fontWeight: FontWeight.w600,
+                color: Colors.white,
                 height: 1.4,
               ),
             ),
@@ -974,7 +1057,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
             if (i > 0) const SizedBox(height: 7),
             InkWell(
               onTap: () => _answerMcq(i),
-              borderRadius: BorderRadius.circular(15),
+              borderRadius: BorderRadius.circular(12),
               child: Container(
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(
@@ -983,32 +1066,23 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                 ),
                 decoration: BoxDecoration(
                   color: selectedIndex == null
-                      ? AppTheme.getCardBackground(context)
+                      ? inputBg
                       : i == mcq.correctOption
-                      ? const Color(0xFFE7F7EC)
+                      ? const Color(0xFF1B3A26)
                       : i == selectedIndex
-                      ? const Color(0xFFFFE8E8)
-                      : AppTheme.getCardBackground(context),
-                  borderRadius: BorderRadius.circular(15),
+                      ? const Color(0xFF3A1B1B)
+                      : inputBg,
+                  borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: selectedIndex == null
-                        ? const Color(0xFFD5D1EC)
+                        ? borderDark
                         : i == mcq.correctOption
                         ? const Color(0xFF40A85C)
                         : i == selectedIndex
                         ? const Color(0xFFE05252)
-                        : const Color(0xFFD5D1EC),
-                    width: i == mcq.correctOption || i == selectedIndex
-                        ? 1.5
-                        : 1,
+                        : borderDark,
+                    width: i == mcq.correctOption || i == selectedIndex ? 1.3 : 0.8,
                   ),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: Color(0x0C000000),
-                      blurRadius: 6,
-                      offset: Offset(0, 2),
-                    ),
-                  ],
                 ),
                 child: Row(
                   children: [
@@ -1018,12 +1092,12 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                       alignment: Alignment.center,
                       decoration: BoxDecoration(
                         color: selectedIndex == null
-                            ? violet.withOpacity(.10)
+                            ? violet.withOpacity(.14)
                             : i == mcq.correctOption
-                            ? const Color(0x2640A85C)
+                            ? const Color(0xFF26603A)
                             : i == selectedIndex
-                            ? const Color(0x26E05252)
-                            : violet.withOpacity(.10),
+                            ? const Color(0xFF602626)
+                            : violet.withOpacity(.14),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Text(
@@ -1032,9 +1106,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                           color: selectedIndex == null
                               ? violet
                               : i == mcq.correctOption
-                              ? const Color(0xFF23813B)
+                              ? const Color(0xFF7BD99C)
                               : i == selectedIndex
-                              ? const Color(0xFFB42323)
+                              ? const Color(0xFFFF8A8A)
                               : violet,
                           fontSize: 13,
                           fontWeight: FontWeight.w900,
@@ -1045,10 +1119,10 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                     Expanded(
                       child: Text(
                         mcq.options[i],
-                        style: TextStyle(
+                        style: const TextStyle(
                           fontSize: 14,
-                          fontWeight: FontWeight.w600,
-                          color: AppTheme.getPrimaryText(context),
+                          fontWeight: FontWeight.w500,
+                          color: Colors.white,
                           height: 1.3,
                         ),
                       ),
@@ -1062,8 +1136,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                               ? Icons.check_circle_outline
                               : Icons.cancel_outlined,
                           color: i == mcq.correctOption
-                              ? const Color(0xFF23813B)
-                              : const Color(0xFFB42323),
+                              ? const Color(0xFF7BD99C)
+                              : const Color(0xFFFF8A8A),
                           size: 20,
                         ),
                       ),
@@ -1082,20 +1156,20 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
                     : 'Not quite. The highlighted green sentence is correct.',
                 style: TextStyle(
                   color: selectedIndex == mcq.correctOption
-                      ? const Color(0xFF23813B)
-                      : const Color(0xFFB42323),
+                      ? const Color(0xFF7BD99C)
+                      : const Color(0xFFFF8A8A),
                   fontSize: 12,
                   fontWeight: FontWeight.w800,
                 ),
               ),
             ),
           if (selectedIndex != null) const SizedBox(height: 5),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3),
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 3),
             child: Text(
               'Tap an option above, or type your own answer below · Always optional',
               style: TextStyle(
-                color: AppTheme.getSecondaryText(context).withOpacity(.95),
+                color: Colors.white54,
                 fontSize: 11.5,
                 fontWeight: FontWeight.w600,
               ),
@@ -1107,44 +1181,153 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
   }
 
   Widget _input() => Padding(
-    padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-    child: Row(
-      children: [
-        _circle(Icons.photo_library_outlined, _pickPhoto),
-        const SizedBox(width: 8),
-        _circle(
-          _recording ? Icons.stop_rounded : Icons.mic_none_rounded,
-          _toggleVoiceInput,
+    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+    child: Container(
+      decoration: BoxDecoration(
+        color: inputBg,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: _recording ? Colors.redAccent.withOpacity(0.5) : borderDark,
+          width: _recording ? 1.2 : 0.8,
         ),
-        const SizedBox(width: 8),
-        AiModelSelector(
-          selectedModel: _selectedTextModel,
-          onSelected: _changeTextModel,
-        ),
-        const SizedBox(width: 8),
-        Expanded(
-          child: TextField(
-            controller: _text,
-            onSubmitted: (_) => _send(),
-            textInputAction: TextInputAction.send,
-            decoration: InputDecoration(
-              hintText: 'Type a message...',
-              filled: true,
-              fillColor: AppTheme.getCardBackground(context),
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: 20,
-                vertical: 15,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(28),
-                borderSide: BorderSide.none,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.25),
+            blurRadius: 12,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          _smallIconBtn(
+            Icons.photo_library_outlined,
+            _pickPhoto,
+            tooltip: 'Attach photo',
+          ),
+          _pressHoldMicBtn(),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: TextField(
+                controller: _text,
+                onSubmitted: (_) => _send(),
+                textInputAction: TextInputAction.newline,
+                minLines: 1,
+                maxLines: 6,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  height: 1.4,
+                ),
+                decoration: const InputDecoration(
+                  hintText: 'Message...',
+                  hintStyle: TextStyle(color: Colors.white38, fontSize: 15),
+                  border: InputBorder.none,
+                  contentPadding: EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 8,
+                  ),
+                  isCollapsed: true,
+                ),
               ),
             ),
           ),
+          AiModelSelector(
+            selectedModel: _selectedTextModel,
+            onSelected: _changeTextModel,
+          ),
+          const SizedBox(width: 4),
+          _sendBtn(),
+        ],
+      ),
+    ),
+  );
+
+  Widget _smallIconBtn(IconData icon, VoidCallback? tap, {String? tooltip}) =>
+    Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: tap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Icon(
+              icon,
+              color: Colors.white70,
+              size: 22,
+            ),
+          ),
         ),
-        const SizedBox(width: 8),
-        _circle(Icons.send_rounded, _send),
-      ],
+      ),
+    );
+
+  Widget _pressHoldMicBtn() => Listener(
+    onPointerDown: (_) {
+      unawaited(_startRecording());
+    },
+    onPointerUp: (_) {
+      unawaited(_stopRecording());
+    },
+    onPointerCancel: (_) {
+      unawaited(_stopRecording());
+    },
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 2),
+      child: Material(
+        color: _recording
+            ? Colors.redAccent.withOpacity(0.18)
+            : Colors.transparent,
+        borderRadius: BorderRadius.circular(12),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            padding: EdgeInsets.all(_recording ? 11 : 10),
+            decoration: BoxDecoration(
+              color: _recording
+                  ? Colors.redAccent.withOpacity(0.15)
+                  : Colors.transparent,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: _recording
+                    ? Colors.redAccent.withOpacity(0.6)
+                    : Colors.transparent,
+                width: 1.2,
+              ),
+            ),
+            child: Icon(
+              _recording ? Icons.mic_rounded : Icons.mic_none_rounded,
+              color: _recording ? Colors.redAccent.shade200 : Colors.white70,
+              size: 22,
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  Widget _sendBtn() => Padding(
+    padding: const EdgeInsets.only(left: 2),
+    child: Material(
+      color: violet,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: _sending ? null : () => _send(),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Icon(
+            Icons.arrow_upward_rounded,
+            color: _sending ? Colors.white54 : Colors.white,
+            size: 22,
+          ),
+        ),
+      ),
     ),
   );
 
@@ -1214,17 +1397,4 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen> {
     }
     setState(() => _selectedTextModel = model);
   }
-
-  Widget _circle(IconData icon, VoidCallback tap) => Material(
-    color: violet,
-    shape: const CircleBorder(),
-    child: InkWell(
-      onTap: tap,
-      customBorder: const CircleBorder(),
-      child: Padding(
-        padding: const EdgeInsets.all(14),
-        child: Icon(icon, color: Colors.white, size: 27),
-      ),
-    ),
-  );
 }

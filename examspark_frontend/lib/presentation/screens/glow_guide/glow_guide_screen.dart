@@ -475,61 +475,88 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text(
-          _category == null
-              ? 'GlowGuide ✨'
-              : 'GlowGuide ✨ · ${_category!}',
-          maxLines: 1,
-          overflow: TextOverflow.ellipsis,
-        ),
-        actions: [
-          IconButton(
-            tooltip: 'New chat',
-            onPressed: _newChat,
-            icon: const Icon(Icons.edit_outlined),
-          ),
-          IconButton(
-            tooltip: 'Chat history',
-            onPressed: _sending ? null : _openHistory,
-            icon: const Icon(Icons.history_outlined),
-          ),
-        ],
+    return Theme(
+      data: Theme.of(context).copyWith(
+        scaffoldBackgroundColor: AppTheme.darkBackground,
+        canvasColor: AppTheme.darkBackground,
+        splashColor: AppTheme.babyPink.withValues(alpha: 0.35),
+        highlightColor: AppTheme.babyPink.withValues(alpha: 0.2),
       ),
-      body: Column(
-        children: [
-          if (!_hasLoadedPreferredLanguage) const SizedBox(height: 8),
-          Expanded(
-            child: ListView.builder(
-              controller: _scroll,
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
-              itemCount: _messages.length + (_sending ? 1 : 0),
-              itemBuilder: (context, index) {
-                if (_sending && index == _messages.length) {
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 18),
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                        child: _webSearchStatus == 'searching'
-                          ? const _WebSearchBubble()
-                          : _processingPhoto
-                          ? _PhotoAnalyzingBubble(
-                              image: _messages.isNotEmpty
-                                  ? _messages.last.image
-                                  : null,
-                            )
-                          : const _PurpleTypingDots(),
-                    ),
-                  );
-                }
-                return _messageTile(_messages[index]);
-              },
+      child: Scaffold(
+        backgroundColor: AppTheme.darkBackground,
+        appBar: AppBar(
+          backgroundColor: AppTheme.darkBackground,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          centerTitle: true,
+          title: Text(
+            _category == null
+                ? 'GlowGuide ✨'
+                : 'GlowGuide ✨ · ${_category!}',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 17,
+              fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 8),
-          _inputBar(),
-        ],
+          iconTheme: const IconThemeData(color: Colors.white70),
+          actions: [
+            IconButton(
+              tooltip: 'New chat',
+              onPressed: _newChat,
+              icon: const Icon(Icons.edit_outlined, color: Colors.white70),
+            ),
+            IconButton(
+              tooltip: 'Chat history',
+              onPressed: _sending ? null : _openHistory,
+              icon: const Icon(Icons.history_outlined, color: Colors.white70),
+            ),
+          ],
+          bottom: const PreferredSize(
+            preferredSize: Size.fromHeight(0.5),
+            child: Divider(
+              height: 0.5,
+              thickness: 0.5,
+              color: Color(0xFF2A2A2E),
+            ),
+          ),
+        ),
+        body: Column(
+          children: [
+            if (!_hasLoadedPreferredLanguage) const SizedBox(height: 8),
+            Expanded(
+              child: ListView.builder(
+                controller: _scroll,
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+                itemCount: _messages.length + (_sending ? 1 : 0),
+                itemBuilder: (context, index) {
+                  if (_sending && index == _messages.length) {
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 18),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                          child: _webSearchStatus == 'searching'
+                            ? const _WebSearchBubble()
+                            : _processingPhoto
+                            ? _PhotoAnalyzingBubble(
+                                image: _messages.isNotEmpty
+                                    ? _messages.last.image
+                                    : null,
+                              )
+                            : const _PurpleTypingDots(),
+                      ),
+                    );
+                  }
+                  return _messageTile(_messages[index]);
+                },
+              ),
+            ),
+            const SizedBox(height: 8),
+            _inputBar(),
+          ],
+        ),
       ),
     );
   }
@@ -543,7 +570,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
             : Alignment.centerLeft,
         child: ConstrainedBox(
           constraints: BoxConstraints(
-            maxWidth: MediaQuery.sizeOf(context).width * .86,
+            maxWidth: MediaQuery.sizeOf(context).width * .82,
           ),
           child: Column(
             crossAxisAlignment: message.isUser
@@ -552,90 +579,103 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
             children: [
               if (message.image != null ||
                   (message.imageUrl?.isNotEmpty ?? false))
-                GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _attachment = message.image;
-                      _attachmentName = message.imageName;
-                    });
-                    _previewPhoto();
-                  },
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(14),
-                    child: message.image != null
-                        ? Image.memory(
-                            message.image!,
-                            width: 180,
-                            height: 140,
-                            fit: BoxFit.cover,
-                          )
-                        : (message.imageUrl != null
-                              ? Image.network(
-                                  message.imageUrl!,
-                                  width: 180,
-                                  height: 140,
-                                  fit: BoxFit.cover,
-                                )
-                              : const SizedBox.shrink()),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
+                  child: GestureDetector(
+                    onTap: () {
+                      setState(() {
+                        _attachment = message.image;
+                        _attachmentName = message.imageName;
+                      });
+                      _previewPhoto();
+                    },
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(14),
+                      child: message.image != null
+                          ? Image.memory(
+                              message.image!,
+                              width: 180,
+                              height: 140,
+                              fit: BoxFit.cover,
+                            )
+                          : (message.imageUrl != null
+                                ? Image.network(
+                                    message.imageUrl!,
+                                    width: 180,
+                                    height: 140,
+                                    fit: BoxFit.cover,
+                                  )
+                                : const SizedBox.shrink()),
+                    ),
                   ),
                 ),
               if (message.verdict != null) ...[
-                const SizedBox(height: 8),
+                const SizedBox(height: 6),
                 _verdictBadge(message.verdict!),
+                const SizedBox(height: 6),
               ],
               if (message.text.isNotEmpty)
                 message.isUser
-                    // User message — light grey pill
                     ? Container(
-                        margin: const EdgeInsets.only(top: 8),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 14,
-                          vertical: 10,
-                        ),
+                        padding: const EdgeInsets.all(16),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).brightness == Brightness.dark
-                              ? Colors.white.withValues(alpha: 0.1)
-                              : Colors.black.withValues(alpha: 0.06),
-                          borderRadius: BorderRadius.circular(18),
+                          color: const Color(0xFF5137ED),
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: Color(0x225137ED),
+                              blurRadius: 10,
+                              offset: Offset(0, 3),
+                            ),
+                          ],
                         ),
                         child: Text(
                           message.text,
-                          style: TextStyle(
-                            color: AppTheme.getPrimaryText(context),
-                            fontSize: 15,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 15.5,
                             height: 1.45,
                           ),
                         ),
                       )
-                    // AI message — plain text, no background
-                    : Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-                        child: Text(
-                          message.text,
-                          style: TextStyle(
-                            color: AppTheme.getPrimaryText(context),
-                            fontSize: 16,
-                            height: 1.5,
+                    : Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF1A1A1D),
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(
+                            color: const Color(0xFF2A2A2E),
+                            width: 0.8,
+                          ),
+                        ),
+                        child: SelectionArea(
+                          child: Text(
+                            message.text,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 15.5,
+                              height: 1.5,
+                            ),
                           ),
                         ),
                       ),
               if ((message.confidenceNote ?? '').trim().isNotEmpty)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(4, 6, 4, 0),
+                  padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Icon(
                         Icons.info_outline_rounded,
                         size: 14,
-                        color: AppTheme.getSecondaryText(context),
+                        color: Colors.white60,
                       ),
                       const SizedBox(width: 6),
                       Expanded(
                         child: Text(
                           message.confidenceNote!,
-                          style: TextStyle(
-                            color: AppTheme.getSecondaryText(context),
+                          style: const TextStyle(
+                            color: Colors.white60,
                             fontSize: 12.5,
                             fontStyle: FontStyle.italic,
                           ),
@@ -664,7 +704,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                         style: TextStyle(
                           color: isTypeOwn
                               ? AppTheme.glowGuidePink
-                              : AppTheme.getPrimaryText(context),
+                              : Colors.white,
                           fontSize: 14,
                           fontWeight: isTypeOwn
                               ? FontWeight.w700
@@ -674,11 +714,9 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                               : FontStyle.normal,
                         ),
                       ),
-                      backgroundColor: Colors.transparent,
-                      side: BorderSide(
-                        color: Theme.of(context).brightness == Brightness.dark
-                            ? Colors.white.withValues(alpha: 0.2)
-                            : Colors.black.withValues(alpha: 0.12),
+                      backgroundColor: const Color(0xFF1C1C1F),
+                      side: const BorderSide(
+                        color: Color(0xFF2A2A2E),
                         width: 1,
                       ),
                       avatar: isTypeOwn
@@ -762,19 +800,30 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 12),
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
         child: Container(
-          padding: const EdgeInsets.fromLTRB(10, 8, 8, 6),
           decoration: BoxDecoration(
-            color: AppTheme.getCardBackground(context),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppTheme.getCardBorder(context)),
+            color: const Color(0xFF1C1C1F),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: const Color(0xFF2A2A2E),
+              width: 0.8,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.25),
+                blurRadius: 12,
+                offset: const Offset(0, 3),
+              ),
+            ],
           ),
+          padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               if (hasPhoto)
-                Align(
-                  alignment: Alignment.centerLeft,
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(4, 4, 4, 2),
                   child: GestureDetector(
                     onTap: _previewPhoto,
                     child: Stack(
@@ -798,12 +847,19 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                               _attachment = null;
                               _attachmentName = null;
                             }),
-                            icon: const Icon(Icons.close_rounded, size: 18),
+                            constraints: const BoxConstraints(
+                              minWidth: 26,
+                              minHeight: 26,
+                            ),
+                            padding: EdgeInsets.zero,
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              size: 16,
+                              color: Colors.white,
+                            ),
                             style: IconButton.styleFrom(
-                              backgroundColor: AppTheme.getPrimaryText(context),
-                              foregroundColor: AppTheme.getCardBackground(
-                                context,
-                              ),
+                              backgroundColor: const Color(0xFF2A2A2E),
+                              foregroundColor: Colors.white,
                             ),
                           ),
                         ),
@@ -812,40 +868,76 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                   ),
                 ),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  IconButton(
-                    tooltip: 'Add photo',
-                    onPressed: _choosePhoto,
-                    icon: const Icon(Icons.camera_alt_outlined),
-                  ),
-                  Expanded(
-                    child: TextField(
-                      controller: _text,
-                      focusNode: _textFocus,
-                      minLines: 1,
-                      maxLines: 4,
-                      textInputAction: TextInputAction.send,
-                      onSubmitted: (_) => _send(),
-                      decoration: const InputDecoration(
-                        hintText: 'Ask about skin, body care, or cloth...',
-                        border: InputBorder.none,
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 2),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        onTap: _choosePhoto,
+                        borderRadius: BorderRadius.circular(12),
+                        child: const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: Icon(
+                            Icons.camera_alt_outlined,
+                            color: Colors.white70,
+                            size: 22,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                  IconButton(
-                    tooltip: 'Send',
-                      onPressed: _sending || _sessionComplete ? null : _send,
-                    icon: Container(
-                      width: 36,
-                      height: 36,
-                      decoration: const BoxDecoration(
-                        color: AppTheme.glowGuidePink,
-                        shape: BoxShape.circle,
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 4,
+                        vertical: 4,
                       ),
-                      child: const Icon(
-                        Icons.arrow_upward_rounded,
-                        color: Colors.white,
-                        size: 20,
+                      child: TextField(
+                        controller: _text,
+                        focusNode: _textFocus,
+                        minLines: 1,
+                        maxLines: 6,
+                        textInputAction: TextInputAction.newline,
+                        onSubmitted: (_) => _send(),
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 15,
+                          height: 1.4,
+                        ),
+                        decoration: const InputDecoration(
+                          hintText: 'Ask about skin, body care, or cloth...',
+                          hintStyle: TextStyle(
+                            color: Colors.white38,
+                            fontSize: 15,
+                          ),
+                          border: InputBorder.none,
+                          contentPadding: EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 8,
+                          ),
+                          isCollapsed: true,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(left: 2),
+                    child: Material(
+                      color: AppTheme.glowGuidePink,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: _sending || _sessionComplete ? null : _send,
+                        child: const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: Icon(
+                            Icons.arrow_upward_rounded,
+                            color: Colors.white,
+                            size: 22,
+                          ),
+                        ),
                       ),
                     ),
                   ),
@@ -986,13 +1078,16 @@ class _WebSearchBubble extends StatelessWidget {
         const SizedBox(
           width: 16,
           height: 16,
-          child: CircularProgressIndicator(strokeWidth: 2),
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: AppTheme.glowGuidePink,
+          ),
         ),
         const SizedBox(width: 10),
-        Text(
+        const Text(
           'Web search',
           style: TextStyle(
-            color: AppTheme.getSecondaryText(context),
+            color: Colors.white70,
             fontSize: 13,
           ),
         ),
@@ -1128,8 +1223,8 @@ class _PreviewAction extends StatelessWidget {
       icon: Icon(icon, size: 16),
       label: Text(label),
       style: FilledButton.styleFrom(
-        backgroundColor: Colors.black87,
-        foregroundColor: Colors.white,
+        backgroundColor: AppTheme.babyPink,
+        foregroundColor: AppTheme.babyPinkMaroon,
       ),
     );
   }
