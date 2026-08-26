@@ -220,16 +220,51 @@ def language_hint_user_line(
     per_message: bool = False,
 ) -> str:
     if per_message:
-        detected = detect_question_language_hint(query)
-        lang = detected or "MATCH_QUESTION"
         selected = (conversation_language or "").strip()
+        selected_locked = bool(selected) and selected.upper() != "MATCH_QUESTION"
+
+        # An explicit override ("answer in Hindi") always wins, even over a
+        # prior selection — the user is deliberately asking for a change.
+        override = detect_explicit_override(query)
+
+        # THE FIX: a short chip tap (e.g. "Acne / Pimples", "Oily Skin",
+        # "Winter") must NOT be treated as an English switch away from a
+        # Hindi/Bengali selection just because the chip label is in
+        # English. We require real, longer sentence content in an
+        # unambiguous different script before trusting per-message
+        # detection over the user's explicit selection.
+        stripped = (query or "").strip()
+        word_count = len(stripped.split())
+        detected = detect_question_language_hint(query)
+
+        if override:
+            lang = override
+        elif selected_locked and (word_count < 4 or detected is None):
+            # Too short / ambiguous (a chip label, a single word, a photo
+            # with no caption) — trust the user's selected language
+            # instead of a stray English chip label.
+            lang = selected.upper()
+        elif (
+            selected_locked
+            and detected
+            and detected != "MATCH_QUESTION"
+            and detected != selected.upper()
+        ):
+            # A genuinely longer, unambiguous message in a different
+            # script/language — treat it as the user naturally switching.
+            lang = detected
+        else:
+            lang = detected or (selected.upper() if selected_locked else "MATCH_QUESTION")
+
         selected_note = ""
-        if selected and selected.upper() != "MATCH_QUESTION":
+        if selected_locked:
             selected_note = (
                 f" The user selected {selected} for this GlowGuide chat. Use {selected} "
                 "for your reply, follow-up question, and every question_options chip "
-                "unless the current user message clearly switches to another language."
+                "unless the current user message clearly switches to another language "
+                "with real sentence content (not just a short chip tap or a single word)."
             )
+
         roman_bengali = bool(_LATIN_LETTER.search(query)) and len(
             _BENGLISH_ROMAN.findall(query)
         ) >= 2
@@ -238,7 +273,7 @@ def language_hint_user_line(
             if _LATIN_LETTER.search(query) and not _NON_LATIN_SCRIPT.search(query)
             else "the script used in the message"
         )
-        if roman_bengali:
+        if roman_bengali and not (selected_locked and word_count < 4):
             return (
                 "PER-MESSAGE LANGUAGE RULE: The current message looks like Bengali "
                 "written in Roman/Latin script (Benglish). Reply in Benglish, not Bengali script. "
@@ -247,10 +282,13 @@ def language_hint_user_line(
             )
         return (
             f"PER-MESSAGE LANGUAGE RULE: Answer this message in {lang}, using {script}. "
-            "Re-detect language and script independently on every message; ignore earlier "
-            "turn language for output. Pure Devanagari means Hindi, pure Bengali script "
-            "means Bengali, and Roman Hindi/Hinglish must remain Roman. Mirror mixed-language "
-            "messages naturally in the same mix and script."
+            "A short chip-tap answer (2-4 words, e.g. a category or skin-type label) is NOT "
+            "a language-switch signal — it is just the label text of the button the user "
+            "tapped. Only treat a message as switching language when it has real, "
+            "unambiguous sentence content in a different script. Pure Devanagari means "
+            "Hindi, pure Bengali script means Bengali, and Roman Hindi/Hinglish must "
+            "remain Roman. Mirror mixed-language messages naturally in the same mix and "
+            "script."
             + selected_note
         )
     lang = resolve_answer_language(query, conversation_language)

@@ -31,6 +31,8 @@ GLOW_GUIDE_RESEARCH_COST = 10
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MAX_GLOW_GUIDE_EXCHANGES = 100
 
+REQUIRED_FIELDS = ["concern", "skin_type", "season", "product_info"]  # product_info = OCR'd/manual ingredients
+
 
 def _log_research_save_result(task: asyncio.Task[None]) -> None:
     try:
@@ -90,6 +92,20 @@ def glow_guide_language_for_turn(text: str, preferred_language: str | None = Non
     """Follow the same answer-language detection contract used across the app."""
     resolved = resolve_answer_language(text, conversation_language=preferred_language)
     return resolved or "MATCH_QUESTION"
+
+
+def _next_missing_field(ctx: dict, active_category: str | None, has_image_this_turn: bool, image: bytes | None) -> str | None:
+    if not ctx.get("concern"):
+        return "concern"
+    if not ctx.get("age") and active_category == "baby":
+        return "age"
+    if not ctx.get("skin_type") and active_category != "baby":
+        return "skin_type"
+    if not ctx.get("season") and not ctx.get("weather"):
+        return "season"
+    if not ctx.get("concern_details") and not has_image_this_turn and not image:
+        return "product_info"
+    return None
 
 
 async def _call_gemini(messages: list[dict[str, Any]]) -> str:
@@ -204,103 +220,32 @@ async def turn(
         context["weather"] = weather.strip()
     base_cost = glow_guide_credit_cost(bool(image))
     if get_credits_balance(user_id) < base_cost:
-        raise GlowGuideError(f"Need at least {base_cost} credits for GlowGuide.", 402)    
-    REQUIRED_FIELDS = ["concern", "skin_type", "season", "product_info"]  # product_info = OCR'd/manual ingredients
+        raise GlowGuideError(f"Need at least {base_cost} credits for GlowGuide.", 402)
 
-def _next_missing_field(ctx: dict, has_image_this_turn: bool) -> str | None:
-    if not ctx.get("concern"):
-        return "concern"
-    if not ctx.get("age") and active_category == "baby":
-        return "age"
-    if not ctx.get("skin_type") and active_category != "baby":
-        return "skin_type"
-    if not ctx.get("season") and not ctx.get("weather"):
-        return "season"
-    if not ctx.get("concern_details") and not has_image_this_turn and not image:
-        return "product_info"
-    return None
+    context_line = ""
+    if isinstance(context, dict) and context:
+        context_line = "\nPERSISTED CONVERSATION CONTEXT (do not ask for these again): " + json.dumps(context, ensure_ascii=True)
 
-context_line = ""
-if isinstance(context, dict) and context:
-    context_line = "\nPERSISTED CONVERSATION CONTEXT (do not ask for these again): " + json.dumps(context, ensure_ascii=True)
+    missing_field = _next_missing_field(context, active_category, bool(image), image)
+    questions_asked_so_far = len(context.get("asked_questions") or [])
+    if missing_field and questions_asked_so_far < 4:
+        context_line += (
+            f"\n\nNEXT REQUIRED QUESTION: Ask specifically about '{missing_field}' only. "
+            f"This is question #{questions_asked_so_far + 1} of max 4. "
+            f"The user's LAST message is their answer to your PREVIOUS question — extract it correctly into the matching JSON field before asking this new one."
+        )
+    elif missing_field and questions_asked_so_far >= 4:
+        context_line += "\n\nYou have asked 4 questions already. Give a PARTIAL verdict now (ready=true) with a disclaimer about missing info — do NOT ask another question."
+    else:
+        context_line += "\n\nAll required info is known. Give the final verdict now (ready=true)."
 
-missing_field = _next_missing_field(context, bool(image))
-questions_asked_so_far = len(context.get("asked_questions") or [])
-if missing_field and questions_asked_so_far < 4:
-    context_line += (
-        f"\n\nNEXT REQUIRED QUESTION: Ask specifically about '{missing_field}' only. "
-        f"This is question #{questions_asked_so_far + 1} of max 4. "
-        f"The user's LAST message is their answer to your PREVIOUS question — extract it correctly into the matching JSON field before asking this new one."
-    )
-elif missing_field and questions_asked_so_far >= 4:
-    context_line += "\n\nYou have asked 4 questions already. Give a PARTIAL verdict now (ready=true) with a disclaimer about missing info — do NOT ask another question."
-else:
-    context_line += "\n\nAll required info is known. Give the final verdict now (ready=true)."REQUIRED_FIELDS = ["concern", "skin_type", "season", "product_info"]  # product_info = OCR'd/manual ingredients
+    prior_questions = context.get("asked_questions") or []
+    if prior_questions:
+        context_line += (
+            "\n\nQUESTIONS ALREADY ASKED THIS SESSION (never repeat these or ask something semantically equivalent):\n- "
+            + "\n- ".join(prior_questions)
+        )
 
-def _next_missing_field(ctx: dict, has_image_this_turn: bool) -> str | None:
-    if not ctx.get("concern"):
-        return "concern"
-    if not ctx.get("age") and active_category == "baby":
-        return "age"
-    if not ctx.get("skin_type") and active_category != "baby":
-        return "skin_type"
-    if not ctx.get("season") and not ctx.get("weather"):
-        return "season"
-    if not ctx.get("concern_details") and not has_image_this_turn and not image:
-        return "product_info"
-    return None
-    REQUIRED_FIELDS = ["concern", "skin_type", "season", "product_info"]  # product_info = OCR'd/manual ingredients
-
-def _next_missing_field(ctx: dict, has_image_this_turn: bool) -> str | None:
-    if not ctx.get("concern"):
-        return "concern"
-    if not ctx.get("age") and active_category == "baby":
-        return "age"
-    if not ctx.get("skin_type") and active_category != "baby":
-        return "skin_type"
-    if not ctx.get("season") and not ctx.get("weather"):
-        return "season"
-    if not ctx.get("concern_details") and not has_image_this_turn and not image:
-        return "product_info"
-    return None
-
-context_line = ""
-if isinstance(context, dict) and context:
-    context_line = "\nPERSISTED CONVERSATION CONTEXT (do not ask for these again): " + json.dumps(context, ensure_ascii=True)
-
-missing_field = _next_missing_field(context, bool(image))
-questions_asked_so_far = len(context.get("asked_questions") or [])
-if missing_field and questions_asked_so_far < 4:
-    context_line += (
-        f"\n\nNEXT REQUIRED QUESTION: Ask specifically about '{missing_field}' only. "
-        f"This is question #{questions_asked_so_far + 1} of max 4. "
-        f"The user's LAST message is their answer to your PREVIOUS question — extract it correctly into the matching JSON field before asking this new one."
-    )
-elif missing_field and questions_asked_so_far >= 4:
-    context_line += "\n\nYou have asked 4 questions already. Give a PARTIAL verdict now (ready=true) with a disclaimer about missing info — do NOT ask another question."
-else:
-    context_line += "\n\nAll required info is known. Give the final verdict now (ready=true)."
-
-
-missing_field = _next_missing_field(context, bool(image))
-questions_asked_so_far = len(context.get("asked_questions") or [])
-if missing_field and questions_asked_so_far < 4:
-    context_line += (
-        f"\n\nNEXT REQUIRED QUESTION: Ask specifically about '{missing_field}' only. "
-        f"This is question #{questions_asked_so_far + 1} of max 4. "
-        f"The user's LAST message is their answer to your PREVIOUS question — extract it correctly into the matching JSON field before asking this new one."
-    )
-elif missing_field and questions_asked_so_far >= 4:
-    context_line += "\n\nYou have asked 4 questions already. Give a PARTIAL verdict now (ready=true) with a disclaimer about missing info — do NOT ask another question."
-else:
-    context_line += "\n\nAll required info is known. Give the final verdict now (ready=true)."
-        context_line = "\nPERSISTED CONVERSATION CONTEXT (do not ask for these again): " + json.dumps(slots, ensure_ascii=True)
-        prior_questions = context.get("asked_questions") or []
-        if prior_questions:
-           context_line += (
-               "\n\nQUESTIONS ALREADY ASKED THIS SESSION (never repeat these or ask something semantically equivalent):\n- "
-               + "\n- ".join(prior_questions)
-           )
     prompt = system_prompt(active_category, text, preferred_language) + context_line
     research = await search_cached_research(text)
     if research is None:
@@ -334,10 +279,10 @@ else:
     if parsed is None:
         raise GlowGuideError("GlowGuide unavailable. " + " | ".join(errors), 502)
     required_credits = glow_guide_credit_cost(bool(image)) + (
-    GLOW_GUIDE_RESEARCH_COST if research and research.get("used_web_search") else 0
-)
-if get_credits_balance(user_id) < required_credits:
-    raise GlowGuideError(f"Need {required_credits} credits for GlowGuide research.", 402)
+        GLOW_GUIDE_RESEARCH_COST if research and research.get("used_web_search") else 0
+    )
+    if get_credits_balance(user_id) < required_credits:
+        raise GlowGuideError(f"Need {required_credits} credits for GlowGuide research.", 402)
     try:
         balance = deduct_credits(user_id, required_credits, "GlowGuide turn", action="glow_guide")
     except InsufficientCreditsError as error:

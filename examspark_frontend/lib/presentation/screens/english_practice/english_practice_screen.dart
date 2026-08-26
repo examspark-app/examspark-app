@@ -807,39 +807,16 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                 ),
               );
             final m = _messages[i];
-            if (!m.isUser) {
-              return Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(8, 4, 8, 16),
-                  child: Container(
-                    constraints: BoxConstraints(
-                      maxWidth: MediaQuery.sizeOf(context).width * .80,
-                    ),
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: cardBg,
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: cardBorder, width: 0.8),
-                      boxShadow: isDark
-                          ? null
-                          : [
-                              BoxShadow(
-                                color: const Color(0xFF000000).withOpacity(0.05),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                    ),
-                    child: SelectionArea(
-                      child: Text(
-                        m.text,
-                        style: TextStyle(
-                          color: primaryText,
-                          fontSize: 15.5,
-                          height: 1.5,
-                        ),
-                      ),
+                        if (!m.isUser) {
+              return Padding(
+                padding: const EdgeInsets.fromLTRB(4, 4, 4, 22),
+                child: SelectionArea(
+                  child: Text(
+                    m.text,
+                    style: TextStyle(
+                      color: primaryText,
+                      fontSize: 15.5,
+                      height: 1.65,
                     ),
                   ),
                 ),
@@ -1223,7 +1200,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
     );
   }
 
-  Widget _input(bool isDark) {
+    Widget _input(bool isDark) {
     final inputBg = AppTheme.getInputBackground(context);
     final cardBorder = AppTheme.getCardBorder(context);
     final primaryText = AppTheme.getPrimaryText(context);
@@ -1231,14 +1208,15 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
     final shadowColor = isDark ? Colors.black : const Color(0xFF3A2B7B);
     final shadowOpacity = isDark ? 0.25 : 0.06;
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
       child: Container(
+        constraints: const BoxConstraints(minHeight: 58),
         decoration: BoxDecoration(
           color: inputBg,
-          borderRadius: BorderRadius.circular(18),
+          borderRadius: BorderRadius.circular(26),
           border: Border.all(
             color: _recording ? Colors.redAccent.withOpacity(0.5) : cardBorder,
-            width: _recording ? 1.2 : 0.8,
+            width: _recording ? 1.2 : 1,
           ),
           boxShadow: [
             BoxShadow(
@@ -1248,50 +1226,53 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             ),
           ],
         ),
-        padding: const EdgeInsets.fromLTRB(8, 6, 8, 6),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.end,
+        padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _smallIconBtn(
-              Icons.photo_library_outlined,
-              _pickPhoto,
-              tooltip: 'Attach photo',
-              subText: subText,
-            ),
-            _pressHoldMicBtn(isDark, subText),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-                child: TextField(
-                  controller: _text,
-                  onSubmitted: (_) => _send(),
-                  textInputAction: TextInputAction.newline,
-                  minLines: 1,
-                  maxLines: 6,
-                  style: TextStyle(
-                    color: primaryText,
-                    fontSize: 15,
-                    height: 1.4,
-                  ),
-                  decoration: InputDecoration(
-                    hintText: 'Message...',
-                    hintStyle: TextStyle(color: subText, fontSize: 15),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 8,
-                    ),
-                    isCollapsed: true,
-                  ),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 10),
+              child: TextField(
+                controller: _text,
+                onSubmitted: (_) => _send(),
+                textInputAction: TextInputAction.newline,
+                minLines: 1,
+                maxLines: 10,
+                style: TextStyle(
+                  color: primaryText,
+                  fontSize: 15.5,
+                  height: 1.4,
+                ),
+                decoration: InputDecoration(
+                  hintText: 'Message...',
+                  hintStyle: TextStyle(color: subText, fontSize: 15.5),
+                  border: InputBorder.none,
+                  contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                  isCollapsed: true,
                 ),
               ),
             ),
-            AiModelSelector(
-              selectedModel: _selectedTextModel,
-              onSelected: _changeTextModel,
+            const SizedBox(height: 8),
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                _smallIconBtn(
+                  Icons.add_rounded,
+                  _pickPhoto,
+                  tooltip: 'Attach photo',
+                  subText: subText,
+                ),
+                const SizedBox(width: 2),
+                AiModelSelector(
+                  selectedModel: _selectedTextModel,
+                  onSelected: _changeTextModel,
+                ),
+                const Spacer(),
+                _pressHoldMicBtn(isDark, subText),
+                const SizedBox(width: 6),
+                _sendBtn(),
+              ],
             ),
-            const SizedBox(width: 4),
-            _sendBtn(),
           ],
         ),
       ),

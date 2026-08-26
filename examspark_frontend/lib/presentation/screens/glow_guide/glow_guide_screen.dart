@@ -1052,20 +1052,21 @@ final latest = sorted.first;
       );
     }
 
-    Widget renderInput() {
-      final hasPhoto = _attachment != null;
-      return SafeArea(
-        top: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
-          child: Container(
-            decoration: BoxDecoration(
-              color: inputBg,
-              borderRadius: BorderRadius.circular(18),
-              border: Border.all(
-                color: inputBorder,
-                width: 0.8,
-              ),
+  Widget renderInput() {
+  final hasPhoto = _attachment != null;
+  return SafeArea(
+    top: false,
+    child: Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      child: Container(
+        constraints: const BoxConstraints(minHeight: 56),
+        decoration: BoxDecoration(
+          color: inputBg,
+          borderRadius: BorderRadius.circular(26),
+          border: Border.all(
+            color: inputBorder,
+            width: 1,
+          ),
               boxShadow: [
                 BoxShadow(
                   color: (isDark ? Colors.black : const Color(0xFF3A2B7B))
@@ -1159,7 +1160,7 @@ final latest = sorted.first;
                           controller: _text,
                           focusNode: _textFocus,
                           minLines: 1,
-                          maxLines: 6,
+                          maxLines: 8,
                           textInputAction: TextInputAction.newline,
                           onSubmitted: (_) => _send(),
                           style: TextStyle(
@@ -1189,17 +1190,17 @@ final latest = sorted.first;
                       padding: const EdgeInsets.only(left: 2),
                       child: Material(
                         color: AppTheme.glowGuidePink,
-                        borderRadius: BorderRadius.circular(12),
+                        borderRadius: BorderRadius.circular(20),
                         child: InkWell(
-                          borderRadius: BorderRadius.circular(12),
+                          borderRadius: BorderRadius.circular(20),
                           onTap:
                               _sending || _sessionComplete ? null : _send,
                           child: const Padding(
-                            padding: EdgeInsets.all(10),
+                            padding: EdgeInsets.all(12),
                             child: Icon(
                               Icons.arrow_upward_rounded,
                               color: Colors.white,
-                              size: 22,
+                              size: 24,
                             ),
                           ),
                         ),
@@ -1771,30 +1772,9 @@ class _CustomTopicInputState extends State<_CustomTopicInput> {
                 widget.onSaved(value.trim());
               },
             ),
-          ),
-          if ((_ctrl.text.trim().isNotEmpty))
-            TextButton(
-              onPressed: () {
-                final clean = _ctrl.text.trim();
-                widget.onSaved(clean);
-                widget.onSubmitted(clean);
-              },
-              style: TextButton.styleFrom(
-                foregroundColor: accent,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 6,
-                ),
-                minimumSize: const Size(0, 0),
-                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              ),
-              child: const Text(
-                'Save',
-                style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-}
+          ),        // ← Expanded band
+        ],          // ← Row ke children list band (Save button hatane ke baad ye last item hai)
+      ),            // ← Row band
+    );              // ← Container band
+  }                 // ← build method band
+}           
