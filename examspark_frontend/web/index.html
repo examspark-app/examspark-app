@@ -9,6 +9,9 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="Sonaxia">
   <meta name="theme-color" content="#F0384C">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
   <link rel="apple-touch-icon" href="images/sonaxia_logo.png">
   <link rel="icon" type="image/svg+xml" href="favicon.svg"/>
   <link rel="icon" type="image/png" href="favicon.png"/>
@@ -106,7 +109,44 @@
     window.addEventListener('load', function () {
       setTimeout(hideInitialShell, 150);
     });
+
+    (function () {
+      var APP_VERSION_KEY = 'examspark_app_version';
+      var currentVersion = 'v1.0.0-5';
+      try {
+        var stored = localStorage.getItem(APP_VERSION_KEY);
+        if (!stored) {
+          localStorage.setItem(APP_VERSION_KEY, currentVersion);
+        } else if (stored !== currentVersion) {
+          localStorage.setItem(APP_VERSION_KEY, currentVersion);
+          if (window.location.search.indexOf('force_refresh=1') === -1) {
+            var sep = window.location.href.indexOf('?') === -1 ? '?' : '&';
+            window.location.replace(window.location.href + sep + 'force_refresh=1');
+          }
+        }
+      } catch (e) {}
+    })();
+
+    window.forceReloadExamSparkApp = function () {
+      try {
+        if ('caches' in window) {
+          caches.keys().then(function (keys) {
+            Promise.all(keys.map(function (k) { return caches.delete(k); })).finally(function () {
+              doHardReload();
+            });
+          }).catch(function () { doHardReload(); });
+        } else {
+          doHardReload();
+        }
+      } catch (e) {
+        doHardReload();
+      }
+      function doHardReload() {
+        var sep = window.location.href.indexOf('?') === -1 ? '?' : '&';
+        window.location.replace(window.location.href + sep + 'v=' + Date.now());
+      }
+    };
   </script>
-  <script src="flutter_bootstrap.js" async></script>
+  <script src="flutter_bootstrap.js?v=1005" async></script>
 </body>
 </html>

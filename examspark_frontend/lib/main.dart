@@ -5,6 +5,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart' show BrowserContextMenu;
 import 'package:posthog_flutter/posthog_flutter.dart';
+import 'package:package_info_plus/package_info_plus.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:examspark_frontend/core/brand/app_brand.dart';
 import 'package:examspark_frontend/core/config/app_config.dart';
@@ -21,6 +23,35 @@ import 'package:examspark_frontend/core/services/crashlytics_service.dart';
 import 'package:examspark_frontend/presentation/widgets/auth_gate.dart';
 import 'package:app_links/app_links.dart';
 import 'package:examspark_frontend/core/payments/payment_service.dart';
+
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:js' as js show context;
+
+void _webForceReload() {
+  if (!kIsWeb) return;
+  try {
+    js.context.callMethod('forceReloadExamSparkApp');
+  } catch (_) {}
+}
+
+Future<void> _checkWebVersionBumpAndReload() async {
+  if (!kIsWeb) return;
+  try {
+    final packageInfo = await PackageInfo.fromPlatform();
+    final current = '${packageInfo.version}+${packageInfo.buildNumber}';
+    final prefs = await SharedPreferences.getInstance();
+    const key = 'examspark_known_app_version';
+    final stored = prefs.getString(key);
+    if (stored == null) {
+      await prefs.setString(key, current);
+      return;
+    }
+    if (stored != current) {
+      await prefs.setString(key, current);
+      _webForceReload();
+    }
+  } catch (_) {}
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -74,6 +105,12 @@ class _ExamSparkAppState extends State<ExamSparkApp> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _initializeBackgroundServices();
       _openInviteDeepLink();
+      if (kIsWeb) {
+        Future<void>.delayed(
+          const Duration(seconds: 3),
+          _checkWebVersionBumpAndReload,
+        );
+      }
     });
 
     if (!kIsWeb) {
