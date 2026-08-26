@@ -598,20 +598,45 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
     await _saveVoicePreference(_ttsProvider, _ttsVoiceKey, selectedLanguage);
   }
 
-  static const items = [
-    ('🎉', 'Party'),
-    ('🛒', 'Market'),
-    ('🧑‍🤝‍🧑', 'Friends'),
-    ('🍴', 'Restaurant'),
-    ('💼', 'Interview'),
-    ('✈️', 'Travel'),
-    ('🏢', 'Office / Citizen'),
-    ('💻', 'Online Client Meeting'),
-    ('🧑‍💼', 'Job Interview'),
-    ('📋', 'Job Test / Screening Chat'),
-    ('🗳️', 'Citizenship Test'),
-    ('🛂', 'Visa Interview'),
+  static const List<(String, IconData, String)> _modeItems = [
+    ('Party', Icons.celebration_outlined, '🎉'),
+    ('Market', Icons.storefront_outlined, '🛒'),
+    ('Friends', Icons.people_outline, '🧑‍🤝‍🧑'),
+    ('Restaurant', Icons.restaurant_outlined, '🍴'),
+    ('Interview', Icons.work_outline, '💼'),
+    ('Travel', Icons.flight_takeoff_outlined, '✈️'),
+    ('Office / Citizen', Icons.apartment_outlined, '🏢'),
+    ('Online Client Meeting', Icons.video_call_outlined, '💻'),
+    ('Job Interview', Icons.badge_outlined, '🧑‍💼'),
+    ('Job Test / Screening Chat', Icons.assignment_outlined, '📋'),
+    ('Citizenship Test', Icons.how_to_vote_outlined, '🗳️'),
+    ('Visa Interview', Icons.airplane_ticket_outlined, '🛂'),
   ];
+
+  static const List<(String, String, String, String, IconData)> _textModels = [
+    (
+      'qwen3',
+      'Qwen3 Turbo',
+      'v3 · Fast & smart',
+      'Great for daily roleplays',
+      Icons.auto_awesome_rounded,
+    ),
+    (
+      'gemini',
+      'Gemini Flash 2.0',
+      'v2.0 · Balanced',
+      'Crisp, natural English',
+      Icons.psychology_alt_outlined,
+    ),
+    (
+      'claude',
+      'Claude Sonnet',
+      'v4 · Premium',
+      'Best for interviews',
+      Icons.psychology_rounded,
+    ),
+  ];
+
   Future<void> custom() async {
     final input = TextEditingController();
     final value = await showDialog<String>(
@@ -640,192 +665,708 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
     }
   }
 
+  String _modelLabel() {
+    final m = _textModels.cast<(String, String, String, String, IconData)>().firstWhere(
+      (e) => e.$1 == _textModel,
+      orElse: () => _textModels.first as (String, String, String, String, IconData),
+    );
+    return '${m.$2}  ·  ${m.$3}';
+  }
+
+  Future<void> _onEnter() async {
+    if (scenario == null || scenario!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a roleplay mode first.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    if (_textModel.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select an AI model first.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    await _openSelectedScenario();
+  }
+
   @override
-  Widget build(BuildContext context) => Scaffold(
-    backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-    drawer: const EnglishPracticeDrawer(),
-    body: SafeArea(
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            Row(
-              children: [
-                Builder(
-                  builder: (context) => IconButton(
-                    onPressed: () => Scaffold.of(context).openDrawer(),
-                    icon: const Icon(Icons.menu_rounded, size: 30),
-                    tooltip: 'Open menu',
+  Widget build(BuildContext context) {
+    final cardBg = AppTheme.getCardBackground(context);
+    final primaryText = AppTheme.getPrimaryText(context);
+    final subText = Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black45;
+
+    return Scaffold(
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      drawer: const EnglishPracticeDrawer(),
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(18, 10, 18, 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Row(
+                children: [
+                  Builder(
+                    builder: (context) => IconButton(
+                      onPressed: () => Scaffold.of(context).openDrawer(),
+                      icon: const Icon(Icons.menu_rounded, size: 28),
+                      tooltip: 'Open menu',
+                    ),
                   ),
-                ),
-                const SizedBox(width: 8),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Roleplay',
+                    style: TextStyle(
+                      color: primaryText,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const Spacer(),
+                  IconButton(
+                    onPressed: _savingVoice ? null : _openLanguagePicker,
+                    icon: const Icon(Icons.language_rounded, size: 24),
+                    tooltip: 'Practice language',
+                  ),
+                  IconButton(
+                    onPressed: _savingVoice ? null : _openVoiceSettings,
+                    icon: const Icon(Icons.tune_rounded, size: 24),
+                    tooltip: 'Voice settings',
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+
+              // 1) AI model row
+              _buildModelRow(cardBg, primaryText, subText),
+              const SizedBox(height: 18),
+
+              // 2) Scenario / Mode chips section
+              _buildScenariosCard(cardBg, primaryText, subText),
+              const SizedBox(height: 22),
+
+              // 3) Sonia persona card + Enter
+              _buildPersonaAndEnter(cardBg, primaryText, subText),
+              const SizedBox(height: 12),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildModelRow(Color cardBg, Color primaryText, Color subText) {
+    final active = _textModels.cast<(String, String, String, String, IconData)>().firstWhere(
+      (e) => e.$1 == _textModel,
+      orElse: () => _textModels.first as (String, String, String, String, IconData),
+    );
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 12, 10, 12),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: const Color(0xFFE6E4F2),
+          width: 0.8,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF6F56FF), Color(0xFF3020BF)],
+              ),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(active.$5, color: Colors.white, size: 22),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 Text(
-                  'Roleplay',
+                  active.$2,
                   style: TextStyle(
-                    color: AppTheme.getPrimaryText(context),
-                    fontSize: 18,
+                    color: primaryText,
+                    fontSize: 15,
                     fontWeight: FontWeight.w800,
                   ),
                 ),
-                const Spacer(),
-                IconButton(
-                  onPressed: () => _openVoiceSettings(),
-                  icon: const Icon(Icons.tune_rounded, size: 25),
-                  tooltip: 'Roleplay voice',
+                const SizedBox(height: 2),
+                Text(
+                  '${active.$3}  ·  ${active.$4}',
+                  style: TextStyle(
+                    color: subText,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 22),
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(20),
-              decoration: BoxDecoration(
-                color: AppTheme.getCardBackground(context),
-                borderRadius: BorderRadius.circular(24),
-              ),
-              child: Column(
-                children: [
-                  const Text(
-                    'Choose Roleplay Mode',
-                    style: TextStyle(
-                      color: _violet,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Wrap(
-                    spacing: 10,
-                    runSpacing: 12,
-                    alignment: WrapAlignment.center,
-                    children: items
-                        .map(
-                          (x) => ChoiceChip(
-                            label: Text(
-                              '${x.$1}  ${x.$2}',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            selected: scenario == x.$2,
-                            onSelected: (_) => setState(() => scenario = x.$2),
-                            selectedColor: const Color(0xFFE8E3FF),
-                            side: BorderSide(
-                              color: scenario == x.$2
-                                  ? _violet
-                                  : const Color(0xFFE2E1ED),
-                            ),
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 10,
-                              vertical: 11,
+          ),
+          const SizedBox(width: 6),
+          PopupMenuButton<String>(
+            onSelected: (v) => setState(() => _textModel = v),
+            itemBuilder: (ctx) {
+              return _textModels.map((m) {
+                return PopupMenuItem<String>(
+                  value: m.$1,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(m.$5, size: 18, color: _violet),
+                      const SizedBox(width: 8),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            m.$2,
+                            style: const TextStyle(
+                              fontSize: 13.5,
+                              fontWeight: FontWeight.w800,
                             ),
                           ),
-                        )
-                        .toList(),
+                          Text(
+                            m.$3,
+                            style: const TextStyle(
+                              fontSize: 10.5,
+                              color: Colors.black45,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 16),
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: custom,
-                      icon: const Icon(Icons.add, color: _violet),
-                      label: const Text(
-                        'Custom Roleplay',
-                        style: TextStyle(
-                          color: _violet,
-                          fontWeight: FontWeight.w700,
+                );
+              }).toList();
+            },
+            child: Container(
+              padding: const EdgeInsets.fromLTRB(8, 7, 8, 7),
+              decoration: BoxDecoration(
+                color: const Color(0xFFF6F5FB),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: const Color(0xFFE6E4F2),
+                  width: 0.8,
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(
+                    Icons.swap_horiz_rounded,
+                    size: 16,
+                    color: _violet,
+                  ),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'Change',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w800,
+                      color: _violet,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScenariosCard(Color cardBg, Color primaryText, Color subText) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(
+          color: const Color(0xFFEBE9F5),
+          width: 0.8,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6F56FF).withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.theater_comedy_outlined,
+                  color: _violet,
+                  size: 19,
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Roleplay Mode',
+                      style: TextStyle(
+                        color: _violet,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16.5,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Pick a situation. Tap again to deselect.',
+                      style: TextStyle(
+                        color: Colors.black45,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          LayoutBuilder(
+            builder: (ctx, constraints) {
+              final cardWidth = (constraints.maxWidth - 10) / 2;
+              final items = _modeItems;
+              return Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                alignment: WrapAlignment.spaceBetween,
+                children: List.generate(items.length, (index) {
+                  final x = items[index];
+                  final label = x.$1;
+                  final icon = x.$2;
+                  final emoji = x.$3;
+                  final selected = scenario == label;
+                  return SizedBox(
+                    width: cardWidth,
+                    child: _modeButton(
+                      label: label,
+                      icon: icon,
+                      emoji: emoji,
+                      selected: selected,
+                      onTap: () => setState(() {
+                        scenario = (scenario == label) ? null : label;
+                      }),
+                    ),
+                  );
+                }),
+              );
+            },
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: custom,
+              icon: const Icon(Icons.add_rounded, color: _violet),
+              label: const Text(
+                'Custom Roleplay',
+                style: TextStyle(
+                  color: _violet,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _violet,
+                side: const BorderSide(color: _violet, width: 1.1),
+                backgroundColor: const Color(0xFFF6F5FB),
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modeButton({
+    required String label,
+    required IconData icon,
+    required String emoji,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 160),
+        padding: const EdgeInsets.fromLTRB(12, 12, 10, 12),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(16),
+          gradient: selected
+              ? const LinearGradient(
+                  colors: [Color(0xFF6F56FF), Color(0xFF3020BF)],
+                )
+              : null,
+          color: selected ? null : const Color(0xFFF6F5FB),
+          border: Border.all(
+            color: selected ? Colors.transparent : const Color(0xFFE6E4F2),
+            width: 0.8,
+          ),
+          boxShadow: selected
+              ? const [
+                  BoxShadow(
+                    color: Color(0x335137ED),
+                    blurRadius: 14,
+                    offset: Offset(0, 4),
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: selected
+                    ? Colors.white.withOpacity(0.14)
+                    : Colors.white,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              alignment: Alignment.center,
+              child: Icon(
+                icon,
+                size: 18,
+                color: selected ? Colors.white : _violet,
+              ),
+            ),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w800,
+                      color: selected ? Colors.white : const Color(0xFF3A3659),
+                    ),
+                  ),
+                  const SizedBox(height: 1),
+                  Text(
+                    emoji,
+                    style: const TextStyle(fontSize: 11),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              const Padding(
+                padding: EdgeInsets.only(left: 4, right: 2),
+                child: Icon(
+                  Icons.check_circle_rounded,
+                  size: 15,
+                  color: Colors.white,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPersonaAndEnter(Color cardBg, Color primaryText, Color subText) {
+    final modelTag = _modelLabel();
+    final isReady = scenario != null && scenario!.trim().isNotEmpty;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(28),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [Color(0xFF6348FF), Color(0xFF3020BF)],
+        ),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x335A3AFF),
+            blurRadius: 22,
+            offset: Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Persona row
+          Row(
+            children: [
+              // Sonia avatar
+              Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: Colors.white, width: 2.2),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x55FFFFFF),
+                      blurRadius: 12,
+                      spreadRadius: 1,
+                    ),
+                  ],
+                  image: const DecorationImage(
+                    fit: BoxFit.cover,
+                    image: NetworkImage(
+                      'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Professional%20friendly%20Indian%20female%20english%20tutor%20portrait%20called%20Sonia%20headshot%20warm%20smile%20clean%20studio%20light%20soft%20pink%20background&image_size=square_hd',
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Row(
+                      children: [
+                        Text(
+                          'Sonia',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(width: 8),
+                        Icon(
+                          Icons.verified_rounded,
+                          color: Color(0xFF9DF3C4),
+                          size: 18,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 3),
+                    const Text(
+                      'Your English buddy',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.fromLTRB(9, 5, 9, 5),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.18),
                         ),
                       ),
-                      style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: _violet),
-                        padding: const EdgeInsets.symmetric(vertical: 15),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.memory_rounded,
+                            size: 13,
+                            color: Colors.white.withOpacity(0.8),
+                          ),
+                          const SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              modelTag,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: Colors.white.withOpacity(0.92),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          // Scenario selected preview + hint
+          if (isReady) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 11, 12, 11),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.18),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 26,
+                    height: 26,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.18),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    alignment: Alignment.center,
+                    child: const Icon(
+                      Icons.theater_comedy_rounded,
+                      size: 15,
+                      color: Colors.white,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          scenario!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 1),
+                        const Text(
+                          'Ready — Sonia will open the scene.',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+          ] else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.info_outline_rounded,
+                    size: 14,
+                    color: Colors.white.withOpacity(0.75),
+                  ),
+                  const SizedBox(width: 6),
+                  const Expanded(
+                    child: Text(
+                      'Pick a roleplay mode first, then tap Enter.',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
-            const SizedBox(height: 20),
-            OutlinedButton.icon(
-              onPressed: _savingVoice ? null : _openLanguagePicker,
-              icon: const Icon(Icons.language_rounded, size: 20),
-              label: const Text('Practice language'),
-              style: OutlinedButton.styleFrom(
-                foregroundColor: _violet,
-                side: const BorderSide(color: _violet),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 11,
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-            Expanded(
-              child: InkWell(
-                onTap: scenario == null ? null : _openSelectedScenario,
-                borderRadius: BorderRadius.circular(25),
-                child: Container(
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF5A42F5), Color(0xFF3324C9)],
-                    ),
-                    borderRadius: BorderRadius.circular(25),
+          const SizedBox(height: 2),
+          // Big Enter button
+          SizedBox(
+            width: double.infinity,
+            height: 58,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                boxShadow: const [
+                  BoxShadow(
+                    color: Color(0x33000000),
+                    blurRadius: 12,
+                    offset: Offset(0, 5),
                   ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Text(
-                        'Start Roleplay',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 18,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Container(
-                        width: 180,
-                        height: 180,
-                        decoration: const BoxDecoration(
-                          color: Colors.white,
-                          shape: BoxShape.circle,
-                          boxShadow: [
-                            BoxShadow(
-                              color: Color(0x665A3AFF),
-                              blurRadius: 30,
-                              spreadRadius: 18,
-                            ),
-                          ],
-                        ),
-                        child: const Icon(
+                ],
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: _onEnter,
+                  borderRadius: BorderRadius.circular(18),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        const Icon(
                           Icons.mic_rounded,
+                          size: 22,
                           color: _violet,
-                          size: 74,
                         ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        scenario == null
-                            ? 'Choose a scenario to begin'
-                            : '$scenario roleplay ready',
-                        style: const TextStyle(color: Colors.white),
-                      ),
-                      const SizedBox(height: 12),
-                      const Text(
-                        'Auto listening  ·  Speak naturally',
-                        style: TextStyle(color: Colors.white70),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Enter',
+                          style: TextStyle(
+                            color: _violet,
+                            fontSize: 16.5,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.arrow_forward_rounded,
+                          size: 18,
+                          color: _violet.withOpacity(0.8),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
             ),
-          ],
-        ),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Auto listening  ·  Speak naturally',
+            style: TextStyle(
+              color: Colors.white70,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
       ),
-    ),
-  );
+    );
+  }
 }
 
 enum RoleplayVoiceState {
