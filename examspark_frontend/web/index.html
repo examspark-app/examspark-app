@@ -39,13 +39,14 @@
       top: 0;
       left: 0;
       right: 0;
+      bottom: 0;
       z-index: 1;
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 72px;
-      background: rgba(255, 255, 255, 0.94);
-      backdrop-filter: blur(8px);
+      flex-direction: column;
+      gap: 12px;
+      background: #f7f4f2;
       transition: opacity 220ms ease;
     }
 
@@ -56,18 +57,17 @@
 
     #sonaxia-shell img {
       display: block;
-      width: 140px;
-      height: 40px;
+      width: 96px;
+      height: 28px;
       object-fit: contain;
     }
 
     #sonaxia-shell::after {
       content: "";
-      width: 16px;
-      height: 16px;
-      margin-left: 12px;
+      width: 13px;
+      height: 13px;
       border-radius: 50%;
-      border: 2px solid rgba(240, 56, 76, 0.2);
+      border: 2px solid rgba(240, 56, 76, 0.18);
       border-top-color: #f0384c;
       animation: sonaxia-spin 0.9s linear infinite;
     }
