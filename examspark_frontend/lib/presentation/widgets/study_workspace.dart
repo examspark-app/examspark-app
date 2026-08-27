@@ -1897,11 +1897,32 @@ Widget build(BuildContext context) {
   }
 
   Widget _askAiTab(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(top: 4),
-      child: WorkspaceAskAiPane(lectureId: widget.lectureId),
-    );
-  }
+  return Padding(
+    padding: const EdgeInsets.all(16),
+    child: Center(
+      child: OutlinedButton.icon(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => Scaffold(
+                appBar: AppBar(
+                  title: const Text('Ask AI'),
+                ),
+                body: SafeArea(
+                  child: WorkspaceAskAiPane(
+                    lectureId: widget.lectureId,
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
+        icon: const Icon(Icons.chat_bubble_outline),
+        label: const Text('Open Ask AI'),
+      ),
+    ),
+  );
+}
 
   Widget _sectionLabel(String text) {
     return Text(
