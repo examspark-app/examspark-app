@@ -33,6 +33,8 @@ class EnglishLanguagePickerScreen extends StatefulWidget {
 
 class _EnglishLanguagePickerScreenState
     extends State<EnglishLanguagePickerScreen> {
+  static const violet = Color(0xFF5137ED);
+
   _PickerStep _step = _PickerStep.nativeLanguage;
   String? _nativeLanguage;
   String? _targetLanguage;
@@ -100,6 +102,19 @@ class _EnglishLanguagePickerScreenState
     _LangOption('ଓଡ଼ିଆ', 'Odia'),
     _LangOption('اردو', 'Urdu'),
     _LangOption('नेपाली', 'Nepali'),
+  ];
+
+  // A small rotating palette so each language tile's avatar gets a
+  // distinct, friendly colour without needing real flag art.
+  static const List<Color> _avatarPalette = [
+    Color(0xFF5137ED),
+    Color(0xFFEF5DA8),
+    Color(0xFF2FB4A6),
+    Color(0xFFF2A93B),
+    Color(0xFF5B8DEF),
+    Color(0xFFE0655B),
+    Color(0xFF8A5CF6),
+    Color(0xFF3FB27F),
   ];
 
   List<_LangOption> get _languages {
@@ -288,160 +303,446 @@ class _EnglishLanguagePickerScreenState
     }
   }
 
+  Color _avatarColorFor(int index) =>
+      _avatarPalette[index % _avatarPalette.length];
+
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
+    final primaryText = AppTheme.getPrimaryText(context);
+    final subText = AppTheme.getSecondaryText(context);
+    final cardBg = AppTheme.getCardBackground(context);
+    final cardBorder = AppTheme.getCardBorder(context);
+    final inputBg = AppTheme.getInputBackground(context);
+
     final showBack =
         _step != _PickerStep.nativeLanguage || widget.returnToPrevious;
     final stepIndex = _step == _PickerStep.nativeLanguage ? 1 : 2;
     const totalSteps = 2;
 
     return Scaffold(
-      appBar: AppBar(
-        leading: showBack
-            ? IconButton(
-                icon: const Icon(Icons.arrow_back),
-                onPressed: _goBack,
-                tooltip: 'Back',
-              )
-            : null,
-        title: Text(_stepTitle),
-        bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(6),
-          child: LinearProgressIndicator(
-            value: stepIndex / totalSteps,
-            minHeight: 3,
-            backgroundColor: Colors.transparent,
-          ),
-        ),
-      ),
-      body: Padding(
-        padding: const EdgeInsets.all(AppTheme.screenPadding),
+      backgroundColor: scaffoldBg,
+      body: SafeArea(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppTheme.getAccentTint(context),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    'Step $stepIndex of $totalSteps',
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.accentColor,
-                    ),
-                  ),
+            // ── Header ──────────────────────────────────────────────
+            Container(
+              padding: const EdgeInsets.fromLTRB(20, 8, 20, 22),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: isDark
+                      ? [const Color(0xFF241B57), const Color(0xFF15111F)]
+                      : [const Color(0xFFEDE8FE), const Color(0xFFFAF7FF)],
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-              _stepSubtitle,
-              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: AppTheme.getSecondaryText(context),
-                height: 1.4,
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(28),
+                  bottomRight: Radius.circular(28),
+                ),
               ),
-            ),
-            if (_step != _PickerStep.nativeLanguage &&
-                _nativeLanguage != null) ...[
-              const SizedBox(height: 12),
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 8,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    'Native language:',
-                    style: TextStyle(
-                      fontSize: 13,
-                      color: AppTheme.getSecondaryText(context),
+                  Row(
+                    children: [
+                      if (showBack)
+                        IconButton(
+                          onPressed: _goBack,
+                          icon: Icon(
+                            Icons.arrow_back_rounded,
+                            color: isDark ? Colors.white : const Color(0xFF1E1B2C),
+                          ),
+                          tooltip: 'Back',
+                          style: IconButton.styleFrom(
+                            backgroundColor:
+                                (isDark ? Colors.white : Colors.black)
+                                    .withOpacity(0.06),
+                          ),
+                        )
+                      else
+                        const SizedBox(width: 8),
+                      const Spacer(),
+                      _StepDots(current: stepIndex, total: totalSteps),
+                      const Spacer(),
+                      SizedBox(width: showBack ? 48 : 8),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+                  Container(
+                    width: 52,
+                    height: 52,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: violet.withOpacity(isDark ? 0.24 : 0.12),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Icon(
+                      _step == _PickerStep.nativeLanguage
+                          ? Icons.record_voice_over_rounded
+                          : Icons.translate_rounded,
+                      color: violet,
+                      size: 26,
                     ),
                   ),
-                  Chip(
-                    label: Text(_nativeLanguage!),
-                    visualDensity: VisualDensity.compact,
+                  const SizedBox(height: 14),
+                  Text(
+                    _stepTitle,
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.w800,
+                      color: primaryText,
+                      height: 1.25,
+                    ),
                   ),
+                  const SizedBox(height: 6),
+                  Text(
+                    _stepSubtitle,
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      color: subText,
+                      height: 1.45,
+                    ),
+                  ),
+                  if (_step != _PickerStep.nativeLanguage &&
+                      _nativeLanguage != null) ...[
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 7,
+                      ),
+                      decoration: BoxDecoration(
+                        color: (isDark ? Colors.white : Colors.black)
+                            .withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.check_circle_rounded,
+                              size: 14, color: violet),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Speaks $_nativeLanguage',
+                            style: TextStyle(
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w600,
+                              color: primaryText,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
-            ],
-            const SizedBox(height: 16),
-            TextField(
-              controller: _search,
-              onChanged: (_) => setState(() {}),
-              decoration: InputDecoration(
-                hintText: _searchHint,
-                prefixIcon: const Icon(Icons.search_rounded),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                isDense: true,
-              ),
             ),
-            const SizedBox(height: 12),
+
+            // ── Body ────────────────────────────────────────────────
             Expanded(
               child: _saving
-                  ? const Center(child: CircularProgressIndicator())
+                  ? Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const CircularProgressIndicator(color: violet),
+                          const SizedBox(height: 14),
+                          Text(
+                            'Setting things up…',
+                            style: TextStyle(color: subText, fontSize: 13.5),
+                          ),
+                        ],
+                      ),
+                    )
                   : ListView(
+                      padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
                       children: [
-                        for (final lang in _filtered) ...[
-                          Card(
-                            margin: const EdgeInsets.only(bottom: 8),
-                            child: ListTile(
-                              title: Text(
-                                lang.label,
-                                style: const TextStyle(fontSize: 16),
-                              ),
-                              subtitle: Text(lang.englishName),
-                              onTap: () => _select(lang.englishName),
-                            ),
+                        // Search bar
+                        Container(
+                          decoration: BoxDecoration(
+                            color: inputBg,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: cardBorder),
                           ),
-                        ],
-                        const SizedBox(height: 8),
-                        if (!_showCustom)
-                          OutlinedButton.icon(
-                            onPressed: () => setState(() => _showCustom = true),
-                            icon: const Icon(Icons.edit_outlined),
-                            label: const Text('Other / Type your own'),
-                          )
-                        else ...[
-                          TextField(
-                            controller: _customController,
-                            autofocus: true,
+                          child: TextField(
+                            controller: _search,
+                            onChanged: (_) => setState(() {}),
+                            style: TextStyle(color: primaryText, fontSize: 14.5),
                             decoration: InputDecoration(
-                              hintText: _customHint,
-                              border: OutlineInputBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                              hintText: _searchHint,
+                              hintStyle: TextStyle(color: subText, fontSize: 14.5),
+                              prefixIcon: Icon(Icons.search_rounded, color: subText),
+                              border: InputBorder.none,
                               isDense: true,
+                              contentPadding:
+                                  const EdgeInsets.symmetric(vertical: 14),
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              onPressed: () {
-                                final v = _customController.text.trim();
-                                if (v.isEmpty) return;
-                                _select(v);
-                              },
-                              child: Text(
-                                _step == _PickerStep.nativeLanguage
-                                    ? 'Continue'
-                                    : 'Start learning',
+                        ),
+                        const SizedBox(height: 16),
+
+                        // Language grid
+                        GridView.builder(
+                          shrinkWrap: true,
+                          physics: const NeverScrollableScrollPhysics(),
+                          itemCount: _filtered.length,
+                          gridDelegate:
+                              const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            mainAxisSpacing: 10,
+                            crossAxisSpacing: 10,
+                            childAspectRatio: 2.5,
+                          ),
+                          itemBuilder: (context, index) {
+                            final lang = _filtered[index];
+                            final color = _avatarColorFor(index);
+                            return _LanguageTile(
+                              option: lang,
+                              color: color,
+                              cardBg: cardBg,
+                              cardBorder: cardBorder,
+                              primaryText: primaryText,
+                              subText: subText,
+                              onTap: () => _select(lang.englishName),
+                            );
+                          },
+                        ),
+
+                        const SizedBox(height: 18),
+
+                        // Custom / "type your own" section
+                        if (!_showCustom)
+                          InkWell(
+                            onTap: () => setState(() => _showCustom = true),
+                            borderRadius: BorderRadius.circular(16),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 14,
+                              ),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(16),
+                                border: Border.all(
+                                  color: violet.withOpacity(0.4),
+                                  width: 1.2,
+                                ),
+                                color: violet.withOpacity(isDark ? 0.10 : 0.05),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.edit_outlined,
+                                      color: violet, size: 18),
+                                  const SizedBox(width: 10),
+                                  Text(
+                                    'Not listed? Type your own',
+                                    style: TextStyle(
+                                      color: violet,
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 13.5,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
+                          )
+                        else
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: cardBorder),
+                              color: cardBg,
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.stretch,
+                              children: [
+                                TextField(
+                                  controller: _customController,
+                                  autofocus: true,
+                                  style: TextStyle(
+                                      color: primaryText, fontSize: 14.5),
+                                  decoration: InputDecoration(
+                                    hintText: _customHint,
+                                    hintStyle:
+                                        TextStyle(color: subText, fontSize: 13),
+                                    filled: true,
+                                    fillColor: inputBg,
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(12),
+                                      borderSide: BorderSide.none,
+                                    ),
+                                    isDense: true,
+                                    contentPadding:
+                                        const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 14,
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: FilledButton(
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: violet,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(
+                                          vertical: 14),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius:
+                                            BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                    onPressed: () {
+                                      final v = _customController.text.trim();
+                                      if (v.isEmpty) return;
+                                      _select(v);
+                                    },
+                                    child: Text(
+                                      _step == _PickerStep.nativeLanguage
+                                          ? 'Continue'
+                                          : 'Start learning',
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w700,
+                                        fontSize: 14.5,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
                           ),
-                        ],
                       ],
                     ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Small dot-and-line progress indicator shown in the header.
+class _StepDots extends StatelessWidget {
+  const _StepDots({required this.current, required this.total});
+  final int current;
+  final int total;
+
+  static const violet = Color(0xFF5137ED);
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 1; i <= total; i++) ...[
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: i == current ? 22 : 8,
+            height: 8,
+            decoration: BoxDecoration(
+              color: i <= current
+                  ? violet
+                  : violet.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          if (i != total) const SizedBox(width: 6),
+        ],
+      ],
+    );
+  }
+}
+
+/// One selectable language card: coloured initial avatar, native-script
+/// label, and the English name underneath.
+class _LanguageTile extends StatelessWidget {
+  const _LanguageTile({
+    required this.option,
+    required this.color,
+    required this.cardBg,
+    required this.cardBorder,
+    required this.primaryText,
+    required this.subText,
+    required this.onTap,
+  });
+
+  final _LangOption option;
+  final Color color;
+  final Color cardBg;
+  final Color cardBorder;
+  final Color primaryText;
+  final Color subText;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: cardBg,
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: cardBorder),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: color.withOpacity(0.16),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  option.englishName.isNotEmpty
+                      ? option.englishName[0].toUpperCase()
+                      : '?',
+                  style: TextStyle(
+                    color: color,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 9),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      option.label,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: primaryText,
+                        fontWeight: FontWeight.w700,
+                        fontSize: 13.5,
+                      ),
+                    ),
+                    Text(
+                      option.englishName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: subText,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );

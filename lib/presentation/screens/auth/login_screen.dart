@@ -121,13 +121,28 @@ class _LoginScreenState extends State<LoginScreen> {
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 48),
-                  TextFormField(
+                                    TextFormField(
                     controller: _emailController,
                     keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
+                    style: const TextStyle(color: Colors.black87),
+                    decoration: InputDecoration(
                       labelText: 'Email',
-                      prefixIcon: Icon(Icons.email),
-                      border: OutlineInputBorder(),
+                      labelStyle: const TextStyle(color: Colors.black54),
+                      prefixIcon: const Icon(Icons.email, color: Colors.black54),
+                      filled: true,
+                      fillColor: const Color(0xFFFFE4EC), // baby pink
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Colors.pink, width: 1.5),
+                      ),
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {
@@ -140,21 +155,37 @@ class _LoginScreenState extends State<LoginScreen> {
                     },
                   ),
                   const SizedBox(height: 16),
-                  TextFormField(
+                                    TextFormField(
                     controller: _passwordController,
                     obscureText: _obscurePassword,
+                    style: const TextStyle(color: Colors.black87),
                     decoration: InputDecoration(
                       labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock),
+                      labelStyle: const TextStyle(color: Colors.black54),
+                      prefixIcon: const Icon(Icons.lock, color: Colors.black54),
                       suffixIcon: IconButton(
                         icon: Icon(
                           _obscurePassword ? Icons.visibility : Icons.visibility_off,
+                          color: Colors.black54,
                         ),
                         onPressed: () {
                           setState(() => _obscurePassword = !_obscurePassword);
                         },
                       ),
-                      border: const OutlineInputBorder(),
+                      filled: true,
+                      fillColor: const Color(0xFFFFE4EC), // baby pink
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide.none,
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: const BorderSide(color: Colors.pink, width: 1.5),
+                      ),
                     ),
                     validator: (value) {
                       if (value == null || value.isEmpty) {

@@ -1159,11 +1159,13 @@ final latest = sorted.first;
                           horizontal: 4,
                           vertical: 4,
                         ),
-                        child: TextField(
+                                                child: TextField(
                           controller: _text,
                           focusNode: _textFocus,
                           minLines: 1,
-                          maxLines: 8,
+                          maxLines: 10,
+                          textAlign: TextAlign.start,
+                          textDirection: TextDirection.ltr,
                           textInputAction: TextInputAction.newline,
                           onSubmitted: (_) => _send(),
                           style: TextStyle(
@@ -1174,6 +1176,7 @@ final latest = sorted.first;
                           decoration: InputDecoration(
                             hintText:
                                 'Ask about skin, body care, or cloth...',
+                            hintTextDirection: TextDirection.ltr,
                             hintStyle: TextStyle(
                               color: subText,
                               fontSize: 15,
