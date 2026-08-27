@@ -8,7 +8,7 @@ import 'package:examspark_frontend/core/constants/roleplay_voice_config.dart';
 import 'package:examspark_frontend/core/services/recording_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_drawer.dart';
-
+import 'package:examspark_frontend/presentation/screens/english_practice/sonia_chat_screen.dart';
 const _violet = Color(0xFF5137ED);
 
 class RoleplaySetupScreen extends StatefulWidget {
@@ -694,7 +694,27 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
     }
     await _openSelectedScenario();
   }
-
+  Future<void> _onChatWithSonia() async {
+    if (scenario == null || scenario!.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please select a roleplay mode first.'),
+          behavior: SnackBarBehavior.floating,
+        ),
+      );
+      return;
+    }
+    await Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => SoniaChatScreen(
+          scenario: scenario!,
+          targetLanguage: widget.targetLanguage ?? _targetLanguage,
+          nativeLanguage: widget.nativeLanguage ?? 'English',
+        ),
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     final cardBg = AppTheme.getCardBackground(context);
@@ -1483,6 +1503,31 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
               color: Colors.white70,
               fontSize: 11.5,
               fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 14),
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: OutlinedButton.icon(
+              onPressed: _onChatWithSonia,
+              icon: const Icon(Icons.chat_bubble_rounded, color: Colors.white, size: 19),
+              label: const Text(
+                'Chat with Sonia',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14.5,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Colors.white54, width: 1.1),
+                backgroundColor: Colors.white.withOpacity(0.10),
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+              ),
             ),
           ),
         ],
