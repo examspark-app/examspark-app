@@ -1675,7 +1675,63 @@ class LectureService {
     final body = await response.stream.bytesToString();
     return _extractErrorDetailFromBody(body, response.statusCode);
   }
+    Future<Map<String, dynamic>> startSoniaChat({
+    required String scenario,
+    required String nativeLanguage,
+    required String targetLanguage,
+  }) async {
+    final accessToken = await _requireAccessToken();
+    final response = await http.post(
+      Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/sonia/start'),
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'scenario': scenario,
+        'native_language': nativeLanguage,
+        'target_language': targetLanguage,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
 
+  Future<Map<String, dynamic>> sendSoniaMessage({
+    required String sessionId,
+    required String text,
+  }) async {
+    final accessToken = await _requireAccessToken();
+    final response = await http.post(
+      Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/sonia/message'),
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'session_id': sessionId, 'text': text}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<void> endSoniaChat({required String sessionId}) async {
+    final accessToken = await _requireAccessToken();
+    final response = await http.post(
+      Uri.parse('${AppConfig.resolvedApiBaseUrl}/api/v1/sonia/$sessionId/end'),
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: '{}',
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+  }
   Future<void> endEnglishRoleplay({
     required String sessionId,
     required int durationSeconds,

@@ -909,151 +909,97 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
     );
   }
 
-  Widget _buildTtsVoiceCard(Color cardBg, Color primaryText, Color subText) {
+    Widget _buildTtsVoiceCard(Color cardBg, Color primaryText, Color subText) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final sectionLabel = isDark ? Colors.white54 : Colors.black45;
-    final providers = <(String key, String label, IconData icon)>[
-      ('fish', 'Fish Voice', Icons.waves_rounded),
-      ('qwen', 'Qwen Voice', Icons.record_voice_over_rounded),
-      ('gemini', 'Gemini Voice', Icons.auto_awesome_rounded),
-    ];
-    final geminiVoices = const <(String key, String label, IconData icon)>[
-      ('warm', 'Warm', Icons.wb_sunny_rounded),
-      ('friendly', 'Friendly', Icons.emoji_emotions_rounded),
-      ('upbeat', 'Upbeat', Icons.bolt_rounded),
-    ];
-    final genderVoices = const <(String key, String label, IconData icon)>[
-      ('female', 'Female', Icons.face_3_rounded),
-      ('male', 'Male', Icons.face_rounded),
-    ];
-    final voiceOptions = _ttsProvider == 'gemini' ? geminiVoices : genderVoices;
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(22),
-        border: Border.all(
-          color: isDark ? const Color(0xFF2A2A2E) : const Color(0xFFEBE9F5),
-          width: 0.8,
+    return InkWell(
+      onTap: _savingVoice ? null : _openVoiceSettings,
+      borderRadius: BorderRadius.circular(22),
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        decoration: BoxDecoration(
+          color: cardBg,
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(
+            color: isDark ? const Color(0xFF2A2A2E) : const Color(0xFFEBE9F5),
+            width: 0.8,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 34,
+              height: 34,
+              decoration: BoxDecoration(
+                color: const Color(0xFF6F56FF).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: const Icon(
+                Icons.graphic_eq_rounded,
+                color: _violet,
+                size: 19,
+              ),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Voice Engine',
+                    style: TextStyle(
+                      color: primaryText,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 16,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    '${_providerLabel(_ttsProvider)} · ${_voiceLabel(_ttsVoiceKey)} · $_targetLanguage',
+                    style: TextStyle(
+                      color: subText,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: subText),
+          ],
         ),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 34,
-                height: 34,
-                decoration: BoxDecoration(
-                  color: const Color(0xFF6F56FF).withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: const Icon(
-                  Icons.graphic_eq_rounded,
-                  color: _violet,
-                  size: 19,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Voice Engine',
-                      style: TextStyle(
-                        color: primaryText,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 2),
-                    Text(
-                      'Pick TTS engine & tone — used for all Sonia replies',
-                      style: TextStyle(
-                        color: subText,
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 14),
-          Text(
-            'TTS PROVIDER',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 11.5,
-              letterSpacing: .6,
-              color: sectionLabel,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final p in providers)
-                _premiumChip(
-                  label: p.$2,
-                  icon: p.$3,
-                  selected: _ttsProvider == p.$1,
-                  compact: false,
-                  onTap: () async {
-                    final newVoiceKey = p.$1 == 'gemini' ? 'warm' : 'female';
-                    setState(() {
-                      _ttsProvider = p.$1;
-                      _ttsVoiceKey = newVoiceKey;
-                    });
-                    await _saveVoicePreference(
-                      _ttsProvider,
-                      _ttsVoiceKey,
-                      _targetLanguage,
-                    );
-                  },
-                ),
-            ],
-          ),
-          const SizedBox(height: 18),
-          Text(
-            _ttsProvider == 'gemini' ? 'VOICE' : 'VOICE GENDER',
-            style: TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 11.5,
-              letterSpacing: .6,
-              color: sectionLabel,
-            ),
-          ),
-          const SizedBox(height: 10),
-          Wrap(
-            spacing: 10,
-            runSpacing: 10,
-            children: [
-              for (final v in voiceOptions)
-                _premiumChip(
-                  label: v.$2,
-                  icon: v.$3,
-                  selected: _ttsVoiceKey == v.$1,
-                  compact: false,
-                  onTap: () async {
-                    setState(() => _ttsVoiceKey = v.$1);
-                    await _saveVoicePreference(
-                      _ttsProvider,
-                      _ttsVoiceKey,
-                      _targetLanguage,
-                    );
-                  },
-                ),
-            ],
-          ),
-        ],
-      ),
     );
+  }
+
+  String _providerLabel(String key) {
+    switch (key) {
+      case 'fish':
+        return 'Fish Voice';
+      case 'qwen':
+        return 'Qwen Voice';
+      case 'gemini':
+        return 'Gemini Voice';
+      default:
+        return key;
+    }
+  }
+
+  String _voiceLabel(String key) {
+    switch (key) {
+      case 'female':
+        return 'Female';
+      case 'male':
+        return 'Male';
+      case 'warm':
+        return 'Warm';
+      case 'friendly':
+        return 'Friendly';
+      case 'upbeat':
+        return 'Upbeat';
+      default:
+        return key;
+    }
   }
 
   Widget _buildScenariosCard(Color cardBg, Color primaryText, Color subText) {

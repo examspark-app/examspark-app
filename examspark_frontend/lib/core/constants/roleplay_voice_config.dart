@@ -12,5 +12,5 @@ class RoleplayVoiceConfig {
   static const speechPromptVisibleFor = Duration(seconds: 3);
 
   /// No user voice for one minute ends this active roleplay session.
-  static const sessionInactivityTimeout = Duration(minutes: 1);
+  static const sessionInactivityTimeout = Duration(minutes: 3);  // 3 minute kar diya
 }
