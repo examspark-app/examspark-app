@@ -11,9 +11,9 @@ class AiModelSelector extends StatelessWidget {
   final ValueChanged<String> onSelected;
 
   static const models = <({String value, String label, IconData icon})>[
-    (value: 'qwen3', label: 'Qwen3', icon: Icons.bolt_rounded),
-    (value: 'gemini', label: 'Gemini Flash', icon: Icons.auto_awesome_rounded),
-    (value: 'claude', label: 'Claude Premium', icon: Icons.workspace_premium_rounded),
+    (value: 'qwen3', label: 'qwen3-30b', icon: Icons.bolt_rounded),
+    (value: 'gemini', label: 'gemini-2.5-flash', icon: Icons.auto_awesome_rounded),
+    (value: 'claude', label: 'claude-3-5-haiku', icon: Icons.workspace_premium_rounded),
   ];
 
   static String labelFor(String model) {

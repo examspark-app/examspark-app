@@ -811,7 +811,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             final m = _messages[i];
                         if (!m.isUser) {
               return Padding(
-                padding: const EdgeInsets.fromLTRB(4, 4, 4, 22),
+                padding: const EdgeInsets.fromLTRB(18, 4, 18, 22),
                 child: SelectionArea(
                   child: Text(
                     m.text,

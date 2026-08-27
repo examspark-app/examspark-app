@@ -835,7 +835,10 @@ final latest = sorted.first;
                           ),
                         )
                       : Container(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 18,
+                            vertical: 16,
+                          ),
                           decoration: BoxDecoration(
                             color: bubbleAi,
                             borderRadius: BorderRadius.circular(16),
@@ -862,7 +865,7 @@ final latest = sorted.first;
                                     ? Colors.white
                                     : const Color(0xFF1E1B2C),
                                 fontSize: 15.5,
-                                height: 1.5,
+                                height: 1.6,
                               ),
                             ),
                           ),
