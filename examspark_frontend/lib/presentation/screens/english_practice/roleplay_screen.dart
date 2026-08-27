@@ -2025,13 +2025,14 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
     }
   }
 
-    @override
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF190A5C) : const Color(0xFFF0EBFF);
     final primaryText = isDark ? Colors.white : const Color(0xFF2A1F66);
     final subText = isDark ? Colors.white70 : const Color(0xFF594AA8);
     final callActive = active || state == RoleplayVoiceState.aiSpeaking;
+    final isSpeaking = state == RoleplayVoiceState.aiSpeaking || state == RoleplayVoiceState.userSpeaking;
 
     return Scaffold(
       backgroundColor: bg,
@@ -2061,18 +2062,35 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
               ),
             ),
 
-            // Middle — photo + wave + reply text (scrollable to always fit)
             Expanded(
               child: SingleChildScrollView(
                 physics: const ClampingScrollPhysics(),
                 child: ConstrainedBox(
                   constraints: BoxConstraints(
-                    minHeight: MediaQuery.of(context).size.height * 0.55,
+                    minHeight: MediaQuery.of(context).size.height * 0.6,
                   ),
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      // Sonia avatar with animated wave ring
+                      // 1) TOP TEXT
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 28),
+                        child: Text(
+                          _openingReply ?? widget.scenario,
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: primaryText,
+                            fontSize: 16,
+                            height: 1.4,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 28),
+
+                      // 2) ROUND AVATAR CIRCLE
                       AnimatedBuilder(
                         animation: pulse,
                         builder: (context, child) {
@@ -2084,8 +2102,8 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
                                 Transform.scale(
                                   scale: scale + 0.12,
                                   child: Container(
-                                    width: 168,
-                                    height: 168,
+                                    width: 180,
+                                    height: 180,
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: (state == RoleplayVoiceState.aiSpeaking
@@ -2098,8 +2116,8 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
                               Transform.scale(
                                 scale: callActive ? scale : 1.0,
                                 child: Container(
-                                  width: 148,
-                                  height: 148,
+                                  width: 160,
+                                  height: 160,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
                                     border: Border.all(
@@ -2113,8 +2131,8 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
                                     boxShadow: [
                                       BoxShadow(
                                         color: _violet.withOpacity(isDark ? 0.30 : 0.15),
-                                        blurRadius: 20,
-                                        offset: const Offset(0, 6),
+                                        blurRadius: 24,
+                                        offset: const Offset(0, 8),
                                       ),
                                     ],
                                   ),
@@ -2122,8 +2140,8 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
                                     child: Image.asset(
                                       'assets/images/sonia_avatar.png',
                                       fit: BoxFit.cover,
-                                      width: 148,
-                                      height: 148,
+                                      width: 160,
+                                      height: 160,
                                     ),
                                   ),
                                 ),
@@ -2132,18 +2150,9 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
                           );
                         },
                       ),
-                      const SizedBox(height: 22),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 28),
-                        child: Text(
-                          _openingReply ?? widget.scenario,
-                          textAlign: TextAlign.center,
-                          maxLines: 3,
-                          overflow: TextOverflow.ellipsis,
-                          style: TextStyle(color: primaryText, fontSize: 15, height: 1.4),
-                        ),
-                      ),
                       const SizedBox(height: 18),
+
+                      // 3) TIMER
                       GestureDetector(
                         onTap: () => setState(() => showTimer = !showTimer),
                         child: Text(
@@ -2153,7 +2162,8 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
                           style: TextStyle(color: subText, fontSize: 17, fontWeight: FontWeight.w700),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
+
                       Text(
                         _listeningHint ??
                             (!_micEnabled
@@ -2167,15 +2177,28 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
                                 : 'Connecting…'),
                         style: TextStyle(color: subText, fontSize: 12.5),
                       ),
+                      const SizedBox(height: 16),
+
+                      // 4) SOUND WAVE
+                      SizedBox(
+                        height: 40,
+                        child: isSpeaking
+                            ? _SoundWave(
+                                color: state == RoleplayVoiceState.aiSpeaking
+                                    ? _violet
+                                    : const Color(0xFF40A85C),
+                              )
+                            : const SizedBox.shrink(),
+                      ),
                     ],
                   ),
                 ),
               ),
             ),
 
-            // Bottom — call controls (mobile call style)
+            // 5) BOTTOM CONTROLS — luxury color, no red
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
@@ -2187,12 +2210,14 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
                     onTap: sessionId == null ? null : _toggleMic,
                   ),
                   _callControlButton(
-                    icon: Icons.call_end_rounded,
-                    label: 'End',
-                    bg: const Color(0xFFE05252),
+                    icon: callActive || sessionId != null
+                        ? Icons.stop_rounded
+                        : Icons.play_arrow_rounded,
+                    label: callActive || sessionId != null ? 'Stop' : 'Start',
+                    bg: _violet,
                     fg: Colors.white,
                     big: true,
-                    onTap: _leave,
+                    onTap: toggle,
                   ),
                   _callControlButton(
                     icon: Icons.refresh_rounded,
@@ -2237,6 +2262,61 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
           Text(label, style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
         ],
       ),
+    );
+  }
+}
+
+class _SoundWave extends StatefulWidget {
+  const _SoundWave({required this.color});
+  final Color color;
+
+  @override
+  State<_SoundWave> createState() => _SoundWaveState();
+}
+
+class _SoundWaveState extends State<_SoundWave> with TickerProviderStateMixin {
+  late final List<AnimationController> _controllers;
+
+  @override
+  void initState() {
+    super.initState();
+    _controllers = List.generate(5, (i) {
+      return AnimationController(
+        vsync: this,
+        duration: Duration(milliseconds: 500 + (i * 80)),
+      )..repeat(reverse: true);
+    });
+  }
+
+  @override
+  void dispose() {
+    for (final c in _controllers) {
+      c.dispose();
+    }
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: List.generate(5, (i) {
+        return AnimatedBuilder(
+          animation: _controllers[i],
+          builder: (context, child) {
+            final height = 8 + (_controllers[i].value * 24);
+            return Container(
+              margin: const EdgeInsets.symmetric(horizontal: 3),
+              width: 4,
+              height: height,
+              decoration: BoxDecoration(
+                color: widget.color,
+                borderRadius: BorderRadius.circular(4),
+              ),
+            );
+          },
+        );
+      }),
     );
   }
 }
