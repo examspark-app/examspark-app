@@ -2239,3 +2239,4 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
       ),
     );
   }
+}
