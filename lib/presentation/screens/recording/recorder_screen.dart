@@ -30,15 +30,16 @@ class _RecorderScreenState extends State<RecorderScreen> {
       appBar: AppBar(
         title: Text(_currentScreen == 1 ? 'Setup Recording' : 'Record Lecture'),
         elevation: 0,
-        backgroundColor: Colors.white,
-        leading: _currentScreen == 2
+backgroundColor: AppTheme.getCardBackground(context),
+leading: _currentScreen == 2
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
                 onPressed: () => setState(() => _currentScreen = 1),
               )
             : null,
       ),
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppTheme.getCardBackground(context),
+
       body: _currentScreen == 1 ? _buildSetupScreen() : _buildRecordingScreen(),
     );
   }
@@ -55,7 +56,12 @@ class _RecorderScreenState extends State<RecorderScreen> {
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: AppTheme.getPrimaryText(context),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+              _sharedFile != null
             ),
           ),
           const SizedBox(height: 8),
@@ -63,7 +69,7 @@ class _RecorderScreenState extends State<RecorderScreen> {
             'Select the transcription mode that best fits your recording environment',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey[600],
+              color: AppTheme.getSecondaryText(context),
             ),
           ),
           const SizedBox(height: 24),
