@@ -2025,172 +2025,181 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
     }
   }
 
-  @override
+    @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF190A5C) : const Color(0xFFF0EBFF);
     final primaryText = isDark ? Colors.white : const Color(0xFF2A1F66);
     final subText = isDark ? Colors.white70 : const Color(0xFF594AA8);
-    final iconBg = isDark ? const Color(0xFFFEFEFF) : const Color(0xFFFFFFFF);
+    final callActive = active || state == RoleplayVoiceState.aiSpeaking;
+
     return Scaffold(
       backgroundColor: bg,
       body: SafeArea(
-        child: Stack(
+        child: Column(
           children: [
-            Positioned(
-              left: 14,
-              top: 8,
-              child: IconButton(
-                onPressed: _leave,
-                icon: Icon(
-                  Icons.arrow_back_ios_new_rounded,
-                  color: subText,
-                ),
-              ),
-            ),
-            Positioned(
-              right: 14,
-              top: 8,
-              child: TextButton.icon(
-                onPressed: _leave,
-                icon: Icon(Icons.close_rounded, color: primaryText),
-                label: Text(
-                  'Exit',
-                  style: TextStyle(
-                    color: primaryText,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ),
-            ),
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+            // Top bar
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: Row(
                 children: [
-                  Text(
-                    _openingReply ?? widget.scenario,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: subText),
+                  IconButton(
+                    onPressed: _leave,
+                    icon: Icon(Icons.arrow_back_ios_new_rounded, color: subText, size: 20),
                   ),
-                  const SizedBox(height: 45),
-                  GestureDetector(
-                    onTap: toggle,
-                    child: SizedBox(
-                      width: 220,
-                      height: 220,
-                      child: Container(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: iconBg,
-                          boxShadow: [
-                            BoxShadow(
-                              color: const Color(0xFF5137ED)
-                                  .withOpacity(isDark ? 0.30 : 0.15),
-                              blurRadius: isDark ? 28 : 20,
-                              offset: const Offset(0, 6),
-                            ),
-                          ],
-                        ),
-                        child: Stack(
-                          fit: StackFit.expand,
-                          children: [
-                            ClipOval(
-                              child: Image.asset(
-                                'assets/images/sonia_avatar.png',
-                                fit: BoxFit.cover,
-                                width: 220,
-                                height: 220,
-                                errorBuilder: (_, __, ___) => Image.network(
-                                  'https://coresg-normal.trae.ai/api/ide/v1/text_to_image?prompt=Professional%20friendly%20Indian%20female%20english%20tutor%20portrait%20called%20Sonia%20headshot%20warm%20smile%20clean%20studio%20light%20soft%20pink%20background&image_size=square_hd',
-                                  fit: BoxFit.cover,
-                                  width: 220,
-                                  height: 220,
+                  const Spacer(),
+                  Text(
+                    widget.scenario,
+                    style: TextStyle(color: subText, fontSize: 13, fontWeight: FontWeight.w600),
+                  ),
+                  const Spacer(),
+                  TextButton(
+                    onPressed: _leave,
+                    child: Text('Exit', style: TextStyle(color: primaryText, fontWeight: FontWeight.w700)),
+                  ),
+                ],
+              ),
+            ),
+
+            // Middle — photo + wave + reply text (scrollable to always fit)
+            Expanded(
+              child: SingleChildScrollView(
+                physics: const ClampingScrollPhysics(),
+                child: ConstrainedBox(
+                  constraints: BoxConstraints(
+                    minHeight: MediaQuery.of(context).size.height * 0.55,
+                  ),
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      // Sonia avatar with animated wave ring
+                      AnimatedBuilder(
+                        animation: pulse,
+                        builder: (context, child) {
+                          final scale = callActive ? pulse.value : 1.0;
+                          return Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              if (callActive)
+                                Transform.scale(
+                                  scale: scale + 0.12,
+                                  child: Container(
+                                    width: 168,
+                                    height: 168,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: (state == RoleplayVoiceState.aiSpeaking
+                                              ? _violet
+                                              : const Color(0xFF40A85C))
+                                          .withOpacity(0.18),
+                                    ),
+                                  ),
                                 ),
-                              ),
-                            ),
-                            Positioned(
-                              bottom: 14,
-                              left: 0,
-                              right: 0,
-                              child: Center(
-                                child: AnimatedContainer(
-                                  duration: const Duration(milliseconds: 180),
-                                  padding: EdgeInsets.all(active ? 18 : 16),
+                              Transform.scale(
+                                scale: callActive ? scale : 1.0,
+                                child: Container(
+                                  width: 148,
+                                  height: 148,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: active
-                                        ? _violet
-                                        : Colors.black.withOpacity(0.45),
-                                    boxShadow: active
-                                        ? [
-                                            BoxShadow(
-                                              color: _violet.withOpacity(0.35),
-                                              blurRadius: 20,
-                                              spreadRadius: 2,
-                                            ),
-                                          ]
-                                        : null,
+                                    border: Border.all(
+                                      color: callActive
+                                          ? (state == RoleplayVoiceState.aiSpeaking
+                                              ? _violet
+                                              : const Color(0xFF40A85C))
+                                          : Colors.white24,
+                                      width: 3,
+                                    ),
+                                    boxShadow: [
+                                      BoxShadow(
+                                        color: _violet.withOpacity(isDark ? 0.30 : 0.15),
+                                        blurRadius: 20,
+                                        offset: const Offset(0, 6),
+                                      ),
+                                    ],
                                   ),
-                                  child: Icon(
-                                    active
-                                        ? Icons.mic_rounded
-                                        : Icons.nights_stay_rounded,
-                                    color: active
-                                        ? Colors.white
-                                        : Colors.white.withOpacity(0.92),
-                                    size: active ? 42 : 36,
+                                  child: ClipOval(
+                                    child: Image.asset(
+                                      'assets/images/sonia_avatar.png',
+                                      fit: BoxFit.cover,
+                                      width: 148,
+                                      height: 148,
+                                    ),
                                   ),
                                 ),
                               ),
-                            ),
-                          ],
+                            ],
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 22),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 28),
+                        child: Text(
+                          _openingReply ?? widget.scenario,
+                          textAlign: TextAlign.center,
+                          maxLines: 3,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(color: primaryText, fontSize: 15, height: 1.4),
                         ),
                       ),
-                    ),
+                      const SizedBox(height: 18),
+                      GestureDetector(
+                        onTap: () => setState(() => showTimer = !showTimer),
+                        child: Text(
+                          showTimer
+                              ? '${elapsed.inMinutes.remainder(60).toString().padLeft(2, '0')}:${elapsed.inSeconds.remainder(60).toString().padLeft(2, '0')}'
+                              : 'Tap to show time',
+                          style: TextStyle(color: subText, fontSize: 17, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _listeningHint ??
+                            (!_micEnabled
+                                ? 'Microphone off'
+                                : state == RoleplayVoiceState.aiSpeaking
+                                ? 'Sonia is speaking…'
+                                : active
+                                ? 'Listening… speak naturally'
+                                : state == RoleplayVoiceState.error
+                                ? 'Tap End Call, then retry'
+                                : 'Connecting…'),
+                        style: TextStyle(color: subText, fontSize: 12.5),
+                      ),
+                    ],
                   ),
-                  const SizedBox(height: 80),
-                  GestureDetector(
-                    onTap: () => setState(() => showTimer = !showTimer),
-                    child: Text(
-                      showTimer
-                          ? '${elapsed.inMinutes.remainder(60).toString().padLeft(2, '0')}:${elapsed.inSeconds.remainder(60).toString().padLeft(2, '0')}'
-                          : 'Tap to show time',
-                      style: TextStyle(color: primaryText, fontSize: 20),
-                    ),
+                ),
+              ),
+            ),
+
+            // Bottom — call controls (mobile call style)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 8, 24, 20),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _callControlButton(
+                    icon: _micEnabled ? Icons.mic_rounded : Icons.mic_off_rounded,
+                    label: _micEnabled ? 'Mute' : 'Muted',
+                    bg: Colors.white.withOpacity(0.12),
+                    fg: primaryText,
+                    onTap: sessionId == null ? null : _toggleMic,
                   ),
-                  const SizedBox(height: 12),
-                  Text(
-                    _listeningHint ??
-                        (!_micEnabled
-                            ? 'Microphone off'
-                            : state == RoleplayVoiceState.aiSpeaking
-                            ? 'AI is speaking…'
-                            : active
-                            ? 'Listening… speak naturally'
-                            : state == RoleplayVoiceState.error
-                            ? 'Tap the moon to retry'
-                            : 'Starting conversation…'),
-                    style: TextStyle(color: subText),
+                  _callControlButton(
+                    icon: Icons.call_end_rounded,
+                    label: 'End',
+                    bg: const Color(0xFFE05252),
+                    fg: Colors.white,
+                    big: true,
+                    onTap: _leave,
                   ),
-                  const SizedBox(height: 80),
-                  TextButton.icon(
-                    onPressed: sessionId == null ? null : _toggleMic,
-                    icon: Icon(
-                      _micEnabled ? Icons.mic_rounded : Icons.mic_off_rounded,
-                      color: primaryText,
-                    ),
-                    label: Text(
-                      _micEnabled ? 'Mic ON' : 'Mic OFF',
-                      style: TextStyle(color: primaryText),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    active
-                        ? 'Listening automatically\nTap the moon to stop the session'
-                        : 'I’ll listen and reply',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: subText, fontSize: 16),
+                  _callControlButton(
+                    icon: Icons.refresh_rounded,
+                    label: 'Retry',
+                    bg: Colors.white.withOpacity(0.12),
+                    fg: primaryText,
+                    onTap: state == RoleplayVoiceState.error ? _startListening : null,
                   ),
                 ],
               ),
@@ -2200,4 +2209,33 @@ class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
       ),
     );
   }
-}
+
+  Widget _callControlButton({
+    required IconData icon,
+    required String label,
+    required Color bg,
+    required Color fg,
+    VoidCallback? onTap,
+    bool big = false,
+  }) {
+    final size = big ? 64.0 : 52.0;
+    return Opacity(
+      opacity: onTap == null ? 0.4 : 1,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          GestureDetector(
+            onTap: onTap,
+            child: Container(
+              width: size,
+              height: size,
+              decoration: BoxDecoration(shape: BoxShape.circle, color: bg),
+              child: Icon(icon, color: fg, size: big ? 28 : 22),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(label, style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
+      ),
+    );
+  }

@@ -747,39 +747,41 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
               fontWeight: FontWeight.w700,
             ),
           ),
-          const Spacer(),
-          FilledButton.icon(
-            onPressed: () => Navigator.pushNamed(context, '/glow-guide'),
-            style: FilledButton.styleFrom(
-              backgroundColor: violet,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              minimumSize: const Size(0, 38),
-            ),
-            icon: const Icon(Icons.auto_awesome_rounded, size: 18),
-            label: const Text(
-              'Skin Care',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-            ),
-          ),
-          const SizedBox(width: 8),
+                    const Spacer(),
           FilledButton(
             onPressed: _roleplay,
             style: FilledButton.styleFrom(
               backgroundColor: violet,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
+                borderRadius: BorderRadius.circular(10),
               ),
-              minimumSize: const Size(0, 38),
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: const Text(
               'Roleplay',
-              style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+            ),
+          ),
+          const SizedBox(width: 6),
+          FilledButton.icon(
+            onPressed: () => Navigator.pushNamed(context, '/glow-guide'),
+            style: FilledButton.styleFrom(
+              backgroundColor: violet,
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10),
+              ),
+              minimumSize: const Size(0, 32),
+              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+            ),
+            icon: const Icon(Icons.auto_awesome_rounded, size: 14),
+            label: const Text(
+              'Skin Care',
+              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
             ),
           ),
         ],

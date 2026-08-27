@@ -338,38 +338,48 @@ class _SoniaChatScreenState extends State<SoniaChatScreen> {
     );
   }
 
-  Widget _buildInputBar(bool isDark) {
+    Widget _buildInputBar(bool isDark) {
+    final charCount = _input.text.length;
+    const maxChars = 200;
     return SafeArea(
       top: false,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 8, 10, 8),
-        decoration: BoxDecoration(
-          color: isDark ? const Color(0xFF15121F) : Colors.white,
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.05),
-              blurRadius: 6,
-              offset: const Offset(0, -2),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(10, 6, 10, 10),
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 54),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF1C1C24) : const Color(0xFFF1EFF7),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isDark ? const Color(0xFF2E2E38) : const Color(0xFFE2DEF0),
+              width: 1,
             ),
-          ],
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: Container(
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF20202A) : const Color(0xFFF1EFF7),
-                  borderRadius: BorderRadius.circular(24),
-                ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(isDark ? 0.2 : 0.05),
+                blurRadius: 10,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          padding: const EdgeInsets.fromLTRB(6, 10, 6, 6),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
                 child: TextField(
                   controller: _input,
                   minLines: 1,
-                  maxLines: 4,
+                  maxLines: 6,
+                  maxLength: maxChars,
                   textInputAction: TextInputAction.send,
                   onSubmitted: (_) => _send(),
+                  onChanged: (_) => setState(() {}),
                   style: TextStyle(
                     color: isDark ? Colors.white : Colors.black87,
-                    fontSize: 14.5,
+                    fontSize: 15,
+                    height: 1.4,
                   ),
                   decoration: InputDecoration(
                     hintText: 'Message Sonia…',
@@ -377,46 +387,61 @@ class _SoniaChatScreenState extends State<SoniaChatScreen> {
                       color: isDark ? Colors.white38 : const Color(0xFFA09CB5),
                     ),
                     border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 11,
+                    counterText: '',
+                    isCollapsed: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  const SizedBox(width: 6),
+                  Text(
+                    '$charCount/$maxChars',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                      color: charCount >= maxChars
+                          ? Colors.redAccent
+                          : (isDark ? Colors.white38 : const Color(0xFFA09CB5)),
                     ),
                   ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            SizedBox(
-              width: 44,
-              height: 44,
-              child: DecoratedBox(
-                decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _violet,
-                ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    customBorder: const CircleBorder(),
-                    onTap: _sending ? null : _send,
-                    child: _sending
-                        ? const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const Icon(
-                            Icons.send_rounded,
-                            color: Colors.white,
-                            size: 20,
-                          ),
+                  const Spacer(),
+                  SizedBox(
+                    width: 40,
+                    height: 40,
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: _input.text.trim().isEmpty ? Colors.grey.shade400 : _violet,
+                      ),
+                      child: Material(
+                        color: Colors.transparent,
+                        child: InkWell(
+                          customBorder: const CircleBorder(),
+                          onTap: (_sending || _input.text.trim().isEmpty) ? null : _send,
+                          child: _sending
+                              ? const Padding(
+                                  padding: EdgeInsets.all(11),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: Colors.white,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.arrow_upward_rounded,
+                                  color: Colors.white,
+                                  size: 20,
+                                ),
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                ],
               ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

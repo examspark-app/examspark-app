@@ -13,6 +13,10 @@ from app.services import english_learning_memory_service as learning_memory
 
 SONIA_CREDITS_PER_MESSAGE = 1
 
+# Message length rules — keep chat turns short and controlled.
+SONIA_MESSAGE_MIN_CHARS = 1
+SONIA_MESSAGE_MAX_CHARS = 200
+
 
 def _now() -> str:
     return datetime.now(timezone.utc).isoformat()
@@ -31,6 +35,9 @@ def _session(session_id: str, user_id: str) -> dict | None:
         or []
     )
     return rows[0] if rows else None
+
+
+
 
 
 async def start(
@@ -116,8 +123,13 @@ async def send_message(user_id: str, session_id: str, text: str) -> dict:
         raise chat.EnglishPracticeError('Session not found.', 404)
     if session['status'] != 'active':
         raise chat.EnglishPracticeError('This chat has ended.', 409)
-    if not text:
+    if len(text) < SONIA_MESSAGE_MIN_CHARS:
         raise chat.EnglishPracticeError('Message is empty.', 400)
+    if len(text) > SONIA_MESSAGE_MAX_CHARS:
+        raise chat.EnglishPracticeError(
+            f'Message is too long — keep it under {SONIA_MESSAGE_MAX_CHARS} characters.',
+            400,
+        )
 
     db = get_supabase_admin()
 
@@ -130,6 +142,8 @@ async def send_message(user_id: str, session_id: str, text: str) -> dict:
         )
     except InsufficientCreditsError as e:
         raise chat.EnglishPracticeError(str(e), 402) from e
+
+    
 
     db.table('english_sonia_messages').insert({
         'session_id': session_id,
@@ -177,9 +191,13 @@ async def send_message(user_id: str, session_id: str, text: str) -> dict:
             'Sonia message: qwen3 failed, falling back to gemini: %s',
             primary_error,
         )
-    reply_raw = await chat._call_chat_model(messages, 'gemini')
+        reply_raw = await chat._call_chat_model(messages, 'gemini')
     reply, suggestions, mcq = chat._split_and_extract(reply_raw)
     reply = reply.strip() or 'Sorry, could you say that again?'
+
+    # Keep Sonia's own replies within the same length rule so turns stay short.
+    if len(reply) > SONIA_MESSAGE_MAX_CHARS:
+        reply = reply[:SONIA_MESSAGE_MAX_CHARS].rstrip()
 
     db.table('english_sonia_messages').insert({
         'session_id': session_id,
