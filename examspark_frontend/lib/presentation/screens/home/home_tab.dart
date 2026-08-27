@@ -1450,10 +1450,21 @@ $rawText
         notificationUnreadCount:
             NotificationInboxController.instance.unreadCount,
         trailing: [
-          GlowGuideRotatingButton(
-            onTap: () => Navigator.pushNamed(context, '/glow-guide'),
-          ),
-        ],
+  if (!Responsive.isMobile(context))
+    GlowGuideRotatingButton(
+      onTap: () => Navigator.pushNamed(context, '/glow-guide'),
+    )
+  else
+    SizedBox(
+      height: 26,
+      child: Transform.scale(
+        scale: 0.7,
+        child: GlowGuideRotatingButton(
+          onTap: () => Navigator.pushNamed(context, '/glow-guide'),
+        ),
+      ),
+    ),
+],
       ),
       body: Column(
         children: [

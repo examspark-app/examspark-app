@@ -273,90 +273,109 @@ Widget build(BuildContext context) {
       isLight ? const Color(0xFFDDDDDD) : const Color(0xFF3A3A3C);
 
   return SafeArea(
-    top: false,
-    child: Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
-      color: Theme.of(context).scaffoldBackgroundColor,
-      child: Container(
-        padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
-        decoration: BoxDecoration(
-          color: pillBg,
-          borderRadius: BorderRadius.circular(22),
-          border: Border.all(
-            color: pillBorder,
-            width: 1.1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: isLight ? 0.04 : 0.30),
-              blurRadius: 14,
-              offset: const Offset(0, -2),
+  top: false,
+  child: Container(
+    padding: const EdgeInsets.fromLTRB(12, 8, 12, 14),
+    color: Theme.of(context).scaffoldBackgroundColor,
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          padding: const EdgeInsets.fromLTRB(10, 10, 10, 8),
+          decoration: BoxDecoration(
+            color: pillBg,
+            borderRadius: BorderRadius.circular(22),
+            border: Border.all(
+              color: pillBorder,
+              width: 1.1,
             ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            if (_hasReply) _buildReplyPreview(context),
-            if (_hasAttachment) _buildAttachmentChip(context),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withValues(alpha: isLight ? 0.04 : 0.30),
+                blurRadius: 14,
+                offset: const Offset(0, -2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (_hasReply) _buildReplyPreview(context),
+              if (_hasAttachment) _buildAttachmentChip(context),
 
-            // ---- Text field (upar, auto-grow ~10 lines tak) ----
-            ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 220),
-              child: TextField(
-                controller: _controller,
-                minLines: 1,
-                maxLines: 10,
-                textInputAction: TextInputAction.newline,
-                style: TextStyle(
-                  fontSize: 15.5,
-                  color: AppTheme.getPrimaryText(context),
-                  height: 1.35,
-                ),
-                decoration: InputDecoration(
-                  hintText: _hasAttachment
-                      ? 'Add a caption (optional)...'
-                      : _hasReply
-                          ? 'Ask about the selected text...'
-                          : 'Ask sonaxia ...',
-                  border: InputBorder.none,
-                  isDense: true,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 6),
-                  hintStyle: TextStyle(
-                    color: muted,
+              // ---- Text field (auto-grow) ----
+              ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 220),
+                child: TextField(
+                  controller: _controller,
+                  minLines: 1,
+                  maxLines: 10,
+                  textInputAction: TextInputAction.newline,
+                  style: TextStyle(
                     fontSize: 15.5,
-                    fontWeight: FontWeight.w400,
+                    color: AppTheme.getPrimaryText(context),
+                    height: 1.35,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: _hasAttachment
+                        ? 'Add a caption (optional)...'
+                        : _hasReply
+                            ? 'Ask about the selected text...'
+                            : 'Ask sonaxia ...',
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 6),
+                    hintStyle: TextStyle(
+                      color: muted,
+                      fontSize: 15.5,
+                      fontWeight: FontWeight.w400,
+                    ),
                   ),
                 ),
               ),
-            ),
 
-            const SizedBox(height: 6),
+              const SizedBox(height: 6),
 
-            // ---- Ek hi row me sab controls ----
-            Row(
-              children: [
-                IconButton(
-                  icon: const Icon(Icons.add_rounded, size: 22),
-                  color: muted,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 34,
-                    minHeight: 34,
+              // ---- Ek hi row me sab controls ----
+              Row(
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.add_rounded, size: 22),
+                    color: muted,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 34,
+                      minHeight: 34,
+                    ),
+                    onPressed: widget.onAttach,
                   ),
-                  onPressed: widget.onAttach,
-                ),
-                if (widget.onModelChanged != null)
-                  AiModelSelector(
-                    selectedModel: widget.selectedModel,
-                    onSelected: widget.onModelChanged!,
-                  ),
-                const Spacer(),
-                if (widget.onYoutube != null)
+                  if (widget.onModelChanged != null)
+                    AiModelSelector(
+                      selectedModel: widget.selectedModel,
+                      onSelected: widget.onModelChanged!,
+                    ),
+                  const Spacer(),
+                  if (widget.onYoutube != null)
+                    IconButton(
+                      icon: Icon(
+                        Icons.smart_display_rounded,
+                        color: Colors.redAccent,
+                        size: 21,
+                      ),
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(
+                        minWidth: 34,
+                        minHeight: 34,
+                      ),
+                      onPressed: widget.onYoutube,
+                      tooltip: 'YouTube Notes',
+                    ),
                   IconButton(
                     icon: Icon(
-                      Icons.smart_display_rounded,
-                      color: Colors.redAccent,
+                      widget.recordLocked
+                          ? Icons.lock_outline_rounded
+                          : Icons.mic_none_rounded,
+                      color: muted,
                       size: 21,
                     ),
                     padding: EdgeInsets.zero,
@@ -364,57 +383,55 @@ Widget build(BuildContext context) {
                       minWidth: 34,
                       minHeight: 34,
                     ),
-                    onPressed: widget.onYoutube,
-                    tooltip: 'YouTube Notes',
+                    onPressed: widget.onRecord,
                   ),
-                IconButton(
-                  icon: Icon(
-                    widget.recordLocked
-                        ? Icons.lock_outline_rounded
-                        : Icons.mic_none_rounded,
-                    color: muted,
-                    size: 21,
-                  ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(
-                    minWidth: 34,
-                    minHeight: 34,
-                  ),
-                  onPressed: widget.onRecord,
-                ),
-                const SizedBox(width: 2),
-                SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: ElevatedButton(
-                    onPressed: canSend ? _handleSend : null,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: actionColor,
-                      foregroundColor: actionIconColor,
-                      elevation: 0,
-                      padding: EdgeInsets.zero,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(10),
+                  const SizedBox(width: 2),
+                  SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: ElevatedButton(
+                      onPressed: canSend ? _handleSend : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: actionColor,
+                        foregroundColor: actionIconColor,
+                        elevation: 0,
+                        padding: EdgeInsets.zero,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        disabledBackgroundColor: isLight
+                            ? const Color(0xFFE5E5EA)
+                            : const Color(0xFF2C2C2E),
+                        disabledForegroundColor: isLight
+                            ? const Color(0xFF8E8E93)
+                            : Colors.white38,
                       ),
-                      disabledBackgroundColor: isLight
-                          ? const Color(0xFFE5E5EA)
-                          : const Color(0xFF2C2C2E),
-                      disabledForegroundColor: isLight
-                          ? const Color(0xFF8E8E93)
-                          : Colors.white38,
-                    ),
-                    child: Icon(
-                      Icons.arrow_upward_rounded,
-                      color: canSend ? actionIconColor : null,
-                      size: 16,
+                      child: Icon(
+                        Icons.arrow_upward_rounded,
+                        color: canSend ? actionIconColor : null,
+                        size: 16,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+            ],
+          ),
         ),
-      ),
-    );
-  }
-}
+
+        // ---- ADD THIS: disclaimer line below the input pill ----
+        Padding(
+          padding: const EdgeInsets.only(top: 8),
+          child: Text(
+            'Sonaxia can make mistakes. Please double-check responses.',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 10.5,
+              color: muted,
+            ),
+          ),
+        ),
+      ],
+    ),
+  ),
+);
