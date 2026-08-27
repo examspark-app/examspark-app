@@ -7,7 +7,7 @@ import 'package:examspark_frontend/core/network/supabase_client.dart'
     as app_supabase;
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
-
+import 'package:url_launcher/url_launcher.dart';
 class GlowGuideScreen extends StatefulWidget {
   const GlowGuideScreen({super.key, this.startFresh = false});
 
@@ -1347,12 +1347,31 @@ final latest = sorted.first;
               ),
             const SizedBox(height: 6),
             _restoring ? const SizedBox.shrink() : renderInput(),
+            if (!_restoring) _buildDisclaimer(isDark, subText),
           ],
         ),
       ),
     );
   }
-
+      Widget _buildDisclaimer(bool isDark, Color subText) {
+    return GestureDetector(
+      onTap: () async {
+        final uri = Uri.parse('https://sites.google.com/view/sonaxia/support');
+        await launchUrl(uri, mode: LaunchMode.externalApplication);
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(top: 4, bottom: 8),
+        child: Text(
+          'Sonaxia AI can make mistakes. Please double-check responses.',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: subText.withOpacity(0.55),
+            fontSize: 10.5,
+          ),
+        ),
+      ),
+    );
+  }
   Widget _verdictBadge(String verdict) {
     final Color color;
     final IconData icon;

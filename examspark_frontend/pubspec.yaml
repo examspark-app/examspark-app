@@ -10,7 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-
+  
   cupertino_icons: ^1.0.8
   supabase_flutter: ^2.9.0
   flutter_dotenv: ^5.2.1
