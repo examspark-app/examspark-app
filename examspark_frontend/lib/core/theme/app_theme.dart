@@ -29,7 +29,7 @@ class AppTheme {
   static const Color darkCardBorder = Color(0xFF2A2A2E);
   static const Color darkCardBackground = Color(0xFF1A1A1D);
   static const Color darkInputBackground = Color(0xFF1C1C1F);
-  static const Color darkAccentTint = Color(0xFFFFFFFF); // White icon-box background
+  static const Color darkAccentTint = Color(0x33FFFFFF); // White icon-box background
 
   // Dark mode accent (buttons) — violet (Claude-like purple accent)
   static const Color darkAccentColor = Color(0xFF5137ED);
