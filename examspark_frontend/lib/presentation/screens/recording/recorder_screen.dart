@@ -383,7 +383,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
       appBar: AppBar(
         title: Text(_currentScreen == 1 ? 'Setup Recording' : 'Record Lecture'),
         elevation: 0,
-        backgroundColor: Colors.white,
+        backgroundColor: AppTheme.getCardBackground(context),
         leading: _currentScreen == 2
             ? IconButton(
                 icon: const Icon(Icons.arrow_back),
@@ -391,7 +391,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               )
             : null, // <-- 3. YAHAN ': null' LAGA ZAROORI HAI (Isse Screen 1 par automatically Hamburger Icon ban jayega)
       ),
-      backgroundColor: Colors.grey[50],
+      backgroundColor: AppTheme.getCardBackground(context),
       body: _currentScreen == 1 ? _buildSetupScreen() : _buildRecordingScreen(),
     );
   }
@@ -405,12 +405,12 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
               'Lecture details',
             style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: AppTheme.getPrimaryText(context),
             ),
           ),
           const SizedBox(height: 8),
@@ -420,7 +420,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                   : 'Add subject and topic, then choose planned duration before recording.',
             style: TextStyle(
               fontSize: 14,
-              color: Colors.grey[600],
+              color: AppTheme.getSecondaryText(context),
             ),
           ),
             const SizedBox(height: 20),
@@ -429,7 +429,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
+                color: AppTheme.getPrimaryText(context),
               ),
             ),
             const SizedBox(height: 8),
@@ -439,7 +439,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                 hintText: 'Select a subject',
                 helperText: 'Not listed? Choose Custom…',
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: AppTheme.getInputBackground(context),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -466,7 +466,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                 decoration: InputDecoration(
                   hintText: 'Custom subject',
                   filled: true,
-                  fillColor: Colors.white,
+                  fillColor: AppTheme.getInputBackground(context),
                   border: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
                   ),
@@ -486,7 +486,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               style: TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w600,
-                color: Colors.grey[800],
+                color: AppTheme.getPrimaryText(context),
               ),
             ),
             const SizedBox(height: 8),
@@ -496,7 +496,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               decoration: InputDecoration(
                 hintText: 'e.g. Introduction to Calculus',
                 filled: true,
-                fillColor: Colors.white,
+                fillColor: AppTheme.getInputBackground(context),
                 border: OutlineInputBorder(
                   borderRadius: BorderRadius.circular(12),
                 ),
@@ -510,16 +510,16 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
             ),
             if (_sharedFile == null) ...[
             const SizedBox(height: 28),
-            const Text(
+            Text(
               'Planned Duration',
               style: TextStyle(
-                  fontSize: 16, fontWeight: FontWeight.bold, color: Colors.black87),
+                  fontSize: 16, fontWeight: FontWeight.bold, color: AppTheme.getPrimaryText(context)),
             ),
             const SizedBox(height: 4),
             Text(
               'We\'ll warn you when you reach this — recording never auto-stops. '
               'Up to 3 hours supported.',
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 13, color: AppTheme.getSecondaryText(context)),
             ),
             const SizedBox(height: 12),
             Wrap(
@@ -643,9 +643,9 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         decoration: BoxDecoration(
-          color: isSelected ? Colors.black87 : Colors.white,
+          color: isSelected ? AppTheme.accentColor : AppTheme.getCardBackground(context),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isSelected ? Colors.black87 : Colors.grey[300]!),
+          border: Border.all(color: isSelected ? AppTheme.accentColor : AppTheme.getCardBorder(context)),
         ),
         alignment: Alignment.center,
         child: Text(
@@ -653,7 +653,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                     style: TextStyle(
                       fontSize: 13,
             fontWeight: FontWeight.w600,
-            color: isSelected ? Colors.white : Colors.grey[700],
+            color: isSelected ? Colors.white : AppTheme.getSecondaryText(context),
           ),
         ),
       ),
@@ -667,7 +667,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
         // Input Method Tabs
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          color: Colors.white,
+          color: AppTheme.getCardBackground(context),
           child: Row(
             children: [
               _buildInputMethodTab(
@@ -716,7 +716,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10),
           decoration: BoxDecoration(
-            color: isSelected ? Colors.black87 : Colors.transparent,
+            color: isSelected ? AppTheme.accentColor : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
           ),
           child: Row(
@@ -725,7 +725,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               Icon(
                 locked ? Icons.lock_outline : icon,
                 size: 18,
-                color: isSelected ? Colors.white : Colors.grey[600],
+                color: isSelected ? Colors.white : AppTheme.getSecondaryText(context),
               ),
               const SizedBox(width: 6),
               Flexible(
@@ -735,7 +735,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                 style: TextStyle(
                     fontSize: 13,
                   fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
-                  color: isSelected ? Colors.white : Colors.grey[600],
+                  color: isSelected ? Colors.white : AppTheme.getSecondaryText(context),
                   ),
                 ),
               ),
@@ -776,18 +776,18 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               width: 72,
               height: 72,
               decoration: BoxDecoration(
-                color: Colors.grey[100],
+                color: AppTheme.getCardBackground(context),
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.lock_outline, size: 36, color: Colors.black87),
+              child: Icon(Icons.lock_outline, size: 36, color: AppTheme.getPrimaryText(context)),
             ),
             const SizedBox(height: 20),
-            const Text(
+            Text(
               'Audio locked',
               style: TextStyle(
                 fontSize: 22,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: AppTheme.getPrimaryText(context),
               ),
             ),
             const SizedBox(height: 10),
@@ -803,14 +803,14 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               Text(
                 'Record + Upload Audio need ₹499+. PDF / Photo stay available.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                style: TextStyle(fontSize: 13, color: AppTheme.getSecondaryText(context)),
               ),
             ] else ...[
               const SizedBox(height: 8),
               Text(
                 'Same recorder features after unlock: credits per minute + 5‑min silence alert.',
                 textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                style: TextStyle(fontSize: 13, color: AppTheme.getSecondaryText(context)),
               ),
             ],
             const SizedBox(height: 24),
@@ -819,7 +819,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               child: ElevatedButton(
                 onPressed: () => Navigator.pushNamed(context, '/subscription'),
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.black87,
+                  backgroundColor: AppTheme.accentColor,
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
@@ -857,7 +857,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               width: 120,
               height: 120,
               decoration: BoxDecoration(
-                color: _isRecording ? Colors.red : Colors.black87,
+                color: _isRecording ? Colors.red : AppTheme.accentColor,
                 shape: BoxShape.circle,
                 boxShadow: [
                   BoxShadow(
@@ -879,10 +879,10 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
           // Timer
           Text(
             _recordingDuration,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 32,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: AppTheme.getPrimaryText(context),
             ),
           ),
           const SizedBox(height: 8),
@@ -902,7 +902,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
               height: 60,
               width: 200,
               decoration: BoxDecoration(
-                color: Colors.grey[200],
+                color: AppTheme.getCardBackground(context),
                 borderRadius: BorderRadius.circular(30),
               ),
               child: const Center(
@@ -927,10 +927,10 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
             width: 200,
             height: 200,
             decoration: BoxDecoration(
-              color: Colors.grey[100],
+              color: AppTheme.getCardBackground(context),
               borderRadius: BorderRadius.circular(16),
               border: Border.all(
-                color: Colors.grey[300]!,
+                color: AppTheme.getCardBorder(context),
                 width: 2,
                 style: BorderStyle.solid,
               ),
@@ -941,7 +941,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                 Icon(
                   Icons.cloud_upload_outlined,
                   size: 48,
-                  color: Colors.grey[400],
+                  color: AppTheme.getSecondaryText(context),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -949,7 +949,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w600,
-                    color: Colors.grey[700],
+                    color: AppTheme.getPrimaryText(context),
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -957,7 +957,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
                   'MP3, WAV, M4A',
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey[500],
+                    color: AppTheme.getSecondaryText(context),
                   ),
                 ),
               ],
@@ -968,7 +968,7 @@ class _RecorderScreenState extends State<RecorderScreen> with WidgetsBindingObse
             onPressed: _handleAudioUpload,
             style: ElevatedButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 16),
-              backgroundColor: Colors.black87,
+              backgroundColor: AppTheme.accentColor,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),

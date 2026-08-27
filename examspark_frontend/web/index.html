@@ -16,17 +16,31 @@
   <meta http-equiv="Expires" content="0">
   <meta http-equiv="Clear-Site-Data" content="cache, storage">
 
-  <link rel="apple-touch-icon" href="images/sonaxia_logo.png?v=1007">
-  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1007"/>
-  <link rel="icon" type="image/png" href="favicon.png?v=1007"/>
+  <link rel="apple-touch-icon" href="images/sonaxia_logo.png?v=1009">
+  <link rel="icon" type="image/svg+xml" href="favicon.svg?v=1009"/>
+  <link rel="icon" type="image/png" href="favicon.png?v=1009"/>
   <title>Sonaxia</title>
-  <link rel="manifest" href="manifest.json?v=1007">
+  <link rel="manifest" href="manifest.json?v=1009">
   <style>
+    :root {
+      --shell-bg: #f7f4f2;
+      --shell-accent: #f0384c;
+      --shell-card: #ffffff;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --shell-bg: #17130f;
+        --shell-accent: #ff5468;
+        --shell-card: #221c17;
+      }
+    }
+
     html, body {
       margin: 0;
       width: 100%;
       height: 100%;
-      background: #f7f4f2;
+      background: var(--shell-bg);
       font-family: Arial, Helvetica, sans-serif;
     }
 
@@ -44,10 +58,8 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      flex-direction: column;
-      gap: 12px;
-      background: #f7f4f2;
-      transition: opacity 220ms ease;
+      background: var(--shell-bg);
+      transition: opacity 260ms ease;
     }
 
     #sonaxia-shell.hidden {
@@ -55,27 +67,66 @@
       pointer-events: none;
     }
 
-    #sonaxia-shell img {
-      display: block;
-      width: 96px;
-      height: 28px;
+    #sonaxia-shell .sonaxia-mark {
+      position: relative;
+      width: 132px;
+      height: 132px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #sonaxia-shell .sonaxia-ring {
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 3px solid var(--shell-accent);
+      opacity: 0.35;
+      animation: sonaxia-ring 1.8s ease-out infinite;
+    }
+
+    #sonaxia-shell .sonaxia-ring.delay {
+      animation-delay: 0.6s;
+    }
+
+    #sonaxia-shell .sonaxia-card {
+      width: 108px;
+      height: 108px;
+      border-radius: 28px;
+      background: var(--shell-card);
+      box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    #sonaxia-shell .sonaxia-card img {
+      width: 68px;
+      height: 68px;
       object-fit: contain;
     }
 
-    #sonaxia-shell::after {
-      content: "";
-      width: 13px;
-      height: 13px;
-      border-radius: 50%;
-      border: 2px solid rgba(240, 56, 76, 0.18);
-      border-top-color: #f0384c;
-      animation: sonaxia-spin 0.9s linear infinite;
+    @media (max-width: 480px) {
+      #sonaxia-shell .sonaxia-mark {
+        width: 152px;
+        height: 152px;
+      }
+
+      #sonaxia-shell .sonaxia-card {
+        width: 124px;
+        height: 124px;
+        border-radius: 32px;
+      }
+
+      #sonaxia-shell .sonaxia-card img {
+        width: 78px;
+        height: 78px;
+      }
     }
 
-    @keyframes sonaxia-spin {
-      to {
-        transform: rotate(360deg);
-      }
+    @keyframes sonaxia-ring {
+      0% { transform: scale(0.9); opacity: 0.45; }
+      100% { transform: scale(1.35); opacity: 0; }
     }
   </style>
 </head>
@@ -192,7 +243,13 @@
   </script>
 
   <div id="sonaxia-shell" aria-live="polite" aria-label="Sonaxia loading shell">
-    <img src="images/sonaxia_logo.png?v=1007" alt="Sonaxia" />
+    <div class="sonaxia-mark">
+      <div class="sonaxia-ring"></div>
+      <div class="sonaxia-ring delay"></div>
+      <div class="sonaxia-card">
+        <img src="images/sonaxia_logo.png?v=1009" alt="Sonaxia" />
+      </div>
+    </div>
   </div>
 
   <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
@@ -226,6 +283,6 @@
     });
   </script>
   <!-- Cache-bust the Flutter bootstrap loader — bump ?v= every build to bypass Cloudflare -->
-  <script src="flutter_bootstrap.js?v=1007" async></script>
+  <script src="flutter_bootstrap.js?v=1009" async></script>
 </body>
 </html>
