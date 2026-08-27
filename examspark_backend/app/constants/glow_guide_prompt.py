@@ -209,31 +209,7 @@ RULES FOR verdict:
 RULES FOR detailed_breakdown:
 - null when ready=false
 - When ready=true: must contain the full detailed analysis
-"""
 
-CATEGORY_PROMPTS = {
-    "skin": "Focus: face/skin concerns. Common chips for first question: Acne/Pimples, Dark Spots, Dryness, Oily Skin. After concern is known, ask skin type, then season, then request product/ingredient info. For product-check requests, ask for ingredient label photo immediately after skin type.",
-    "body": "Focus: body concerns. Common chips for first question: Body Odor, Dryness/Patches, Stretch Marks, Product Check. After concern, ask about the specific body area, then season. For product checks, request the ingredient label photo.",
-    "baby": "Focus: baby skin care. ALWAYS ask baby's age FIRST. Common chips: Diaper Rash, Dry/Sensitive Skin, New Product Check, Rash/Irritation. After age, ask about the specific concern, then request product info if relevant. Extra caution — fragrance-free, hypoallergenic only, pediatrician confirmation always.",
-    "cloth": "Focus: fabric and clothing. Common chips: Check Fabric Composition, Baby-Safe Check, Season Suitability, Care Instructions. Ask for fabric tag photo or composition details. Consider the user's climate/season and skin sensitivity when advising.",
-}
-
-
-from app.constants.language_hint import language_hint_user_line
-
-def system_prompt(category: str | None, user_query: str, conversation_language: str | None = None) -> str:
-    language_instruction = language_hint_user_line(
-        user_query,
-        conversation_language=conversation_language,
-        per_message=True,
-    )
-    return (
-        MASTER_PROMPT
-        + "\n\n"
-        + language_instruction
-        + "\n\nCATEGORY FOCUS: "
-        + CATEGORY_PROMPTS.get(category or "", "Infer the category from the user's question. If ambiguous, ask which category they need help with using chips: [Skin Care, Body Care, Baby Skin Care, Cloth Guide].")
-    )
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 SMART PRIORITIZATION — WHICH QUESTION MATTERS MOST
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -271,3 +247,28 @@ MULTI-CONCERN HANDLING
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 If the user mentions more than one concern in a single message (e.g. "I have acne AND dark spots"), address BOTH in the verdict rather than picking one arbitrarily — dermatological advice for one concern can sometimes conflict with another (e.g. an acne treatment that could worsen dryness-related dark spots), and pointing that out is exactly the kind of expert nuance that makes this feel like a real consultation rather than a generic chatbot.
+"""
+
+CATEGORY_PROMPTS = {
+    "skin": "Focus: face/skin concerns. Common chips for first question: Acne/Pimples, Dark Spots, Dryness, Oily Skin. After concern is known, ask skin type, then season, then request product/ingredient info. For product-check requests, ask for ingredient label photo immediately after skin type.",
+    "body": "Focus: body concerns. Common chips for first question: Body Odor, Dryness/Patches, Stretch Marks, Product Check. After concern, ask about the specific body area, then season. For product checks, request the ingredient label photo.",
+    "baby": "Focus: baby skin care. ALWAYS ask baby's age FIRST. Common chips: Diaper Rash, Dry/Sensitive Skin, New Product Check, Rash/Irritation. After age, ask about the specific concern, then request product info if relevant. Extra caution — fragrance-free, hypoallergenic only, pediatrician confirmation always.",
+    "cloth": "Focus: fabric and clothing. Common chips: Check Fabric Composition, Baby-Safe Check, Season Suitability, Care Instructions. Ask for fabric tag photo or composition details. Consider the user's climate/season and skin sensitivity when advising.",
+}
+
+
+from app.constants.language_hint import language_hint_user_line
+
+def system_prompt(category: str | None, user_query: str, conversation_language: str | None = None) -> str:
+    language_instruction = language_hint_user_line(
+        user_query,
+        conversation_language=conversation_language,
+        per_message=True,
+    )
+    return (
+        MASTER_PROMPT
+        + "\n\n"
+        + language_instruction
+        + "\n\nCATEGORY FOCUS: "
+        + CATEGORY_PROMPTS.get(category or "", "Infer the category from the user's question. If ambiguous, ask which category they need help with using chips: [Skin Care, Body Care, Baby Skin Care, Cloth Guide].")
+    )
