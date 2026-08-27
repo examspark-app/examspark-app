@@ -1517,7 +1517,7 @@ class RoleplayVoiceScreen extends StatefulWidget {
 }
 
 class _RoleplayVoiceScreenState extends State<RoleplayVoiceScreen>
-  with SingleTickerProviderStateMixin, WidgetsBindingObserver 
+with SingleTickerProviderStateMixin, WidgetsBindingObserver { 
   late final AnimationController pulse = AnimationController(
     vsync: this,
     duration: const Duration(milliseconds: 1100),
