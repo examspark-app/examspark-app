@@ -47,6 +47,7 @@ class AskAiRequest(BaseModel):
     conversation_language: Optional[ConversationLanguage] = None
     # Phase 4D — Study Workspace Ask AI conversation thread (same table as Home AI)
     session_id: Optional[str] = None
+    text_model: Literal["qwen3", "gemini", "claude"] = "qwen3"
 
     @field_validator("conversation_language", mode="before")
     @classmethod
