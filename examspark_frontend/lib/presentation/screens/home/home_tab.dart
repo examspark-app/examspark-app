@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
-import 'package:examspark_frontend/presentation/widgets/skeleton_loader.dart';
+import 'package:examspark_frontend/presentation/screens/recording/widgets/skeleton_loader.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
