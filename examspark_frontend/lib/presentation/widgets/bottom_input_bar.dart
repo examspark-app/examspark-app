@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/widgets/ai_model_selector.dart';
 
@@ -92,6 +93,17 @@ class _BottomInputBarState extends State<BottomInputBar> {
     // Reply quote ko parent clear karega after send request is handed off.
     if (_hasReply) {
       widget.onClearReply?.call();
+    }
+  }
+
+  Future<void> _launchSupport() async {
+    final uri = Uri.parse('https://sites.google.com/view/sonaxia/support');
+    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Support page open nahi ho payi.')),
+        );
+      }
     }
   }
 
@@ -355,6 +367,20 @@ Widget build(BuildContext context) {
                       onSelected: widget.onModelChanged!,
                     ),
                   const Spacer(),
+                  IconButton(
+                    icon: Icon(
+                      Icons.help_outline_rounded,
+                      color: muted,
+                      size: 21,
+                    ),
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(
+                      minWidth: 34,
+                      minHeight: 34,
+                    ),
+                    onPressed: _launchSupport,
+                    tooltip: 'Support',
+                  ),
                   if (widget.onYoutube != null)
                     IconButton(
                       icon: Icon(
@@ -423,7 +449,7 @@ Widget build(BuildContext context) {
         Padding(
           padding: const EdgeInsets.only(top: 8),
           child: Text(
-            'Sonaxia can make mistakes. Please double-check responses.',
+            'Sonaxia Ai can make mistakes. Please double-check responses.',
             textAlign: TextAlign.center,
             style: TextStyle(
               fontSize: 10.5,

@@ -194,7 +194,7 @@ class _SoniaChatScreenState extends State<SoniaChatScreen> {
                     ),
                   ),
           ),
-          _buildInputBar(isDark),
+          _buildInputBar(isDark, personaName),
         ],
       ),
     );
@@ -350,7 +350,7 @@ class _SoniaChatScreenState extends State<SoniaChatScreen> {
     );
   }
 
-    Widget _buildInputBar(bool isDark) {
+    Widget _buildInputBar(bool isDark, String personaName) {
     final charCount = _input.text.length;
     const maxChars = 200;
     return SafeArea(

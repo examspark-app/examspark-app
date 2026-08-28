@@ -2,7 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
-import 'package:examspark_frontend/core/services/home_ask_bridge.dart';
+import 'package:examspark_frontend/presentation/widgets/workspace_ask_ai_pane.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/core/utils/dom_selection.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
@@ -120,10 +120,8 @@ class _SelectableStudyTextState extends State<SelectableStudyText> {
       return;
     }
 
-    // IMPORTANT:
-    // Selected text is NOT sent to AI immediately.
-    // It is queued as reply context for the Home composer.
-    HomeAskBridge.instance.requestReply(text);
+        if (!mounted) return;
+    _openWorkspaceAskAi(text);
   }
 
   Future<void> _replyFromTopButton() async {
@@ -156,9 +154,25 @@ class _SelectableStudyTextState extends State<SelectableStudyText> {
       return;
     }
 
-    HomeAskBridge.instance.requestReply(text);
+        if (!mounted) return;
+    _openWorkspaceAskAi(text);
   }
-
+  
+  void _openWorkspaceAskAi(String text) {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => Scaffold(
+          appBar: AppBar(title: const Text('Ask AI')),
+          body: SafeArea(
+            child: WorkspaceAskAiPane(
+              lectureId: widget.lectureId,
+              initialQuery: text,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
   @override
   Widget build(BuildContext context) {
     if (!widget.enableAskAi) {

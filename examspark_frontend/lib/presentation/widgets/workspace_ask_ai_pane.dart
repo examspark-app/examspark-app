@@ -5,12 +5,18 @@ import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/widgets/ai/ai_assistant_message.dart';
 import 'package:examspark_frontend/presentation/widgets/ai/ai_thinking_bubble.dart';
-
+import 'package:url_launcher/url_launcher.dart';
 /// Library / Study Workspace Ask AI — same FastAPI path as Notes result RAG modal.
+// BAAD ME
 class WorkspaceAskAiPane extends StatefulWidget {
   final String lectureId;
+  final String? initialQuery;
 
-  const WorkspaceAskAiPane({super.key, required this.lectureId});
+  const WorkspaceAskAiPane({
+    super.key,
+    required this.lectureId,
+    this.initialQuery,
+  });
 
   @override
   State<WorkspaceAskAiPane> createState() => _WorkspaceAskAiPaneState();
@@ -45,7 +51,16 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
     'What should I remember for revision?',
     'List important terms and definitions',
   ];
-
+    @override
+  void initState() {
+    super.initState();
+    final q = widget.initialQuery?.trim();
+    if (q != null && q.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _send(q);
+      });
+    }
+  }
   @override
   void dispose() {
     _controller.dispose();
@@ -351,6 +366,39 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
                 ),
               ),
             ],
+          ),
+                ),
+        Padding(
+          padding: const EdgeInsets.only(top: 6, bottom: 4),
+          child: GestureDetector(
+            onTap: () {
+              launchUrl(
+                Uri.parse(
+                  'https://sites.google.com/view/sonaxia/support',
+                ),
+                mode: LaunchMode.externalApplication,
+              );
+            },
+            child: Text.rich(
+              TextSpan(
+                text: 'Sonaxia Ai can make mistakes. ',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.getSecondaryText(context),
+                      fontSize: 11,
+                    ),
+                children: [
+                  TextSpan(
+                    text: 'Please double-check responses.',
+                    style: TextStyle(
+                      color: AppTheme.accentColor,
+                      fontSize: 11,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ],
+              ),
+              textAlign: TextAlign.center,
+            ),
           ),
         ),
       ],
