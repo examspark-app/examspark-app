@@ -13,7 +13,7 @@ import 'package:examspark_frontend/presentation/screens/english_practice/english
 import 'package:examspark_frontend/presentation/screens/english_practice/roleplay_screen.dart';
 import 'package:examspark_frontend/presentation/widgets/ai_model_selector.dart';
 import 'package:examspark_frontend/presentation/widgets/glow_guide_rotating_button.dart';
-
+import 'package:shared_preferences/shared_preferences.dart';
 class _Message {
   const _Message(this.text, this.isUser, {this.imageUrl});
   final String text;
@@ -190,13 +190,14 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
   String? _error;
   bool _longChatPromptShown = false;
   bool _resumeCancelled = false;
-  late String _selectedTextModel = widget.textModel;
+  String _selectedTextModel = 'qwen3';
+  static const _modelPrefsKey = 'english_practice_preferred_model';
 
   bool _voiceActive = false;
   late AnimationController _waveController;
   final Random _random = Random();
 
-  @override
+    @override
   void initState() {
     super.initState();
     _waveController = AnimationController(
@@ -208,7 +209,27 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
         setState(() => _voiceActive = active);
       }
     });
-    _load(initial: true);
+    _loadSavedModelThenStart();
+  }
+
+  Future<void> _loadSavedModelThenStart() async {
+    // Explicit textModel argument (e.g. from language picker) always wins.
+    // Otherwise fall back to the user's last-saved preference.
+    if (widget.textModel != 'qwen3') {
+      _selectedTextModel = widget.textModel;
+    } else {
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        final saved = prefs.getString(_modelPrefsKey);
+        if (saved == 'qwen3' || saved == 'gemini' || saved == 'claude') {
+          _selectedTextModel = saved!;
+        }
+      } catch (_) {
+        // Local pref read failed — default 'qwen3' is already set.
+      }
+    }
+    if (mounted) setState(() {});
+    await _load(initial: true);
   }
 
   @override
@@ -1422,6 +1443,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
         ),
       );
       if (!mounted || confirmed != true) return;
+            unawaited(_savePreferredModel(model));
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -1431,5 +1453,14 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       return;
     }
     setState(() => _selectedTextModel = model);
+    unawaited(_savePreferredModel(model));
   }
-}
+
+  Future<void> _savePreferredModel(String model) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_modelPrefsKey, model);
+    } catch (_) {
+      // Non-critical — worst case the preference just doesn't persist.
+    }
+  }

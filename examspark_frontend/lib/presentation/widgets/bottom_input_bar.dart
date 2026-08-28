@@ -367,20 +367,7 @@ Widget build(BuildContext context) {
                       onSelected: widget.onModelChanged!,
                     ),
                   const Spacer(),
-                  IconButton(
-                    icon: Icon(
-                      Icons.help_outline_rounded,
-                      color: muted,
-                      size: 21,
-                    ),
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(
-                      minWidth: 34,
-                      minHeight: 34,
-                    ),
-                    onPressed: _launchSupport,
-                    tooltip: 'Support',
-                  ),
+                  
                   if (widget.onYoutube != null)
                     IconButton(
                       icon: Icon(
@@ -445,15 +432,27 @@ Widget build(BuildContext context) {
           ),
         ),
 
-        // ---- ADD THIS: disclaimer line below the input pill ----
+                // ---- Disclaimer line below the input pill, tap opens support ----
         Padding(
           padding: const EdgeInsets.only(top: 8),
-          child: Text(
-            'Sonaxia Ai can make mistakes. Please double-check responses.',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 10.5,
-              color: muted,
+          child: GestureDetector(
+            onTap: _launchSupport,
+            child: Text.rich(
+              TextSpan(
+                text: 'Sonaxia Ai can make mistakes. ',
+                style: TextStyle(fontSize: 10.5, color: muted),
+                children: [
+                  TextSpan(
+                    text: 'Please double-check responses.',
+                    style: TextStyle(
+                      fontSize: 10.5,
+                      color: AppTheme.accentColor,
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ],
+              ),
+              textAlign: TextAlign.center,
             ),
           ),
         ),

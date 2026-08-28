@@ -28,6 +28,7 @@ class _AskMsg {
   final String? trustLine;
   final bool animateReveal;
   final Map<String, dynamic>? visualPayload;
+  final bool isSelectedQuote;
 
   const _AskMsg(
     this.text, {
@@ -35,6 +36,7 @@ class _AskMsg {
     this.trustLine,
     this.animateReveal = false,
     this.visualPayload,
+    this.isSelectedQuote = false,
   });
 }
 
@@ -121,9 +123,9 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
     final text = selectedText.trim();
     if (text.isEmpty || _isSending) return;
 
-    setState(() {
+      setState(() {
       _messages.add(
-        _AskMsg(text, isUser: true),
+        _AskMsg(text, isUser: true, isSelectedQuote: true),
       );
       _isSending = true;
       _liveStreamText = null;
@@ -290,8 +292,66 @@ class _WorkspaceAskAiPaneState extends State<WorkspaceAskAiPane> {
                         child: AiThinkingBubble(),
                       );
                     }
-                    final m = _messages[index];
+                                        final m = _messages[index];
                     if (m.isUser) {
+                      if (m.isSelectedQuote) {
+                        return Align(
+                          alignment: Alignment.centerRight,
+                          child: Container(
+                            constraints: BoxConstraints(
+                              maxWidth: MediaQuery.of(context).size.width * 0.85,
+                            ),
+                            margin: const EdgeInsets.only(bottom: 12),
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: AppTheme.getCardBackground(context),
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border(
+                                left: BorderSide(
+                                  color: AppTheme.accentColor,
+                                  width: 3,
+                                ),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.format_quote_rounded,
+                                      size: 14,
+                                      color: AppTheme.accentColor,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Selected text',
+                                      style: TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppTheme.accentColor,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  m.text,
+                                  maxLines: 4,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: AppTheme.getPrimaryText(context),
+                                    fontSize: 13.5,
+                                    height: 1.4,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      }
                       return Align(
                         alignment: Alignment.centerRight,
                         child: Container(
