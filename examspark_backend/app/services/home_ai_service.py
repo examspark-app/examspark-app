@@ -1074,7 +1074,7 @@ async def home_ai(
     if text_model not in {"qwen3", "gemini", "claude"}:
         text_model = "qwen3"
     if text_model == "claude":
-        from app.services.plan_tier_service import require_feature_unlocked
+        
         try:
             require_feature_unlocked(user_id, GatedFeature.PREMIUM_CHAT_MODEL)
         except Exception as error:
@@ -1349,7 +1349,7 @@ async def home_ai_stream(
     if text_model not in {"qwen3", "gemini", "claude"}:
         text_model = "qwen3"
     if text_model == "claude":
-        from app.services.plan_tier_service import require_feature_unlocked
+        
         try:
             require_feature_unlocked(user_id, GatedFeature.PREMIUM_CHAT_MODEL)
         except Exception as error:
