@@ -15,9 +15,6 @@ import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 
 enum _AuthMode { login, signUp }
 
-/// Secure entry portal. One screen, two clear modes (Login / Sign Up)
-/// switched with a segmented toggle — old users and new users each get an
-/// unambiguous primary action, plus Google sign-in and password reset.
 class LoginScreen extends StatefulWidget {
   const LoginScreen({
     super.key,
@@ -25,12 +22,7 @@ class LoginScreen extends StatefulWidget {
     this.inviteJoinHint = false,
   });
 
-  /// Opens straight on the "Sign Up" tab — used when pushed from
-  /// [GuestHomeScreen]'s "Create Free Account" prompt so the user doesn't
-  /// have to tap the toggle themselves.
   final bool startInSignUp;
-
-  /// Invite deep link: show “create account to open group” under the title.
   final bool inviteJoinHint;
 
   @override
@@ -48,10 +40,10 @@ class _LoginScreenState extends State<LoginScreen> {
   bool _isLoading = false;
   bool _obscurePassword = true;
   late final TapGestureRecognizer _switchModeRecognizer;
-  // Task 1 — Signup Consent: tap recognizers for the "Terms & Conditions"
-  // and "Privacy Policy" links shown below the Create Account button.
   late final TapGestureRecognizer _termsRecognizer;
   late final TapGestureRecognizer _privacyRecognizer;
+
+  static const Color _babyPink = Color(0xFFFF8FB1);
 
   @override
   void initState() {
@@ -73,10 +65,6 @@ class _LoginScreenState extends State<LoginScreen> {
     });
   }
 
-  /// When this screen was pushed on top of something else (e.g.
-  /// `GuestHomeScreen`) rather than being `AuthGate`'s current root
-  /// content, pop it after a successful login/signup so the root's now-
-  /// updated content (onboarding / AppShell) becomes visible again.
   void _popIfPushed() {
     if (Navigator.of(context).canPop()) {
       Navigator.of(context).pop();
@@ -101,9 +89,6 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _mode = mode);
   }
 
-  // Task 1 — opens Terms & Conditions / Privacy Policy inside the in-app
-  // WebView (Task 4). Never opens an external browser, except on Web
-  // platform, where `LegalWebViewScreen` itself opens a new tab.
   void _openLegalDoc(String title, String url) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -114,17 +99,13 @@ class _LoginScreenState extends State<LoginScreen> {
 
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
-
     try {
       final response = await SupabaseClient.instance.signInWithEmail(
         email: _emailController.text.trim(),
         password: _passwordController.text,
       );
-
       if (response.user != null && mounted) {
-        // AuthGate listens to authStateChanges and shows AppShell automatically.
         _popIfPushed();
       }
     } catch (e) {
@@ -145,19 +126,14 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _handleSignUp() async {
     if (!_formKey.currentState!.validate()) return;
-
     setState(() => _isLoading = true);
-
     final email = _emailController.text.trim();
-
     try {
       final deviceId = await getDeviceIdentifier();
       if (deviceId != null &&
@@ -169,7 +145,6 @@ class _LoginScreenState extends State<LoginScreen> {
         password: _passwordController.text,
         referralCode: _referralController.text,
       );
-
       if (mounted) {
         if (response.session != null &&
             _referralController.text.trim().isNotEmpty) {
@@ -178,9 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
               _referralController.text.trim(),
             );
             await PendingReferralStore.clear();
-          } catch (_) {
-            // Referral redemption is non-blocking for account creation.
-          }
+          } catch (_) {}
         }
         if (response.session != null) {
           final deviceId = await getDeviceIdentifier();
@@ -191,16 +164,12 @@ class _LoginScreenState extends State<LoginScreen> {
           }
         }
         if (response.session == null) {
-          // Email confirmation required — no session yet. Take the user to
-          // a real confirmation page instead of a snackbar they can miss.
           await Navigator.of(context).push(
             MaterialPageRoute(
               builder: (_) => EmailVerificationScreen(email: email),
             ),
           );
         } else {
-          // Session came back immediately (email confirmations off in
-          // Supabase settings) — AuthGate picks it up; pop back to reveal it.
           _popIfPushed();
         }
       }
@@ -212,18 +181,14 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   Future<void> _handleGoogleSignIn() async {
     setState(() => _isLoading = true);
-
     try {
       await SupabaseClient.instance.signInWithGoogle();
-      // Web: browser redirects to Google then back — AuthGate handles the rest.
     } catch (e) {
       if (mounted) {
         AppToast.showSnackBar(
@@ -232,9 +197,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       }
     } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -244,28 +207,30 @@ class _LoginScreenState extends State<LoginScreen> {
     ).push(MaterialPageRoute(builder: (_) => const ResetPasswordScreen()));
   }
 
-  static const Color _babyPink = Color(0xFFFFC1D9);
-  static const Color _babyPinkDeep = Color(0xFFF48FB1);
-  static const Color _babyPinkBg = Color(0xFFFFF5F9);
-  static const Color _textOnPink = Color(0xFF4A1230);
-
   @override
   Widget build(BuildContext context) {
     final isLogin = _mode == _AuthMode.login;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final bg = AppTheme.getCardBackground(context) == AppTheme.lightCardBackground
+        ? (isDark ? AppTheme.darkBackground : AppTheme.lightBackground)
+        : (isDark ? AppTheme.darkBackground : AppTheme.lightBackground);
+    final primaryText = AppTheme.getPrimaryText(context);
+    final secondaryText = AppTheme.getSecondaryText(context);
+    final fieldFill = AppTheme.getCardBackground(context);
+    final fieldBorder = AppTheme.getCardBorder(context);
+
     final inputBorder = OutlineInputBorder(
       borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-      borderSide: const BorderSide(color: _babyPinkDeep, width: 1.2),
+      borderSide: const BorderSide(color: _babyPink, width: 1.4),
     );
     final inputBorderDisabled = OutlineInputBorder(
       borderRadius: BorderRadius.circular(AppTheme.borderRadius),
-      borderSide: BorderSide(
-        color: _babyPink.withValues(alpha: 0.65),
-        width: 1,
-      ),
+      borderSide: BorderSide(color: fieldBorder, width: 1),
     );
 
     return Scaffold(
-      backgroundColor: _babyPinkBg,
+      backgroundColor: bg,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -284,20 +249,16 @@ class _LoginScreenState extends State<LoginScreen> {
                     const SizedBox(height: 6),
                     Text(
                       isLogin ? 'Welcome back' : 'Create your account',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                            color: _textOnPink.withValues(alpha: 0.75),
-                          ),
+                      style: TextStyle(fontSize: 14, color: secondaryText),
                       textAlign: TextAlign.center,
                     ),
                     if (widget.inviteJoinHint) ...[
                       const SizedBox(height: 8),
                       Text(
                         isLogin
-                            ? 'Sign in to open your teacher’s group'
-                            : 'Create a free account to open your teacher’s group',
-                        style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                              color: _textOnPink.withValues(alpha: 0.65),
-                            ),
+                            ? 'Sign in to open your teacher\u2019s group'
+                            : 'Create a free account to open your teacher\u2019s group',
+                        style: TextStyle(fontSize: 13, color: secondaryText),
                         textAlign: TextAlign.center,
                       ),
                     ],
@@ -306,18 +267,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       TextFormField(
                         controller: _referralController,
                         textCapitalization: TextCapitalization.characters,
-                        cursorColor: _babyPinkDeep,
+                        cursorColor: primaryText,
+                        style: TextStyle(color: primaryText),
                         decoration: InputDecoration(
                           labelText: 'Referral code (optional)',
-                          labelStyle: TextStyle(
-                            color: _textOnPink.withValues(alpha: 0.7),
-                          ),
-                          prefixIcon: const Icon(
+                          labelStyle: TextStyle(color: secondaryText),
+                          prefixIcon: Icon(
                             Icons.card_giftcard_outlined,
-                            color: _babyPinkDeep,
+                            color: secondaryText,
                           ),
                           filled: true,
-                          fillColor: Colors.white,
+                          fillColor: fieldFill,
                           enabledBorder: inputBorderDisabled,
                           focusedBorder: inputBorder,
                           border: inputBorderDisabled,
@@ -326,21 +286,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 12),
                     ],
 
+                    // Login / Sign Up segmented toggle — black & white,
+                    // baby pink only on the active pill.
                     Container(
                       padding: const EdgeInsets.all(4),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: _babyPink, width: 1.2),
+                        color: fieldFill,
+                        border: Border.all(color: fieldBorder, width: 1),
                         borderRadius: BorderRadius.circular(
                           AppTheme.borderRadius,
                         ),
-                        boxShadow: [
-                          BoxShadow(
-                            color: _babyPinkDeep.withValues(alpha: 0.08),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
                       ),
                       child: Row(
                         children: [
@@ -348,6 +303,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: _ModeTab(
                               label: 'Login',
                               isActive: isLogin,
+                              primaryText: primaryText,
+                              secondaryText: secondaryText,
                               onTap: () => _switchMode(_AuthMode.login),
                             ),
                           ),
@@ -355,6 +312,8 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: _ModeTab(
                               label: 'Sign Up',
                               isActive: !isLogin,
+                              primaryText: primaryText,
+                              secondaryText: secondaryText,
                               onTap: () => _switchMode(_AuthMode.signUp),
                             ),
                           ),
@@ -368,30 +327,31 @@ class _LoginScreenState extends State<LoginScreen> {
                       focusNode: _emailFocusNode,
                       keyboardType: TextInputType.emailAddress,
                       textInputAction: TextInputAction.next,
-                      cursorColor: _babyPinkDeep,
+                      cursorColor: primaryText,
+                      style: TextStyle(color: primaryText),
                       autofillHints: const [AutofillHints.email],
                       onFieldSubmitted: (_) =>
                           _passwordFocusNode.requestFocus(),
                       decoration: InputDecoration(
                         labelText: 'Email',
-                        labelStyle: TextStyle(
-                          color: _textOnPink.withValues(alpha: 0.7),
-                        ),
-                        prefixIcon: const Icon(
+                        labelStyle: TextStyle(color: secondaryText),
+                        prefixIcon: Icon(
                           Icons.email_outlined,
-                          color: _babyPinkDeep,
+                          color: secondaryText,
                         ),
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: fieldFill,
                         enabledBorder: inputBorderDisabled,
                         focusedBorder: inputBorder,
                         border: inputBorderDisabled,
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty)
+                        if (value == null || value.isEmpty) {
                           return 'Please enter your email';
-                        if (!value.contains('@'))
+                        }
+                        if (!value.contains('@')) {
                           return 'Please enter a valid email';
+                        }
                         return null;
                       },
                     ),
@@ -401,25 +361,24 @@ class _LoginScreenState extends State<LoginScreen> {
                       focusNode: _passwordFocusNode,
                       obscureText: _obscurePassword,
                       textInputAction: TextInputAction.done,
-                      cursorColor: _babyPinkDeep,
+                      cursorColor: primaryText,
+                      style: TextStyle(color: primaryText),
                       autofillHints: const [AutofillHints.password],
                       onFieldSubmitted: (_) =>
                           isLogin ? _handleLogin() : _handleSignUp(),
                       decoration: InputDecoration(
                         labelText: 'Password',
-                        labelStyle: TextStyle(
-                          color: _textOnPink.withValues(alpha: 0.7),
-                        ),
-                        prefixIcon: const Icon(
+                        labelStyle: TextStyle(color: secondaryText),
+                        prefixIcon: Icon(
                           Icons.lock_outline,
-                          color: _babyPinkDeep,
+                          color: secondaryText,
                         ),
                         suffixIcon: IconButton(
                           icon: Icon(
                             _obscurePassword
                                 ? Icons.visibility_outlined
                                 : Icons.visibility_off_outlined,
-                            color: _babyPinkDeep,
+                            color: secondaryText,
                           ),
                           tooltip: _obscurePassword
                               ? 'Show password'
@@ -429,16 +388,18 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                         ),
                         filled: true,
-                        fillColor: Colors.white,
+                        fillColor: fieldFill,
                         enabledBorder: inputBorderDisabled,
                         focusedBorder: inputBorder,
                         border: inputBorderDisabled,
                       ),
                       validator: (value) {
-                        if (value == null || value.isEmpty)
+                        if (value == null || value.isEmpty) {
                           return 'Please enter your password';
-                        if (value.length < 6)
+                        }
+                        if (value.length < 6) {
                           return 'Password must be at least 6 characters';
+                        }
                         return null;
                       },
                     ),
@@ -450,8 +411,10 @@ class _LoginScreenState extends State<LoginScreen> {
                           onPressed: _isLoading ? null : _openResetPassword,
                           style: TextButton.styleFrom(
                             padding: EdgeInsets.zero,
-                            foregroundColor: _babyPinkDeep,
-                            textStyle: const TextStyle(fontWeight: FontWeight.w600),
+                            foregroundColor: _babyPink,
+                            textStyle: const TextStyle(
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                           child: const Text('Forgot password?'),
                         ),
@@ -460,15 +423,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       const SizedBox(height: 20),
 
                     const SizedBox(height: 12),
+                    // Primary action button — solid black/white (theme-
+                    // inverted), NOT baby pink. Baby pink is reserved for
+                    // small accents only (active tab, links, focus border).
                     ElevatedButton(
                       onPressed: _isLoading
                           ? null
                           : (isLogin ? _handleLogin : _handleSignUp),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _babyPinkDeep,
-                        foregroundColor: Colors.white,
+                        backgroundColor: primaryText,
+                        foregroundColor: bg,
                         elevation: 0,
-                        shadowColor: _babyPinkDeep.withValues(alpha: 0.3),
                         minimumSize: const Size.fromHeight(52),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(
@@ -481,12 +446,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         ),
                       ),
                       child: _isLoading
-                          ? const SizedBox(
+                          ? SizedBox(
                               height: 20,
                               width: 20,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2.2,
-                                color: Colors.white,
+                                color: bg,
                               ),
                             )
                           : Text(isLogin ? 'Sign In' : 'Create Account'),
@@ -499,9 +464,7 @@ class _LoginScreenState extends State<LoginScreen> {
                         child: RichText(
                           textAlign: TextAlign.center,
                           text: TextSpan(
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: _textOnPink.withValues(alpha: 0.7),
-                                ),
+                            style: TextStyle(fontSize: 12.5, color: secondaryText),
                             children: [
                               const TextSpan(
                                 text:
@@ -510,7 +473,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               TextSpan(
                                 text: 'Terms & Conditions',
                                 style: const TextStyle(
-                                  color: _babyPinkDeep,
+                                  color: _babyPink,
                                   fontWeight: FontWeight.w700,
                                 ),
                                 recognizer: _termsRecognizer,
@@ -519,7 +482,7 @@ class _LoginScreenState extends State<LoginScreen> {
                               TextSpan(
                                 text: 'Privacy Policy',
                                 style: const TextStyle(
-                                  color: _babyPinkDeep,
+                                  color: _babyPink,
                                   fontWeight: FontWeight.w700,
                                 ),
                                 recognizer: _privacyRecognizer,
@@ -535,26 +498,21 @@ class _LoginScreenState extends State<LoginScreen> {
                     Row(
                       children: [
                         Expanded(
-                          child: Divider(
-                            color: _babyPink.withValues(alpha: 0.7),
-                            thickness: 1,
-                          ),
+                          child: Divider(color: fieldBorder, thickness: 1),
                         ),
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 14),
                           child: Text(
                             'or',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: _textOnPink.withValues(alpha: 0.55),
-                                  fontWeight: FontWeight.w600,
-                                ),
+                            style: TextStyle(
+                              color: secondaryText,
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                            ),
                           ),
                         ),
                         Expanded(
-                          child: Divider(
-                            color: _babyPink.withValues(alpha: 0.7),
-                            thickness: 1,
-                          ),
+                          child: Divider(color: fieldBorder, thickness: 1),
                         ),
                       ],
                     ),
@@ -566,15 +524,15 @@ class _LoginScreenState extends State<LoginScreen> {
                         isLogin
                             ? 'Continue with Google'
                             : 'Sign up with Google',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.w600,
-                          color: _textOnPink,
+                          color: primaryText,
                         ),
                       ),
                       style: OutlinedButton.styleFrom(
-                        side: const BorderSide(color: _babyPinkDeep, width: 1.3),
-                        backgroundColor: Colors.white,
-                        foregroundColor: _babyPinkDeep,
+                        side: BorderSide(color: fieldBorder, width: 1.2),
+                        backgroundColor: fieldFill,
+                        foregroundColor: primaryText,
                         minimumSize: const Size.fromHeight(52),
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(
@@ -587,19 +545,17 @@ class _LoginScreenState extends State<LoginScreen> {
                     Center(
                       child: RichText(
                         text: TextSpan(
-                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                color: _textOnPink.withValues(alpha: 0.7),
-                              ),
+                          style: TextStyle(fontSize: 13, color: secondaryText),
                           children: [
                             TextSpan(
                               text: isLogin
-                                  ? "New here? "
+                                  ? 'New here? '
                                   : 'Already have an account? ',
                             ),
                             TextSpan(
                               text: isLogin ? 'Create an account' : 'Sign in',
                               style: const TextStyle(
-                                color: _babyPinkDeep,
+                                color: _babyPink,
                                 fontWeight: FontWeight.w700,
                               ),
                               recognizer: _switchModeRecognizer,
@@ -624,11 +580,15 @@ class _ModeTab extends StatelessWidget {
   const _ModeTab({
     required this.label,
     required this.isActive,
+    required this.primaryText,
+    required this.secondaryText,
     required this.onTap,
   });
 
   final String label;
   final bool isActive;
+  final Color primaryText;
+  final Color secondaryText;
   final VoidCallback onTap;
 
   @override
@@ -640,24 +600,17 @@ class _ModeTab extends StatelessWidget {
         duration: const Duration(milliseconds: 200),
         padding: const EdgeInsets.symmetric(vertical: 11),
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFFF48FB1) : Colors.transparent,
+          color: isActive
+              ? const Color(0xFFFF8FB1)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(AppTheme.borderRadius - 2),
-          boxShadow: isActive
-              ? [
-                  BoxShadow(
-                    color: const Color(0xFFF48FB1).withValues(alpha: 0.25),
-                    blurRadius: 8,
-                    offset: const Offset(0, 1),
-                  ),
-                ]
-              : null,
         ),
         alignment: Alignment.center,
         child: Text(
           label,
           style: TextStyle(
             fontWeight: FontWeight.w700,
-            color: isActive ? Colors.white : const Color(0xFF4A1230).withValues(alpha: 0.6),
+            color: isActive ? Colors.white : secondaryText,
             fontSize: 14.5,
           ),
         ),
