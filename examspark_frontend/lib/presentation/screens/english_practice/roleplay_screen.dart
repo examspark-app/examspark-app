@@ -1252,8 +1252,8 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                     ],
                   ),
                   child: ClipOval(
-                    child: Image.asset(
-                      'assets/images/sonia_avatar.png',
+                    child: Image.network(
+                      '/images/sonia_avatar.png',
                       fit: BoxFit.cover,
                       width: 72,
                       height: 72,
@@ -2137,8 +2137,8 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
                                     ],
                                   ),
                                   child: ClipOval(
-                                    child: Image.asset(
-                                      'assets/images/sonia_avatar.png',
+                                    child: Image.network(
+                                      '/images/sonia_avatar.png',
                                       fit: BoxFit.cover,
                                       width: 160,
                                       height: 160,

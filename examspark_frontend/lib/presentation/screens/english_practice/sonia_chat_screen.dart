@@ -212,8 +212,8 @@ class _SoniaChatScreenState extends State<SoniaChatScreen> {
               border: Border.all(color: Colors.white, width: 1.4),
             ),
             child: ClipOval(
-              child: Image.asset(
-                'assets/images/sonia_avatar.png',
+              child: Image.network(
+                '/images/sonia_avatar.png',
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(
                   color: Colors.white24,
