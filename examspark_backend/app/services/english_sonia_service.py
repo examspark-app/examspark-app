@@ -112,7 +112,7 @@ async def start(
         'started_at': row['started_at'],
         'opening_reply': opening,
         'character_name': 'Sonia',
-        'avatar_path': 'assets/images/sonia_avatar.png',
+        'avatar_path': 'images/sonia_avatar.png',
     }
 
 
@@ -259,7 +259,7 @@ def restore_session(session_id: str, user_id: str) -> dict | None:
         'id': session['id'],
         'scenario': session['scenario'],
         'character_name': 'Sonia',
-        'avatar_path': 'assets/images/sonia_avatar.png',
+        'avatar_path': 'images/sonia_avatar.png',
         'status': session.get('status'),
         'messages': list(messages),
     }

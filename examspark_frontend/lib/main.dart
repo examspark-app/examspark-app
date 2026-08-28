@@ -24,13 +24,16 @@ import 'package:examspark_frontend/presentation/widgets/auth_gate.dart';
 import 'package:app_links/app_links.dart';
 import 'package:examspark_frontend/core/payments/payment_service.dart';
 
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:js' as js show context;
+// NEW:
+import 'dart:js_interop';
+
+@JS('forceReloadExamSparkApp')
+external void _forceReloadExamSparkAppJS();
 
 void _webForceReload() {
   if (!kIsWeb) return;
   try {
-    js.context.callMethod('forceReloadExamSparkApp');
+    _forceReloadExamSparkAppJS();
   } catch (_) {}
 }
 
