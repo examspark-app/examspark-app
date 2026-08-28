@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
-
+import 'package:examspark_frontend/presentation/widgets/skeleton_loader.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -2571,18 +2571,9 @@ trailing: [
                       ),
                     ),
                   ),
-                  if (_loadingSessions)
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 16),
-                      child: Center(
-                        child: SizedBox(
-                          width: 18,
-                          height: 18,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        ),
-                      ),
-                    )
-                  else if (_recentSessions == null || _recentSessions!.isEmpty)
+                  if (_recentSessions == null || _loadingSessions)
+                    const SkeletonChatList(itemCount: 5)
+                  else if (_recentSessions!.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 16,

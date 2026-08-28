@@ -169,7 +169,7 @@ class EnglishPracticeScreen extends StatefulWidget {
 }
 
 class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
-    with TickerProviderStateMixin {
+  with TickerProviderStateMixin {
   static const violet = Color(0xFF5137ED);
 
   final _text = TextEditingController();
@@ -1456,7 +1456,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
     unawaited(_savePreferredModel(model));
   }
 
-  Future<void> _savePreferredModel(String model) async {
+    Future<void> _savePreferredModel(String model) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_modelPrefsKey, model);
@@ -1464,3 +1464,4 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       // Non-critical — worst case the preference just doesn't persist.
     }
   }
+}   // ← यह नया brace class को close करता है
