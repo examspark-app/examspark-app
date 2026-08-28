@@ -18,10 +18,12 @@ class SoniaChatScreen extends StatefulWidget {
     required this.scenario,
     required this.targetLanguage,
     required this.nativeLanguage,
+    this.voiceKey = 'female',
   });
   final String scenario;
   final String targetLanguage;
   final String nativeLanguage;
+  final String voiceKey;
 
   @override
   State<SoniaChatScreen> createState() => _SoniaChatScreenState();
@@ -142,13 +144,18 @@ class _SoniaChatScreenState extends State<SoniaChatScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isMunna = widget.voiceKey == 'male';
+    final personaName = isMunna ? 'Munna' : 'Sonia';
+    final avatarPath = isMunna
+        ? '/images/munna_avatar.png'
+        : '/images/sonia_avatar.png';
     final bg = isDark ? const Color(0xFF0B0B12) : const Color(0xFFECE5FF);
     final bubbleBgOther = isDark ? const Color(0xFF20202A) : Colors.white;
     final bubbleBgMine = _violet;
 
     return Scaffold(
       backgroundColor: bg,
-      appBar: _buildWhatsAppStyleHeader(context, isDark),
+      appBar: _buildWhatsAppStyleHeader(context, isDark, personaName, avatarPath),
       body: Column(
         children: [
           if (_error != null)
@@ -193,7 +200,12 @@ class _SoniaChatScreenState extends State<SoniaChatScreen> {
     );
   }
 
-  PreferredSizeWidget _buildWhatsAppStyleHeader(BuildContext context, bool isDark) {
+    PreferredSizeWidget _buildWhatsAppStyleHeader(
+    BuildContext context,
+    bool isDark,
+    String personaName,
+    String avatarPath,
+  ) {
     return AppBar(
       backgroundColor: isDark ? const Color(0xFF15121F) : _violet,
       elevation: 0,
@@ -213,7 +225,7 @@ class _SoniaChatScreenState extends State<SoniaChatScreen> {
             ),
             child: ClipOval(
               child: Image.network(
-                '/images/sonia_avatar.png',
+                avatarPath,
                 fit: BoxFit.cover,
                 errorBuilder: (_, __, ___) => Container(
                   color: Colors.white24,
@@ -229,8 +241,8 @@ class _SoniaChatScreenState extends State<SoniaChatScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Text(
-                  'Sonia',
+                Text(
+                  personaName,
                   style: TextStyle(
                     color: Colors.white,
                     fontSize: 16,
@@ -238,7 +250,7 @@ class _SoniaChatScreenState extends State<SoniaChatScreen> {
                   ),
                 ),
                 Text(
-                  _soniaTyping ? 'typing…' : widget.scenario,
+                  _soniaTyping ? '$personaName is typing…' : widget.scenario,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   style: TextStyle(
@@ -382,7 +394,7 @@ class _SoniaChatScreenState extends State<SoniaChatScreen> {
                     height: 1.4,
                   ),
                   decoration: InputDecoration(
-                    hintText: 'Message Sonia…',
+                        hintText: 'Message $personaName…',
                     hintStyle: TextStyle(
                       color: isDark ? Colors.white38 : const Color(0xFFA09CB5),
                     ),

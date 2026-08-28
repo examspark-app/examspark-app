@@ -529,6 +529,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
           nativeLanguage: widget.nativeLanguage ?? 'English',
           chatSessionId: widget.chatSessionId,
           textModel: _textModel,
+          voiceKey: _ttsVoiceKey,
         ),
       ),
     );
@@ -546,6 +547,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
             nativeLanguage: widget.nativeLanguage ?? 'English',
             chatSessionId: widget.chatSessionId,
             textModel: _textModel,
+            voiceKey: _ttsVoiceKey,
           ),
         ),
       );
@@ -711,6 +713,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
           scenario: scenario!,
           targetLanguage: widget.targetLanguage ?? _targetLanguage,
           nativeLanguage: widget.nativeLanguage ?? 'English',
+          voiceKey: _ttsVoiceKey,
         ),
       ),
     );
@@ -1212,6 +1215,11 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
 
   Widget _buildPersonaAndEnter(Color cardBg, Color primaryText, Color subText) {
     final isReady = scenario != null && scenario!.trim().isNotEmpty;
+    final isMunna = _ttsVoiceKey == 'male';
+    final personaName = isMunna ? 'Munna' : 'Sonia';
+    final avatarPath = isMunna
+        ? '/images/munna_avatar.png'
+        : '/images/sonia_avatar.png';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.fromLTRB(18, 20, 18, 18),
@@ -1253,7 +1261,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                   ),
                   child: ClipOval(
                     child: Image.network(
-                      '/images/sonia_avatar.png',
+                      avatarPath,
                       fit: BoxFit.cover,
                       width: 72,
                       height: 72,
@@ -1271,11 +1279,11 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
-                  children: const [
+                  children: [
                     Row(
                       children: [
                         Text(
-                          'Sonia',
+                          personaName,
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 20,
@@ -1349,8 +1357,8 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                           ),
                         ),
                         const SizedBox(height: 1),
-                        const Text(
-                          'Ready — Sonia will open the scene.',
+                        Text(
+                          'Ready — $personaName will open the scene.',
                           style: TextStyle(
                             color: Colors.white70,
                             fontSize: 11,
@@ -1506,12 +1514,14 @@ class RoleplayVoiceScreen extends StatefulWidget {
     required this.nativeLanguage,
     this.chatSessionId,
     this.textModel = 'qwen3',
+    this.voiceKey = 'female',
   });
   final String scenario;
   final String targetLanguage;
   final String nativeLanguage;
   final String? chatSessionId;
   final String textModel;
+  final String voiceKey;
   @override
   State<RoleplayVoiceScreen> createState() => _RoleplayVoiceScreenState();
 }
@@ -2033,6 +2043,11 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
     final subText = isDark ? Colors.white70 : const Color(0xFF594AA8);
     final callActive = active || state == RoleplayVoiceState.aiSpeaking;
     final isSpeaking = state == RoleplayVoiceState.aiSpeaking || state == RoleplayVoiceState.userSpeaking;
+    final isMunna = widget.voiceKey == 'male';
+    final personaName = isMunna ? 'Munna' : 'Sonia';
+    final avatarPath = isMunna
+      ? '/images/munna_avatar.png'
+      : '/images/sonia_avatar.png';
 
     return Scaffold(
       backgroundColor: bg,
@@ -2138,7 +2153,7 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
                                   ),
                                   child: ClipOval(
                                     child: Image.network(
-                                      '/images/sonia_avatar.png',
+                                      avatarPath,
                                       fit: BoxFit.cover,
                                       width: 160,
                                       height: 160,
@@ -2169,7 +2184,7 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
                             (!_micEnabled
                                 ? 'Microphone off'
                                 : state == RoleplayVoiceState.aiSpeaking
-                                ? 'Sonia is speaking…'
+                                ? '$personaName is speaking…'
                                 : active
                                 ? 'Listening… speak naturally'
                                 : state == RoleplayVoiceState.error
