@@ -1419,26 +1419,31 @@ class LectureService {
   }
 
   Future<Map<String, dynamic>> sendEnglishPracticeMessage({
-    required String sessionId,
-    required String message,
-  }) async {
-    final accessToken = await _requireAccessToken();
-    final uri = Uri.parse(
-      '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/message',
-    );
-    final response = await http.post(
-      uri,
-      headers: {
-        'Authorization': 'Bearer $accessToken',
-        'Content-Type': 'application/json',
-      },
-      body: jsonEncode({'session_id': sessionId, 'message': message}),
-    );
-    if (response.statusCode != 200) {
-      throw Exception(_extractErrorDetail(response));
-    }
-    return jsonDecode(response.body) as Map<String, dynamic>;
+  required String sessionId,
+  required String message,
+  String? model,          // ← NAYA
+}) async {
+  final accessToken = await _requireAccessToken();
+  final uri = Uri.parse(
+    '${AppConfig.resolvedApiBaseUrl}/api/v1/english-practice/message',
+  );
+  final response = await http.post(
+    uri,
+    headers: {
+      'Authorization': 'Bearer $accessToken',
+      'Content-Type': 'application/json',
+    },
+    body: jsonEncode({
+      'session_id': sessionId,
+      'message': message,
+      if (model != null) 'model': model,   // ← NAYA
+    }),
+  );
+  if (response.statusCode != 200) {
+    throw Exception(_extractErrorDetail(response));
   }
+  return jsonDecode(response.body) as Map<String, dynamic>;
+}
 
   /// One manual Chat mic turn. Raw recording remains in memory only; the
   /// server persists the resulting transcript through the normal chat path.

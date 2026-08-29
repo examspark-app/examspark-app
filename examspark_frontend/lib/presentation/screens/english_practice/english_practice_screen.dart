@@ -14,6 +14,7 @@ import 'package:examspark_frontend/presentation/screens/english_practice/rolepla
 import 'package:examspark_frontend/presentation/widgets/ai_model_selector.dart';
 import 'package:examspark_frontend/presentation/widgets/glow_guide_rotating_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 class _Message {
   const _Message(this.text, this.isUser, {this.imageUrl});
   final String text;
@@ -382,6 +383,110 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
         curve: Curves.easeOut,
       );
   });
+    MarkdownStyleSheet _markdownStyle(BuildContext context, Color primaryText) {
+    final secondary = AppTheme.getSecondaryText(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    const baseFontSize = 15.5;
+    const baseHeight = 1.65;
+
+    return MarkdownStyleSheet(
+      p: TextStyle(
+        color: primaryText,
+        fontSize: baseFontSize,
+        height: baseHeight,
+        fontWeight: FontWeight.w400,
+      ),
+      h1: TextStyle(
+        color: primaryText,
+        fontSize: 21,
+        height: 1.4,
+        fontWeight: FontWeight.w700,
+      ),
+      h2: TextStyle(
+        color: primaryText,
+        fontSize: 18.5,
+        height: 1.4,
+        fontWeight: FontWeight.w700,
+      ),
+      h3: TextStyle(
+        color: primaryText,
+        fontSize: 16.5,
+        height: 1.4,
+        fontWeight: FontWeight.w600,
+      ),
+      h1Padding: const EdgeInsets.only(top: 12, bottom: 6),
+      h2Padding: const EdgeInsets.only(top: 10, bottom: 5),
+      h3Padding: const EdgeInsets.only(top: 8, bottom: 4),
+      strong: TextStyle(
+        color: primaryText,
+        fontWeight: FontWeight.w700,
+        fontSize: baseFontSize,
+        height: baseHeight,
+      ),
+      em: TextStyle(
+        color: primaryText,
+        fontStyle: FontStyle.italic,
+        fontSize: baseFontSize,
+        height: baseHeight,
+      ),
+      listBullet: TextStyle(
+        color: primaryText,
+        fontSize: baseFontSize,
+        height: baseHeight,
+      ),
+      listIndent: 18,
+      listBulletPadding: const EdgeInsets.only(right: 8),
+      blockSpacing: 8,
+      code: TextStyle(
+        color: primaryText,
+        fontSize: baseFontSize - 1,
+        fontFamily: 'monospace',
+        backgroundColor: isDark
+            ? Colors.white.withOpacity(0.08)
+            : Colors.black.withOpacity(0.05),
+      ),
+      codeblockDecoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.06)
+            : Colors.black.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.getCardBorder(context)),
+      ),
+      codeblockPadding: const EdgeInsets.all(12),
+      blockquoteDecoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.05)
+            : Colors.black.withOpacity(0.035),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(left: BorderSide(color: violet, width: 3)),
+      ),
+      blockquotePadding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 8,
+      ),
+      tableHead: TextStyle(
+        color: primaryText,
+        fontWeight: FontWeight.w700,
+        fontSize: baseFontSize - 1.5,
+      ),
+      tableBody: TextStyle(
+        color: primaryText,
+        fontSize: baseFontSize - 1.5,
+        height: 1.4,
+      ),
+      tableBorder: TableBorder.all(
+        color: AppTheme.getCardBorder(context),
+        width: 1,
+      ),
+      tableCellsPadding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 8,
+      ),
+      horizontalRuleDecoration: BoxDecoration(
+        border: Border(top: BorderSide(color: AppTheme.getCardBorder(context))),
+      ),
+    );
+  }
   Future<void> _send([String? prompt]) async {
     final value = (prompt ?? _text.text).trim();
     if (value.isEmpty || _sending || _sessionId == null) return;
@@ -398,10 +503,11 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
     _bottom();
 
     try {
-      final r = await LectureService.instance.sendEnglishPracticeMessage(
-        sessionId: _sessionId!,
-        message: value,
-      );
+    final r = await LectureService.instance.sendEnglishPracticeMessage(
+     sessionId: _sessionId!,
+     message: value,
+     model: _selectedTextModel,
+   );
 
       if (!mounted) return;
 
@@ -830,17 +936,15 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                 ),
               );
             final m = _messages[i];
-                        if (!m.isUser) {
+                                    if (!m.isUser) {
               return Padding(
                 padding: const EdgeInsets.fromLTRB(18, 4, 18, 22),
                 child: SelectionArea(
-                  child: Text(
-                    m.text,
-                    style: TextStyle(
-                      color: primaryText,
-                      fontSize: 15.5,
-                      height: 1.65,
-                    ),
+                  child: MarkdownBody(
+                    data: m.text,
+                    selectable: false,
+                    styleSheet: _markdownStyle(context, primaryText),
+                    softLineBreak: true,
                   ),
                 ),
               );
@@ -1422,36 +1526,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       }
     }
     if (!mounted) return;
-    if (_sessionId != null) {
-      final confirmed = await showDialog<bool>(
-        context: context,
-        builder: (dialogContext) => AlertDialog(
-          title: const Text('Change AI model?'),
-          content: const Text(
-            'A new chat will use this text model. Your current chat will stay in History.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext, false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(dialogContext, true),
-              child: const Text('New chat'),
-            ),
-          ],
-        ),
-      );
-      if (!mounted || confirmed != true) return;
-            unawaited(_savePreferredModel(model));
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (_) => EnglishPracticeScreen(textModel: model),
-        ),
-      );
-      return;
-    }
+
+    // Mid-chat switch — no new session, no forced dialog. The next message
+    // uses the new model; the backend also remembers it on this session.
     setState(() => _selectedTextModel = model);
     unawaited(_savePreferredModel(model));
   }

@@ -21,6 +21,7 @@ class SetPreferenceRequest(BaseModel):
 class SendMessageRequest(BaseModel):
     session_id: str = Field(..., min_length=1)
     message: str = Field(..., min_length=1, max_length=2000)
+    model: str | None = Field(None, min_length=1, max_length=20)  # ← NAYA
 
 
 class StartRequest(BaseModel):
@@ -88,7 +89,12 @@ async def send_message(
     user: AuthenticatedUser = Depends(get_current_user),
 ):
     try:
-        result = await eps.send_message(user.user_id, body.session_id, body.message)
+        result = await eps.send_message(
+            user.user_id,
+            body.session_id,
+            body.message,
+            model=body.model,      # ← NAYA
+        )
         audio = result.pop("audio_bytes", None)
         return {
             **result,
