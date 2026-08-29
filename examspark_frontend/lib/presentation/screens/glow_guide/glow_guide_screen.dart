@@ -1565,7 +1565,7 @@ class _DetailedBreakdownExpanderState
     with SingleTickerProviderStateMixin {
   bool _expanded = false;
 
-  @override
+    @override
   Widget build(BuildContext context) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1573,7 +1573,7 @@ class _DetailedBreakdownExpanderState
         InkWell(
           onTap: () => setState(() => _expanded = !_expanded),
           borderRadius: BorderRadius.circular(10),
-                    child: Container(
+          child: Container(
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
             decoration: BoxDecoration(
@@ -1615,35 +1615,6 @@ class _DetailedBreakdownExpanderState
               ],
             ),
           ),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(
-                color: AppTheme.glowGuidePink.withValues(alpha: 0.5),
-              ),
-              color: AppTheme.glowGuidePink.withValues(alpha: 0.06),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  _expanded
-                      ? Icons.expand_less_rounded
-                      : Icons.manage_search_rounded,
-                  size: 16,
-                  color: AppTheme.glowGuidePink,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  _expanded ? 'Hide breakdown' : '  See detailed breakdown',
-                  style: const TextStyle(
-                    color: AppTheme.glowGuidePink,
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ],
-            ),
-          ),
         ),
         AnimatedCrossFade(
           duration: const Duration(milliseconds: 250),
@@ -1672,35 +1643,6 @@ class _DetailedBreakdownExpanderState
                 ),
               ),
             ),
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _WebSearchBubble extends StatelessWidget {
-  const _WebSearchBubble();
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        const SizedBox(
-          width: 16,
-          height: 16,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: AppTheme.glowGuidePink,
-          ),
-        ),
-        const SizedBox(width: 10),
-        const Text(
-          'Web search',
-          style: TextStyle(
-            color: Colors.white70,
-            fontSize: 13,
           ),
         ),
       ],
