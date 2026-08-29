@@ -176,7 +176,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
   final _text = TextEditingController();
   final _scroll = ScrollController();
   final _messages = <_Message>[];
-  List<String> _suggestions = const [];
+  List<Map<String, String>> _suggestions = const [];
   _PracticeMcq? _currentMcq;
   int? _mcqSelectedIndex;
   String? _sessionId;
@@ -264,7 +264,14 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             false,
           ),
         );
-      _suggestions = List<String>.from(r['suggestions'] as List? ?? const []);
+            _suggestions = (r['suggestions'] as List? ?? const [])
+          .whereType<Map>()
+          .map((s) => {
+                'text': (s['text'] ?? '').toString(),
+                'pronunciation': (s['pronunciation'] ?? '').toString(),
+              })
+          .where((s) => s['text']!.trim().isNotEmpty)
+          .toList();
       final mcq = _PracticeMcq.fromJson(r['mcq']);
       if (mcq != null) _currentMcq = mcq;
       _loading = false;
@@ -514,7 +521,14 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       setState(() {
         _messages.add(_Message('${r['reply'] ?? ''}', false));
 
-        final s = List<String>.from(r['suggestions'] as List? ?? const []);
+                final s = (r['suggestions'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => {
+                  'text': (item['text'] ?? '').toString(),
+                  'pronunciation': (item['pronunciation'] ?? '').toString(),
+                })
+            .where((item) => item['text']!.trim().isNotEmpty)
+            .toList();
 
         if (s.isNotEmpty) {
           _suggestions = s;
@@ -727,9 +741,14 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
         _currentMcq = null;
         _messages.add(_Message('${response['transcript'] ?? ''}', true));
         _messages.add(_Message('${response['reply'] ?? ''}', false));
-        final suggestions = List<String>.from(
-          response['suggestions'] as List? ?? const [],
-        );
+                final suggestions = (response['suggestions'] as List? ?? const [])
+            .whereType<Map>()
+            .map((item) => {
+                  'text': (item['text'] ?? '').toString(),
+                  'pronunciation': (item['pronunciation'] ?? '').toString(),
+                })
+            .where((item) => item['text']!.trim().isNotEmpty)
+            .toList();
         if (suggestions.isNotEmpty) _suggestions = suggestions;
         final mcq = _PracticeMcq.fromJson(response['mcq']);
         _currentMcq = mcq;
@@ -1051,71 +1070,97 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
   );
 
   Widget _suggestionPanel(bool isDark) {
-    if (_suggestions.isEmpty) return const SizedBox.shrink();
-    final count = _suggestions.length > 2 ? 2 : _suggestions.length;
-    final icons = [
-      Icons.edit_outlined,
-      Icons.menu_book_outlined,
-      Icons.edit_note_outlined,
-      Icons.chat_bubble_outline_rounded,
-      Icons.record_voice_over_outlined,
-    ];
-    final cardBg = AppTheme.getCardBackground(context);
-    final cardBorder = AppTheme.getCardBorder(context);
-    final inputBg = AppTheme.getInputBackground(context);
-    final primaryText = AppTheme.getPrimaryText(context);
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: cardBorder),
-      ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 8,
-        children: [
-          for (var i = 0; i < count; i++)
-            InkWell(
-              onTap: () => _send(_suggestions[i]),
-              borderRadius: BorderRadius.circular(12),
-              child: Container(
-                constraints: BoxConstraints(
-                  maxWidth: MediaQuery.sizeOf(context).width * .43,
-                ),
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 10,
-                ),
-                decoration: BoxDecoration(
-                  color: inputBg,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: cardBorder),
-                ),
-                child: Row(
-                  children: [
-                    Icon(icons[i], color: violet, size: 18),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        _suggestions[i],
-                        style: TextStyle(
-                          color: primaryText,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 13,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+  if (_suggestions.isEmpty) return const SizedBox.shrink();
+  final suggestion = _suggestions.first;
+  final text = suggestion['text'] ?? '';
+  final pronunciation = suggestion['pronunciation'] ?? '';
+  if (text.trim().isEmpty) return const SizedBox.shrink();
+
+  final cardBg = AppTheme.getCardBackground(context);
+  final cardBorder = AppTheme.getCardBorder(context);
+  final inputBg = AppTheme.getInputBackground(context);
+  final primaryText = AppTheme.getPrimaryText(context);
+  final subText = AppTheme.getSecondaryText(context);
+
+  return Container(
+    margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+    padding: const EdgeInsets.all(8),
+    decoration: BoxDecoration(
+      color: cardBg,
+      borderRadius: BorderRadius.circular(16),
+      border: Border.all(color: cardBorder),
+    ),
+    child: Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        // Box 1 — target/practice language phrase (tappable to send)
+        InkWell(
+          onTap: () => _send(text),
+          borderRadius: BorderRadius.circular(12),
+          child: Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width * .43,
             ),
-        ],
-      ),
-    );
-  }
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: inputBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: cardBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.edit_outlined, color: violet, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: TextStyle(
+                      color: primaryText,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        // Box 2 — native-language pronunciation guide (read-only)
+        if (pronunciation.trim().isNotEmpty)
+          Container(
+            constraints: BoxConstraints(
+              maxWidth: MediaQuery.sizeOf(context).width * .43,
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: inputBg,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: cardBorder),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.record_voice_over_outlined, color: subText, size: 18),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    pronunciation,
+                    style: TextStyle(
+                      color: subText,
+                      fontWeight: FontWeight.w500,
+                      fontSize: 13,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+      ],
+    ),
+  );
+}
 
   Widget _practiceMcqPanel(bool isDark) {
     final mcq = _currentMcq;

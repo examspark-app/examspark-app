@@ -65,13 +65,30 @@ def _schedule_reply_tts(user_id: str, text: str) -> None:
     asyncio.create_task(synthesize())
 
 
-def _extract_suggestions(text: str) -> tuple[str, list[str]]:
-    """Pull <<SUGGESTIONS>>...<<END_SUGGESTIONS>> out of an AI reply."""
+def _extract_suggestions(text: str) -> tuple[str, list[dict]]:
+    """Pull <<SUGGESTIONS>>...<<END_SUGGESTIONS>> out of an AI reply.
+
+    Each suggestion is "target phrase::pronunciation" — returns a list of
+    {"text": target_phrase, "pronunciation": native_script_pronunciation}.
+    A malformed entry (missing "::") falls back to using the same text for
+    both fields rather than being dropped, so the UI never breaks.
+    """
     import re
     match = re.search(r'<<SUGGESTIONS>>(.*?)<<END_SUGGESTIONS>>', text, re.DOTALL)
     if not match:
         return text.strip(), []
-    suggestions = [s.strip() for s in match.group(1).split('|') if s.strip()]
+    raw_items = [s.strip() for s in match.group(1).split('|') if s.strip()]
+    suggestions: list[dict] = []
+    for item in raw_items:
+        if '::' in item:
+            phrase, _, pronunciation = item.partition('::')
+            phrase = phrase.strip()
+            pronunciation = pronunciation.strip()
+        else:
+            phrase = item.strip()
+            pronunciation = item.strip()
+        if phrase:
+            suggestions.append({"text": phrase, "pronunciation": pronunciation})
     clean = re.sub(r'<<SUGGESTIONS>>.*?<<END_SUGGESTIONS>>', '', text, flags=re.DOTALL).strip()
     return clean, suggestions
 
@@ -884,7 +901,7 @@ def _mark_mcq_shown(session_id: str, user_id: str, message_count: int) -> None:
     ).eq("id", session_id).eq("user_id", user_id).execute()
 
 
-def _split_and_extract(raw_reply: str) -> tuple[str, list[str], dict | None]:
+def _split_and_extract(raw_reply: str) -> tuple[str, list[dict], dict | None]:
     """Run extractors in order and return (clean_text, suggestions, mcq)."""
     clean, suggestions = _extract_suggestions(raw_reply)
     clean, mcq = _extract_mcq(clean)

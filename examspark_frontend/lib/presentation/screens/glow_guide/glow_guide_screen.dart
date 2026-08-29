@@ -810,18 +810,21 @@ final latest = sorted.first;
                   _verdictBadge(message.verdict!),
                   const SizedBox(height: 6),
                 ],
-                if (message.text.isNotEmpty)
+                                if (message.text.isNotEmpty)
                   message.isUser
                       ? Container(
-                          padding: const EdgeInsets.all(16),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 14,
+                            vertical: 10,
+                          ),
                           decoration: BoxDecoration(
                             color: bubbleUser,
-                            borderRadius: BorderRadius.circular(16),
+                            borderRadius: BorderRadius.circular(18),
                             boxShadow: [
                               BoxShadow(
-                                color: bubbleUser.withOpacity(isDark ? 0.18 : 0.12),
-                                blurRadius: 10,
-                                offset: const Offset(0, 3),
+                                color: bubbleUser.withOpacity(isDark ? 0.16 : 0.10),
+                                blurRadius: 8,
+                                offset: const Offset(0, 2),
                               ),
                             ],
                           ),
@@ -829,12 +832,13 @@ final latest = sorted.first;
                             message.text,
                             style: const TextStyle(
                               color: Colors.white,
-                              fontSize: 15.5,
-                              height: 1.45,
+                              fontSize: 14,
+                              height: 1.4,
+                              letterSpacing: 0.1,
                             ),
                           ),
                         )
-                      : Container(
+                                            : Container(
                           padding: const EdgeInsets.symmetric(
                             horizontal: 18,
                             vertical: 16,
@@ -857,42 +861,80 @@ final latest = sorted.first;
                                     ),
                                   ],
                           ),
-                          child: SelectionArea(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              if (message.verdict != null) ...[
+                                Row(
+                                  children: [
+                                    Icon(
+                                      Icons.eco_rounded,
+                                      size: 13,
+                                      color: AppTheme.glowGuidePink,
+                                    ),
+                                    const SizedBox(width: 5),
+                                    Text(
+                                      'GLOWGUIDE ASSESSMENT',
+                                      style: TextStyle(
+                                        color: AppTheme.glowGuidePink,
+                                        fontSize: 10.5,
+                                        fontWeight: FontWeight.w800,
+                                        letterSpacing: 0.6,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 8),
+                              ],
+                              SelectionArea(
+                                child: Text(
+                                  message.text,
+                                  style: TextStyle(
+                                    color: isDark
+                                        ? Colors.white
+                                        : const Color(0xFF1E1B2C),
+                                    fontSize: 15.5,
+                                    height: 1.6,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                                if ((message.confidenceNote ?? '').trim().isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(2, 8, 2, 0),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: subText.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.fact_check_outlined,
+                            size: 13,
+                            color: subText,
+                          ),
+                          const SizedBox(width: 6),
+                          Flexible(
                             child: Text(
-                              message.text,
+                              message.confidenceNote!,
                               style: TextStyle(
-                                color: isDark
-                                    ? Colors.white
-                                    : const Color(0xFF1E1B2C),
-                                fontSize: 15.5,
-                                height: 1.6,
+                                color: subText,
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
                               ),
                             ),
                           ),
-                        ),
-                if ((message.confidenceNote ?? '').trim().isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 8, 4, 0),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.info_outline_rounded,
-                          size: 14,
-                          color: subText,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            message.confidenceNote!,
-                            style: TextStyle(
-                              color: subText,
-                              fontSize: 12.5,
-                              fontStyle: FontStyle.italic,
-                            ),
-                          ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
                   ),
                 if ((message.detailedBreakdown ?? '').trim().isNotEmpty) ...[
@@ -1330,20 +1372,34 @@ final latest = sorted.first;
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
                   itemCount: _messages.length + (_sending ? 1 : 0),
                   itemBuilder: (context, index) {
-                    if (_sending && index == _messages.length) {
+                                        if (_sending && index == _messages.length) {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 18),
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: _webSearchStatus == 'searching'
-                              ? const _WebSearchBubble()
-                              : _processingPhoto
-                              ? _PhotoAnalyzingBubble(
-                                  image: _messages.isNotEmpty
-                                      ? _messages.last.image
-                                      : null,
-                                )
-                              : const _PurpleTypingDots(),
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 14,
+                            ),
+                            decoration: BoxDecoration(
+                              color: bubbleAi,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(
+                                color: bubbleAiBorder,
+                                width: 0.8,
+                              ),
+                            ),
+                            child: _webSearchStatus == 'searching'
+                                ? const _WebSearchBubble()
+                                : _processingPhoto
+                                ? _PhotoAnalyzingBubble(
+                                    image: _messages.isNotEmpty
+                                        ? _messages.last.image
+                                        : null,
+                                  )
+                                : const _PurpleTypingDots(),
+                          ),
                         ),
                       );
                     }
@@ -1379,54 +1435,84 @@ final latest = sorted.first;
     );
   }
   Widget _verdictBadge(String verdict) {
-    final Color color;
-    final IconData icon;
-    final String label;
-    switch (verdict) {
-      case 'harmful':
-        color = const Color(0xFFE05252);
-        icon = Icons.warning_amber_rounded;
-        label = 'Use with caution';
-        break;
-      case 'good_fit':
-        color = const Color(0xFF40A85C);
-        icon = Icons.check_circle_outline_rounded;
-        label = 'Good fit';
-        break;
-      case 'careful':
-        color = const Color(0xFFCC9A2E);
-        icon = Icons.error_outline_rounded;
-        label = 'Proceed carefully';
-        break;
-      default:
-        return const SizedBox.shrink();
-    }
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: color.withOpacity(0.12),
-        borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: color.withOpacity(0.35)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(icon, size: 15, color: color),
-          const SizedBox(width: 6),
-          Text(
-            label,
-            style: TextStyle(
-              color: color,
-              fontSize: 12.5,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-        ],
-      ),
-    );
+  final Color color;
+  final IconData icon;
+  final String label;
+  final String subtitle;
+  switch (verdict) {
+    case 'harmful':
+      color = const Color(0xFFD64545);
+      icon = Icons.report_gmailerrorred_rounded;
+      label = 'Not Suitable';
+      subtitle = 'May not be the right fit for your skin';
+      break;
+    case 'good_fit':
+      color = const Color(0xFF2FA75F);
+      icon = Icons.verified_rounded;
+      label = 'Safe to Use';
+      subtitle = 'Suitable based on what you shared';
+      break;
+    case 'careful':
+      color = const Color(0xFFC98A1F);
+      icon = Icons.shield_outlined;
+      label = 'Use with Caution';
+      subtitle = 'Some considerations before using';
+      break;
+    default:
+      return const SizedBox.shrink();
   }
+  return Container(
+    width: double.infinity,
+    padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+    margin: const EdgeInsets.only(bottom: 10),
+    decoration: BoxDecoration(
+      color: color.withOpacity(0.08),
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: color.withOpacity(0.28), width: 1.1),
+    ),
+    child: Row(
+      children: [
+        Container(
+          width: 34,
+          height: 34,
+          decoration: BoxDecoration(
+            color: color.withOpacity(0.15),
+            shape: BoxShape.circle,
+          ),
+          child: Icon(icon, size: 18, color: color),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                label,
+                style: TextStyle(
+                  color: color,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.1,
+                ),
+              ),
+              const SizedBox(height: 1),
+              Text(
+                subtitle,
+                style: TextStyle(
+                  color: color.withOpacity(0.85),
+                  fontSize: 11.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    ),
+  );
 }
-
+}
 class _GlowMessage {
   const _GlowMessage(
     this.text,
@@ -1487,8 +1573,48 @@ class _DetailedBreakdownExpanderState
         InkWell(
           onTap: () => setState(() => _expanded = !_expanded),
           borderRadius: BorderRadius.circular(10),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: AppTheme.glowGuidePink.withValues(alpha: 0.35),
+              ),
+              color: AppTheme.glowGuidePink.withValues(alpha: 0.05),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  _expanded
+                      ? Icons.expand_less_rounded
+                      : Icons.description_outlined,
+                  size: 17,
+                  color: AppTheme.glowGuidePink,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _expanded
+                        ? 'Hide detailed breakdown'
+                        : 'View full ingredient breakdown',
+                    style: const TextStyle(
+                      color: AppTheme.glowGuidePink,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Icon(
+                  _expanded
+                      ? Icons.keyboard_arrow_up_rounded
+                      : Icons.keyboard_arrow_down_rounded,
+                  size: 18,
+                  color: AppTheme.glowGuidePink.withOpacity(0.7),
+                ),
+              ],
+            ),
+          ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(10),
               border: Border.all(
