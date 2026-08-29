@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/widgets/ai/ai_typewriter_text.dart';
 import 'package:examspark_frontend/presentation/widgets/home/home_ai_visual_card.dart';
@@ -69,6 +70,126 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
     return !VisualPayloadData.fromJson(raw).isEmpty;
   }
 
+  /// ChatGPT / Claude style markdown look — clean headings, spaced
+  /// paragraphs, readable bullets, subtle bold, and a distinct code block
+  /// background so formulas/code never blend into normal prose.
+  MarkdownStyleSheet _markdownStyle(BuildContext context) {
+    final primary = AppTheme.getPrimaryText(context);
+    final secondary = AppTheme.getSecondaryText(context);
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    const baseFontSize = 15.0;
+    const baseHeight = 1.55;
+
+    return MarkdownStyleSheet(
+      p: TextStyle(
+        color: primary,
+        fontSize: baseFontSize,
+        height: baseHeight,
+        fontWeight: FontWeight.w400,
+      ),
+      // Bigger, clearly separated section headings — like ChatGPT's "##".
+      h1: TextStyle(
+        color: primary,
+        fontSize: 22,
+        height: 1.4,
+        fontWeight: FontWeight.w700,
+      ),
+      h2: TextStyle(
+        color: primary,
+        fontSize: 19,
+        height: 1.4,
+        fontWeight: FontWeight.w700,
+      ),
+      h3: TextStyle(
+        color: primary,
+        fontSize: 17,
+        height: 1.4,
+        fontWeight: FontWeight.w600,
+      ),
+      h1Padding: const EdgeInsets.only(top: 14, bottom: 6),
+      h2Padding: const EdgeInsets.only(top: 12, bottom: 6),
+      h3Padding: const EdgeInsets.only(top: 10, bottom: 4),
+      strong: TextStyle(
+        color: primary,
+        fontWeight: FontWeight.w700,
+        fontSize: baseFontSize,
+        height: baseHeight,
+      ),
+      em: TextStyle(
+        color: primary,
+        fontStyle: FontStyle.italic,
+        fontSize: baseFontSize,
+        height: baseHeight,
+      ),
+      // Clean round bullets with breathing room — not cramped dashes.
+      listBullet: TextStyle(
+        color: primary,
+        fontSize: baseFontSize,
+        height: baseHeight,
+      ),
+      listIndent: 20,
+      listBulletPadding: const EdgeInsets.only(right: 8),
+      blockSpacing: 10,
+      // Distinct code/formula styling so `E = mc²` never looks like prose.
+      code: TextStyle(
+        color: primary,
+        fontSize: baseFontSize - 1,
+        fontFamily: 'monospace',
+        backgroundColor: isDark
+            ? Colors.white.withOpacity(0.08)
+            : Colors.black.withOpacity(0.05),
+      ),
+      codeblockDecoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.06)
+            : Colors.black.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+          color: AppTheme.getCardBorder(context),
+        ),
+      ),
+      codeblockPadding: const EdgeInsets.all(12),
+      // Table look for compact fact tables (revision sheets etc).
+      tableHead: TextStyle(
+        color: primary,
+        fontWeight: FontWeight.w700,
+        fontSize: baseFontSize - 1,
+      ),
+      tableBody: TextStyle(
+        color: primary,
+        fontSize: baseFontSize - 1,
+        height: 1.4,
+      ),
+      tableBorder: TableBorder.all(
+        color: AppTheme.getCardBorder(context),
+        width: 1,
+      ),
+      tableCellsPadding: const EdgeInsets.symmetric(
+        horizontal: 10,
+        vertical: 8,
+      ),
+      blockquoteDecoration: BoxDecoration(
+        color: isDark
+            ? Colors.white.withOpacity(0.05)
+            : Colors.black.withOpacity(0.035),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(
+          left: BorderSide(color: secondary, width: 3),
+        ),
+      ),
+      blockquotePadding: const EdgeInsets.symmetric(
+        horizontal: 12,
+        vertical: 8,
+      ),
+      horizontalRuleDecoration: BoxDecoration(
+        border: Border(
+          top: BorderSide(color: AppTheme.getCardBorder(context)),
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     // Standard chat-app reading typography — same body text size WhatsApp /
@@ -99,7 +220,12 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
                 });
               }
             },
-            child: Text(widget.text, style: textStyle),
+            child: MarkdownBody(
+              data: widget.text,
+              selectable: false, // SelectionArea already handles selection
+              styleSheet: _markdownStyle(context),
+              softLineBreak: true,
+            ),
           );
 
     final maxW = MediaQuery.sizeOf(context).width;

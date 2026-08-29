@@ -946,8 +946,53 @@ def _derive_teacher_tips(
     }
 
 
+def _is_study_query(knowledge: dict[str, Any], query: str = "") -> bool:
+    """Casual chat / greetings ke liye False — study questions ke liye True."""
+    q = (query or "").strip().lower()
+
+    if len(q) < 4:
+        return False
+
+    casual_patterns = (
+        "hi", "hello", "hey", "thanks", "thank you", "ok", "okay",
+        "bye", "good morning", "good night", "kaise ho", "kya haal",
+        "namaste", "shukriya",
+    )
+    if q in casual_patterns:
+        return False
+
+    study_signals = (
+        "what", "explain", "define", "how", "why", "difference",
+        "formula", "chapter", "exam", "solve", "meaning", "kya hai",
+        "kaise", "samjhao", "batao",
+    )
+    has_signal = any(s in q for s in study_signals)
+    if len(q) < 15 and not has_signal:
+        return False
+
+    return True
+
+
+def _has_enough_context(knowledge: dict[str, Any]) -> bool:
+    """Knowledge Object me itna content hona chahiye ki chips meaningful bane."""
+    summary = (knowledge.get("summary") or "").strip()
+    explanation = (knowledge.get("explanation") or "").strip()
+    key_points = knowledge.get("key_points") or knowledge.get("concepts") or []
+
+    total_text_len = len(summary) + len(explanation)
+    has_points = len([p for p in key_points if str(p).strip()]) >= 2
+
+    return total_text_len >= 60 or has_points
+
+
 def recommend_tool_types(knowledge: dict[str, Any], query: str = "") -> list[str]:
-    """Dynamic recommended chips from topic signals."""
+    """Dynamic recommended chips from topic signals — empty if not study-worthy."""
+
+    if not _is_study_query(knowledge, query):
+        return []
+    if not _has_enough_context(knowledge):
+        return []
+
     text = " ".join(
         [
             query,

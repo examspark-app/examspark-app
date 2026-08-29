@@ -110,6 +110,10 @@ HomeStudyChipDef? homeChipByType(String toolType) {
 enum HomeChipUiState { ready, loading, generated, active }
 
 /// All chips visible in a wrap — no More sheet.
+/// NEW: if [recommended] is empty (backend decided this isn't a study-worthy
+/// question / not enough context), the whole bar renders nothing.
+/// If [recommended] has items, ONLY those chips (in that order) are shown —
+/// instead of always showing every chip regardless of context.
 class HomeStudyChipBar extends StatelessWidget {
   final Map<String, HomeChipUiState> toolStates;
   final String? activeToolType;
@@ -123,6 +127,11 @@ class HomeStudyChipBar extends StatelessWidget {
   /// When true, also show [kHomeExtraChips] outside.
   final bool showExtraCatalogChips;
 
+  /// When true (default), an empty [recommended] list means "don't show
+  /// chips at all" (casual / non-study message). Set to false to fall back
+  /// to showing every chip when recommended is empty (old behaviour).
+  final bool hideWhenNoRecommendation;
+
   const HomeStudyChipBar({
     super.key,
     required this.toolStates,
@@ -133,6 +142,7 @@ class HomeStudyChipBar extends StatelessWidget {
     this.moreHint,
     this.extraMoreChips = const [],
     this.showExtraCatalogChips = false,
+    this.hideWhenNoRecommendation = true,
   });
 
   HomeChipUiState _stateFor(String toolType) {
@@ -140,7 +150,7 @@ class HomeStudyChipBar extends StatelessWidget {
     return toolStates[toolType] ?? HomeChipUiState.ready;
   }
 
-  List<HomeStudyChipDef> get _visibleChips {
+  List<HomeStudyChipDef> get _allKnownChips {
     final seen = <String>{};
     final out = <HomeStudyChipDef>[];
     void addAll(Iterable<HomeStudyChipDef> list) {
@@ -156,10 +166,40 @@ class HomeStudyChipBar extends StatelessWidget {
     return out;
   }
 
+  /// Chips actually shown to the user.
+  /// - If server sent a recommended list, show ONLY those (matched by
+  ///   toolType), in the order the server sent them.
+  /// - If server sent nothing and [hideWhenNoRecommendation] is false,
+  ///   fall back to the full catalog (legacy behaviour).
+  List<HomeStudyChipDef> get _visibleChips {
+    if (recommended.isNotEmpty) {
+      final known = _allKnownChips;
+      final out = <HomeStudyChipDef>[];
+      for (final toolType in recommended) {
+        final match = known.firstWhere(
+          (c) => c.toolType == toolType,
+          orElse: () => const HomeStudyChipDef(
+            label: '',
+            toolType: '',
+            icon: Icons.help_outline,
+          ),
+        );
+        if (match.toolType.isNotEmpty) out.add(match);
+      }
+      if (out.isNotEmpty) return out;
+    }
+    if (!hideWhenNoRecommendation) return _allKnownChips;
+    return const [];
+  }
+
   @override
   Widget build(BuildContext context) {
-    final secondary = AppTheme.getSecondaryText(context);
     final chips = _visibleChips;
+
+    // Casual / non-study message → server sent no recommendations → show nothing.
+    if (chips.isEmpty) return const SizedBox.shrink();
+
+    final secondary = AppTheme.getSecondaryText(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
