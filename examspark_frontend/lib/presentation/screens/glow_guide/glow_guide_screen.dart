@@ -2001,3 +2001,68 @@ class _SourceChips extends StatelessWidget {
     return Wrap(spacing: 8, runSpacing: 8, children: chips);
   }
 }
+class _WebSearchBubble extends StatefulWidget {
+  const _WebSearchBubble();
+
+  @override
+  State<_WebSearchBubble> createState() => _WebSearchBubbleState();
+}
+
+class _WebSearchBubbleState extends State<_WebSearchBubble>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _controller,
+      builder: (_, __) {
+        final pulse = 1 - (_controller.value - 0.5).abs() * 2;
+        return Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: AppTheme.glowGuidePink.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: AppTheme.glowGuidePink.withOpacity(0.25),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                Icons.travel_explore_rounded,
+                size: 16,
+                color: AppTheme.glowGuidePink.withOpacity(0.55 + pulse * 0.45),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'Searching trusted sources…',
+                style: TextStyle(
+                  color: AppTheme.glowGuidePink.withOpacity(0.55 + pulse * 0.45),
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
