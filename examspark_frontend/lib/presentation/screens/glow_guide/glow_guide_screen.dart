@@ -582,6 +582,11 @@ final latest = sorted.first;
             verdict: result['verdict'] as String?,
             confidenceNote: result['confidence_note'] as String?,
             detailedBreakdown: result['detailed_breakdown'] as String?,
+            sources: (result['sources'] as List?)
+                    ?.whereType<Map>()
+                    .map((e) => Map<String, dynamic>.from(e))
+                    .toList() ??
+                const [],
           ),
         );
         _sending = false;
@@ -991,6 +996,10 @@ final latest = sorted.first;
                   _DetailedBreakdownExpander(
                     breakdown: message.detailedBreakdown!,
                   ),
+                ],
+                if (message.sources.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  _SourceChips(sources: message.sources),
                 ],
                 if (message.categoryHeaderChips.isNotEmpty) ...[
                   const SizedBox(height: 12),
@@ -1432,7 +1441,7 @@ final latest = sorted.first;
                               ),
                             ),
                             child: _webSearchStatus == 'searching'
-                                ? const _WebSearchBubble()
+                                ? _WebSearchBubble()
                                 : _processingPhoto
                                 ? _PhotoAnalyzingBubble(
                                     image: _messages.isNotEmpty
@@ -1573,6 +1582,7 @@ class _GlowMessage {
     this.verdict,
     this.confidenceNote,
     this.detailedBreakdown,
+    this.sources = const [],
   });
   final String text;
   final bool isUser;
@@ -1591,6 +1601,7 @@ class _GlowMessage {
   final String? verdict;
   final String? confidenceNote;
   final String? detailedBreakdown;
+  final List<Map<String, dynamic>> sources;
 }
 
 class _DetailedBreakdownExpander extends StatefulWidget {
@@ -1914,3 +1925,79 @@ class _CustomTopicInputState extends State<_CustomTopicInput> {
     );              // ← Container band
   }                 // ← build method band
 }           
+class _SourceChips extends StatelessWidget {
+  const _SourceChips({required this.sources});
+  final List<Map<String, dynamic>> sources;
+
+  String? _domainFrom(String? url) {
+    if (url == null || url.isEmpty) return null;
+    try {
+      final uri = Uri.parse(url);
+      final host = uri.host;
+      return host.startsWith('www.') ? host.substring(4) : host;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final chipBg = isDark ? const Color(0xFF1C1C1F) : const Color(0xFFF6F3FB);
+    final chipBorder = isDark ? const Color(0xFF2A2A2E) : const Color(0xFFE3DDF3);
+    final textColor = isDark ? Colors.white60 : Colors.black54;
+
+    final seen = <String>{};
+    final chips = <Widget>[];
+    for (final source in sources) {
+      final url = source['url']?.toString();
+      final domain = _domainFrom(url);
+      if (domain == null || !seen.add(domain)) continue;
+      chips.add(
+        InkWell(
+          onTap: url == null
+              ? null
+              : () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+          borderRadius: BorderRadius.circular(20),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            decoration: BoxDecoration(
+              color: chipBg,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: chipBorder, width: 0.8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: Image.network(
+                    'https://www.google.com/s2/favicons?domain=$domain&sz=64',
+                    width: 14,
+                    height: 14,
+                    errorBuilder: (_, __, ___) => Icon(
+                      Icons.public_rounded,
+                      size: 14,
+                      color: textColor,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  domain,
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: textColor,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    if (chips.isEmpty) return const SizedBox.shrink();
+    return Wrap(spacing: 8, runSpacing: 8, children: chips);
+  }
+}
