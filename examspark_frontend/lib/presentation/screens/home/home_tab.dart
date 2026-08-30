@@ -160,6 +160,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   final ScrollController _scrollController = ScrollController();
   bool _isRefreshing = false;
   bool _isSending = false;
+  bool _restoringSession = false;
 
   /// Locked after first successful turn (HINDI/BENGALI/ENGLISH/HINGLISH).
   String? _conversationLanguage;
@@ -1305,14 +1306,11 @@ $rawText
   }
 
   Future<void> _restoreStudySession(String sessionId) async {
-    // Optimistic: show a loading placeholder immediately so the screen
-    // never looks empty/stuck while the real history fetches.
     setState(() {
-      _messages
-        ..clear()
-        ..add(_ChatBubble('Loading chat…', false, revealComplete: true));
+      _messages.clear();
       _liveStreamText = null;
       _isSending = false;
+      _restoringSession = true;
     });
     _scrollToBottom(instant: true);
 
@@ -1404,6 +1402,7 @@ $rawText
         }
         _liveStreamText = null;
         _isSending = false;
+        _restoringSession = false;
       });
       _sessionMessages = List<_ChatBubble>.from(_messages);
       _sessionLanguage = _conversationLanguage;

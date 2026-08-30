@@ -41,6 +41,9 @@ static const String contactUs =
 static const String aboutSonaxia =
     'https://sites.google.com/view/sonaxia';
 
+static const String paymentBusinessInfo =
+    'https://sites.google.com/view/sonaxia/payment-business-info';    
+
   /// The 6 core policy documents. Shown on:
   /// - First Login Legal Consent screen (Task 2)
   /// - Legal Center → "Policies" section (Task 3)
@@ -88,6 +91,11 @@ static const String aboutSonaxia =
       title: 'About Sonaxia',
       icon: Icons.info_outline,
       url: aboutSonaxia,
+    ),
+    LegalDocument(
+      title: 'Business & Payment Info',
+      icon: Icons.storefront_outlined,
+      url: paymentBusinessInfo,
     ),
   ];
 }

@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:typed_data';
-
+import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart'
@@ -23,6 +23,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
     ('Body Care', Icons.spa_outlined),
     ('Baby Skin Care', Icons.child_friendly_outlined),
     ('Cloth Guide', Icons.checkroom_outlined),
+    ('Hair Care', Icons.content_cut_outlined),
   ];
 
   static const _typeOwnOption = 'Something else — I\'ll type it';
@@ -53,6 +54,12 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
       'Season suitability',
       'Care instructions',
     ],
+    'hair': [
+      'Hair loss',
+      'Hair whitening',
+      'General hair care',
+      'Short to long growth',
+    ],
   };
 
   final _text = TextEditingController();
@@ -63,6 +70,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   Uint8List? _attachment;
   String? _attachmentName;
   String? _category;
+  String? _gender;
   String? _age;
   String? _seasonWeather;
   String? _sessionId;
@@ -304,7 +312,24 @@ final latest = sorted.first;
       _sessionTitle ??= display ?? key;
       _messages.add(
         _GlowMessage(
-          '${display ?? key} selected. What age should I consider for this guidance?',
+          '${display ?? key} selected. Just so I can guide you accurately — is this for a male or female?',
+          false,
+          chips: const ['Male', 'Female'],
+          isGenderChips: true,
+        ),
+      );
+    });
+    _scrollToBottom();
+  }
+
+  void _selectGender(String value) {
+    final clean = value.trim();
+    if (clean.isEmpty) return;
+    setState(() {
+      _gender = clean;
+      _messages.add(
+        _GlowMessage(
+          'Got it. What age should I consider for this guidance?',
           false,
           chips: const ['Baby', 'Child', 'Teen', 'Adult'],
           isAgeChips: true,
@@ -467,6 +492,7 @@ final latest = sorted.first;
     'Body Care': 'body',
     'Baby Skin Care': 'baby',
     'Cloth Guide': 'cloth',
+    'Hair Care': 'hair',
   };
 
   Future<void> _selectCategory(String label) async {
@@ -511,13 +537,13 @@ final latest = sorted.first;
       _sending = true;
       _processingPhoto = image != null;
       _messages.add(
-        _GlowMessage(
-          text.isEmpty ? 'Photo attached' : text,
-          true,
-          image: image,
-          imageName: imageName,
-        ),
-      );
+  _GlowMessage(
+    text,   // ← khaali rehne do agar photo-only hai
+    true,
+    image: image,
+    imageName: imageName,
+  ),
+);
       _text.clear();
       _attachment = null;
       _attachmentName = null;
@@ -528,7 +554,7 @@ final latest = sorted.first;
         text: text,
         category: _category,
         sessionId: _sessionId,
-        age: _age,
+        age: _gender != null ? '$_gender${_age != null ? ", $_age" : ""}' : _age,
         weather: _seasonWeather,
         imageBytes: image,
         filename: imageName,
@@ -705,6 +731,7 @@ final latest = sorted.first;
     'body': 'Body Care',
     'baby': 'Baby Skin Care',
     'cloth': 'Cloth Guide',
+    'hair': 'Hair Care',
   };
 
   String _prettyCategory(String raw) {
@@ -725,6 +752,44 @@ final latest = sorted.first;
         );
       }
     });
+  }
+
+  // ← YAHAN PASTE KARO (naya method neeche se shuru)
+  MarkdownStyleSheet _markdownStyle(
+    BuildContext context,
+    Color primaryText,
+    bool isDark,
+  ) {
+    const baseFontSize = 15.5;
+    const baseHeight = 1.6;
+    return MarkdownStyleSheet(
+      p: TextStyle(color: primaryText, fontSize: baseFontSize, height: baseHeight),
+      h1: TextStyle(color: primaryText, fontSize: 20, height: 1.4, fontWeight: FontWeight.w700),
+      h2: TextStyle(color: primaryText, fontSize: 17.5, height: 1.4, fontWeight: FontWeight.w700),
+      h3: TextStyle(color: primaryText, fontSize: 16, height: 1.4, fontWeight: FontWeight.w600),
+      strong: TextStyle(color: primaryText, fontWeight: FontWeight.w700, fontSize: baseFontSize, height: baseHeight),
+      em: TextStyle(color: primaryText, fontStyle: FontStyle.italic, fontSize: baseFontSize, height: baseHeight),
+      listBullet: TextStyle(color: primaryText, fontSize: baseFontSize, height: baseHeight),
+      listIndent: 18,
+      blockSpacing: 8,
+      code: TextStyle(
+        color: primaryText,
+        fontSize: baseFontSize - 1,
+        fontFamily: 'monospace',
+        backgroundColor: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+      ),
+      codeblockDecoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      codeblockPadding: const EdgeInsets.all(12),
+      blockquoteDecoration: BoxDecoration(
+        color: AppTheme.glowGuidePink.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(8),
+        border: Border(left: BorderSide(color: AppTheme.glowGuidePink, width: 3)),
+      ),
+      blockquotePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+    );
   }
 
   @override
@@ -838,28 +903,10 @@ final latest = sorted.first;
                             ),
                           ),
                         )
-                                            : Container(
+                                            : Padding(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 18,
-                            vertical: 16,
-                          ),
-                          decoration: BoxDecoration(
-                            color: bubbleAi,
-                            borderRadius: BorderRadius.circular(16),
-                            border: Border.all(
-                              color: bubbleAiBorder,
-                              width: 0.8,
-                            ),
-                            boxShadow: isDark
-                                ? null
-                                : [
-                                    BoxShadow(
-                                      color: const Color(0xFF000000)
-                                          .withOpacity(0.05),
-                                      blurRadius: 10,
-                                      offset: const Offset(0, 2),
-                                    ),
-                                  ],
+                            horizontal: 4,
+                            vertical: 4,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -887,15 +934,17 @@ final latest = sorted.first;
                                 const SizedBox(height: 8),
                               ],
                               SelectionArea(
-                                child: Text(
-                                  message.text,
-                                  style: TextStyle(
-                                    color: isDark
+                                child: MarkdownBody(
+                                  data: message.text,
+                                  selectable: false,
+                                  styleSheet: _markdownStyle(
+                                    context,
+                                    isDark
                                         ? Colors.white
                                         : const Color(0xFF1E1B2C),
-                                    fontSize: 15.5,
-                                    height: 1.6,
+                                    isDark,
                                   ),
+                                  softLineBreak: true,
                                 ),
                               ),
                             ],
@@ -1072,6 +1121,8 @@ final latest = sorted.first;
                                   _selectLanguage(chip);
                                 } else if (message.isCategoryChips) {
                                   _chooseTopCategory(chip);
+                                } else if (message.isGenderChips) {
+                                  _selectGender(chip);
                                 } else if (message.isAgeChips) {
                                   _selectAge(chip);
                                 } else if (message.isSeasonChips) {
@@ -1174,8 +1225,37 @@ final latest = sorted.first;
                       ),
                     ),
                   ),
+                                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  child: TextField(
+                    controller: _text,
+                    focusNode: _textFocus,
+                    minLines: 1,
+                    maxLines: 10,
+                    textAlign: TextAlign.start,
+                    textDirection: TextDirection.ltr,
+                    textInputAction: TextInputAction.newline,
+                    onSubmitted: (_) => _send(),
+                    style: TextStyle(
+                      color: isDark ? Colors.white : const Color(0xFF1E1B2C),
+                      fontSize: 15,
+                      height: 1.4,
+                    ),
+                    decoration: InputDecoration(
+                      hintText: 'Ask about skin, body care, or cloth...',
+                      hintTextDirection: TextDirection.ltr,
+                      hintStyle: TextStyle(
+                        color: subText,
+                        fontSize: 15,
+                      ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 8),
+                      isCollapsed: true,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
                 Row(
-                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 2),
@@ -1187,69 +1267,27 @@ final latest = sorted.first;
                           child: Padding(
                             padding: const EdgeInsets.all(10),
                             child: Icon(
-                              Icons.camera_alt_outlined,
+                              Icons.add_rounded,
                               color: subText,
-                              size: 22,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ),
-                    Expanded(
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 4,
-                        ),
-                                                child: TextField(
-                          controller: _text,
-                          focusNode: _textFocus,
-                          minLines: 1,
-                          maxLines: 10,
-                          textAlign: TextAlign.start,
-                          textDirection: TextDirection.ltr,
-                          textInputAction: TextInputAction.newline,
-                          onSubmitted: (_) => _send(),
-                          style: TextStyle(
-                            color: isDark ? Colors.white : const Color(0xFF1E1B2C),
-                            fontSize: 15,
-                            height: 1.4,
-                          ),
-                          decoration: InputDecoration(
-                            hintText:
-                                'Ask about skin, body care, or cloth...',
-                            hintTextDirection: TextDirection.ltr,
-                            hintStyle: TextStyle(
-                              color: subText,
-                              fontSize: 15,
-                            ),
-                            border: InputBorder.none,
-                            contentPadding:
-                                const EdgeInsets.symmetric(
-                              horizontal: 8,
-                              vertical: 8,
-                            ),
-                            isCollapsed: true,
-                          ),
-                        ),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.only(left: 2),
-                      child: Material(
-                        color: AppTheme.glowGuidePink,
-                        borderRadius: BorderRadius.circular(20),
-                        child: InkWell(
-                          borderRadius: BorderRadius.circular(20),
-                          onTap:
-                              _sending || _sessionComplete ? null : _send,
-                          child: const Padding(
-                            padding: EdgeInsets.all(12),
-                            child: Icon(
-                              Icons.arrow_upward_rounded,
-                              color: Colors.white,
                               size: 24,
                             ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const Spacer(),
+                    Material(
+                      color: AppTheme.glowGuidePink,
+                      borderRadius: BorderRadius.circular(20),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(20),
+                        onTap: _sending || _sessionComplete ? null : _send,
+                        child: const Padding(
+                          padding: EdgeInsets.all(10),
+                          child: Icon(
+                            Icons.arrow_upward_rounded,
+                            color: Colors.white,
+                            size: 22,
                           ),
                         ),
                       ),
@@ -1346,19 +1384,22 @@ final latest = sorted.first;
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       SizedBox(
-                        width: 20,
-                        height: 20,
+                        width: 28,
+                        height: 28,
                         child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: AppTheme.glowGuidePink,
+                          strokeWidth: 2.5,
+                          valueColor: AlwaysStoppedAnimation<Color>(
+                            AppTheme.glowGuidePink,
+                          ),
                         ),
                       ),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 14),
                       Text(
                         'Opening last chat…',
                         style: TextStyle(
                           color: subText,
                           fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -1524,6 +1565,7 @@ class _GlowMessage {
     this.isLanguageChips = false,
     this.isConcernChips = false,
     this.isCategoryChips = false,
+    this.isGenderChips = false,
     this.isAgeChips = false,
     this.isSeasonChips = false,
     this.hasCustomInput = false,
@@ -1541,6 +1583,7 @@ class _GlowMessage {
   final bool isLanguageChips;
   final bool isConcernChips;
   final bool isCategoryChips;
+  final bool isGenderChips;
   final bool isAgeChips;
   final bool isSeasonChips;
   final bool hasCustomInput;

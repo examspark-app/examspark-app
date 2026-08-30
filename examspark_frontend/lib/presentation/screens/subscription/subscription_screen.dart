@@ -10,6 +10,8 @@ import 'package:examspark_frontend/core/data/groups_repository.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/teacher_setup_gate.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
+import 'package:examspark_frontend/core/constants/legal_urls.dart';
+import 'package:examspark_frontend/presentation/screens/legal/legal_webview_screen.dart';
 
 /// Subscription Screen & Credit Management — Credits summary, history,
 /// student vs teacher plan cards, INR credit packs (no Extra Hours / USD).
@@ -170,6 +172,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildTrustBanner(),
+                    const SizedBox(height: 16),
                     _buildCreditsSummary(),
                     const SizedBox(height: 28),
                     if (_isTeacher) ...[
@@ -269,6 +273,56 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
             fontSize: 20,
             fontWeight: FontWeight.bold,
           ),
+    );
+  }
+
+  // ← YAHAN PASTE KARO (naya method neeche se shuru)
+  Widget _buildTrustBanner() {
+    return InkWell(
+      borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => const LegalWebViewScreen(
+              title: 'Business & Payment Info',
+              url: LegalUrls.paymentBusinessInfo,
+            ),
+          ),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        decoration: BoxDecoration(
+          color: AppTheme.getCardBackground(context),
+          borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+          border: Border.all(color: AppTheme.getCardBorder(context)),
+        ),
+        child: Row(
+          children: [
+            Icon(
+              Icons.verified_user_outlined,
+              size: 18,
+              color: AppTheme.accentColor,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'Secured payments · View business & refund details',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.getSecondaryText(context),
+                      fontWeight: FontWeight.w500,
+                    ),
+              ),
+            ),
+            Icon(
+              Icons.arrow_forward_ios,
+              size: 13,
+              color: AppTheme.getSecondaryText(context),
+            ),
+          ],
+        ),
+      ),
     );
   }
 

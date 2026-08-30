@@ -841,7 +841,30 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
         ),
         body: SafeArea(
           child: _loading
-              ? const Center(child: CircularProgressIndicator(color: violet))
+              ? Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      SizedBox(
+                        width: 28,
+                        height: 28,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2.5,
+                          valueColor: const AlwaysStoppedAnimation<Color>(violet),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      Text(
+                        'Opening chat…',
+                        style: TextStyle(
+                          color: AppTheme.getSecondaryText(context),
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                )
               : _error != null
               ? Center(
                   child: ElevatedButton(

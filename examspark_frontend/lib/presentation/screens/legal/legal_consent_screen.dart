@@ -103,6 +103,21 @@ class _LegalConsentScreenState extends State<LegalConsentScreen> {
                             onTap: () => _openDoc(LegalUrls.corePolicies[i]),
                           ),
                         ],
+                        Divider(height: 1, color: AppTheme.getCardBorder(context)),
+                        _PolicyTile(
+                          doc: const LegalDocument(
+                            title: 'Business & Payment Info',
+                            icon: Icons.storefront_outlined,
+                            url: LegalUrls.paymentBusinessInfo,
+                          ),
+                          onTap: () => _openDoc(
+                            const LegalDocument(
+                              title: 'Business & Payment Info',
+                              icon: Icons.storefront_outlined,
+                              url: LegalUrls.paymentBusinessInfo,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
                   ),

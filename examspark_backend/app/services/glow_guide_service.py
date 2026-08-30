@@ -294,7 +294,9 @@ async def turn(
             "glowguide", user_id, str(uuid.uuid4()), filename=filename, category=active_category
         )
         R2StorageService().upload_bytes(image_path, image, _mime(filename))
-    db.table("glow_guide_messages").insert([{"session_id": session_id, "user_id": user_id, "role": "user", "message": text or "Photo attached", "image_path": image_path}, {"session_id": session_id, "user_id": user_id, "role": "assistant", "message": reply}]).execute()
+    db.table("glow_guide_messages").insert([
+    {"session_id": session_id, "user_id": user_id, "role": "user", "message": text or "", "image_path": image_path},
+    {"session_id": session_id, "user_id": user_id, "role": "assistant", "message": reply}]).execute()
     new_exchange_count = exchange_count + 1
     next_context = dict(context) if isinstance(context, dict) else {}
     for key in (

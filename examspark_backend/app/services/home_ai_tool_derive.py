@@ -1002,27 +1002,29 @@ def recommend_tool_types(knowledge: dict[str, Any], query: str = "") -> list[str
         ]
     ).lower()
 
-    rec = ["flashcards", "quiz", "revision"]
+    rec = ["flashcards", "quiz", "revision", "important_questions", "learn_more"]
 
     if any(w in text for w in ("photo", "cycle", "process", "flow", "biology", "cell", "reaction")):
-        rec = ["visual", "flashcards", "quiz", "memory_tricks"]
+        rec = ["visual", "flashcards", "quiz", "memory_tricks", "revision"]
     elif any(w in text for w in ("history", "war", "empire", "year", "century", "timeline")):
-        rec = ["visual", "important_questions", "revision", "memory_tricks"]
+        rec = ["visual", "important_questions", "revision", "memory_tricks", "flashcards"]
+    elif any(w in text for w in ("gravity", "force", "energy", "motion", "physics", "electricity", "magnet", "wave", "light", "heat", "pressure")):
+        rec = ["flashcards", "quiz", "important_questions", "revision", "learn_more"]
     elif any(w in text for w in ("math", "equation", "formula", "derivative", "integral", "algebra")):
-        rec = ["quiz", "flashcards", "revision", "mind_map"]
+        rec = ["quiz", "flashcards", "revision", "mind_map", "important_questions"]
     elif any(w in text for w in ("grammar", "tense", "noun", "verb", "english", "sentence")):
-        rec = ["quiz", "flashcards", "memory_tricks", "learn_more"]
+        rec = ["quiz", "flashcards", "memory_tricks", "learn_more", "revision"]
     elif any(w in text for w in ("network", "code", "program", "api", "computer", "algorithm")):
-        rec = ["mind_map", "quiz", "learn_more", "revision"]
+        rec = ["mind_map", "quiz", "learn_more", "revision", "flashcards"]
     elif any(w in text for w in ("map", "climate", "river", "geography", "continent")):
-        rec = ["visual", "flashcards", "important_questions", "revision"]
+        rec = ["visual", "flashcards", "important_questions", "revision", "learn_more"]
 
     if knowledge.get("visual_payload") and "visual" not in rec:
         rec = ["visual"] + [t for t in rec if t != "visual"]
 
     if any(w in text for w in ("exam", "neet", "jee", "board", "marks", "important")):
         if "important_questions" not in rec:
-            rec = rec[:3] + ["important_questions"]
+            rec = rec[:4] + ["important_questions"]
 
     seen: set[str] = set()
     out: list[str] = []
@@ -1030,4 +1032,4 @@ def recommend_tool_types(knowledge: dict[str, Any], query: str = "") -> list[str
         if t not in seen:
             seen.add(t)
             out.append(t)
-    return out[:4]
+    return out[:5]
