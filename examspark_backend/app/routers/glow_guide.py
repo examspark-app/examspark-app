@@ -163,6 +163,6 @@ async def list_glow_guide_sessions(
 
     db = get_supabase_admin()
     sessions = db.table("glow_guide_sessions").select(
-        "id,category_type,status,created_at,updated_at"
+        "id,title,category_type,status,created_at,updated_at"
     ).eq("user_id", user.user_id).order("updated_at", desc=True).limit(50).execute().data or []
     return {"sessions": sessions}

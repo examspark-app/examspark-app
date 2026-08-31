@@ -107,7 +107,16 @@ def _next_missing_field(ctx: dict, active_category: str | None, has_image_this_t
         return "product_info"
     return None
 
-
+def _title_for_session(active_category: str | None, context: dict, user_text: str) -> str:
+    if active_category:
+        return active_category.replace("_", " ").replace("-", " ").title()
+    concern = (context.get("concern") or "").strip()
+    if concern:
+        return (concern[:40] + "…") if len(concern) > 40 else concern
+    text = (user_text or "").strip()
+    if text:
+        return (text[:40] + "…") if len(text) > 40 else text
+    return "GlowGuide Chat"
 async def _call_gemini(messages: list[dict[str, Any]]) -> str:
     if not AIConfig.gemini_tts_configured():
         raise GlowGuideError("Gemini is not configured.", 500)
@@ -322,6 +331,8 @@ async def turn(
         "exchange_count": new_exchange_count,
         "context_json": next_context,
     }
+    if not current.get("title"):
+        session_update["title"] = _title_for_session(active_category, next_context, text)
     if new_exchange_count >= MAX_GLOW_GUIDE_EXCHANGES:
         session_update["status"] = "archived"
     db.table("glow_guide_sessions").update(session_update).eq("id", session_id).eq("user_id", user_id).execute()

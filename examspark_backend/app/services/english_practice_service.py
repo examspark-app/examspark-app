@@ -924,7 +924,7 @@ async def start_session(user_id: str, model: str = "qwen3") -> dict:
                 "native_language": native,
                 "target_language": target,
                 "status": "active",
-                "title": f"{target} Practice · {_now()[:10]}",
+                "title": f"{native} → {target} Practice",
                 "message_count": 0,
                 "text_model": model if model in _CHAT_MODELS else "qwen3",
             }

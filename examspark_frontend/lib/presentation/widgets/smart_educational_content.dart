@@ -411,7 +411,7 @@ class _VisualBlocks extends StatelessWidget {
         for (final p in payload.pieCharts) ...[       // 👈 naya
           _PieChartCard(item: p),
           const SizedBox(height: 12),
-        ]  
+        ],  
         for (final d in payload.textDiagrams) ...[
           _TextDiagramCard(diagram: d),
           const SizedBox(height: 12),
