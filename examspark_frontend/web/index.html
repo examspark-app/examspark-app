@@ -13,8 +13,65 @@
   <link rel="icon" type="image/png" href="favicon.png"/>
   <title>Sonaxia</title>
   <link rel="manifest" href="manifest.json">
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #ffffff;
+    }
+    #splash-screen {
+      position: fixed;
+      inset: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: #ffffff;
+      z-index: 9999;
+      transition: opacity 0.35s ease;
+    }
+    #splash-screen.splash-hide {
+      opacity: 0;
+      pointer-events: none;
+    }
+    #splash-logo {
+      width: 72px;
+      height: 72px;
+      border-radius: 18px;
+      background: #0F9D58; /* apna accent color yahan daal do */
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-weight: 700;
+      font-size: 30px;
+      color: #ffffff;
+      margin-bottom: 22px;
+      animation: splash-pulse 1.3s ease-in-out infinite;
+    }
+    @keyframes splash-pulse {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.08); opacity: 0.85; }
+    }
+    #splash-spinner {
+      width: 30px;
+      height: 30px;
+      border: 3px solid #E0E0E0;
+      border-top-color: #0F9D58; /* apna accent color yahan daal do */
+      border-radius: 50%;
+      animation: splash-spin 0.8s linear infinite;
+    }
+    @keyframes splash-spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
 </head>
 <body>
+  <div id="splash-screen">
+    <div id="splash-logo">S</div>
+    <div id="splash-spinner"></div>
+  </div>
+
   <script>
     window.forceReloadExamSparkApp = function () {
       window.location.reload();
@@ -48,6 +105,31 @@
       } catch (_) {}
     })();
   </script>
+
+  <script>
+    // Flutter web pehla frame paint kar de to ke turant baad splash hide karo.
+    (function () {
+      var splash = document.getElementById('splash-screen');
+      if (!splash) return;
+      var hidden = false;
+      function hideSplash() {
+        if (hidden) return;
+        hidden = true;
+        splash.classList.add('splash-hide');
+        setTimeout(function () { splash.remove(); }, 400);
+      }
+      var observer = new MutationObserver(function () {
+        if (document.querySelector('flt-glass-pane') || document.querySelector('flutter-view')) {
+          hideSplash();
+          observer.disconnect();
+        }
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      // Safety fallback — agar 12 second me bhi Flutter nahi mila to bhi hata do.
+      setTimeout(hideSplash, 12000);
+    })();
+  </script>
+
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>
