@@ -254,19 +254,34 @@
 
   
   <script>
+    let _razorpayScriptPromise = null;
+    function _loadRazorpayScript() {
+      if (_razorpayScriptPromise) return _razorpayScriptPromise;
+      _razorpayScriptPromise = new Promise(function (resolve, reject) {
+        var script = document.createElement('script');
+        script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+        script.onload = function () { resolve(); };
+        script.onerror = function () { reject(new Error('Failed to load Razorpay')); };
+        document.head.appendChild(script);
+      });
+      return _razorpayScriptPromise;
+    }
+
     window.openExamSparkRazorpay = function (optionsJson) {
-      return new Promise(function (resolve, reject) {
-        var options = JSON.parse(optionsJson);
-        options.handler = function (response) {
-          resolve(JSON.stringify(response));
-        };
-        options.modal = {
-          ondismiss: function () {
-            reject(new Error('Payment cancelled'));
-          }
-        };
-        var rzp = new Razorpay(options);
-        rzp.open();
+      return _loadRazorpayScript().then(function () {
+        return new Promise(function (resolve, reject) {
+          var options = JSON.parse(optionsJson);
+          options.handler = function (response) {
+            resolve(JSON.stringify(response));
+          };
+          options.modal = {
+            ondismiss: function () {
+              reject(new Error('Payment cancelled'));
+            }
+          };
+          var rzp = new Razorpay(options);
+          rzp.open();
+        });
       });
     };
 
@@ -282,7 +297,3 @@
       setTimeout(hideInitialShell, 150);
     });
   </script>
-  <!-- Cache-bust the Flutter bootstrap loader — bump ?v= every build to bypass Cloudflare -->
-  <script src="flutter_bootstrap.js?v=1009" async></script>
-</body>
-</html>
