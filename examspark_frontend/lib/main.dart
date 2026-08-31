@@ -69,10 +69,12 @@ Future<void> main() async {
   // Background payment listener
   PaymentService.instance.initialize();
 
-  try {
-    await dotenv.load(fileName: '.env');
-  } catch (_) {
-    // .env optional when using --dart-define
+  if (!kIsWeb) {
+    try {
+      await dotenv.load(fileName: '.env');
+    } catch (_) {
+      // .env optional when using --dart-define
+    }
   }
 
   final url = dotenv.maybeGet('SUPABASE_URL') ?? AppConfig.supabaseUrl;
