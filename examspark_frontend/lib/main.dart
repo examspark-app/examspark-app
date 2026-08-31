@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -57,7 +58,26 @@ Future<void> _checkWebVersionBumpAndReload() async {
 }
 
 Future<void> main() async {
+  runZonedGuarded(() async {
+    await _bootstrap();
+  }, (error, stack) {
+    debugPrint('SONAXIA_GLOBAL_ERROR: $error');
+    debugPrint('SONAXIA_GLOBAL_STACK:\n$stack');
+  });
+}
+
+Future<void> _bootstrap() async {
   WidgetsFlutterBinding.ensureInitialized();
+  FlutterError.onError = (details) {
+    FlutterError.presentError(details);
+    debugPrint('SONAXIA_FLUTTER_ERROR: ${details.exception}');
+    debugPrint('SONAXIA_FLUTTER_STACK:\n${details.stack}');
+  };
+  ui.PlatformDispatcher.instance.onError = (error, stack) {
+    debugPrint('SONAXIA_PLATFORM_ERROR: $error');
+    debugPrint('SONAXIA_PLATFORM_STACK:\n$stack');
+    return true;
+  };
 
   // Web-only: let Flutter render its own text-selection context menu
   // (e.g. our "Reply" button) instead of the browser's native right-click
@@ -77,9 +97,13 @@ Future<void> main() async {
     }
   }
 
-  final url = dotenv.maybeGet('SUPABASE_URL') ?? AppConfig.supabaseUrl;
+  final url = kIsWeb
+      ? AppConfig.supabaseUrl
+      : (dotenv.maybeGet('SUPABASE_URL') ?? AppConfig.supabaseUrl);
 
-  final key = dotenv.maybeGet('SUPABASE_ANON_KEY') ?? AppConfig.supabaseAnonKey;
+  final key = kIsWeb
+      ? AppConfig.supabaseAnonKey
+      : (dotenv.maybeGet('SUPABASE_ANON_KEY') ?? AppConfig.supabaseAnonKey);
 
   if (url.isNotEmpty && key.isNotEmpty) {
     await SupabaseClient.instance.initialize(url: url, anonKey: key);
@@ -126,10 +150,13 @@ class _ExamSparkAppState extends State<ExamSparkApp> {
 
   Future<void> _initializeBackgroundServices() async {
     await CrashlyticsService.instance.initialize();
-    final posthogApiKey = dotenv.maybeGet('POSTHOG_API_KEY') ?? '';
+    final posthogApiKey = kIsWeb
+      ? ''
+      : (dotenv.maybeGet('POSTHOG_API_KEY') ?? '');
 
-    final posthogHost =
-        dotenv.maybeGet('POSTHOG_HOST') ?? 'https://us.i.posthog.com';
+    final posthogHost = kIsWeb
+      ? 'https://us.i.posthog.com'
+      : (dotenv.maybeGet('POSTHOG_HOST') ?? 'https://us.i.posthog.com');
 
     if (posthogApiKey.isNotEmpty) {
       try {

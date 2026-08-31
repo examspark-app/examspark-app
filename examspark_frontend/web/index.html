@@ -16,6 +16,11 @@
 </head>
 <body>
   <script>
+    window.forceReloadExamSparkApp = function () {
+      window.location.reload();
+    };
+  </script>
+  <script>
     (function () {
       var APP_VERSION_KEY = 'examspark_app_version';
       var RELOAD_ATTEMPTED_KEY = 'examspark_reload_attempted';

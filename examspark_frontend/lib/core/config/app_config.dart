@@ -1,4 +1,5 @@
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 /// Supabase and app configuration.
 /// Copy `.env.example` to `.env` or pass --dart-define values at build time.
@@ -35,6 +36,9 @@ class AppConfig {
   /// `.env`'s `FASTAPI_BASE_URL` actually takes effect without needing
   /// --dart-define at every `flutter run`.
   static String get resolvedApiBaseUrl {
+    if (kIsWeb) {
+      return apiBaseUrl.isNotEmpty ? apiBaseUrl : _legacyApiBaseUrl;
+    }
     final fromDotenv = dotenv.maybeGet('FASTAPI_BASE_URL') ?? dotenv.maybeGet('API_BASE_URL');
     if (fromDotenv != null && fromDotenv.isNotEmpty) return fromDotenv;
     return apiBaseUrl.isNotEmpty ? apiBaseUrl : _legacyApiBaseUrl;
