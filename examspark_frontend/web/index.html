@@ -34,42 +34,91 @@
       opacity: 0;
       pointer-events: none;
     }
+
+    /* Wrapper just holds the ripple rings + the logo, so the ripple can be
+       centered independently of the logo's own pulse animation. */
+    #splash-logo-wrap {
+      position: relative;
+      width: 96px;
+      height: 96px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      margin-bottom: 22px;
+    }
+
+    /* The logo itself: full circle, image fills it, and it pulses
+       (scales in/out) continuously. */
     #splash-logo {
+      position: relative;
       width: 72px;
       height: 72px;
-      border-radius: 18px;
+      border-radius: 50%;
       background: #0F9D58; /* apna accent color yahan daal do */
       display: flex;
       align-items: center;
       justify-content: center;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      font-weight: 700;
-      font-size: 30px;
-      color: #ffffff;
-      margin-bottom: 22px;
-      animation: splash-pulse 1.3s ease-in-out infinite;
+      overflow: hidden;
+      z-index: 2;
+      box-shadow: 0 4px 14px rgba(15, 157, 88, 0.35);
+      animation: splash-pulse 1.6s ease-in-out infinite;
+    }
+    #splash-logo img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
     }
     @keyframes splash-pulse {
-      0%, 100% { transform: scale(1); opacity: 1; }
-      50% { transform: scale(1.08); opacity: 0.85; }
+      0%, 100% {
+        transform: scale(1);
+      }
+      50% {
+        transform: scale(1.08);
+      }
     }
-    #splash-spinner {
-      width: 30px;
-      height: 30px;
-      border: 3px solid #E0E0E0;
-      border-top-color: #0F9D58; /* apna accent color yahan daal do */
+
+    /* Two circular rings pulse outward from behind the logo and fade —
+       radar-ping style, staggered so a new ring starts before the last one
+       finishes. Sits on the wrapper so it stays centered on the circle. */
+    #splash-logo-wrap::before,
+    #splash-logo-wrap::after {
+      content: '';
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: 72px;
+      height: 72px;
+      margin: -36px 0 0 -36px;
       border-radius: 50%;
-      animation: splash-spin 0.8s linear infinite;
+      border: 2px solid #0F9D58; /* apna accent color yahan daal do */
+      opacity: 0;
+      z-index: 1;
+      animation: splash-ripple 2s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
     }
-    @keyframes splash-spin {
-      to { transform: rotate(360deg); }
+    #splash-logo-wrap::after {
+      animation-delay: 1s;
     }
+    @keyframes splash-ripple {
+      0% {
+        transform: scale(1);
+        opacity: 0.55;
+      }
+      100% {
+        transform: scale(2.1);
+        opacity: 0;
+      }
+    }
+
   </style>
 </head>
 <body>
   <div id="splash-screen">
-    <div id="splash-logo">S</div>
-    <div id="splash-spinner"></div>
+    <div id="splash-logo-wrap">
+      <div id="splash-logo">
+        <img src="images/sonaxia_logo.png" alt="Sonaxia">
+      </div>
+    </div>
   </div>
 
   <script>
