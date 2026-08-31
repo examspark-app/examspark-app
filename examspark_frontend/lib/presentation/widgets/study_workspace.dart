@@ -1098,6 +1098,7 @@ Widget build(BuildContext context) {
             toolStates: _chipStates,
             activeToolType: _activeChipType,
             recommended: const [],
+            hideWhenNoRecommendation: false,
             moreHint: StudyToolCopy.recordingPaidFirstGenerate,
             extraMoreChips: const [
               HomeStudyChipDef(
@@ -1105,6 +1106,11 @@ Widget build(BuildContext context) {
                 toolType: 'five_min_revision',
                 icon: Icons.timer_outlined,
               ),
+              HomeStudyChipDef(
+  label: 'Visual',
+  toolType: 'visual',
+  icon: Icons.image_outlined,
+),
               HomeStudyChipDef(
                 label: 'Cheat Sheet',
                 toolType: 'cheat_sheet',

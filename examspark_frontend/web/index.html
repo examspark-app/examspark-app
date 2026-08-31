@@ -53,14 +53,14 @@
       position: relative;
       width: 72px;
       height: 72px;
-      border-radius: 50%;
-      background: #0F9D58; /* apna accent color yahan daal do */
+      border-radius: 22px;
+      background: #ffffff;
       display: flex;
       align-items: center;
       justify-content: center;
       overflow: hidden;
       z-index: 2;
-      box-shadow: 0 4px 14px rgba(15, 157, 88, 0.35);
+      box-shadow: 0 4px 14px rgba(230, 0, 122, 0.25);
       animation: splash-pulse 1.6s ease-in-out infinite;
     }
     #splash-logo img {
@@ -90,13 +90,14 @@
       width: 72px;
       height: 72px;
       margin: -36px 0 0 -36px;
-      border-radius: 50%;
-      border: 2px solid #0F9D58; /* apna accent color yahan daal do */
+      border-radius: 22px;
+      border: 2px solid #E6007A; /* logo ka pink shade */
       opacity: 0;
       z-index: 1;
       animation: splash-ripple 2s cubic-bezier(0.2, 0.6, 0.4, 1) infinite;
     }
     #splash-logo-wrap::after {
+      border-color: #FF7A00; /* logo ka orange shade */
       animation-delay: 1s;
     }
     @keyframes splash-ripple {
