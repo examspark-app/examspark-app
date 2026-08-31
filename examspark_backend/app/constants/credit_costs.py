@@ -60,10 +60,19 @@ def ask_ai_cost(mode: str, *, used_web_search: bool = False) -> int:
     return ASK_AI_DEEP if deep else ASK_AI_NORMAL
 
 
+ASK_AI_CLAUDE = 7  # Premium model (₹499+ plan) — flat per-chat cost.
+
+
 def home_ai_cost_for_study_chip(
-    study_chip: str | None, mode: str, *, used_web_search: bool = False
+    study_chip: str | None,
+    mode: str,
+    *,
+    used_web_search: bool = False,
+    text_model: str | None = None,
 ) -> int:
     """Server-side Home AI cost. Unknown chip → normal Ask AI price."""
+    if text_model == "claude":
+        return ASK_AI_CLAUDE
     if used_web_search:
         return ask_ai_cost(mode, used_web_search=True)
     key = (study_chip or "").strip().lower()

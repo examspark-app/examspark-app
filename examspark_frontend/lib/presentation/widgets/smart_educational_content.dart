@@ -8,6 +8,8 @@ import 'package:examspark_frontend/core/theme/app_theme.dart';
 /// Structured visual payload from FastAPI (notes, Ask AI done event, revision).
 class VisualPayloadData {
   final List<GraphDataItem> graphs;
+  final List<ChartDataItem> barCharts;   // 👈 naya
+  final List<ChartDataItem> pieCharts;   // 👈 naya
   final List<TextDiagramData> textDiagrams;
   final List<TimelineItemData> timelines;
   final List<HierarchyNodeData> hierarchyTrees;
@@ -20,6 +22,8 @@ class VisualPayloadData {
 
   const VisualPayloadData({
     this.graphs = const [],
+    this.barCharts = const [],           // 👈 naya
+    this.pieCharts = const [],           // 👈 naya
     this.textDiagrams = const [],
     this.timelines = const [],
     this.hierarchyTrees = const [],
@@ -37,6 +41,12 @@ class VisualPayloadData {
       graphs: _list(json['graphs'])
           .map((e) => GraphDataItem.fromJson(Map<String, dynamic>.from(e)))
           .toList(),
+      barCharts: _list(json['bar_charts'] ?? json['barCharts'])       // 👈 naya
+          .map((e) => ChartDataItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      pieCharts: _list(json['pie_charts'] ?? json['pieCharts'])       // 👈 naya
+          .map((e) => ChartDataItem.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),    
       textDiagrams: _list(json['text_diagrams'] ?? json['textDiagrams'])
           .map((e) => TextDiagramData.fromJson(Map<String, dynamic>.from(e)))
           .toList(),
@@ -61,6 +71,8 @@ class VisualPayloadData {
 
   bool get isEmpty =>
       graphs.isEmpty &&
+      barCharts.isEmpty &&        // 👈 naya
+      pieCharts.isEmpty &&        // 👈 naya
       textDiagrams.isEmpty &&
       timelines.isEmpty &&
       hierarchyTrees.isEmpty &&
@@ -121,7 +133,37 @@ class GraphDataItem {
     );
   }
 }
+class ChartDataItem {
+  final String? title;
+  final List<ChartSlice> slices;
 
+  ChartDataItem({this.title, required this.slices});
+
+  factory ChartDataItem.fromJson(Map<String, dynamic> json) {
+    final raw = json['data'] as List? ?? [];
+    return ChartDataItem(
+      title: json['title']?.toString(),
+      slices: raw
+          .whereType<Map>()
+          .map((e) => ChartSlice.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+    );
+  }
+}
+
+class ChartSlice {
+  final String label;
+  final double value;
+
+  ChartSlice({required this.label, required this.value});
+
+  factory ChartSlice.fromJson(Map<String, dynamic> json) {
+    return ChartSlice(
+      label: json['label']?.toString() ?? '',
+      value: (json['value'] as num?)?.toDouble() ?? 0,
+    );
+  }
+}
 class TextDiagramData {
   final String? title;
   final String content;
@@ -362,6 +404,14 @@ class _VisualBlocks extends StatelessWidget {
           _GraphChart(item: g),
           const SizedBox(height: 12),
         ],
+        for (final b in payload.barCharts) ...[      // 👈 naya
+          _BarChartCard(item: b),
+          const SizedBox(height: 12),
+        ],
+        for (final p in payload.pieCharts) ...[       // 👈 naya
+          _PieChartCard(item: p),
+          const SizedBox(height: 12),
+        ]  
         for (final d in payload.textDiagrams) ...[
           _TextDiagramCard(diagram: d),
           const SizedBox(height: 12),
@@ -527,7 +577,188 @@ class _GraphChart extends StatelessWidget {
     return expression;
   }
 }
+class _BarChartCard extends StatelessWidget {
+  final ChartDataItem item;
+  const _BarChartCard({required this.item});
 
+  @override
+  Widget build(BuildContext context) {
+    if (item.slices.isEmpty) return const SizedBox.shrink();
+    final maxY = item.slices.map((s) => s.value).reduce((a, b) => a > b ? a : b);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.getCardBackground(context),
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        border: Border.all(color: AppTheme.getCardBorder(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (item.title != null && item.title!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                item.title!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+          SizedBox(
+            height: 200,
+            child: BarChart(
+              BarChartData(
+                maxY: maxY * 1.2,
+                gridData: const FlGridData(show: true),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                  leftTitles: const AxisTitles(sideTitles: SideTitles(showTitles: true, reservedSize: 32)),
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, meta) {
+                        final i = value.toInt();
+                        if (i < 0 || i >= item.slices.length) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            item.slices[i].label,
+                            style: const TextStyle(fontSize: 10),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                barGroups: [
+                  for (var i = 0; i < item.slices.length; i++)
+                    BarChartGroupData(
+                      x: i,
+                      barRods: [
+                        BarChartRodData(
+                          toY: item.slices[i].value,
+                          color: AppTheme.accentColor,
+                          width: 18,
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _PieChartCard extends StatelessWidget {
+  final ChartDataItem item;
+  const _PieChartCard({required this.item});
+
+  static const _palette = [
+    Color(0xFF7C4DFF),
+    Color(0xFF00BFA5),
+    Color(0xFFFF6D00),
+    Color(0xFF2979FF),
+    Color(0xFFD500F9),
+    Color(0xFFFFAB00),
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    if (item.slices.isEmpty) return const SizedBox.shrink();
+    final total = item.slices.fold<double>(0, (sum, s) => sum + s.value);
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: AppTheme.getCardBackground(context),
+        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        border: Border.all(color: AppTheme.getCardBorder(context)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (item.title != null && item.title!.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(
+                item.title!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.w600),
+              ),
+            ),
+          Row(
+            children: [
+              SizedBox(
+                width: 130,
+                height: 130,
+                child: PieChart(
+                  PieChartData(
+                    sections: [
+                      for (var i = 0; i < item.slices.length; i++)
+                        PieChartSectionData(
+                          value: item.slices[i].value,
+                          color: _palette[i % _palette.length],
+                          title: total > 0
+                              ? '${(item.slices[i].value / total * 100).round()}%'
+                              : '',
+                          radius: 50,
+                          titleStyle: const TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                    ],
+                    sectionsSpace: 2,
+                    centerSpaceRadius: 24,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    for (var i = 0; i < item.slices.length; i++)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 3),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: _palette[i % _palette.length],
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Expanded(
+                              child: Text(
+                                item.slices[i].label,
+                                style: const TextStyle(fontSize: 12),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
 class _TextDiagramCard extends StatelessWidget {
   final TextDiagramData diagram;
   final String? label;

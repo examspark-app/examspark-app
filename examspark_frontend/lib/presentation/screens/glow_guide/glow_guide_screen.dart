@@ -194,7 +194,6 @@ final latest = sorted.first;
             'English',
             'Hindi',
             'Bengali',
-            'Save & continue',
           ],
           isLanguageChips: true,
           hasCustomInput: true,
@@ -209,19 +208,6 @@ final latest = sorted.first;
     if (_sending) return;
     final trimmed = label.trim();
     if (trimmed.isEmpty) return;
-    if (trimmed == 'Save & continue') {
-      final raw = _lastCustomLanguageLabel?.trim();
-      final useLang = raw != null && raw.isNotEmpty
-          ? raw
-          : _preferredLanguage == 'MATCH_QUESTION'
-          ? 'MATCH_QUESTION'
-          : (_preferredLanguage.isEmpty ? 'MATCH_QUESTION' : _preferredLanguage);
-      final code = useLang == 'Auto-detect' ? 'MATCH_QUESTION' : useLang;
-      setState(() => _preferredLanguage = code);
-      unawaited(_savePreferredLanguage(code));
-      if (mounted) _showCategoryChoices();
-      return;
-    }
     final lang = trimmed == 'Auto-detect' ? 'MATCH_QUESTION' : trimmed;
     _lastCustomLanguageLabel = trimmed == 'Auto-detect' ? null : trimmed;
     setState(() => _preferredLanguage = lang);
@@ -254,7 +240,6 @@ final latest = sorted.first;
             false,
             chips: [
               ..._categories.map((item) => item.$1),
-              'Save & continue',
             ],
             isCategoryChips: true,
             hasCustomInput: true,
@@ -267,22 +252,6 @@ final latest = sorted.first;
   Future<void> _chooseTopCategory(String label) async {
     final trimmed = label.trim();
     if (trimmed.isEmpty) return;
-    if (trimmed == 'Save & continue') {
-      final raw = _lastCustomCategoryLabel?.trim();
-      final hasCustom = raw != null && raw.isNotEmpty;
-      if (!hasCustom && (_category == null || _category!.isEmpty)) return;
-      if (hasCustom) {
-        final key = _categoryKeyForLabel(raw) ?? raw.toLowerCase();
-        _continueAfterCategoryChoice(key, raw);
-        return;
-      }
-      // Preset category was already tapped — just move forward using it.
-      final display = _category != null
-          ? _prettyCategory(_category!)
-          : null;
-      _continueAfterCategoryChoice(_category!, display);
-      return;
-    }
     _lastCustomCategoryLabel = trimmed;
     final key = _categoryKeyForLabel(trimmed);
     if (key == null) {
@@ -1073,81 +1042,41 @@ final latest = sorted.first;
                 ],
                 if (message.chips.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: message.chips.map((chip) {
-                      final isTypeOwn = chip == _typeOwnOption;
-                      final isSave = chip == 'Save & continue';
-                      final isCatHeader = message.isConcernChips &&
-                          _categories.any((c) => c.$1 == chip);
-                      return ActionChip(
-                        label: Text(
-                          chip,
-                          style: TextStyle(
-                            color: isSave || isTypeOwn
-                                ? AppTheme.glowGuidePink
-                                : (isCatHeader
-                                    ? subText
-                                    : chipText),
-                            fontSize: 13.5,
-                            fontWeight: isSave || isTypeOwn
-                                ? FontWeight.w800
-                                : FontWeight.w600,
-                            fontStyle: isTypeOwn
-                                ? FontStyle.italic
-                                : FontStyle.normal,
-                          ),
-                        ),
-                        backgroundColor: isSave
-                            ? AppTheme.glowGuidePink.withOpacity(0.08)
-                            : (isCatHeader
-                                ? chipBg.withOpacity(0.8)
-                                : chipBg),
-                        side: BorderSide(
-                          color: isSave
-                              ? AppTheme.glowGuidePink.withOpacity(0.45)
-                              : chipBorder,
-                          width: 0.9,
-                        ),
-                        avatar: isTypeOwn
-                            ? Icon(
-                                Icons.edit_outlined,
-                                size: 15,
-                                color: AppTheme.glowGuidePink,
-                              )
-                            : (isSave
-                                ? Icon(
-                                    Icons.check_circle_outline_rounded,
-                                    size: 15,
-                                    color: AppTheme.glowGuidePink,
-                                  )
-                                : null),
-                        onPressed: _sending || _sessionComplete
-                            ? null
-                            : () {
-                                if (message.isLanguageChips) {
-                                  _selectLanguage(chip);
-                                } else if (message.isCategoryChips) {
-                                  _chooseTopCategory(chip);
-                                } else if (message.isGenderChips) {
-                                  _selectGender(chip);
-                                } else if (message.isAgeChips) {
-                                  _selectAge(chip);
-                                } else if (message.isSeasonChips) {
-                                  _selectSeasonWeather(chip);
-                                } else if (message.isConcernChips) {
-                                  if (isCatHeader) {
-                                    _chooseTopCategory(chip);
-                                  } else {
-                                    _selectConcern(chip);
-                                  }
-                                } else {
-                                  _selectCategory(chip);
-                                }
-                              },
-                      );
-                    }).toList(),
+                  _NumberedOptionCard(
+                    options: message.chips,
+                    textColor: chipText,
+                    subText: subText,
+                    borderColor: chipBorder,
+                    bg: chipBg,
+                    onSelect: (chip) {
+                      if (_sending || _sessionComplete) return;
+                      if (chip == _typeOwnOption) {
+                        _selectConcern(chip);
+                        return;
+                      }
+                      if (message.isLanguageChips) {
+                        _selectLanguage(chip);
+                      } else if (message.isCategoryChips) {
+                        _chooseTopCategory(chip);
+                      } else if (message.isGenderChips) {
+                        _selectGender(chip);
+                      } else if (message.isAgeChips) {
+                        _selectAge(chip);
+                      } else if (message.isSeasonChips) {
+                        _selectSeasonWeather(chip);
+                      } else if (message.isConcernChips) {
+                        final isCatHeader = _categories.any(
+                          (c) => c.$1 == chip,
+                        );
+                        if (isCatHeader) {
+                          _chooseTopCategory(chip);
+                        } else {
+                          _selectConcern(chip);
+                        }
+                      } else {
+                        _selectCategory(chip);
+                      }
+                    },
                   ),
                 ],
               ],
@@ -2063,6 +1992,86 @@ class _WebSearchBubbleState extends State<_WebSearchBubble>
           ),
         );
       },
+    );
+  }
+}
+class _NumberedOptionCard extends StatelessWidget {
+  const _NumberedOptionCard({
+    required this.options,
+    required this.onSelect,
+    required this.textColor,
+    required this.subText,
+    required this.borderColor,
+    required this.bg,
+  });
+
+  final List<String> options;
+  final ValueChanged<String> onSelect;
+  final Color textColor;
+  final Color subText;
+  final Color borderColor;
+  final Color bg;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: borderColor, width: 0.9),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < options.length; i++) ...[
+            InkWell(
+              onTap: () => onSelect(options[i]),
+              borderRadius: BorderRadius.vertical(
+                top: i == 0 ? const Radius.circular(14) : Radius.zero,
+                bottom: i == options.length - 1
+                    ? const Radius.circular(14)
+                    : Radius.zero,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 14,
+                  vertical: 13,
+                ),
+                child: Row(
+                  children: [
+                    Text(
+                      '${i + 1}',
+                      style: TextStyle(
+                        color: subText,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        options[i],
+                        style: TextStyle(
+                          color: textColor,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 16,
+                      color: subText,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            if (i != options.length - 1)
+              Divider(height: 1, color: borderColor),
+          ],
+        ],
+      ),
     );
   }
 }

@@ -1072,7 +1072,7 @@ async def home_ai(
     if mode not in ("normal", "deep"):
         raise HomeAiError("mode must be 'normal' or 'deep'.", status_code=400)
     if text_model not in {"qwen3", "gemini", "claude"}:
-        text_model = "qwen3"
+        text_model = "gemini"
     if text_model == "claude":
         
         try:
@@ -1155,7 +1155,7 @@ async def home_ai(
 
     # Precheck web band when route is web_deferred (Tavily may fire).
     amount = home_ai_cost_for_study_chip(
-        study_chip, mode, used_web_search=(route == "web_deferred")
+        study_chip, mode, used_web_search=(route == "web_deferred"), text_model=text_model
     )
 
     def _precheck_sync() -> None:
@@ -1208,7 +1208,7 @@ async def home_ai(
             answer_source = WEB
             confidence = MEDIUM
             amount = home_ai_cost_for_study_chip(
-                study_chip, mode, used_web_search=True
+                study_chip, mode, used_web_search=True, text_model=text_model
             )
         else:
             web_deferred_no_web = True
@@ -1217,13 +1217,13 @@ async def home_ai(
                 answer_source = NO_MATCH
             confidence = derive_home_ai_confidence(sources_meta, answer_source)
             amount = home_ai_cost_for_study_chip(
-                study_chip, mode, used_web_search=False
+                study_chip, mode, used_web_search=False, text_model=text_model
             )
     else:
         answer_source = derive_home_ai_source(sources_meta, context_blocks)
         confidence = derive_home_ai_confidence(sources_meta, answer_source)
         amount = home_ai_cost_for_study_chip(
-            study_chip, mode, used_web_search=False
+            study_chip, mode, used_web_search=False, text_model=text_model
         )
 
     history = get_recent_messages(sid, user_id, limit=50) if sid else []
@@ -1347,7 +1347,7 @@ async def home_ai_stream(
         }
         return
     if text_model not in {"qwen3", "gemini", "claude"}:
-        text_model = "qwen3"
+        text_model = "gemini"
     if text_model == "claude":
         
         try:
@@ -1454,7 +1454,7 @@ async def home_ai_stream(
         return
 
     amount = home_ai_cost_for_study_chip(
-        study_chip, mode, used_web_search=(route == "web_deferred")
+        study_chip, mode, used_web_search=(route == "web_deferred"), text_model=text_model
     )
 
     def _precheck_sync() -> None:
@@ -1522,7 +1522,7 @@ async def home_ai_stream(
             answer_source = WEB
             confidence = MEDIUM
             amount = home_ai_cost_for_study_chip(
-                study_chip, mode, used_web_search=True
+                study_chip, mode, used_web_search=True, text_model=text_model
             )
         else:
             web_deferred_no_web = True
@@ -1531,13 +1531,13 @@ async def home_ai_stream(
                 answer_source = NO_MATCH
             confidence = derive_home_ai_confidence(sources_meta, answer_source)
             amount = home_ai_cost_for_study_chip(
-                study_chip, mode, used_web_search=False
+                study_chip, mode, used_web_search=False, text_model=text_model
             )
     else:
         answer_source = derive_home_ai_source(sources_meta, context_blocks)
         confidence = derive_home_ai_confidence(sources_meta, answer_source)
         amount = home_ai_cost_for_study_chip(
-            study_chip, mode, used_web_search=False
+            study_chip, mode, used_web_search=False, text_model=text_model
         )
 
         yield {

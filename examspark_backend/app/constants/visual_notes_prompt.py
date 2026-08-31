@@ -38,6 +38,7 @@ for each topic — quality over quantity, clarity over decoration.
 - Include chemical equations (LaTeX) whenever relevant.
 - Include reaction flow diagrams in visualPayload.process_flows.
 - Include comparison tables in cleanNotes markdown where appropriate.
+- Composition/percentage data (e.g. mixture ratios) → pie_charts.
 
 --- Biology ---
 - Labelled text diagrams for organs, cells, cycles, systems (text_diagrams).
@@ -49,10 +50,14 @@ for each topic — quality over quantity, clarity over decoration.
 --- Geography ---
 - Cycles, flow diagrams, hierarchy trees, comparison tables when useful.
 - Maps as text descriptions only — never images.
+- Numeric comparisons (rainfall, population, area, climate data) → bar_charts.
+- Percentage/composition data (land use, resource distribution) → pie_charts.
 
 --- Economics ---
 - Demand/supply and graphable relationships → graph metadata.
 - Comparison tables and process flows when useful.
+- Category-vs-value data (GDP by sector, income comparison) → bar_charts.
+- Percentage breakdowns (budget allocation, market share) → pie_charts.
 
 --- Computer Science ---
 - Algorithms → flowcharts (process_flows) or hierarchy trees.
@@ -144,6 +149,8 @@ visualPayload JSON SCHEMA (same response object)
 Add key "visualPayload" with this structure (use empty arrays when not needed):
 {
   "graphs": [ { "function": "y=x^2+5", "x_range": [-6, 6], "label": "optional" } ],
+  "bar_charts": [ { "title": "Rainfall by Season (mm)", "data": [ { "label": "Winter", "value": 20 }, { "label": "Summer", "value": 150 } ] } ],
+  "pie_charts": [ { "title": "Atmosphere Composition", "data": [ { "label": "Nitrogen", "value": 78 }, { "label": "Oxygen", "value": 21 } ] } ],
   "text_diagrams": [ { "title": "Photosynthesis", "content": "☀️ Sunlight\\n      ↓\\n🌿 Leaf\\n..." } ],
   "timelines": [ { "period": "1857", "label": "Revolt" } ],
   "hierarchy_trees": [ { "label": "Animal Kingdom", "children": [ { "label": "Mammals", "children": [] } ] } ],
@@ -156,6 +163,9 @@ Add key "visualPayload" with this structure (use empty arrays when not needed):
 }
 Text diagrams: arrows, spacing, emoji only — never SVG or images.
 Graphs: metadata only — Flutter renders from function string.
+Bar/pie charts: use for comparisons, percentages, or category-vs-value data
+(e.g. rainfall by season, population by state, composition %, survey results).
+Values must be real numbers from the topic — never invented statistics.
 """
 
 NOTES_OUTPUT_ORDER = """
@@ -296,6 +306,8 @@ After the full answer, on its own line output exactly:
 <<VISUAL_JSON>>
 then a single compact JSON object using only the useful keys from:
 {"graphs":[{"function":"y=x^2-5*x+6","x_range":[-2,7],"label":"Parabola with roots 2 and 3"}],
+"bar_charts":[{"title":"Comparison","data":[{"label":"A","value":10},{"label":"B","value":20}]}],
+"pie_charts":[{"title":"Composition","data":[{"label":"Part A","value":60},{"label":"Part B","value":40}]}],
 "text_diagrams":[{"title":"Title","content":"Part A\\n  ↓\\nPart B"}],
 "timelines":[{"period":"Year","label":"Event"}],
 "hierarchy_trees":[{"label":"Root","children":[]}],

@@ -45,8 +45,20 @@ class HighlightBox(BaseModel):
     content: str = ""
 
 
+class ChartSlice(BaseModel):
+    label: str = ""
+    value: float = 0.0
+
+
+class ChartItem(BaseModel):
+    title: Optional[str] = None
+    data: list[ChartSlice] = Field(default_factory=list)
+
+
 class VisualPayload(BaseModel):
     graphs: list[GraphDataItem] = Field(default_factory=list)
+    bar_charts: list[ChartItem] = Field(default_factory=list)
+    pie_charts: list[ChartItem] = Field(default_factory=list)
     text_diagrams: list[TextDiagram] = Field(default_factory=list)
     timelines: list[TimelineItem] = Field(default_factory=list)
     hierarchy_trees: list[HierarchyNode] = Field(default_factory=list)
@@ -86,6 +98,8 @@ def _normalize_visual_dict(raw: dict) -> dict:
         ("memoryTricks", "memory_tricks"),
         ("examTips", "exam_tips"),
         ("cheatSheet", "cheat_sheet"),
+        ("barCharts", "bar_charts"),
+        ("pieCharts", "pie_charts"),
     ]
     for camel, snake in pairs:
         if camel in out and snake not in out:
@@ -96,6 +110,8 @@ def _normalize_visual_dict(raw: dict) -> dict:
 def payload_has_content(payload: VisualPayload) -> bool:
     return bool(
         payload.graphs
+        or payload.bar_charts
+        or payload.pie_charts
         or payload.text_diagrams
         or payload.timelines
         or payload.hierarchy_trees
@@ -117,6 +133,10 @@ def visual_payload_to_plain_text(payload: VisualPayload | None) -> str:
         label = g.label or g.function
         if label:
             parts.append(f"Graph: {label}")
+    for chart in payload.bar_charts + payload.pie_charts:
+        if chart.title or chart.data:
+            values = ", ".join(f"{s.label}: {s.value}" for s in chart.data)
+            parts.append(f"Chart {chart.title or ''}: {values}".strip())
     for d in payload.text_diagrams + payload.process_flows:
         title = d.title or "Diagram"
         if d.content.strip():

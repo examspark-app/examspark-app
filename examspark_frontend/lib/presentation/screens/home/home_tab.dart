@@ -162,10 +162,10 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   bool _isSending = false;
   bool _restoringSession = false;
 
-  /// Locked after first successful turn (HINDI/BENGALI/ENGLISH/HINGLISH).
+    /// Locked after first successful turn (HINDI/BENGALI/ENGLISH/HINGLISH).
   String? _conversationLanguage;
   String _visionModel = 'qwen-vl';
-  String _textModel = 'qwen3';
+  String _textModel = 'gemini';
 
   /// Phase 4D — active Study Session (Supabase).
   String? _homeAiSessionId;
