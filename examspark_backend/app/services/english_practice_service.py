@@ -753,7 +753,7 @@ def restore_session(session_id: str, user_id: str) -> dict | None:
     messages = (
         get_supabase_admin()
         .table("english_practice_messages")
-        .select("role, message, image_path, created_at")
+        .select("role, message, image_path, suggestions, created_at")
         .eq("session_id", session_id)
         .eq("user_id", user_id)
         .order("created_at", desc=False)
@@ -872,7 +872,12 @@ def _build_context_messages(
 
 
 def _persist_message(
-    session_id: str, user_id: str, role: str, message: str, image_path: str | None = None
+    session_id: str,
+    user_id: str,
+    role: str,
+    message: str,
+    image_path: str | None = None,
+    suggestions: list[dict] | None = None,
 ) -> None:
     row = {
             "session_id": session_id,
@@ -882,6 +887,8 @@ def _persist_message(
         }
     if image_path:
         row["image_path"] = image_path
+    if suggestions:
+        row["suggestions"] = suggestions
     get_supabase_admin().table("english_practice_messages").insert(row).execute()
     get_supabase_admin().table("english_practice_sessions").update(
         {"updated_at": _now(), "message_count": _message_count_incremental(session_id, user_id)}
@@ -988,7 +995,7 @@ async def start_session(user_id: str, model: str = "qwen3") -> dict:
     )
     clean, suggestions, mcq = _split_and_extract(raw)
     greeting = clean or f"Welcome! Let's start {target} practice — pick speaking, grammar, or vocabulary to begin."
-    _persist_message(sid, user_id, "assistant", greeting)
+    _persist_message(sid, user_id, "assistant", greeting, suggestions=suggestions)
     _schedule_reply_tts(user_id, greeting)
     result: dict = {
         "session_id": sid,
@@ -1070,7 +1077,7 @@ async def send_message(
     raw_reply = await _call_chat_model(messages, model)
     clean, suggestions, mcq = _split_and_extract(raw_reply)
     reply = clean or "Okay, let's continue."
-    _persist_message(session_id, user_id, "assistant", reply)
+    _persist_message(session_id, user_id, "assistant", reply, suggestions=suggestions)
     learning_memory.schedule_update(
         user_id=user_id,
         native_language=native,

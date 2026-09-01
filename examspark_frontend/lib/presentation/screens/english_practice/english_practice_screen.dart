@@ -17,12 +17,42 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:examspark_frontend/core/services/feature_analytics_tracker.dart';
 class _Message {
-  const _Message(this.text, this.isUser, {this.imageUrl});
+  const _Message(this.text, this.isUser, {this.imageUrl, this.suggestions = const []});
   final String text;
   final bool isUser;
   final String? imageUrl;
+  final List<Map<String, String>> suggestions;
+}
+class _SuggestionParseResult {
+  const _SuggestionParseResult(this.cleanText, this.suggestions);
+  final String cleanText;
+  final List<Map<String, String>> suggestions;
 }
 
+_SuggestionParseResult _extractSuggestionsFromText(String raw) {
+  final regex = RegExp(
+    r'<<SUGGESTIONS>>([\s\S]*?)(?:<<END_SUGGESTIONS>>|$)',
+  );
+  final match = regex.firstMatch(raw);
+  if (match == null) {
+    return _SuggestionParseResult(raw.trim(), const []);
+  }
+  final clean = (raw.substring(0, match.start) + raw.substring(match.end))
+      .trim();
+  final block = match.group(1) ?? '';
+  final suggestions = <Map<String, String>>[];
+  for (final line in block.split('\n')) {
+    final t = line.trim();
+    if (t.isEmpty) continue;
+    final parts = t.split('::');
+    final text = parts.isNotEmpty ? parts[0].trim() : '';
+    final pron = parts.length > 1 ? parts[1].trim() : '';
+    if (text.isNotEmpty) {
+      suggestions.add({'text': text, 'pronunciation': pron});
+    }
+  }
+  return _SuggestionParseResult(clean, suggestions);
+}
 class _ChatProcessingIndicator extends StatefulWidget {
   const _ChatProcessingIndicator({required this.voice});
 
@@ -258,18 +288,16 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       _sessionId = r['session_id'] as String?;
       _nativeLanguage = '${r['native_language'] ?? ''}';
       _targetLanguage = '${r['target_language'] ?? 'English'}';
-      final greeting = '${r['greeting'] ?? ''}'.trim();
+      final rawGreeting = '${r['greeting'] ?? ''}'.trim();
+      final parsed = _extractSuggestionsFromText(
+        rawGreeting.isEmpty
+            ? 'Welcome! Let’s begin with a small English practice step.'
+            : rawGreeting,
+      );
       _messages
         ..clear()
-        ..add(
-          _Message(
-            greeting.isEmpty
-                ? 'Welcome! Let’s begin with a small English practice step.'
-                : greeting,
-            false,
-          ),
-        );
-            final suggestions = (r['suggestions'] as List? ?? const [])
+        ..add(_Message(parsed.cleanText, false));
+      final backendSuggestions = (r['suggestions'] as List? ?? const [])
           .whereType<Map>()
           .map((s) => {
                 'text': (s['text'] ?? '').toString(),
@@ -277,9 +305,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
               })
           .where((s) => s['text']!.trim().isNotEmpty)
           .toList();
-        if (suggestions.isNotEmpty && _suggestions.isEmpty) {
-          _suggestions = suggestions;
-        }
+      _suggestions = backendSuggestions.isNotEmpty
+          ? backendSuggestions
+          : parsed.suggestions;
       final mcq = _PracticeMcq.fromJson(r['mcq']);
       if (mcq != null) _currentMcq = mcq;
       _loading = false;
@@ -319,14 +347,31 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       _messages
         ..clear()
         ..addAll(
-          (r['messages'] as List? ?? const []).map(
-            (m) => _Message(
-              '${m['message'] ?? ''}',
+          (r['messages'] as List? ?? const []).map((m) {
+            final raw = '${m['message'] ?? ''}';
+            final parsed = _extractSuggestionsFromText(raw);
+            final backendSuggestions = (m['suggestions'] as List? ?? const [])
+                .whereType<Map>()
+                .map((s) => {
+                      'text': (s['text'] ?? '').toString(),
+                      'pronunciation': (s['pronunciation'] ?? '').toString(),
+                    })
+                .where((s) => s['text']!.trim().isNotEmpty)
+                .toList();
+            return _Message(
+              parsed.cleanText,
               m['role'] == 'user',
               imageUrl: m['image_url']?.toString(),
-            ),
-          ),
+              suggestions: backendSuggestions.isNotEmpty
+                  ? backendSuggestions
+                  : parsed.suggestions,
+            );
+          }),
         );
+
+    if (_messages.isNotEmpty && !_messages.last.isUser) {
+      _suggestions = _messages.last.suggestions;
+    }
       _loading = false;
     });
     _bottom();
@@ -527,9 +572,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       if (!mounted) return;
 
       setState(() {
-        _messages.add(_Message('${r['reply'] ?? ''}', false));
+        final parsed = _extractSuggestionsFromText('${r['reply'] ?? ''}');
 
-                final s = (r['suggestions'] as List? ?? const [])
+        final s = (r['suggestions'] as List? ?? const [])
             .whereType<Map>()
             .map((item) => {
                   'text': (item['text'] ?? '').toString(),
@@ -538,9 +583,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             .where((item) => item['text']!.trim().isNotEmpty)
             .toList();
 
-        if (s.isNotEmpty && _suggestions.isEmpty) {
-          _suggestions = s;
-        }
+        final resolvedSuggestions = s.isNotEmpty ? s : parsed.suggestions;
+        _suggestions = resolvedSuggestions;
+        _messages.add(_Message(parsed.cleanText, false, suggestions: resolvedSuggestions));
 
         final mcq = _PracticeMcq.fromJson(r['mcq']);
         _currentMcq = mcq;
@@ -748,8 +793,13 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       setState(() {
         _currentMcq = null;
         _messages.add(_Message('${response['transcript'] ?? ''}', true));
-        _messages.add(_Message('${response['reply'] ?? ''}', false));
-                final suggestions = (response['suggestions'] as List? ?? const [])
+        final parsed = _extractSuggestionsFromText('${response['reply'] ?? ''}');
+        _messages.add(_Message(
+          parsed.cleanText,
+          false,
+          suggestions: suggestions.isNotEmpty ? suggestions : parsed.suggestions,
+        ));
+        final suggestions = (response['suggestions'] as List? ?? const [])
             .whereType<Map>()
             .map((item) => {
                   'text': (item['text'] ?? '').toString(),
@@ -757,7 +807,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                 })
             .where((item) => item['text']!.trim().isNotEmpty)
             .toList();
-        if (suggestions.isNotEmpty && _suggestions.isEmpty) _suggestions = suggestions;
+        _suggestions = suggestions.isNotEmpty ? suggestions : parsed.suggestions;
         final mcq = _PracticeMcq.fromJson(response['mcq']);
         _currentMcq = mcq;
         _mcqSelectedIndex = null;
@@ -1114,101 +1164,80 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
     final primaryText = AppTheme.getPrimaryText(context);
     final subText = AppTheme.getSecondaryText(context);
 
-    final phraseBox = InkWell(
-      onTap: () => _send(text),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: inputBg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: cardBorder),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(Icons.edit_outlined, color: violet, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                text,
-                style: TextStyle(
-                  color: primaryText,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
+    final phraseBox = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: inputBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cardBorder),
       ),
-    );
-
-    final pronunciationBox = InkWell(
-      onTap: () => _send(pronunciation.trim().isNotEmpty ? pronunciation : ''),
-      borderRadius: BorderRadius.circular(12),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        decoration: BoxDecoration(
-          color: inputBg,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: cardBorder),
-        ),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          children: [
-            Icon(Icons.record_voice_over_outlined, color: subText, size: 18),
-            const SizedBox(width: 8),
-            Expanded(
-              child: Text(
-                pronunciation.trim().isNotEmpty ? pronunciation : 'Pronunciation',
-                style: TextStyle(
-                  color: subText,
-                  fontWeight: FontWeight.w500,
-                  fontSize: 13,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(Icons.edit_outlined, color: violet, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              text,
+              style: TextStyle(
+                color: primaryText,
+                fontWeight: FontWeight.w600,
+                fontSize: 13,
               ),
+              maxLines: 4,
+              overflow: TextOverflow.visible,
+              softWrap: true,
             ),
-          ],
-        ),
-      ),
-    );
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final isWide = constraints.maxWidth >= 600;
-
-        return Container(
-          margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-          padding: const EdgeInsets.all(8),
-          decoration: BoxDecoration(
-            color: cardBg,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: cardBorder),
           ),
-          child: isWide
-              ? Row(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    Expanded(child: phraseBox),
-                    const SizedBox(width: 8),
-                    Expanded(child: pronunciationBox),
-                  ],
-                )
-              : Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    phraseBox,
-                    const SizedBox(height: 8),
-                    pronunciationBox,
-                  ],
-                ),
-        );
-      },
+        ],
+      ),
+    );
+
+    final pronunciationBox = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: inputBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cardBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(Icons.record_voice_over_outlined, color: subText, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              pronunciation.trim().isNotEmpty ? pronunciation : 'Pronunciation',
+              style: TextStyle(
+                color: subText,
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+              ),
+              maxLines: 4,
+              overflow: TextOverflow.visible,
+              softWrap: true,
+            ),
+          ),
+        ],
+      ),
+    );
+
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.all(8),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: cardBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          phraseBox,
+          const SizedBox(height: 8),
+          pronunciationBox,
+        ],
+      ),
     );
   }
 
