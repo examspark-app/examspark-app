@@ -332,7 +332,14 @@ final latest = sorted.first;
         _GlowMessage(
           '${display ?? key} selected. Just so I can guide you accurately — is this for a male or female?',
           false,
-          chips: const ['Male', 'Female'],
+          chips: const [
+  'Baby',
+  'Child',
+  'Teen',
+  'Adult',
+  'Middle Age',
+  'Old Age',
+],
           isGenderChips: true,
         ),
       );
@@ -349,7 +356,14 @@ final latest = sorted.first;
         _GlowMessage(
           'Got it. What age should I consider for this guidance?',
           false,
-          chips: const ['Baby', 'Child', 'Teen', 'Adult'],
+          chips: const [
+            'Baby',
+            'Child',
+            'Teen',
+            'Adult',
+            'Middle Age',
+            'Old Age',
+          ],
           isAgeChips: true,
           hasCustomInput: true,
         ),
@@ -631,13 +645,14 @@ final latest = sorted.first;
       if (_sessionComplete) _promptNewChat();
     } catch (error) {
       if (!mounted || _lastSubmittedKey != submissionKey) return;
+      final detail = error.toString().replaceFirst('Exception: ', '');
       setState(() {
         _sending = false;
         _processingPhoto = false;
         _webSearchStatus = null;
         _messages.add(
           _GlowMessage(
-            'Skin Care AI is unavailable right now. Please try again.',
+            '${_prettyCategory(_category ?? "skin")} AI is unavailable right now. ($detail)',
             false,
           ),
         );
