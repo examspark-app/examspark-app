@@ -385,7 +385,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                     dense: true,
                     visualDensity: VisualDensity.compact,
                     leading: Icon(Icons.eco_outlined, size: 20, color: iconColor),
-                    title: const Text('Skin Care AI 🌿', style: TextStyle(fontSize: 14)),
+                    title: const Text('Glow Care AI 🌿', style: TextStyle(fontSize: 14)),
                     onTap: () {
                       Navigator.pop(context);
                       Navigator.pushNamed(context, '/glow-guide');

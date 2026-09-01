@@ -180,6 +180,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
   _PracticeMcq? _currentMcq;
   int? _mcqSelectedIndex;
   String? _sessionId;
+  String? _analyticsSessionKey;
   bool _loading = false;
   int _latestSessionRequestId = 0;
   bool _sending = false;
@@ -201,6 +202,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
     @override
   void initState() {
     super.initState();
+        _analyticsSessionKey =
+        FeatureAnalyticsTracker.instance.startFeature('english_practice');
     _waveController = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 300),
@@ -235,6 +238,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
 
   @override
   void dispose() {
+        FeatureAnalyticsTracker.instance.stopFeature(_analyticsSessionKey);
     _text.dispose();
     _scroll.dispose();
     _voiceTurnLimitTimer?.cancel();

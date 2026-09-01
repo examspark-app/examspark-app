@@ -37,6 +37,7 @@ import 'package:examspark_frontend/presentation/widgets/youtube_link_dialog.dart
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 import 'package:examspark_frontend/presentation/widgets/glow_guide_rotating_button.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
+import 'package:examspark_frontend/core/services/feature_analytics_tracker.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 
@@ -169,7 +170,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 
   /// Phase 4D — active Study Session (Supabase).
   String? _homeAiSessionId;
-
+  String? _analyticsSessionKey;
   /// Live SSE tokens while waiting (null = still thinking).
   String? _liveStreamText;
   String? _replyQuote;
@@ -231,6 +232,8 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   @override
   void initState() {
     super.initState();
+        _analyticsSessionKey =
+        FeatureAnalyticsTracker.instance.startFeature('home_ai');
     WidgetsBinding.instance.addObserver(this);
     if (_sessionMessages != null && _sessionMessages!.isNotEmpty) {
       _messages.addAll(_sessionMessages!);
@@ -414,6 +417,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 
   @override
   void dispose() {
+    FeatureAnalyticsTracker.instance.stopFeature(_analyticsSessionKey);
     _quoteTimer?.cancel();
     _persistDebounce?.cancel();
     _persistChatNow();

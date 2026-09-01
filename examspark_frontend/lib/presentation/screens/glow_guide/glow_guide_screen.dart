@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart'
     as app_supabase;
+import 'package:examspark_frontend/core/services/feature_analytics_tracker.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -74,6 +75,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   String? _age;
   String? _seasonWeather;
   String? _sessionId;
+  String? _analyticsSessionKey;
   bool _sending = false;
   bool _sessionComplete = false;
   bool _usedWebSearch = false;
@@ -88,6 +90,8 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   @override
   void initState() {
     super.initState();
+        _analyticsSessionKey =
+        FeatureAnalyticsTracker.instance.startFeature('glowguide');
     if (widget.startFresh) {
       _showLanguageChoice();
     } else {
@@ -351,6 +355,7 @@ final latest = sorted.first;
 
   @override
   void dispose() {
+        FeatureAnalyticsTracker.instance.stopFeature(_analyticsSessionKey);
     _text.dispose();
     _textFocus.dispose();
     _scroll.dispose();
