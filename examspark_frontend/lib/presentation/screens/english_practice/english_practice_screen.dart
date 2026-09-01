@@ -1098,97 +1098,112 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
   );
 
   Widget _suggestionPanel(bool isDark) {
-  if (_suggestions.isEmpty) return const SizedBox.shrink();
-  final suggestion = _suggestions.first;
-  final text = suggestion['text'] ?? '';
-  final pronunciation = suggestion['pronunciation'] ?? '';
-  if (text.trim().isEmpty) return const SizedBox.shrink();
+    if (_suggestions.isEmpty) return const SizedBox.shrink();
 
-  final cardBg = AppTheme.getCardBackground(context);
-  final cardBorder = AppTheme.getCardBorder(context);
-  final inputBg = AppTheme.getInputBackground(context);
-  final primaryText = AppTheme.getPrimaryText(context);
-  final subText = AppTheme.getSecondaryText(context);
+    final suggestion = _suggestions.first;
+    final text = suggestion['text'] ?? '';
+    final pronunciation = suggestion['pronunciation'] ?? '';
+    if (text.trim().isEmpty) return const SizedBox.shrink();
 
-  return Container(
-    margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
-    padding: const EdgeInsets.all(8),
-    decoration: BoxDecoration(
-      color: cardBg,
-      borderRadius: BorderRadius.circular(16),
-      border: Border.all(color: cardBorder),
-    ),
-    child: Wrap(
-      spacing: 8,
-      runSpacing: 8,
-      children: [
-        // Box 1 — target/practice language phrase (tappable to send)
-        InkWell(
-          onTap: () => _send(text),
+    final cardBg = AppTheme.getCardBackground(context);
+    final cardBorder = AppTheme.getCardBorder(context);
+    final inputBg = AppTheme.getInputBackground(context);
+    final primaryText = AppTheme.getPrimaryText(context);
+    final subText = AppTheme.getSecondaryText(context);
+
+    final phraseBox = InkWell(
+      onTap: () => _send(text),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: inputBg,
           borderRadius: BorderRadius.circular(12),
-          child: Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.sizeOf(context).width * .43,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: inputBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: cardBorder),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.edit_outlined, color: violet, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    text,
-                    style: TextStyle(
-                      color: primaryText,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 13,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
+          border: Border.all(color: cardBorder),
         ),
-        // Box 2 — native-language pronunciation guide (read-only)
-        if (pronunciation.trim().isNotEmpty)
-          Container(
-            constraints: BoxConstraints(
-              maxWidth: MediaQuery.sizeOf(context).width * .43,
-            ),
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-            decoration: BoxDecoration(
-              color: inputBg,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: cardBorder),
-            ),
-            child: Row(
-              children: [
-                Icon(Icons.record_voice_over_outlined, color: subText, size: 18),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    pronunciation,
-                    style: TextStyle(
-                      color: subText,
-                      fontWeight: FontWeight.w500,
-                      fontSize: 13,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(Icons.edit_outlined, color: violet, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                text,
+                style: TextStyle(
+                  color: primaryText,
+                  fontWeight: FontWeight.w600,
+                  fontSize: 13,
                 ),
-              ],
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    final pronunciationBox = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      decoration: BoxDecoration(
+        color: inputBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: cardBorder),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Icon(Icons.record_voice_over_outlined, color: subText, size: 18),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              pronunciation.trim().isNotEmpty ? pronunciation : 'Pronunciation',
+              style: TextStyle(
+                color: subText,
+                fontWeight: FontWeight.w500,
+                fontSize: 13,
+              ),
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
             ),
           ),
-      ],
-    ),
-  );
-}
+        ],
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isWide = constraints.maxWidth >= 600;
+
+        return Container(
+          margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          padding: const EdgeInsets.all(8),
+          decoration: BoxDecoration(
+            color: cardBg,
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: cardBorder),
+          ),
+          child: isWide
+              ? Row(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Expanded(child: phraseBox),
+                    const SizedBox(width: 8),
+                    Expanded(child: pronunciationBox),
+                  ],
+                )
+              : Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    phraseBox,
+                    const SizedBox(height: 8),
+                    pronunciationBox,
+                  ],
+                ),
+        );
+      },
+    );
+  }
 
   Widget _practiceMcqPanel(bool isDark) {
     final mcq = _currentMcq;

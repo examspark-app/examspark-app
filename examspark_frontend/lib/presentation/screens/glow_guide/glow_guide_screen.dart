@@ -88,6 +88,7 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   String? _lastSubmittedKey;
   String? _sessionTitle;
   bool _restoring = false;
+  bool _customInputFlowOpen = false;
 
   @override
   void initState() {
@@ -224,7 +225,9 @@ final latest = sorted.first;
 
   void _showLanguageChoice() {
     if (!mounted) return;
+    if (_hasLoadedPreferredLanguage) return;
     setState(() {
+      _customInputFlowOpen = false;
       _hasLoadedPreferredLanguage = true;
       _messages.add(
         _GlowMessage(
@@ -251,7 +254,10 @@ final latest = sorted.first;
     if (trimmed.isEmpty) return;
     final lang = trimmed == 'Auto-detect' ? 'MATCH_QUESTION' : trimmed;
     _lastCustomLanguageLabel = trimmed == 'Auto-detect' ? null : trimmed;
-    setState(() => _preferredLanguage = lang);
+    setState(() {
+      _customInputFlowOpen = false;
+      _preferredLanguage = lang;
+    });
     await _savePreferredLanguage(lang);
     if (mounted) _showCategoryChoices();
   }
@@ -274,6 +280,7 @@ final latest = sorted.first;
   void _showCategoryChoices() {
     if (!mounted) return;
     setState(() {
+      _customInputFlowOpen = false;
       if (!_messages.any((message) => message.chips.isNotEmpty && !message.isLanguageChips)) {
         _messages.add(
           _GlowMessage(
@@ -294,6 +301,7 @@ final latest = sorted.first;
     final trimmed = label.trim();
     if (trimmed.isEmpty) return;
     _lastCustomCategoryLabel = trimmed;
+    setState(() => _customInputFlowOpen = false);
     final key = _categoryKeyForLabel(trimmed);
     if (key == null) {
       _continueAfterCategoryChoice(trimmed.toLowerCase(), trimmed);
@@ -525,13 +533,13 @@ final latest = sorted.first;
   Future<void> _selectConcern(String concern) async {
     if (_sending) return;
     if (concern == _typeOwnOption) {
-      _text.clear();
-      _focusTextInput();
+      setState(() => _customInputFlowOpen = true);
       return;
     }
+
+    setState(() => _customInputFlowOpen = false);
     _sessionTitle ??= _niceTitleFromConcern(concern);
     _text.text = concern;
-    _focusTextInput();
     await _send();
   }
 
@@ -1011,7 +1019,7 @@ final latest = sorted.first;
                     }).toList(),
                   ),
                 ],
-                if (message.hasCustomInput) ...[
+                if (message.hasCustomInput && _customInputFlowOpen) ...[
                   const SizedBox(height: 12),
                   _CustomTopicInput(
                     hint: message.isLanguageChips
@@ -1036,6 +1044,7 @@ final latest = sorted.first;
                       if (_sending || _sessionComplete || value.trim().isEmpty) {
                         return;
                       }
+                      setState(() => _customInputFlowOpen = false);
                       if (message.isLanguageChips) {
                         _selectLanguage(value);
                       } else if (message.isCategoryChips) {
@@ -1675,7 +1684,7 @@ class _PurpleTypingDotsState extends State<_PurpleTypingDots>
             padding: const EdgeInsets.symmetric(horizontal: 3),
             child: Opacity(
               opacity: 0.35 + (phase * 0.65),
-              child: const CircleAvatar(
+              child: CircleAvatar(
                 radius: 4,
                 backgroundColor: AppTheme.glowGuidePink,
               ),
