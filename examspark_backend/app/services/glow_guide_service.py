@@ -108,15 +108,36 @@ def _next_missing_field(ctx: dict, active_category: str | None, has_image_this_t
     return None
 
 def _title_for_session(active_category: str | None, context: dict, user_text: str) -> str:
-    if active_category:
-        return active_category.replace("_", " ").replace("-", " ").title()
     concern = (context.get("concern") or "").strip()
     if concern:
-        return (concern[:40] + "…") if len(concern) > 40 else concern
+        concern = (concern[:40] + "…") if len(concern) > 40 else concern
+        if active_category:
+            category = active_category.replace("_", " ").replace("-", " ").title()
+            return f"{category} · {concern}"
+        return concern
+    if active_category:
+        return active_category.replace("_", " ").replace("-", " ").title()
     text = (user_text or "").strip()
     if text:
         return (text[:40] + "…") if len(text) > 40 else text
     return "GlowGuide Chat"
+
+
+def rename_session(session_id: str, user_id: str, title: str) -> dict | None:
+    cleaned = (title or "").strip()[:120]
+    if not cleaned:
+        raise GlowGuideError("Title cannot be empty.", 400)
+    rows = (
+        get_supabase_admin()
+        .table("glow_guide_sessions")
+        .update({"title": cleaned, "updated_at": "now()"})
+        .eq("id", session_id)
+        .eq("user_id", user_id)
+        .select("id,title,updated_at")
+        .execute()
+        .data or []
+    )
+    return rows[0] if rows else None
 async def _call_gemini(messages: list[dict[str, Any]]) -> str:
     if not AIConfig.gemini_tts_configured():
         raise GlowGuideError("Gemini is not configured.", 500)

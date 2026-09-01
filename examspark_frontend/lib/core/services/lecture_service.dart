@@ -1027,6 +1027,23 @@ class LectureService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  Future<void> renameGlowGuideSession(String sessionId, String title) async {
+    final token = await _requireAccessToken();
+    final response = await http.patch(
+      Uri.parse(
+        '${AppConfig.resolvedApiBaseUrl}/api/v1/glow-guide/sessions/$sessionId',
+      ),
+      headers: {
+        'Authorization': 'Bearer $token',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({'title': title.trim()}),
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+  }
+
   /// Home AI Camera / Image → chat answer (not Study Workspace).
   /// Credits: [CreditCosts.homeAiVision] (10) server-side after SUCCESS.
   Future<Map<String, dynamic>> homeAiVision({
@@ -1772,7 +1789,26 @@ class LectureService {
     }
     final data = jsonDecode(response.body) as Map<String, dynamic>;
     final list = data['sessions'] as List? ?? [];
-    return list.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    final unique = <String, Map<String, dynamic>>{};
+    for (final entry in list) {
+      final session = Map<String, dynamic>.from(entry as Map);
+      final id = session['id']?.toString().trim() ?? '';
+      if (id.isNotEmpty) unique.putIfAbsent(id, () => session);
+    }
+    final sessions = unique.values.toList()
+      ..sort((a, b) {
+        final aPinned = a['pinned'] == true;
+        final bPinned = b['pinned'] == true;
+        if (aPinned != bPinned) return aPinned ? -1 : 1;
+        final aTime = DateTime.tryParse(a['updated_at']?.toString() ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final bTime = DateTime.tryParse(b['updated_at']?.toString() ?? '') ??
+            DateTime.fromMillisecondsSinceEpoch(0);
+        final byTime = bTime.compareTo(aTime);
+        if (byTime != 0) return byTime;
+        return (b['id']?.toString() ?? '').compareTo(a['id']?.toString() ?? '');
+      });
+    return sessions;
   }
 
   Future<void> homeAiPinSession(String sessionId, bool pinned) async {

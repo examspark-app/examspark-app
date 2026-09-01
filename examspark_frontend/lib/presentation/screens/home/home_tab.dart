@@ -1853,8 +1853,8 @@ trailing: [
                                 borderRadius: BorderRadius.circular(18),
                                 child: ConstrainedBox(
                                   constraints: const BoxConstraints(
-                                    maxWidth: 260,
-                                    maxHeight: 220,
+                                      maxWidth: 220,
+                                      maxHeight: 176,
                                   ),
                                   child: Image.memory(
                                     bubble.imageBytes!,
@@ -1869,15 +1869,18 @@ trailing: [
                         ],
                         if (bubble.imageUrl != null &&
                             bubble.imageUrl!.isNotEmpty) ...[
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(18),
-                            child: Image.network(
-                              bubble.imageUrl!,
-                              width: 260,
-                              height: 220,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) =>
-                                  const SizedBox.shrink(),
+                          GestureDetector(
+                            onTap: () => _showNetworkAttachedImage(bubble.imageUrl!),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(14),
+                              child: Image.network(
+                                bubble.imageUrl!,
+                                width: 220,
+                                height: 176,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) =>
+                                    const SizedBox.shrink(),
+                              ),
                             ),
                           ),
                           const SizedBox(height: 8),
@@ -2015,6 +2018,35 @@ trailing: [
                   style: const TextStyle(color: Colors.white70, fontSize: 12),
                 ),
               ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _showNetworkAttachedImage(String url) async {
+    await showDialog<void>(
+      context: context,
+      barrierColor: Colors.black87,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(12),
+        child: Stack(
+          children: [
+            InteractiveViewer(
+              minScale: 0.8,
+              maxScale: 5,
+              child: Image.network(url, fit: BoxFit.contain),
+            ),
+            Positioned(
+              top: 0,
+              right: 0,
+              child: IconButton(
+                tooltip: 'Close image',
+                onPressed: () => Navigator.pop(dialogContext),
+                icon: const Icon(Icons.close_rounded, color: Colors.white),
+              ),
+            ),
           ],
         ),
       ),

@@ -1,8 +1,10 @@
 import asyncio
 from collections.abc import AsyncIterator
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from app.services.auth_service import AuthenticatedUser, get_current_user
 from app.services.glow_guide_service import GlowGuideError, turn
@@ -137,22 +139,49 @@ async def restore_glow_guide_session(
     rows = db.table("glow_guide_sessions").select("*").eq("id", session_id).eq("user_id", user.user_id).limit(1).execute().data or []
     if not rows:
         raise HTTPException(status_code=404, detail="GlowGuide session not found.")
+    db.table("glow_guide_sessions").update(
+        {"updated_at": datetime.now(timezone.utc).isoformat()}
+    ).eq("id", session_id).eq("user_id", user.user_id).execute()
     messages = db.table("glow_guide_messages").select("id,role,message,image_path,created_at").eq("session_id", session_id).eq("user_id", user.user_id).order("created_at", desc=False).execute().data or []
     from app.services.r2_storage_service import R2StorageError, R2StorageService
+    r2 = R2StorageService()
     for message in messages:
         if message.get("image_path"):
             try:
-                message["image_url"] = R2StorageService().signed_url(str(message["image_path"]))
+                message["image_url"] = r2.signed_url(str(message["image_path"]))
             except R2StorageError:
                 message["image_url"] = None
-    session = rows[0]
+    session = {
+        **rows[0],
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
     return {
         "session_id": session_id,
         "category": session.get("category_type"),
+        "title": session.get("title"),
+        "updated_at": session.get("updated_at"),
         "status": session.get("status"),
         "exchange_count": session.get("exchange_count", 0),
         "messages": messages,
     }
+
+
+class RenameGlowGuideSessionRequest(BaseModel):
+    title: str = Field(..., min_length=1, max_length=120)
+
+
+@router.patch("/sessions/{session_id}")
+async def rename_glow_guide_session(
+    session_id: str,
+    body: RenameGlowGuideSessionRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    from app.services import glow_guide_service
+
+    result = glow_guide_service.rename_session(session_id, user.user_id, body.title)
+    if result is None:
+        raise HTTPException(status_code=404, detail="GlowGuide session not found.")
+    return result
 
 
 @router.get("/sessions")
@@ -164,5 +193,10 @@ async def list_glow_guide_sessions(
     db = get_supabase_admin()
     sessions = db.table("glow_guide_sessions").select(
         "id,title,category_type,status,created_at,updated_at"
-    ).eq("user_id", user.user_id).order("updated_at", desc=True).limit(50).execute().data or []
-    return {"sessions": sessions}
+    ).eq("user_id", user.user_id).order("updated_at", desc=True).order("id", desc=True).limit(50).execute().data or []
+    unique: dict[str, dict] = {}
+    for session in sessions:
+        session_id = str(session.get("id") or "").strip()
+        if session_id and session_id not in unique:
+            unique[session_id] = session
+    return {"sessions": list(unique.values())}

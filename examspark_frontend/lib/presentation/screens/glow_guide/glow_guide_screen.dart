@@ -8,11 +8,13 @@ import 'package:examspark_frontend/core/network/supabase_client.dart'
 import 'package:examspark_frontend/core/services/feature_analytics_tracker.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/presentation/screens/glow_guide/glow_guide_history_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
 class GlowGuideScreen extends StatefulWidget {
-  const GlowGuideScreen({super.key, this.startFresh = false});
+  const GlowGuideScreen({super.key, this.startFresh = false, this.sessionId});
 
   final bool startFresh;
+  final String? sessionId;
 
   @override
   State<GlowGuideScreen> createState() => _GlowGuideScreenState();
@@ -90,12 +92,47 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   @override
   void initState() {
     super.initState();
-        _analyticsSessionKey =
+    _analyticsSessionKey =
         FeatureAnalyticsTracker.instance.startFeature('glowguide');
-    if (widget.startFresh) {
+    if (widget.sessionId != null && widget.sessionId!.isNotEmpty) {
+      _restoreSessionById(widget.sessionId!);
+    } else if (widget.startFresh) {
       _showLanguageChoice();
     } else {
       _openLatestOrFresh();
+    }
+  }
+
+  Future<void> _restoreSessionById(String sessionId) async {
+    try {
+      final restored = await LectureService.instance.restoreGlowGuideSession(sessionId);
+      if (!mounted) return;
+      final restoredMessages = (restored['messages'] as List? ?? const [])
+          .whereType<Map>()
+          .map((message) => _GlowMessage(
+                message['message']?.toString() ?? '',
+                message['role'] == 'user',
+                imageUrl: message['image_url']?.toString(),
+              ))
+          .toList();
+      setState(() {
+        _restoring = false;
+        _sessionId = sessionId;
+        _category = restored['category'] as String?;
+        final title = restored['title']?.toString().trim() ?? '';
+        _sessionTitle = title.isEmpty ? _deriveTitleFromMessages(restoredMessages) : title;
+        _sessionComplete = restored['status'] == 'archived' ||
+            (restored['exchange_count'] as num? ?? 0) >= 100;
+        _hasLoadedPreferredLanguage = true;
+        _messages..clear()..addAll(restoredMessages);
+      });
+      _scrollToBottom();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _restoring = false;
+        _messages.add(_GlowMessage('Could not open this chat. Please try again.', false));
+      });
     }
   }
 
@@ -409,6 +446,14 @@ final latest = sorted.first;
   Future<void> _previewPhoto() async {
     final bytes = _attachment;
     if (bytes == null) return;
+    await _showImagePreview(Image.memory(bytes, fit: BoxFit.contain));
+  }
+
+  Future<void> _previewNetworkPhoto(String url) async {
+    await _showImagePreview(Image.network(url, fit: BoxFit.contain));
+  }
+
+  Future<void> _showImagePreview(Widget image) async {
     await showDialog<void>(
       context: context,
       barrierColor: Colors.black87,
@@ -417,7 +462,11 @@ final latest = sorted.first;
         insetPadding: const EdgeInsets.all(12),
         child: Stack(
           children: [
-            InteractiveViewer(child: Image.memory(bytes, fit: BoxFit.contain)),
+            InteractiveViewer(
+              minScale: 0.8,
+              maxScale: 5,
+              child: image,
+            ),
             Positioned(
               top: 0,
               right: 0,
@@ -632,64 +681,10 @@ final latest = sorted.first;
   }
 
   Future<void> _openHistory() async {
-    final sessions = await LectureService.instance.listGlowGuideSessions();
-    if (!mounted) return;
-    final selected = await showModalBottomSheet<String>(
-      context: context,
-      builder: (sheetContext) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const ListTile(title: Text('Skin Care AI History')),
-            for (final session in sessions)
-              ListTile(
-                leading: const Icon(Icons.eco_outlined),
-                title: Text(
-                  _deriveHistoryTitle(session),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text((session['updated_at'] as String?) ?? ''),
-                onTap: () =>
-                    Navigator.pop(sheetContext, session['id'] as String?),
-              ),
-          ],
-        ),
-      ),
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const GlowGuideHistoryScreen()),
     );
-    if (!mounted || selected == null) return;
-    final restored = await LectureService.instance.restoreGlowGuideSession(
-      selected,
-    );
-    if (!mounted) return;
-    final restoredMessages = (restored['messages'] as List? ?? const [])
-        .whereType<Map>()
-        .map(
-          (message) => _GlowMessage(
-            message['message']?.toString() ?? '',
-            message['role'] == 'user',
-            imageUrl: message['image_url']?.toString(),
-          ),
-        )
-        .toList();
-    final computedTitle =
-        (restored['title']?.toString().trim().isNotEmpty ?? false)
-            ? restored['title'].toString()
-            : _deriveTitleFromMessages(restoredMessages);
-    setState(() {
-      _sessionId = selected;
-      _category = restored['category'] as String?;
-      _sessionTitle = computedTitle;
-      _usedWebSearch = false;
-      _sessionComplete =
-          restored['status'] == 'archived' ||
-          (restored['exchange_count'] as num? ?? 0) >= 100;
-      _hasLoadedPreferredLanguage = true;
-      _messages
-        ..clear()
-        ..addAll(restoredMessages);
-    });
-    _scrollToBottom();
   }
 
   String _deriveHistoryTitle(Map session) {
@@ -823,26 +818,30 @@ final latest = sorted.first;
                     padding: const EdgeInsets.only(bottom: 8),
                     child: GestureDetector(
                       onTap: () {
-                        setState(() {
-                          _attachment = message.image;
-                          _attachmentName = message.imageName;
-                        });
-                        _previewPhoto();
+                        if (message.image != null) {
+                          setState(() {
+                            _attachment = message.image;
+                            _attachmentName = message.imageName;
+                          });
+                          _previewPhoto();
+                        } else if (message.imageUrl != null) {
+                          _previewNetworkPhoto(message.imageUrl!);
+                        }
                       },
                       child: ClipRRect(
                         borderRadius: BorderRadius.circular(14),
                         child: message.image != null
                             ? Image.memory(
                                 message.image!,
-                                width: 180,
-                                height: 140,
+                                width: 164,
+                                height: 124,
                                 fit: BoxFit.cover,
                               )
                             : (message.imageUrl != null
                                   ? Image.network(
                                       message.imageUrl!,
-                                      width: 180,
-                                      height: 140,
+                                      width: 164,
+                                      height: 124,
                                       fit: BoxFit.cover,
                                     )
                                   : const SizedBox.shrink()),
@@ -1079,7 +1078,7 @@ final latest = sorted.first;
                           _selectConcern(chip);
                         }
                       } else {
-                        _selectCategory(chip);
+                        _selectConcern(chip);
                       }
                     },
                   ),

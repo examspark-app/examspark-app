@@ -716,11 +716,17 @@ def list_sessions(user_id: str, limit: int = 30) -> list[dict]:
         .eq("user_id", user_id)
         .order("pinned", desc=True)
         .order("updated_at", desc=True)
+        .order("id", desc=True)
         .limit(limit)
         .execute()
         .data or []
     )
-    return list(rows)
+    unique_rows: dict[str, dict] = {}
+    for row in rows:
+        session_id = str(row.get("id") or "").strip()
+        if session_id and session_id not in unique_rows:
+            unique_rows[session_id] = row
+    return list(unique_rows.values())
 
 
 def latest_active_session(user_id: str) -> dict | None:
