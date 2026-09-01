@@ -100,7 +100,10 @@ def _next_missing_field(ctx: dict, active_category: str | None, has_image_this_t
         return "concern"
     if not ctx.get("age") and active_category == "baby":
         return "age"
-    if not ctx.get("skin_type") and active_category != "baby":
+    if active_category == "hair":
+        if not ctx.get("hair_type"):
+            return "hair_type"
+    elif not ctx.get("skin_type") and active_category != "baby":
         return "skin_type"
     if not ctx.get("season") and not ctx.get("weather"):
         return "season"
@@ -340,6 +343,7 @@ async def turn(
         "season",
         "weather",
         "skin_type",
+        "hair_type",
         "concern",
         "concern_details",
     ):

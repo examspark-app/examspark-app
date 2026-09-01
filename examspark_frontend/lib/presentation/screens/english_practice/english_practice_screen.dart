@@ -54,7 +54,7 @@ class _ChatProcessingIndicatorState extends State<_ChatProcessingIndicator>
 
   @override
   Widget build(BuildContext context) {
-    const color = Color(0xFF5137ED);
+    final color = AppTheme.babyPink;
     final subText = AppTheme.getSecondaryText(context);
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 4, 20, 14),
@@ -269,7 +269,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             false,
           ),
         );
-            _suggestions = (r['suggestions'] as List? ?? const [])
+            final suggestions = (r['suggestions'] as List? ?? const [])
           .whereType<Map>()
           .map((s) => {
                 'text': (s['text'] ?? '').toString(),
@@ -277,6 +277,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
               })
           .where((s) => s['text']!.trim().isNotEmpty)
           .toList();
+        if (suggestions.isNotEmpty && _suggestions.isEmpty) {
+          _suggestions = suggestions;
+        }
       final mcq = _PracticeMcq.fromJson(r['mcq']);
       if (mcq != null) _currentMcq = mcq;
       _loading = false;
@@ -535,7 +538,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             .where((item) => item['text']!.trim().isNotEmpty)
             .toList();
 
-        if (s.isNotEmpty) {
+        if (s.isNotEmpty && _suggestions.isEmpty) {
           _suggestions = s;
         }
 
@@ -754,7 +757,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                 })
             .where((item) => item['text']!.trim().isNotEmpty)
             .toList();
-        if (suggestions.isNotEmpty) _suggestions = suggestions;
+        if (suggestions.isNotEmpty && _suggestions.isEmpty) _suggestions = suggestions;
         final mcq = _PracticeMcq.fromJson(response['mcq']);
         _currentMcq = mcq;
         _mcqSelectedIndex = null;
@@ -1143,31 +1146,35 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       ),
     );
 
-    final pronunciationBox = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-      decoration: BoxDecoration(
-        color: inputBg,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: cardBorder),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.center,
-        children: [
-          Icon(Icons.record_voice_over_outlined, color: subText, size: 18),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              pronunciation.trim().isNotEmpty ? pronunciation : 'Pronunciation',
-              style: TextStyle(
-                color: subText,
-                fontWeight: FontWeight.w500,
-                fontSize: 13,
+    final pronunciationBox = InkWell(
+      onTap: () => _send(pronunciation.trim().isNotEmpty ? pronunciation : ''),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: inputBg,
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: cardBorder),
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Icon(Icons.record_voice_over_outlined, color: subText, size: 18),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                pronunciation.trim().isNotEmpty ? pronunciation : 'Pronunciation',
+                style: TextStyle(
+                  color: subText,
+                  fontWeight: FontWeight.w500,
+                  fontSize: 13,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
 

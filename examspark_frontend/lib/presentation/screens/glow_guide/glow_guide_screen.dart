@@ -1019,7 +1019,7 @@ final latest = sorted.first;
                     }).toList(),
                   ),
                 ],
-                if (message.hasCustomInput && _customInputFlowOpen) ...[
+                if (message.hasCustomInput) ...[
                   const SizedBox(height: 12),
                   _CustomTopicInput(
                     hint: message.isLanguageChips

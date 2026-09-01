@@ -208,7 +208,7 @@ class _CreditsHistoryScreenState extends State<CreditsHistoryScreen> {
               '$spentLabel Credits Used',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: AppTheme.getPrimaryText(context),
+                    color: AppTheme.babyPink,
                   ),
             ),
             const SizedBox(height: 4),
