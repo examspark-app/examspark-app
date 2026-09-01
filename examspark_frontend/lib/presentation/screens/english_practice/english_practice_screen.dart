@@ -794,11 +794,6 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
         _currentMcq = null;
         _messages.add(_Message('${response['transcript'] ?? ''}', true));
         final parsed = _extractSuggestionsFromText('${response['reply'] ?? ''}');
-        _messages.add(_Message(
-          parsed.cleanText,
-          false,
-          suggestions: suggestions.isNotEmpty ? suggestions : parsed.suggestions,
-        ));
         final suggestions = (response['suggestions'] as List? ?? const [])
             .whereType<Map>()
             .map((item) => {
@@ -807,7 +802,13 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                 })
             .where((item) => item['text']!.trim().isNotEmpty)
             .toList();
-        _suggestions = suggestions.isNotEmpty ? suggestions : parsed.suggestions;
+        final resolvedSuggestions = suggestions.isNotEmpty ? suggestions : parsed.suggestions;
+        _suggestions = resolvedSuggestions;
+        _messages.add(_Message(
+          parsed.cleanText,
+          false,
+          suggestions: resolvedSuggestions,
+        ));
         final mcq = _PracticeMcq.fromJson(response['mcq']);
         _currentMcq = mcq;
         _mcqSelectedIndex = null;
