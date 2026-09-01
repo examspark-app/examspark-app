@@ -618,7 +618,10 @@ final latest = sorted.first;
           const <String>[];
       setState(() {
         _sessionId = result['session_id'] as String? ?? _sessionId;
-        _category = result['category'] as String? ?? _category;
+        // Once the user picked a category via chips, lock it — never let
+        // the AI's own category guess (which can get confused by an age
+        // bracket like "Baby") silently override the user's explicit choice.
+        _category = _category ?? (result['category'] as String?);
         _messages.add(
           _GlowMessage(
             result['reply'] as String? ?? 'I need a little more detail.',
@@ -1034,36 +1037,43 @@ final latest = sorted.first;
                     }).toList(),
                   ),
                 ],
-                if (message.hasCustomInput) ...[
+                                if (message.hasCustomInput) ...[
                   const SizedBox(height: 12),
                   _CustomTopicInput(
                     hint: message.isLanguageChips
                         ? 'Or type your own language…'
-                        : 'Or type your own topic (e.g. hair care, kids dress)',
+                        : message.isCategoryChips
+                            ? 'Or type your own topic (e.g. hair care, kids dress)'
+                            : message.isAgeChips
+                                ? 'Or type your own age'
+                                : message.isSeasonChips
+                                    ? 'Or type your own season/weather'
+                                    : 'Type your own',
                     label: message.isLanguageChips
                         ? _lastCustomLanguageLabel
-                        : _lastCustomCategoryLabel,
+                        : message.isCategoryChips
+                            ? _lastCustomCategoryLabel
+                            : null,
                     onSaved: (value) {
                       if (_sending || _sessionComplete) return;
                       if (message.isLanguageChips) {
                         setState(() => _lastCustomLanguageLabel = value);
                       } else if (message.isCategoryChips) {
                         setState(() => _lastCustomCategoryLabel = value);
-                      } else if (message.isAgeChips) {
-                        _age = value;
-                      } else if (message.isSeasonChips) {
-                        _seasonWeather = value;
                       }
                     },
                     onSubmitted: (value) {
                       if (_sending || _sessionComplete || value.trim().isEmpty) {
                         return;
                       }
-                      setState(() => _customInputFlowOpen = false);
                       if (message.isLanguageChips) {
                         _selectLanguage(value);
                       } else if (message.isCategoryChips) {
                         _chooseTopCategory(value);
+                      } else if (message.isAgeChips) {
+                        _selectAge(value);
+                      } else if (message.isSeasonChips) {
+                        _selectSeasonWeather(value);
                       }
                     },
                   ),
