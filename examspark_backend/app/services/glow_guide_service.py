@@ -7,6 +7,7 @@ import json
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -130,7 +131,10 @@ def rename_session(session_id: str, user_id: str, title: str) -> dict | None:
     rows = (
         get_supabase_admin()
         .table("glow_guide_sessions")
-        .update({"title": cleaned, "updated_at": "now()"})
+        .update({
+            "title": cleaned,
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        })
         .eq("id", session_id)
         .eq("user_id", user_id)
         .select("id,title,updated_at")
@@ -348,7 +352,7 @@ async def turn(
         asked_questions.append(reply)
     next_context["asked_questions"] = asked_questions[-10:]  # last 10 rakho, list bloat na ho
     session_update: dict[str, Any] = {
-        "updated_at": "now()",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
         "exchange_count": new_exchange_count,
         "context_json": next_context,
     }
