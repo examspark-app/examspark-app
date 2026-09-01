@@ -15,6 +15,7 @@ import 'package:examspark_frontend/presentation/widgets/ai_model_selector.dart';
 import 'package:examspark_frontend/presentation/widgets/glow_guide_rotating_button.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:examspark_frontend/core/services/feature_analytics_tracker.dart';
 class _Message {
   const _Message(this.text, this.isUser, {this.imageUrl});
   final String text;
