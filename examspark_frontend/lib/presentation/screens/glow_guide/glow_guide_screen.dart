@@ -284,13 +284,13 @@ final latest = sorted.first;
       if (!_messages.any((message) => message.chips.isNotEmpty && !message.isLanguageChips)) {
         _messages.add(
           _GlowMessage(
-            'First, what do you need help with?\nPick a guide or type your own topic (e.g. hair care, kids dress).',
+            'First, what do you need help with?',
             false,
             chips: [
               ..._categories.map((item) => item.$1),
             ],
             isCategoryChips: true,
-            hasCustomInput: true,
+            hasCustomInput: false,
           ),
         );
       }
@@ -332,14 +332,7 @@ final latest = sorted.first;
         _GlowMessage(
           '${display ?? key} selected. Just so I can guide you accurately — is this for a male or female?',
           false,
-          chips: const [
-  'Baby',
-  'Child',
-  'Teen',
-  'Adult',
-  'Middle Age',
-  'Old Age',
-],
+          chips: const ['Male', 'Female'],
           isGenderChips: true,
         ),
       );
@@ -350,66 +343,75 @@ final latest = sorted.first;
   void _selectGender(String value) {
     final clean = value.trim();
     if (clean.isEmpty) return;
-    setState(() {
-      _gender = clean;
-      _messages.add(
-        _GlowMessage(
-          'Got it. What age should I consider for this guidance?',
-          false,
-          chips: const [
-            'Baby',
-            'Child',
-            'Teen',
-            'Adult',
-            'Middle Age',
-            'Old Age',
-          ],
-          isAgeChips: true,
-          hasCustomInput: true,
-        ),
-      );
-    });
-    _scrollToBottom();
+    setState(() => _gender = clean);
+    // Basic info collected — hand off to the AI for everything else.
+    // From here it's a fully open conversation: the AI decides what to ask
+    // (if anything), the user can send text or a photo at any time, and
+    // chips shown from now on are just optional quick-tap suggestions.
+    _sendSilentTurn('Gender: $clean.');
   }
 
-  void _selectAge(String value) {
-    final clean = value.trim();
-    if (clean.isEmpty) return;
-    setState(() {
-      _age = clean;
-      _messages.add(
-        _GlowMessage(
-          'What season or weather should I consider?',
-          false,
-          chips: const ['Winter', 'Summer', 'Monsoon', 'Humid', 'Dry'],
-          isSeasonChips: true,
-          hasCustomInput: true,
-        ),
-      );
-    });
+  /// Sends a turn to the backend without adding a visible user bubble —
+  /// used right after category selection so the AI's first reply is the
+  /// very next thing shown, tailored to this category from the start.
+  Future<void> _sendSilentTurn(String contextNote) async {
+    if (_sending || _sessionComplete) return;
+    _sending = true;
+    setState(() => _sending = true);
     _scrollToBottom();
-  }
-
-  void _selectSeasonWeather(String value) {
-    final clean = value.trim();
-    if (clean.isEmpty) return;
-    final concerns = [
-      ..._concernsByCategory[_category] ?? const <String>[],
-      _typeOwnOption,
-    ];
-    setState(() {
-      _seasonWeather = clean;
-      _messages.add(
-        _GlowMessage(
-          'Thanks. What would you like to check?',
-          false,
-          chips: concerns,
-          isConcernChips: true,
-          categoryHeaderChips: [for (final c in _categories) c.$1],
-        ),
+    try {
+      final result = await LectureService.instance.glowGuideTurnStream(
+        text: contextNote,
+        category: _category,
+        sessionId: _sessionId,
+        age: _gender,
+        weather: null,
+        imageBytes: null,
+        filename: null,
+        language: _preferredLanguage,
+        onStatus: (status) {
+          if (!mounted) return;
+          setState(() => _webSearchStatus = status);
+        },
       );
-    });
-    _scrollToBottom();
+      if (!mounted) return;
+      final options = (result['question_options'] as List?)
+              ?.map((item) => item.toString())
+              .where((item) => item.trim().isNotEmpty)
+              .toList() ??
+          const <String>[];
+      setState(() {
+        _sessionId = result['session_id'] as String? ?? _sessionId;
+        _category = _category ?? (result['category'] as String?);
+        _messages.add(
+          _GlowMessage(
+            result['reply'] as String? ?? 'What would you like to check?',
+            false,
+            chips: options,
+            isConcernChips: options.isNotEmpty,
+            hasCustomInput: true,
+            verdict: result['verdict'] as String?,
+            confidenceNote: result['confidence_note'] as String?,
+            detailedBreakdown: result['detailed_breakdown'] as String?,
+          ),
+        );
+        _sending = false;
+        _sessionComplete = result['session_complete'] == true;
+      });
+      _scrollToBottom();
+    } catch (error) {
+      if (!mounted) return;
+      final detail = error.toString().replaceFirst('Exception: ', '');
+      setState(() {
+        _sending = false;
+        _messages.add(
+          _GlowMessage(
+            '${_prettyCategory(_category ?? "skin")} AI is unavailable right now. ($detail)',
+            false,
+          ),
+        );
+      });
+    }
   }
 
   @override
@@ -627,6 +629,8 @@ final latest = sorted.first;
             result['reply'] as String? ?? 'I need a little more detail.',
             false,
             chips: options,
+            isConcernChips: options.isNotEmpty,
+            hasCustomInput: true,
             verdict: result['verdict'] as String?,
             confidenceNote: result['confidence_note'] as String?,
             detailedBreakdown: result['detailed_breakdown'] as String?,
@@ -1044,11 +1048,7 @@ final latest = sorted.first;
                         ? 'Or type your own language…'
                         : message.isCategoryChips
                             ? 'Or type your own topic (e.g. hair care, kids dress)'
-                            : message.isAgeChips
-                                ? 'Or type your own age'
-                                : message.isSeasonChips
-                                    ? 'Or type your own season/weather'
-                                    : 'Type your own',
+                            : 'Or type your own answer',
                     label: message.isLanguageChips
                         ? _lastCustomLanguageLabel
                         : message.isCategoryChips
@@ -1070,10 +1070,11 @@ final latest = sorted.first;
                         _selectLanguage(value);
                       } else if (message.isCategoryChips) {
                         _chooseTopCategory(value);
-                      } else if (message.isAgeChips) {
-                        _selectAge(value);
-                      } else if (message.isSeasonChips) {
-                        _selectSeasonWeather(value);
+                      } else {
+                        // Any AI-generated question (gender, hair type,
+                        // season, concern, etc.) — send as a free-typed reply.
+                        _text.text = value;
+                        _send();
                       }
                     },
                   ),
@@ -1088,31 +1089,18 @@ final latest = sorted.first;
                     bg: chipBg,
                     onSelect: (chip) {
                       if (_sending || _sessionComplete) return;
-                      if (chip == _typeOwnOption) {
-                        _selectConcern(chip);
-                        return;
-                      }
                       if (message.isLanguageChips) {
                         _selectLanguage(chip);
                       } else if (message.isCategoryChips) {
                         _chooseTopCategory(chip);
                       } else if (message.isGenderChips) {
                         _selectGender(chip);
-                      } else if (message.isAgeChips) {
-                        _selectAge(chip);
-                      } else if (message.isSeasonChips) {
-                        _selectSeasonWeather(chip);
-                      } else if (message.isConcernChips) {
-                        final isCatHeader = _categories.any(
-                          (c) => c.$1 == chip,
-                        );
-                        if (isCatHeader) {
-                          _chooseTopCategory(chip);
-                        } else {
-                          _selectConcern(chip);
-                        }
                       } else {
-                        _selectConcern(chip);
+                        // Everything from here on is a free-flow AI
+                        // conversation — a chip tap is just a quick way to
+                        // send that text as the user's own message.
+                        _text.text = chip;
+                        _send();
                       }
                     },
                   ),

@@ -43,6 +43,7 @@ def _synthesise_blocking(
     client = OpenAI(
         base_url="https://api.fish.audio/compat/v1",
         api_key=AIConfig.FISH_AUDIO_API_KEY,
+        timeout=15.0,
     )
     try:
         response = client.audio.speech.create(

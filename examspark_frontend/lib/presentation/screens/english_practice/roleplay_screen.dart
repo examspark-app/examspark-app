@@ -326,12 +326,12 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                               runSpacing: 10,
                               children: [
                                 _premiumChip(
-                                  label: 'Fish Voice',
-                                  icon: Icons.waves_rounded,
-                                  selected: selectedProvider == 'fish',
+                                  label: 'Gemini Voice',
+                                  icon: Icons.auto_awesome_rounded,
+                                  selected: selectedProvider == 'gemini',
                                   onTap: () => setSheetState(() {
-                                    selectedProvider = 'fish';
-                                    selectedVoiceKey = 'female';
+                                    selectedProvider = 'gemini';
+                                    selectedVoiceKey = 'warm';
                                   }),
                                 ),
                                 _premiumChip(
@@ -344,12 +344,12 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                                   }),
                                 ),
                                 _premiumChip(
-                                  label: 'Gemini Voice',
-                                  icon: Icons.auto_awesome_rounded,
-                                  selected: selectedProvider == 'gemini',
+                                  label: 'Fish Voice',
+                                  icon: Icons.waves_rounded,
+                                  selected: selectedProvider == 'fish',
                                   onTap: () => setSheetState(() {
-                                    selectedProvider = 'gemini';
-                                    selectedVoiceKey = 'warm';
+                                    selectedProvider = 'fish';
+                                    selectedVoiceKey = 'female';
                                   }),
                                 ),
                               ],

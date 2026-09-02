@@ -51,7 +51,7 @@ _VOICE_IDS: Final[dict[str, dict[str, str]]] = {
         "male": "",
     },
 }
-_DEFAULT_PROVIDER = "fish"
+_DEFAULT_PROVIDER = "gemini"
 _DEFAULT_VOICE_KEY = "female"
 _DEFAULT_LANGUAGE = "English"
 SUPPORTED_ROLEPLAY_LANGUAGES = frozenset({
@@ -171,7 +171,7 @@ async def synthesize_for_user(user_id: str, text: str) -> tuple[bytes, str]:
     # to Gemini, so Fish was never attempted.
     providers = [provider] + [
         candidate
-        for candidate in ("fish", "qwen", "gemini")
+        for candidate in ("qwen", "gemini", "fish")
         if candidate != provider and _provider_configured(candidate)
     ]
 
