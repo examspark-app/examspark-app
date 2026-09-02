@@ -30,8 +30,14 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   ];
 
   static const _typeOwnOption = 'Something else — I\'ll type it';
+  static const _defaultLanguageOption = 'English (Default)';
+static const _autoDetectLanguageOption = 'Auto-detect';
+static const _manualLanguageOption = 'Manual entry';
+
+
 
   static const _concernsByCategory = {
+    
     'skin': [
       'Acne / pimples',
       'Dark spots',
@@ -114,6 +120,23 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
                 message['message']?.toString() ?? '',
                 message['role'] == 'user',
                 imageUrl: message['image_url']?.toString(),
+                chips: (message['question_options'] as List?)
+                        ?.map((c) => c.toString())
+                        .where((c) => c.trim().isNotEmpty)
+                        .toList() ??
+                    const [],
+                isConcernChips: ((message['question_options'] as List?)
+                        ?.isNotEmpty ??
+                    false),
+                hasCustomInput: true,
+                verdict: message['verdict']?.toString(),
+                confidenceNote: message['confidence_note']?.toString(),
+                detailedBreakdown: message['detailed_breakdown']?.toString(),
+                sources: (message['sources'] as List?)
+                        ?.whereType<Map>()
+                        .map((e) => Map<String, dynamic>.from(e))
+                        .toList() ??
+                    const [],
               ))
           .toList();
       setState(() {
@@ -234,13 +257,12 @@ final latest = sorted.first;
           'Which language would you like to chat in?\nPick a preset below, or type your own (हिन्दी, বাংলা, anything).',
           false,
           chips: const [
-            'Auto-detect',
-            'English',
-            'Hindi',
-            'Bengali',
-          ],
-          isLanguageChips: true,
-          hasCustomInput: true,
+  _defaultLanguageOption,
+  _autoDetectLanguageOption,
+  _manualLanguageOption,
+],
+isLanguageChips: true,
+hasCustomInput: true,
         ),
       );
     });
@@ -249,19 +271,62 @@ final latest = sorted.first;
   String? _lastCustomLanguageLabel;
 
   Future<void> _selectLanguage(String label) async {
-    if (_sending) return;
-    final trimmed = label.trim();
-    if (trimmed.isEmpty) return;
-    final lang = trimmed == 'Auto-detect' ? 'MATCH_QUESTION' : trimmed;
-    _lastCustomLanguageLabel = trimmed == 'Auto-detect' ? null : trimmed;
+  if (_sending) return;
+
+  final trimmed = label.trim();
+  if (trimmed.isEmpty) return;
+
+  // First-screen manual option only opens the custom language input.
+  if (trimmed == _manualLanguageOption) {
     setState(() {
-      _customInputFlowOpen = false;
-      _preferredLanguage = lang;
+      _customInputFlowOpen = true;
     });
-    await _savePreferredLanguage(lang);
-    if (mounted) _showCategoryChoices();
+    return;
   }
 
+  final lang = _canonicalFirstLanguage(trimmed);
+
+  _lastCustomLanguageLabel =
+      trimmed == _autoDetectLanguageOption ? null : trimmed;
+
+  setState(() {
+    _customInputFlowOpen = false;
+    _preferredLanguage = lang;
+  });
+
+  await _savePreferredLanguage(lang);
+
+  if (mounted) {
+    _showCategoryChoices();
+  }
+}
+
+String _canonicalFirstLanguage(String label) {
+  final value = label.trim().toLowerCase();
+
+  switch (value) {
+    case 'english':
+    case 'english (default)':
+      return 'ENGLISH';
+
+    case 'auto-detect':
+    case 'auto detect':
+      return 'MATCH_QUESTION';
+
+    case 'hindi':
+      return 'HINDI';
+
+    case 'bengali':
+      return 'BENGALI';
+
+    case 'hinglish':
+      return 'HINGLISH';
+
+    default:
+      // Manual language entry.
+      return label.trim();
+  }
+}
   Future<void> _savePreferredLanguage(String value) async {
     final clean = value.trim();
     if (clean.isEmpty) return;
@@ -1041,9 +1106,11 @@ final latest = sorted.first;
                     }).toList(),
                   ),
                 ],
-                                if (message.hasCustomInput) ...[
-                  const SizedBox(height: 12),
-                  _CustomTopicInput(
+
+                if (message.hasCustomInput &&
+    (!message.isLanguageChips || _customInputFlowOpen)) ...[
+  const SizedBox(height: 12),
+  _CustomTopicInput(
                     hint: message.isLanguageChips
                         ? 'Or type your own language…'
                         : message.isCategoryChips
@@ -1071,8 +1138,6 @@ final latest = sorted.first;
                       } else if (message.isCategoryChips) {
                         _chooseTopCategory(value);
                       } else {
-                        // Any AI-generated question (gender, hair type,
-                        // season, concern, etc.) — send as a free-typed reply.
                         _text.text = value;
                         _send();
                       }
@@ -1095,6 +1160,8 @@ final latest = sorted.first;
                         _chooseTopCategory(chip);
                       } else if (message.isGenderChips) {
                         _selectGender(chip);
+                        } else if (chip == _typeOwnOption) {           // 👈 naya check
+                        setState(() => _customInputFlowOpen = true);
                       } else {
                         // Everything from here on is a free-flow AI
                         // conversation — a chip tap is just a quick way to
@@ -1395,15 +1462,11 @@ final latest = sorted.first;
                                 width: 0.8,
                               ),
                             ),
-                            child: _webSearchStatus == 'searching'
-                                ? _WebSearchBubble()
-                                : _processingPhoto
-                                ? _PhotoAnalyzingBubble(
-                                    image: _messages.isNotEmpty
-                                        ? _messages.last.image
-                                        : null,
-                                  )
-                                : const _PurpleTypingDots(),
+                            child: _GlowThinkingBubble(
+  status: _webSearchStatus,
+  processingPhoto: _processingPhoto,
+  image: _messages.isNotEmpty ? _messages.last.image : null,
+),
                           ),
                         ),
                       );
@@ -1659,115 +1722,149 @@ class _DetailedBreakdownExpanderState
   }
 }
 
-class _PurpleTypingDots extends StatefulWidget {
-  const _PurpleTypingDots();
+class _GlowThinkingBubble extends StatefulWidget {
+  const _GlowThinkingBubble({
+    required this.status,
+    required this.processingPhoto,
+    this.image,
+  });
 
-  @override
-  State<_PurpleTypingDots> createState() => _PurpleTypingDotsState();
-}
-
-class _PurpleTypingDotsState extends State<_PurpleTypingDots>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (_, _) => Row(
-        mainAxisSize: MainAxisSize.min,
-        children: List.generate(3, (index) {
-          final phase = ((_controller.value * 3) - index).clamp(0.0, 1.0);
-          return Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 3),
-            child: Opacity(
-              opacity: 0.35 + (phase * 0.65),
-              child: CircleAvatar(
-                radius: 4,
-                backgroundColor: AppTheme.glowGuidePink,
-              ),
-            ),
-          );
-        }),
-      ),
-    );
-  }
-}
-
-class _PhotoAnalyzingBubble extends StatefulWidget {
-  const _PhotoAnalyzingBubble({required this.image});
-
+  final String? status;
+  final bool processingPhoto;
   final Uint8List? image;
 
   @override
-  State<_PhotoAnalyzingBubble> createState() => _PhotoAnalyzingBubbleState();
+  State<_GlowThinkingBubble> createState() => _GlowThinkingBubbleState();
 }
 
-class _PhotoAnalyzingBubbleState extends State<_PhotoAnalyzingBubble>
+class _GlowThinkingBubbleState extends State<_GlowThinkingBubble>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
+  Timer? _timer;
+
+  int _index = 0;
+
+  static const List<String> _normalStages = [
+    'Thinking about your question…',
+    'Understanding what you need…',
+    'Checking relevant details…',
+    'Reviewing the information…',
+    'Preparing your answer…',
+  ];
+
+  static const List<String> _photoStages = [
+    'Looking at your photo…',
+    'Analyzing the details…',
+    'Checking what I can identify…',
+    'Reviewing the findings…',
+    'Preparing your answer…',
+  ];
 
   @override
   void initState() {
     super.initState();
+
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1400),
-    )..repeat();
+      duration: const Duration(milliseconds: 900),
+    )..repeat(reverse: true);
+
+    _timer = Timer.periodic(
+      const Duration(milliseconds: 1500),
+      (_) {
+        if (!mounted) return;
+
+        final stages =
+            widget.processingPhoto ? _photoStages : _normalStages;
+
+        setState(() {
+          _index = (_index + 1) % stages.length;
+        });
+      },
+    );
   }
 
   @override
   void dispose() {
+    _timer?.cancel();
     _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    if (widget.image == null) return const _PurpleTypingDots();
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (_, _) => SizedBox(
-        width: 120,
-        height: 92,
-        child: Stack(
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(12),
-              child: Image.memory(
-                widget.image!,
-                fit: BoxFit.cover,
-                width: 120,
-                height: 92,
+    final isDark =
+        Theme.of(context).brightness == Brightness.dark;
+
+    final textColor =
+        isDark ? Colors.white : const Color(0xFF20182B);
+
+    final accentColor = AppTheme.glowGuidePink;
+
+    final stages =
+        widget.processingPhoto ? _photoStages : _normalStages;
+
+    final String label =
+        widget.status == 'searching'
+            ? 'Researching trusted sources…'
+            : stages[_index];
+
+    return FadeTransition(
+      opacity: Tween<double>(
+        begin: 0.60,
+        end: 1.0,
+      ).animate(_controller),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          SizedBox(
+            width: 18,
+            height: 18,
+            child: CircularProgressIndicator(
+              strokeWidth: 2.2,
+              valueColor: AlwaysStoppedAnimation<Color>(
+                accentColor,
               ),
             ),
-            Positioned(
-              top: _controller.value * 88,
-              left: 0,
-              right: 0,
-              child: Container(height: 3, color: AppTheme.glowGuidePink),
+          ),
+          const SizedBox(width: 10),
+          Flexible(
+            child: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 350),
+              transitionBuilder: (child, animation) {
+                return FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.15),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                );
+              },
+              child: Text(
+                label,
+                key: ValueKey(label),
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 }
+
+
+
+  
+
+
 
 class _PreviewAction extends StatelessWidget {
   const _PreviewAction({

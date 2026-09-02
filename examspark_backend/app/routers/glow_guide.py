@@ -142,7 +142,9 @@ async def restore_glow_guide_session(
     db.table("glow_guide_sessions").update(
         {"updated_at": datetime.now(timezone.utc).isoformat()}
     ).eq("id", session_id).eq("user_id", user.user_id).execute()
-    messages = db.table("glow_guide_messages").select("id,role,message,image_path,created_at").eq("session_id", session_id).eq("user_id", user.user_id).order("created_at", desc=False).execute().data or []
+    messages = db.table("glow_guide_messages").select(
+    "id,role,message,image_path,created_at,question_options,verdict,confidence_note,detailed_breakdown,sources"
+).eq("session_id", session_id).eq("user_id", user.user_id).order("created_at", desc=False).execute().data or []
     from app.services.r2_storage_service import R2StorageError, R2StorageService
     r2 = R2StorageService()
     for message in messages:

@@ -332,8 +332,25 @@ async def turn(
         )
         R2StorageService().upload_bytes(image_path, image, _mime(filename))
     db.table("glow_guide_messages").insert([
-    {"session_id": session_id, "user_id": user_id, "role": "user", "message": text or "", "image_path": image_path},
-    {"session_id": session_id, "user_id": user_id, "role": "assistant", "message": reply}]).execute()
+    {
+        "session_id": session_id,
+        "user_id": user_id,
+        "role": "user",
+        "message": text or "",
+        "image_path": image_path,
+    },
+    {
+        "session_id": session_id,
+        "user_id": user_id,
+        "role": "assistant",
+        "message": reply,
+        "question_options": parsed.get("question_options") or [],
+        "verdict": parsed.get("verdict"),
+        "confidence_note": parsed.get("confidence_note") or "",
+        "detailed_breakdown": parsed.get("detailed_breakdown"),
+        "sources": research.get("sources", []) if research else [],
+    },
+]).execute()
     new_exchange_count = exchange_count + 1
     next_context = dict(context) if isinstance(context, dict) else {}
     for key in (
