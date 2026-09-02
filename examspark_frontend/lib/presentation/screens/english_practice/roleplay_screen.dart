@@ -1972,32 +1972,67 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   Future<void> _playJsonTurn(Uint8List bytes, String turnSessionId) async {
     if (mounted)
       setState(() => state = RoleplayVoiceState.generatingAiResponse);
-    final result = await LectureService.instance.sendEnglishRoleplayAudio(
-      sessionId: turnSessionId,
-      audioBytes: bytes,
-      filename: 'roleplay_turn.m4a',
-    );
-    final reply = (result['reply'] as String? ?? '').trim();
-    final encoded = result['audio_base64'] as String?;
-    if (reply.isEmpty) throw StateError('AI response text was empty.');
-    if (encoded == null || encoded.isEmpty) {
-      throw StateError('AI response voice was not generated.');
+
+    final playlist = ConcatenatingAudioSource(children: const []);
+    var started = false;
+    Map<String, dynamic>? done;
+
+    try {
+      done = await LectureService.instance.streamEnglishRoleplayAudio(
+        sessionId: turnSessionId,
+        audioBytes: bytes,
+        filename: 'roleplay_turn.m4a',
+        onAudioChunk: (chunk) async {
+          if (_leaving || _stopping || sessionId != turnSessionId) return;
+          final b64 = chunk['audio_base64'] as String?;
+          if (b64 == null || b64.isEmpty) return;
+          final audio = base64Decode(b64);
+          final mime = chunk['audio_mime_type'] as String? ?? 'audio/mpeg';
+          await playlist.add(
+            AudioSource.uri(UriData.fromBytes(audio, mimeType: mime).uri),
+          );
+          if (!started) {
+            started = true;
+            await _player.setAudioSource(playlist);
+            if (mounted) setState(() => state = RoleplayVoiceState.aiSpeaking);
+            pulse.repeat(reverse: true);
+            unawaited(_player.play());
+          }
+        },
+      );
+    } on RoleplayStreamException catch (error) {
+      if (!error.canFallback) rethrow;
+      // No audio played yet — safe to fall back to the old blocking call.
+      final result = await LectureService.instance.sendEnglishRoleplayAudio(
+        sessionId: turnSessionId,
+        audioBytes: bytes,
+        filename: 'roleplay_turn.m4a',
+      );
+      final reply = (result['reply'] as String? ?? '').trim();
+      final encoded = result['audio_base64'] as String?;
+      if (reply.isEmpty) throw StateError('AI response text was empty.');
+      if (encoded == null || encoded.isEmpty) {
+        throw StateError('AI response voice was not generated.');
+      }
+      final audio = base64Decode(encoded);
+      if (mounted) setState(() => _openingReply = reply);
+      await _loadPlayableAudio(
+        audio,
+        result['audio_mime_type'] as String? ?? 'audio/mpeg',
+      );
+      if (_leaving || _stopping || sessionId != turnSessionId) return;
+      if (mounted) setState(() => state = RoleplayVoiceState.aiSpeaking);
+      pulse.repeat(reverse: true);
+      await _player.play();
+      await _player.processingStateStream.firstWhere(
+        (processingState) => processingState == ProcessingState.completed,
+      );
+      return;
     }
-    final audio = base64Decode(encoded);
-    if (mounted) {
-      setState(() {
-        _openingReply = reply;
-        state = RoleplayVoiceState.showingOpeningText;
-      });
-    }
-    await _loadPlayableAudio(
-      audio,
-      result['audio_mime_type'] as String? ?? 'audio/mpeg',
-    );
+
+    final reply = (done['reply'] as String? ?? '').trim();
+    if (mounted && reply.isNotEmpty) setState(() => _openingReply = reply);
     if (_leaving || _stopping || sessionId != turnSessionId) return;
-    if (mounted) setState(() => state = RoleplayVoiceState.aiSpeaking);
-    pulse.repeat(reverse: true);
-    await _player.play();
     await _player.processingStateStream.firstWhere(
       (processingState) => processingState == ProcessingState.completed,
     );
