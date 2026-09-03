@@ -18,8 +18,6 @@ class AiAssistantMessage extends StatefulWidget {
   final Widget? trailing;
   final Map<String, dynamic>? visualPayload;
 
-  /// Called with the selected text when the user taps "Ask AI" from the
-  /// text-selection toolbar.
   final Future<void> Function(String actionId, String selectedText)? onSelectAi;
 
   const AiAssistantMessage({
@@ -69,9 +67,6 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
     return !VisualPayloadData.fromJson(raw).isEmpty;
   }
 
-  /// ChatGPT / Claude style markdown look — clean headings, spaced
-  /// paragraphs, readable bullets, subtle bold, and a distinct code block
-  /// background so formulas/code never blend into normal prose.
   MarkdownStyleSheet _markdownStyle(BuildContext context) {
     final primary = AppTheme.getPrimaryText(context);
     final secondary = AppTheme.getSecondaryText(context);
@@ -87,7 +82,6 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
         height: baseHeight,
         fontWeight: FontWeight.w400,
       ),
-      // Bigger, clearly separated section headings — like ChatGPT's "##".
       h1: TextStyle(
         color: primary,
         fontSize: 22,
@@ -121,7 +115,6 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
         fontSize: baseFontSize,
         height: baseHeight,
       ),
-      // Clean round bullets with breathing room — not cramped dashes.
       listBullet: TextStyle(
         color: primary,
         fontSize: baseFontSize,
@@ -130,7 +123,6 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
       listIndent: 20,
       listBulletPadding: const EdgeInsets.only(right: 8),
       blockSpacing: 10,
-      // Distinct code/formula styling so `E = mc²` never looks like prose.
       code: TextStyle(
         color: primary,
         fontSize: baseFontSize - 1,
@@ -149,7 +141,6 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
         ),
       ),
       codeblockPadding: const EdgeInsets.all(12),
-      // Table look for compact fact tables (revision sheets etc).
       tableHead: TextStyle(
         color: primary,
         fontWeight: FontWeight.w700,
@@ -191,10 +182,6 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
 
   @override
   Widget build(BuildContext context) {
-    // Standard chat-app reading typography — same body text size WhatsApp /
-    // Telegram / ChatGPT mobile use (15px), with a comfortable 1.5 line
-    // height for paragraphs and neutral letter-spacing (no artificial
-    // tightening/loosening).
     final textStyle = TextStyle(
       color: AppTheme.getPrimaryText(context),
       fontSize: 15,
@@ -220,15 +207,13 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
             },
             child: MarkdownBody(
               data: widget.text,
-              selectable: false, // SelectionArea already handles selection
+              selectable: false,
               styleSheet: _markdownStyle(context),
               softLineBreak: true,
             ),
           );
 
     final maxW = MediaQuery.sizeOf(context).width;
-    // Match ChatGPT Web's optimal reading width (~768px max for text blocks)
-    // while keeping comfortable margins on mobile devices.
     final cardMax = maxW < 768 ? maxW - 20 : 760.0;
     return Align(
       alignment: Alignment.centerLeft,
@@ -285,3 +270,12 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
               ),
             ],
             if (widget.trailing != null && _revealDone) ...[
+              const SizedBox(height: 16),
+              widget.trailing!,
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
