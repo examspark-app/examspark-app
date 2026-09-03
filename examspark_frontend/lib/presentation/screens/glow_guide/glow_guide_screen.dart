@@ -978,12 +978,48 @@ String _canonicalFirstLanguage(String label) {
                         )
                                             : Padding(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 4,
-                            vertical: 4,
+                            horizontal: 2,
+                            vertical: 6,
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
+                              Row(
+                                children: [
+                                  Container(
+                                    width: 22,
+                                    height: 22,
+                                    alignment: Alignment.center,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      gradient: LinearGradient(
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
+                                        colors: [
+                                          AppTheme.glowGuidePink,
+                                          AppTheme.glowGuidePink.withOpacity(0.75),
+                                        ],
+                                      ),
+                                    ),
+                                    child: const Icon(
+                                      Icons.eco_rounded,
+                                      size: 12,
+                                      color: Colors.white,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Sonaxia AI',
+                                    style: TextStyle(
+                                      color: subText,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      letterSpacing: 0.1,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 10),
                               if (message.verdict != null) ...[
                                 Row(
                                   children: [
@@ -1006,18 +1042,21 @@ String _canonicalFirstLanguage(String label) {
                                 ),
                                 const SizedBox(height: 8),
                               ],
-                              SelectionArea(
-                                child: MarkdownBody(
-                                  data: message.text,
-                                  selectable: false,
-                                  styleSheet: _markdownStyle(
-                                    context,
-                                    isDark
-                                        ? Colors.white
-                                        : const Color(0xFF1E1B2C),
-                                    isDark,
+                              Padding(
+                                padding: const EdgeInsets.only(left: 30),
+                                child: SelectionArea(
+                                  child: MarkdownBody(
+                                    data: message.text,
+                                    selectable: false,
+                                    styleSheet: _markdownStyle(
+                                      context,
+                                      isDark
+                                          ? Colors.white
+                                          : const Color(0xFF1E1B2C),
+                                      isDark,
+                                    ),
+                                    softLineBreak: true,
                                   ),
-                                  softLineBreak: true,
                                 ),
                               ),
                             ],
@@ -1409,33 +1448,8 @@ String _canonicalFirstLanguage(String label) {
           children: [
             if (!_hasLoadedPreferredLanguage) const SizedBox(height: 8),
             if (_restoring)
-              Expanded(
-                child: Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          valueColor: AlwaysStoppedAnimation<Color>(
-                            AppTheme.glowGuidePink,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        'Opening last chat…',
-                        style: TextStyle(
-                          color: subText,
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
+              const Expanded(
+                child: _GlowGuideLoader(),
               )
             else
               Expanded(
@@ -1444,29 +1458,18 @@ String _canonicalFirstLanguage(String label) {
                   padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
                   itemCount: _messages.length + (_sending ? 1 : 0),
                   itemBuilder: (context, index) {
-                                        if (_sending && index == _messages.length) {
+                    if (_sending && index == _messages.length) {
                       return Padding(
-                        padding: const EdgeInsets.only(bottom: 18),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 4,
+                          vertical: 14,
+                        ),
                         child: Align(
                           alignment: Alignment.centerLeft,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 16,
-                              vertical: 14,
-                            ),
-                            decoration: BoxDecoration(
-                              color: bubbleAi,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(
-                                color: bubbleAiBorder,
-                                width: 0.8,
-                              ),
-                            ),
-                            child: _GlowThinkingBubble(
-  status: _webSearchStatus,
-  processingPhoto: _processingPhoto,
-  image: _messages.isNotEmpty ? _messages.last.image : null,
-),
+                          child: _GlowThinkingBubble(
+                            status: _webSearchStatus,
+                            processingPhoto: _processingPhoto,
+                            image: _messages.isNotEmpty ? _messages.last.image : null,
                           ),
                         ),
                       );
@@ -2193,6 +2196,138 @@ class _NumberedOptionCard extends StatelessWidget {
             if (i != options.length - 1)
               Divider(height: 1, color: borderColor),
           ],
+        ],
+      ),
+    );
+  }
+}
+/// Small, centered loading animation shown while a saved chat restores.
+/// Confined to its own Expanded area — never covers the whole screen.
+class _GlowGuideLoader extends StatefulWidget {
+  const _GlowGuideLoader();
+
+  @override
+  State<_GlowGuideLoader> createState() => _GlowGuideLoaderState();
+}
+
+class _GlowGuideLoaderState extends State<_GlowGuideLoader>
+    with TickerProviderStateMixin {
+  static const _messages = [
+    'Opening last chat…',
+    'Bringing back your notes…',
+    'Almost there…',
+  ];
+
+  late final AnimationController _pulse;
+  late final AnimationController _textFade;
+  int _messageIndex = 0;
+  Timer? _messageTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1300),
+    )..repeat(reverse: true);
+    _textFade = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+      value: 1,
+    );
+    _messageTimer = Timer.periodic(const Duration(milliseconds: 1800), (_) {
+      if (!mounted) return;
+      _textFade.reverse().then((_) {
+        if (!mounted) return;
+        setState(() => _messageIndex = (_messageIndex + 1) % _messages.length);
+        _textFade.forward();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _messageTimer?.cancel();
+    _pulse.dispose();
+    _textFade.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final subText = AppTheme.getSecondaryText(context);
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedBuilder(
+            animation: _pulse,
+            builder: (context, child) {
+              final t = _pulse.value;
+              return SizedBox(
+                width: 52,
+                height: 52,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Transform.scale(
+                      scale: 1 + (t * 0.35),
+                      child: Container(
+                        width: 42,
+                        height: 42,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppTheme.glowGuidePink.withOpacity(0.18 * (1 - t)),
+                        ),
+                      ),
+                    ),
+                    Transform.scale(
+                      scale: 0.94 + (t * 0.06),
+                      child: Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              AppTheme.glowGuidePink,
+                              AppTheme.glowGuidePink.withOpacity(0.75),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppTheme.glowGuidePink.withOpacity(0.35),
+                              blurRadius: 14,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.face_retouching_natural_rounded,
+                          color: Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          FadeTransition(
+            opacity: _textFade,
+            child: Text(
+              _messages[_messageIndex],
+              style: TextStyle(
+                color: subText,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
         ],
       ),
     );

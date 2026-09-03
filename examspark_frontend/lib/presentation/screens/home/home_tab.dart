@@ -36,6 +36,7 @@ import 'package:examspark_frontend/presentation/screens/search/search_overlay_sc
 import 'package:examspark_frontend/presentation/widgets/youtube_link_dialog.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 import 'package:examspark_frontend/presentation/widgets/glow_guide_rotating_button.dart';
+import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_screen.dart';
 import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:examspark_frontend/core/services/feature_analytics_tracker.dart';
 import 'dart:convert';
@@ -181,6 +182,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   bool _restoredDisk = false;
   bool _notificationsSheetOpen = false;
   bool _showQuote = false;
+  bool _launcherDismissed = false;
   String? _replySelection;
   String _preferredLanguage = 'English';
   String? _dailyQuote;
@@ -1439,7 +1441,7 @@ $rawText
         showLogo: true,
         userName: _userName,
         leading: IconButton(
-          icon: const Icon(Icons.menu_rounded),
+          icon: const Icon(Icons.dehaze_rounded),
           tooltip: 'Menu',
           onPressed: widget.onOpenDrawer,
         ),
@@ -1452,19 +1454,7 @@ $rawText
         onNotificationTap: _openNotifications,
         notificationUnreadCount:
             NotificationInboxController.instance.unreadCount,
-trailing: [
-  SizedBox(
-    height: 28,
-    width: 100,
-    child: FittedBox(
-      fit: BoxFit.scaleDown,
-      alignment: Alignment.centerRight,
-      child: GlowGuideRotatingButton(
-        onTap: () => Navigator.pushNamed(context, '/glow-guide'),
-      ),
-    ),
-  ),
-],
+trailing: const [],
       ),
       body: Column(
         children: [
@@ -1509,6 +1499,20 @@ trailing: [
 
   Widget _buildWelcome(BuildContext context) {
     final name = _greetingName;
+    if (!_launcherDismissed) {
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(AppTheme.screenPadding),
+        child: Column(
+          children: [
+            const SizedBox(height: 12),
+            if (name.isNotEmpty) _buildGreetingBanner(context, name),
+            const SizedBox(height: 24),
+            _buildFeatureLauncher(context),
+            const SizedBox(height: 12),
+          ],
+        ),
+      );
+    }
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppTheme.screenPadding),
       child: Column(
@@ -1516,13 +1520,24 @@ trailing: [
           const SizedBox(height: 12),
           if (name.isNotEmpty) _buildGreetingBanner(context, name),
           const SizedBox(height: 24),
-          Text(
-            'Got a doubt? Ask away. 🧠',
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              fontSize: 19,
-              fontWeight: FontWeight.w700,
-            ),
-            textAlign: TextAlign.center,
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Got a doubt? Ask away.',
+                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                  fontSize: 19,
+                  fontWeight: FontWeight.w700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.psychology_alt_rounded,
+                color: AppTheme.accentColor,
+                size: 22,
+              ),
+            ],
           ),
           const SizedBox(height: 8),
           AnimatedSwitcher(
@@ -1551,6 +1566,41 @@ trailing: [
           const SizedBox(height: 28),
         ],
       ),
+    );
+  }
+
+  /// Home-page launcher — 3 feature cards shown before the user starts
+  /// chatting. Tapping "Study AI" reveals the normal chat welcome (below);
+  /// the other two navigate straight to their own screens.
+  Widget _buildFeatureLauncher(BuildContext context) {
+    return Column(
+      children: [
+        _FeatureLauncherCard(
+          icon: Icons.auto_awesome_rounded,
+          title: 'Study AI',
+          tagline: 'Learn. Solve. Score.',
+          onTap: () => setState(() => _launcherDismissed = true),
+        ),
+        const SizedBox(height: 12),
+        _FeatureLauncherCard(
+          icon: Icons.record_voice_over_rounded,
+          title: 'English Practice',
+          tagline: 'Speak. Practice. Grow.',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const EnglishPracticeScreen(),
+            ),
+          ),
+        ),
+        const SizedBox(height: 12),
+        _FeatureLauncherCard(
+          icon: Icons.eco_rounded,
+          title: 'GlowGuide',
+          tagline: 'Care. Simply. Better.',
+          onTap: () => Navigator.pushNamed(context, '/glow-guide'),
+        ),
+      ],
     );
   }
 
@@ -2708,120 +2758,109 @@ class _UploadOptionsSheet extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
-    final maxH = MediaQuery.sizeOf(context).height * 0.72;
     return Container(
-      constraints: BoxConstraints(maxHeight: maxH),
-      padding: EdgeInsets.fromLTRB(20, 16, 20, 12 + bottomInset),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 16 + bottomInset),
       decoration: BoxDecoration(
         color: Theme.of(context).scaffoldBackgroundColor,
         borderRadius: const BorderRadius.vertical(top: Radius.circular(20)),
       ),
-      child: SingleChildScrollView(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Center(
-              child: Container(
-                width: 36,
-                height: 4,
-                margin: const EdgeInsets.only(bottom: 14),
-                decoration: BoxDecoration(
-                  color: AppTheme.getCardBorder(context),
-                  borderRadius: BorderRadius.circular(99),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Center(
+            child: Container(
+              width: 36,
+              height: 4,
+              margin: const EdgeInsets.only(bottom: 16),
+              decoration: BoxDecoration(
+                color: AppTheme.getCardBorder(context),
+                borderRadius: BorderRadius.circular(99),
+              ),
+            ),
+          ),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+            children: [
+              _CircleOption(
+                icon: Icons.photo_camera_outlined,
+                label: 'Camera',
+                onTap: onHomeVisionCamera,
+              ),
+              _CircleOption(
+                icon: Icons.image_outlined,
+                label: 'Gallery',
+                onTap: onHomeVisionGallery,
+              ),
+              _CircleOption(
+                icon: Icons.picture_as_pdf_outlined,
+                label: 'PDF',
+                onTap: () => onOptionSelected('uploadDocument'),
+              ),
+              if (!hideAudioUpload)
+                _CircleOption(
+                  icon: audioLocked
+                      ? Icons.lock_outline_rounded
+                      : Icons.mic_outlined,
+                  label: 'Audio',
+                  onTap: audioLocked
+                      ? () => onAudioLocked?.call()
+                      : () => onOptionSelected('uploadAudio'),
                 ),
-              ),
-            ),
-            Text(
-              'Add content',
-              style: Theme.of(
-                context,
-              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 4),
-            Text(
-              'Camera & Image → Home AI answer · ${CreditCosts.homeAiVision} credits',
-              style: TextStyle(
-                fontSize: 12,
-                color: AppTheme.getSecondaryText(context),
-              ),
-            ),
-            const SizedBox(height: 10),
-            _homeOption(
-              context,
-              Icons.photo_camera_outlined,
-              'Camera',
-              'Take photo → Home AI explains',
-              onHomeVisionCamera,
-            ),
-            _homeOption(
-              context,
-              Icons.image_outlined,
-              'Upload Image',
-              'Pick photo/diagram → Home AI explains',
-              onHomeVisionGallery,
-            ),
-            const Divider(height: 16),
-            _option(
-              context,
-              Icons.picture_as_pdf_outlined,
-              'PDF Document',
-              'uploadDocument',
-              subtitle: 'Creates Notes in Study Workspace',
-            ),
-            if (!hideAudioUpload)
-              _option(
-                context,
-                Icons.mic_outlined,
-                'Audio File',
-                'uploadAudio',
-                locked: audioLocked,
-              ),
-          ],
-        ),
+            ],
+          ),
+        ],
       ),
     );
   }
+}
 
-  Widget _homeOption(
-    BuildContext context,
-    IconData icon,
-    String label,
-    String subtitle,
-    VoidCallback onTap,
-  ) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
-      dense: true,
-      leading: Icon(icon, color: AppTheme.getPrimaryText(context), size: 20),
-      title: Text(label, style: const TextStyle(fontSize: 15)),
+class _CircleOption extends StatelessWidget {
+  const _CircleOption({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
       onTap: onTap,
-    );
-  }
-
-  Widget _option(
-    BuildContext context,
-    IconData icon,
-    String label,
-    String inputMethod, {
-    bool locked = false,
-    String? subtitle,
-  }) {
-    return ListTile(
-      contentPadding: EdgeInsets.zero,
-      visualDensity: VisualDensity.compact,
-      dense: true,
-      leading: Icon(icon, color: AppTheme.getPrimaryText(context), size: 20),
-      title: Text(label, style: const TextStyle(fontSize: 15)),
-      trailing: locked ? const Icon(Icons.lock_outline, size: 18) : null,
-      onTap: () {
-        if (locked) {
-          onAudioLocked?.call();
-          return;
-        }
-        onOptionSelected(inputMethod);
-      },
+      borderRadius: BorderRadius.circular(16),
+      child: Padding(
+        padding: const EdgeInsets.all(6),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 52,
+              height: 52,
+              decoration: BoxDecoration(
+                color: AppTheme.getCardBackground(context),
+                shape: BoxShape.circle,
+                border: Border.all(color: AppTheme.getCardBorder(context)),
+              ),
+              child: Icon(
+                icon,
+                color: AppTheme.getPrimaryText(context),
+                size: 22,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.getPrimaryText(context),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -2866,36 +2905,47 @@ class _CollapsibleUserTextState extends State<_CollapsibleUserText> {
         )..layout(maxWidth: constraints.maxWidth - 32);
         final isOverflowing = tp.didExceedMaxLines;
 
-        return Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: BoxDecoration(
-            color: widget.bubbleColor,
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              SelectableText(
-                widget.text,
-                style: style,
-                maxLines: _expanded ? null : _collapsedLines,
+        // IntrinsicWidth makes the bubble HUG short text (pill shape, like
+        // Claude) instead of always stretching to the max allowed width.
+        // The ConstrainedBox still caps it at the available width so long
+        // text wraps into a wider paragraph box instead of growing tall
+        // and narrow.
+        return IntrinsicWidth(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: widget.bubbleColor,
+                borderRadius: BorderRadius.circular(18),
               ),
-              if (isOverflowing) ...[
-                const SizedBox(height: 4),
-                GestureDetector(
-                  onTap: () => setState(() => _expanded = !_expanded),
-                  child: Text(
-                    _expanded ? 'Show less' : 'Show more',
-                    style: TextStyle(
-                      color: widget.textColor.withValues(alpha: 0.75),
-                      fontSize: 13,
-                      fontWeight: FontWeight.w600,
-                      decoration: TextDecoration.underline,
-                    ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SelectableText(
+                    widget.text,
+                    style: style,
+                    maxLines: _expanded ? null : _collapsedLines,
                   ),
-                ),
-              ],
-            ],
+                  if (isOverflowing) ...[
+                    const SizedBox(height: 4),
+                    GestureDetector(
+                      onTap: () => setState(() => _expanded = !_expanded),
+                      child: Text(
+                        _expanded ? 'Show less' : 'Show more',
+                        style: TextStyle(
+                          color: widget.textColor.withValues(alpha: 0.75),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                          decoration: TextDecoration.underline,
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
           ),
         );
       },
@@ -3083,6 +3133,77 @@ class _PracticeQuestionBoxState extends State<_PracticeQuestionBox> {
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+class _FeatureLauncherCard extends StatelessWidget {
+  const _FeatureLauncherCard({
+    required this.icon,
+    required this.title,
+    required this.tagline,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String tagline;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppTheme.getCardBackground(context),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.getCardBorder(context)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AppTheme.accentColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: AppTheme.accentColor, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      tagline,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: AppTheme.getSecondaryText(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(
+                Icons.chevron_right_rounded,
+                color: AppTheme.getSecondaryText(context),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

@@ -39,7 +39,6 @@ class AiAssistantMessage extends StatefulWidget {
 
 class _AiAssistantMessageState extends State<AiAssistantMessage> {
   bool _revealDone = false;
-  String _selectedText = '';
   String? _pendingReply;
 
   @override
@@ -137,13 +136,13 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
         fontSize: baseFontSize - 1,
         fontFamily: 'monospace',
         backgroundColor: isDark
-            ? Colors.white.withOpacity(0.08)
-            : Colors.black.withOpacity(0.05),
+            ? Colors.white.withValues(alpha: 0.08)
+            : Colors.black.withValues(alpha: 0.05),
       ),
       codeblockDecoration: BoxDecoration(
         color: isDark
-            ? Colors.white.withOpacity(0.06)
-            : Colors.black.withOpacity(0.04),
+            ? Colors.white.withValues(alpha: 0.06)
+            : Colors.black.withValues(alpha: 0.04),
         borderRadius: BorderRadius.circular(10),
         border: Border.all(
           color: AppTheme.getCardBorder(context),
@@ -171,8 +170,8 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
       ),
       blockquoteDecoration: BoxDecoration(
         color: isDark
-            ? Colors.white.withOpacity(0.05)
-            : Colors.black.withOpacity(0.035),
+            ? Colors.white.withValues(alpha: 0.05)
+            : Colors.black.withValues(alpha: 0.035),
         borderRadius: BorderRadius.circular(8),
         border: Border(
           left: BorderSide(color: secondary, width: 3),
@@ -215,7 +214,6 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
               final text = (content?.plainText ?? '').trim();
               if (text.isNotEmpty && text != _pendingReply) {
                 setState(() {
-                  _selectedText = text;
                   _pendingReply = text;
                 });
               }
@@ -252,7 +250,6 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
                     final text = _pendingReply!;
                     setState(() {
                       _pendingReply = null;
-                      _selectedText = '';
                     });
                     final callback = widget.onSelectAi;
                     if (callback == null) return;
@@ -288,12 +285,3 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
               ),
             ],
             if (widget.trailing != null && _revealDone) ...[
-              const SizedBox(height: 16),
-              widget.trailing!,
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-}

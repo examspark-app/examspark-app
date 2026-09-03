@@ -1,7 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 
-/// Compact AI thinking bubble — small, black/white, no heavy orbit animation.
+/// Compact AI thinking bubble — book-scan animation, adaptive B/W cover.
 class AiThinkingBubble extends StatefulWidget {
   const AiThinkingBubble({super.key});
 
@@ -11,7 +11,7 @@ class AiThinkingBubble extends StatefulWidget {
 
 class _AiThinkingBubbleState extends State<AiThinkingBubble>
     with TickerProviderStateMixin {
-  late final AnimationController _pulse;
+  late final AnimationController _scan;
   late final AnimationController _bar;
   late final AnimationController _phrase;
 
@@ -28,10 +28,10 @@ class _AiThinkingBubbleState extends State<AiThinkingBubble>
   void initState() {
     super.initState();
 
-    _pulse = AnimationController(
+    _scan = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 900),
-    )..repeat(reverse: true);
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
 
     _bar = AnimationController(
       vsync: this,
@@ -57,7 +57,7 @@ class _AiThinkingBubbleState extends State<AiThinkingBubble>
 
   @override
   void dispose() {
-    _pulse.dispose();
+    _scan.dispose();
     _bar.dispose();
     _phrase.dispose();
     super.dispose();
@@ -71,9 +71,12 @@ class _AiThinkingBubbleState extends State<AiThinkingBubble>
     final card = AppTheme.getCardBackground(context);
     final primary = AppTheme.getPrimaryText(context);
 
-    // Black/white — dark on light bg, light on dark bg
-    final dotColor = isDark ? Colors.white70 : Colors.black54;
+    // Adaptive book cover — dark cover on light bg, light cover on dark bg.
+    final coverColor = isDark ? const Color(0xFFE8E6E1) : const Color(0xFF2C2C2A);
+    final pageColor = isDark ? const Color(0xFF1A1A1A) : const Color(0xFFFDFCFA);
+    final lineColor = isDark ? Colors.white24 : Colors.black26;
     final barColor = isDark ? Colors.white60 : Colors.black38;
+    final scanColor = AppTheme.accentColor;
 
     return Align(
       alignment: Alignment.centerLeft,
@@ -89,19 +92,18 @@ class _AiThinkingBubbleState extends State<AiThinkingBubble>
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // Three pulsing dots — replaces heavy orbit animation
-              AnimatedBuilder(
-                animation: _pulse,
-                builder: (context, _) {
-                  return _ThinkingDots(pulse: _pulse.value, color: dotColor);
-                },
+              _BookIcon(
+                scanAnimation: _scan,
+                coverColor: coverColor,
+                pageColor: pageColor,
+                lineColor: lineColor,
+                scanColor: scanColor,
               ),
               const SizedBox(width: 10),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Rotating phrase
                   AnimatedBuilder(
                     animation: _phrase,
                     builder: (context, _) {
@@ -128,7 +130,6 @@ class _AiThinkingBubbleState extends State<AiThinkingBubble>
                     },
                   ),
                   const SizedBox(height: 5),
-                  // Progress bar — neutral black/white
                   AnimatedBuilder(
                     animation: _bar,
                     builder: (context, _) {
@@ -167,32 +168,172 @@ class _AiThinkingBubbleState extends State<AiThinkingBubble>
   }
 }
 
-/// Three small staggered pulsing dots.
-class _ThinkingDots extends StatelessWidget {
-  final double pulse;
-  final Color color;
+/// Small realistic open-book icon with a moving scan line — mobile-sized (28px).
+class _BookIcon extends StatelessWidget {
+  final Animation<double> scanAnimation;
+  final Color coverColor;
+  final Color pageColor;
+  final Color lineColor;
+  final Color scanColor;
 
-  const _ThinkingDots({required this.pulse, required this.color});
+  const _BookIcon({
+    required this.scanAnimation,
+    required this.coverColor,
+    required this.pageColor,
+    required this.lineColor,
+    required this.scanColor,
+  });
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: List.generate(3, (i) {
-        final offset = ((pulse + i * 0.33) % 1.0).clamp(0.0, 1.0);
-        final size = 5.0 + offset * 2.5;
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: Container(
-            width: size,
-            height: size,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: color.withValues(alpha: 0.35 + offset * 0.55),
+    return SizedBox(
+      width: 28,
+      height: 28,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          CustomPaint(
+            size: const Size(28, 28),
+            painter: _BookPainter(
+              coverColor: coverColor,
+              pageColor: pageColor,
+              lineColor: lineColor,
             ),
           ),
-        );
-      }),
+          AnimatedBuilder(
+            animation: scanAnimation,
+            builder: (context, _) {
+              // 0 → 1 loop: fade in, move down, fade out.
+              final t = scanAnimation.value;
+              final opacity = t < 0.1
+                  ? t / 0.1
+                  : t > 0.9
+                      ? (1 - t) / 0.1
+                      : 1.0;
+              final top = 4 + (t * 16);
+              return Positioned(
+                left: 3,
+                right: 3,
+                top: top,
+                child: Opacity(
+                  opacity: opacity.clamp(0.0, 1.0),
+                  child: Container(
+                    height: 1.5,
+                    decoration: BoxDecoration(
+                      color: scanColor,
+                      borderRadius: BorderRadius.circular(2),
+                      boxShadow: [
+                        BoxShadow(
+                          color: scanColor.withValues(alpha: 0.6),
+                          blurRadius: 3,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
     );
+  }
+}
+
+class _BookPainter extends CustomPainter {
+  final Color coverColor;
+  final Color pageColor;
+  final Color lineColor;
+
+  _BookPainter({
+    required this.coverColor,
+    required this.pageColor,
+    required this.lineColor,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final w = size.width;
+    final h = size.height;
+    final coverPaint = Paint()..color = coverColor;
+    final pagePaint = Paint()..color = pageColor;
+    final linePaint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 0.6;
+    final spinePaint = Paint()
+      ..color = coverColor.withValues(alpha: 0.9)
+      ..strokeWidth = 1.2;
+
+    // Left cover (outer)
+    final leftCover = Path()
+      ..moveTo(w * 0.12, h * 0.20)
+      ..cubicTo(w * 0.12, h * 0.14, w * 0.17, h * 0.12, w * 0.21, h * 0.14)
+      ..lineTo(w * 0.46, h * 0.20)
+      ..lineTo(w * 0.46, h * 0.84)
+      ..lineTo(w * 0.21, h * 0.78)
+      ..cubicTo(w * 0.17, h * 0.76, w * 0.12, h * 0.74, w * 0.12, h * 0.68)
+      ..close();
+    canvas.drawPath(leftCover, coverPaint);
+
+    // Left page (inner, slightly smaller)
+    final leftPage = Path()
+      ..moveTo(w * 0.17, h * 0.23)
+      ..cubicTo(w * 0.17, h * 0.19, w * 0.19, h * 0.17, w * 0.22, h * 0.18)
+      ..lineTo(w * 0.42, h * 0.22)
+      ..lineTo(w * 0.42, h * 0.80)
+      ..lineTo(w * 0.22, h * 0.75)
+      ..cubicTo(w * 0.19, h * 0.74, w * 0.17, h * 0.71, w * 0.17, h * 0.67)
+      ..close();
+    canvas.drawPath(leftPage, pagePaint);
+
+    // Right cover (outer)
+    final rightCover = Path()
+      ..moveTo(w * 0.88, h * 0.20)
+      ..cubicTo(w * 0.88, h * 0.14, w * 0.83, h * 0.12, w * 0.79, h * 0.14)
+      ..lineTo(w * 0.54, h * 0.20)
+      ..lineTo(w * 0.54, h * 0.84)
+      ..lineTo(w * 0.79, h * 0.78)
+      ..cubicTo(w * 0.83, h * 0.76, w * 0.88, h * 0.74, w * 0.88, h * 0.68)
+      ..close();
+    canvas.drawPath(rightCover, coverPaint);
+
+    // Right page (inner)
+    final rightPage = Path()
+      ..moveTo(w * 0.83, h * 0.23)
+      ..cubicTo(w * 0.83, h * 0.19, w * 0.81, h * 0.17, w * 0.78, h * 0.18)
+      ..lineTo(w * 0.58, h * 0.22)
+      ..lineTo(w * 0.58, h * 0.80)
+      ..lineTo(w * 0.78, h * 0.75)
+      ..cubicTo(w * 0.81, h * 0.74, w * 0.83, h * 0.71, w * 0.83, h * 0.67)
+      ..close();
+    canvas.drawPath(rightPage, pagePaint);
+
+    // Text lines on pages (suggesting written content)
+    for (final frac in [0.34, 0.44, 0.54]) {
+      canvas.drawLine(
+        Offset(w * 0.20, h * frac),
+        Offset(w * 0.39, h * (frac + 0.02)),
+        linePaint,
+      );
+      canvas.drawLine(
+        Offset(w * 0.61, h * (frac + 0.02)),
+        Offset(w * 0.80, h * frac),
+        linePaint,
+      );
+    }
+
+    // Spine
+    canvas.drawLine(
+      Offset(w * 0.5, h * 0.13),
+      Offset(w * 0.5, h * 0.85),
+      spinePaint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _BookPainter oldDelegate) {
+    return oldDelegate.coverColor != coverColor ||
+        oldDelegate.pageColor != pageColor ||
+        oldDelegate.lineColor != lineColor;
   }
 }

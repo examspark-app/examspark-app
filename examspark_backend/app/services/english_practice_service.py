@@ -249,6 +249,7 @@ def _system_prompt(
     target_focus: str | None,
     memory_context: str = '',
     target_language: str = "English",
+    practice_mode: str | None = None,
 ) -> str:
     tgt = target_language or "English"
     nat = native_language or "the student's native language"
@@ -337,6 +338,17 @@ ERROR:
 """
     if target_focus:
         base += f"\nThe student already chose to focus on: {target_focus}. Do not ask this again — teach it directly.\n"
+    if practice_mode:
+        base += f"""
+ACTIVE PRACTICE MODE: {practice_mode}
+The student has chosen to practise a "{practice_mode}" situation right now.
+From this turn onward, frame the conversation, examples, and any MCQ inside
+this "{practice_mode}" scenario — act as if you are the other person in that
+situation (e.g. a shopkeeper for Market, a host for Party, an interviewer for
+Job Interview) while still correcting mistakes and teaching gently as usual.
+Stay in this "{practice_mode}" scenario until the student clearly asks to
+switch to a different mode or to stop practising a specific situation.
+"""
     return base + (f"\n\n{memory_context}" if memory_context else '')
 
 
@@ -834,7 +846,20 @@ def _focus_from_message(text: str) -> str | None:
     if "i cannot speak" in t or "i don't speak" in t or "i can't speak" in t:
         return "beginner"
     return None
+_MODE_PRACTICE_RE = re.compile(
+    r"let'?s practice a[n]? (.+?) conversation", re.IGNORECASE
+)
 
+
+def _mode_from_message(text: str) -> str | None:
+    """Detect an explicit practice-mode request like
+    "Let's practice a Party conversation." (sent by the app when the
+    user taps a mode chip/card). Returns the mode label or None."""
+    match = _MODE_PRACTICE_RE.search(text.strip())
+    if not match:
+        return None
+    mode = match.group(1).strip()
+    return mode[:60] if mode else None
 
 def _build_context_messages(
     session_id: str,
@@ -843,6 +868,7 @@ def _build_context_messages(
     target_language: str,
     focus: str | None,
     force_mcq: bool = False,
+    practice_mode: str | None = None,
 ) -> tuple[list[dict], int]:
     db = get_supabase_admin()
     rows = (
@@ -864,6 +890,7 @@ def _build_context_messages(
         target_focus=focus,
         memory_context=memory_context,
         target_language=target_language,
+        practice_mode=practice_mode,
     )
     system_text += _mcq_cadence_instruction(force_mcq)
     messages: list[dict] = [{"role": "system", "content": system_text}]
@@ -1056,6 +1083,18 @@ async def send_message(
     focus: str | None = None
     if existing_count <= 1:
         focus = _focus_from_message(text)
+
+    # Detect an explicit practice-mode request (sent by the app when the
+    # user taps a mode chip/card) and persist it on the session so later
+    # turns keep the same scenario without the user repeating it.
+    detected_mode = _mode_from_message(text)
+    practice_mode = session.get("practice_mode")
+    if detected_mode:
+        practice_mode = detected_mode
+        get_supabase_admin().table("english_practice_sessions").update(
+            {"practice_mode": practice_mode}
+        ).eq("id", session_id).eq("user_id", user_id).execute()
+
     _persist_message(session_id, user_id, "user", text, image_path=image_path)
     try:
         deduct_credits(
@@ -1073,6 +1112,7 @@ async def send_message(
         target_language=target,
         focus=focus,
         force_mcq=force_mcq,
+        practice_mode=practice_mode,
     )
     raw_reply = await _call_chat_model(messages, model)
     clean, suggestions, mcq = _split_and_extract(raw_reply)

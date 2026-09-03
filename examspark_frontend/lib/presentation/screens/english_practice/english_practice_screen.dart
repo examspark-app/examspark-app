@@ -226,6 +226,26 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
   String _selectedTextModel = 'qwen3';
   static const _modelPrefsKey = 'english_practice_preferred_model';
 
+  // Practice-mode prompt: shown every 100 exchanges, and openable manually.
+  int _exchangeCount = 0;
+  bool _showModePrompt = false;
+  String? _activeMode;
+
+  static const List<(String, IconData, String)> _modeItems = [
+    ('Party', Icons.celebration_outlined, '🎉'),
+    ('Market', Icons.storefront_outlined, '🛒'),
+    ('Friends', Icons.people_outline, '🧑‍🤝‍🧑'),
+    ('Restaurant', Icons.restaurant_outlined, '🍴'),
+    ('Interview', Icons.work_outline, '💼'),
+    ('Travel', Icons.flight_takeoff_outlined, '✈️'),
+    ('Office / Citizen', Icons.apartment_outlined, '🏢'),
+    ('Online Client Meeting', Icons.video_call_outlined, '💻'),
+    ('Job Interview', Icons.badge_outlined, '🧑‍💼'),
+    ('Job Test / Screening Chat', Icons.assignment_outlined, '📋'),
+    ('Citizenship Test', Icons.how_to_vote_outlined, '🗳️'),
+    ('Visa Interview', Icons.airplane_ticket_outlined, '🛂'),
+  ];
+
   bool _voiceActive = false;
   late AnimationController _waveController;
   final Random _random = Random();
@@ -572,6 +592,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       if (!mounted) return;
 
       setState(() {
+        _exchangeCount++;
+        if (_exchangeCount % 100 == 0) _showModePrompt = true;
         final parsed = _extractSuggestionsFromText('${r['reply'] ?? ''}');
 
         final s = (r['suggestions'] as List? ?? const [])
@@ -791,6 +813,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       );
       if (!mounted) return;
       setState(() {
+        _exchangeCount++;
+        if (_exchangeCount % 100 == 0) _showModePrompt = true;
         _currentMcq = null;
         _messages.add(_Message('${response['transcript'] ?? ''}', true));
         final parsed = _extractSuggestionsFromText('${response['reply'] ?? ''}');
@@ -900,30 +924,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
         ),
         body: SafeArea(
           child: _loading
-              ? Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      SizedBox(
-                        width: 28,
-                        height: 28,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2.5,
-                          valueColor: const AlwaysStoppedAnimation<Color>(violet),
-                        ),
-                      ),
-                      const SizedBox(height: 14),
-                      Text(
-                        'Opening chat…',
-                        style: TextStyle(
-                          color: AppTheme.getSecondaryText(context),
-                          fontSize: 13.5,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                )
+              ? const _OpeningChatLoader()
               : _error != null
               ? Center(
                   child: ElevatedButton(
@@ -936,6 +937,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                     _header(isDark),
                     Expanded(child: _chat(isDark)),
                     if (_recording) _soundWaveBar(isDark),
+                    _modePromptPanel(isDark),
                     _suggestionPanel(isDark),
                     _input(isDark),
                     _practiceMcqPanel(isDark),
@@ -993,12 +995,13 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
               style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
             ),
           ),
+
           const SizedBox(width: 6),
           FilledButton.icon(
-            onPressed: () => Navigator.pushNamed(context, '/glow-guide'),
+            onPressed: _openModePicker,
             style: FilledButton.styleFrom(
-              backgroundColor: violet,
-              foregroundColor: Colors.white,
+              backgroundColor: violet.withOpacity(0.12),
+              foregroundColor: violet,
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
@@ -1006,10 +1009,10 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
               minimumSize: const Size(0, 32),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
-            icon: const Icon(Icons.auto_awesome_rounded, size: 14),
-            label: const Text(
-              'Skin Care',
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+            icon: const Icon(Icons.theater_comedy_outlined, size: 14),
+            label: Text(
+              _activeMode ?? 'Mode',
+              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -1241,7 +1244,211 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       ),
     );
   }
+    Widget _modePromptPanel(bool isDark) {
+    if (!_showModePrompt) return const SizedBox.shrink();
+    final cardBg = AppTheme.getCardBackground(context);
+    final subText = AppTheme.getSecondaryText(context);
+    final popular = _modeItems.take(4).toList();
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: violet.withOpacity(0.35), width: 1.1),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: violet.withOpacity(isDark ? .22 : .12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.theater_comedy_outlined, color: violet, size: 15),
+                    const SizedBox(width: 5),
+                    Text(
+                      '100 turns done — pick a mode?',
+                      style: TextStyle(
+                        color: violet,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 11.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              InkWell(
+                onTap: () => setState(() => _showModePrompt = false),
+                borderRadius: BorderRadius.circular(14),
+                child: Padding(
+                  padding: const EdgeInsets.all(4),
+                  child: Icon(Icons.close_rounded, color: subText, size: 18),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'Practice a specific situation, or close this and keep chatting freely.',
+            style: TextStyle(color: subText, fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+          const SizedBox(height: 10),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final mode in popular)
+                _modeChip(mode.$1, mode.$2, isDark),
+              InkWell(
+                onTap: _openModePicker,
+                borderRadius: BorderRadius.circular(12),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 9),
+                  decoration: BoxDecoration(
+                    color: violet.withOpacity(isDark ? 0.14 : 0.08),
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: violet.withOpacity(0.4)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.apps_rounded, size: 14, color: violet),
+                      const SizedBox(width: 5),
+                      Text(
+                        'See all',
+                        style: TextStyle(
+                          color: violet,
+                          fontSize: 12.5,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
+  Widget _modeChip(String label, IconData icon, bool isDark) {
+    final cardBorder = AppTheme.getCardBorder(context);
+    final primaryText = AppTheme.getPrimaryText(context);
+    return InkWell(
+      onTap: () => _selectPracticeMode(label),
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+        decoration: BoxDecoration(
+          color: AppTheme.getInputBackground(context),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: cardBorder),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 15, color: violet),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: TextStyle(color: primaryText, fontSize: 12.5, fontWeight: FontWeight.w700),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openModePicker() async {
+    final selected = await showModalBottomSheet<String>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheetContext) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 4, 18, 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Pick a practice mode',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'Choose a situation to practise, or close and keep chatting freely.',
+                style: TextStyle(
+                  color: AppTheme.getSecondaryText(context),
+                  fontSize: 12.5,
+                ),
+              ),
+              const SizedBox(height: 16),
+              Wrap(
+                spacing: 10,
+                runSpacing: 10,
+                children: [
+                  for (final mode in _modeItems)
+                    InkWell(
+                      onTap: () => Navigator.pop(sheetContext, mode.$1),
+                      borderRadius: BorderRadius.circular(14),
+                      child: Container(
+                        width: (MediaQuery.sizeOf(context).width - 18 * 2 - 10) / 2,
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 12,
+                        ),
+                        decoration: BoxDecoration(
+                          color: violet.withOpacity(0.08),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: violet.withOpacity(0.25)),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(mode.$2, size: 18, color: violet),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                mode.$1,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 13,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || selected == null) return;
+    _selectPracticeMode(selected);
+  }
+
+  void _selectPracticeMode(String label) {
+    setState(() {
+      _showModePrompt = false;
+      _activeMode = label;
+    });
+    _send('Let\'s practice a $label conversation.');
+  }
   Widget _practiceMcqPanel(bool isDark) {
     final mcq = _currentMcq;
     if (mcq == null || _sending) return const SizedBox.shrink();
@@ -1658,7 +1865,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
     unawaited(_savePreferredModel(model));
   }
 
-    Future<void> _savePreferredModel(String model) async {
+        Future<void> _savePreferredModel(String model) async {
     try {
       final prefs = await SharedPreferences.getInstance();
       await prefs.setString(_modelPrefsKey, model);
@@ -1667,3 +1874,139 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
     }
   }
 }   // ← यह नया brace class को close करता है
+
+/// Small, non-blocking loading animation shown while the practice session
+/// opens. Stays centered in the same footprint as the old spinner — never
+/// covers the whole screen — and follows the system light/dark theme
+/// automatically via AppTheme, same as the rest of the app.
+class _OpeningChatLoader extends StatefulWidget {
+  const _OpeningChatLoader();
+
+  @override
+  State<_OpeningChatLoader> createState() => _OpeningChatLoaderState();
+}
+
+class _OpeningChatLoaderState extends State<_OpeningChatLoader>
+    with TickerProviderStateMixin {
+  static const _violet = Color(0xFF5137ED);
+  static const _messages = [
+    'Warming up your tutor…',
+    'Getting your practice ready…',
+    'Setting the scene…',
+  ];
+
+  late final AnimationController _pulse;
+  late final AnimationController _textFade;
+  int _messageIndex = 0;
+  Timer? _messageTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _pulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1400),
+    )..repeat(reverse: true);
+    _textFade = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+      value: 1,
+    );
+    _messageTimer = Timer.periodic(const Duration(milliseconds: 1800), (_) {
+      if (!mounted) return;
+      _textFade.reverse().then((_) {
+        if (!mounted) return;
+        setState(() => _messageIndex = (_messageIndex + 1) % _messages.length);
+        _textFade.forward();
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _messageTimer?.cancel();
+    _pulse.dispose();
+    _textFade.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final subText = AppTheme.getSecondaryText(context);
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          AnimatedBuilder(
+            animation: _pulse,
+            builder: (context, child) {
+              final t = _pulse.value; // 0 → 1 → 0
+              return SizedBox(
+                width: 64,
+                height: 64,
+                child: Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    Transform.scale(
+                      scale: 1 + (t * 0.35),
+                      child: Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: _violet.withOpacity(0.16 * (1 - t)),
+                        ),
+                      ),
+                    ),
+                    Transform.scale(
+                      scale: 0.94 + (t * 0.06),
+                      child: Container(
+                        width: 46,
+                        height: 46,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              _violet,
+                              _violet.withOpacity(0.75),
+                            ],
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: _violet.withOpacity(0.35),
+                              blurRadius: 16,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.graphic_eq_rounded,
+                          color: Colors.white,
+                          size: 22,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 16),
+          FadeTransition(
+            opacity: _textFade,
+            child: Text(
+              _messages[_messageIndex],
+              style: TextStyle(
+                color: subText,
+                fontSize: 13.5,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}

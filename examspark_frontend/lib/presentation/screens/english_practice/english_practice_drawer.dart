@@ -25,6 +25,8 @@ class EnglishPracticeDrawer extends StatelessWidget {
     final primaryText = AppTheme.getPrimaryText(context);
     final subText = AppTheme.getSecondaryText(context);
     final divider = AppTheme.getCardBorder(context);
+    const violet = Color(0xFF5137ED);
+
     return Drawer(
       backgroundColor: bg,
       child: SafeArea(
@@ -50,6 +52,25 @@ class EnglishPracticeDrawer extends StatelessWidget {
                 ),
               ),
             ),
+
+            // Home — always first, takes the user back to the app's home.
+            ListTile(
+              leading: Icon(Icons.home_rounded, color: subText),
+              title: Text(
+                'Home',
+                style: TextStyle(color: primaryText),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamedAndRemoveUntil(
+                  context,
+                  '/home',
+                  (route) => false,
+                );
+              },
+            ),
+            Divider(color: divider, height: 1),
+
             ListTile(
               leading: Icon(Icons.language_rounded, color: subText),
               title: Text(
@@ -95,6 +116,41 @@ class EnglishPracticeDrawer extends StatelessWidget {
                 );
               },
             ),
+            Divider(color: divider),
+
+            // GlowGuide / Skin Care AI — moved here from the header to free
+            // up space on mobile. Professional icon inside a soft tinted
+            // square, consistent with a premium-feature entry.
+            ListTile(
+              leading: Container(
+                width: 34,
+                height: 34,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: violet.withOpacity(isDark ? 0.22 : 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(
+                  Icons.auto_awesome_rounded,
+                  color: violet,
+                  size: 18,
+                ),
+              ),
+              title: Text(
+                'Skin Care AI',
+                style: TextStyle(color: primaryText, fontWeight: FontWeight.w600),
+              ),
+              subtitle: Text(
+                'GlowGuide skin & body guidance',
+                style: TextStyle(color: subText, fontSize: 12),
+              ),
+              onTap: () {
+                Navigator.pop(context);
+                Navigator.pushNamed(context, '/glow-guide');
+              },
+            ),
+            Divider(color: divider),
+
             ListTile(
               leading: Icon(Icons.close_rounded, color: subText),
               title: Text(
