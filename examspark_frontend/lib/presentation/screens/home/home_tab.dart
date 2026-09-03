@@ -1498,111 +1498,101 @@ trailing: const [],
   }
 
   Widget _buildWelcome(BuildContext context) {
-    final name = _greetingName;
-    if (!_launcherDismissed) {
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(AppTheme.screenPadding),
-        child: Column(
+  final name = _greetingName;
+  return SingleChildScrollView(
+    padding: const EdgeInsets.all(AppTheme.screenPadding),
+    child: Column(
+      children: [
+        const SizedBox(height: 12),
+        if (name.isNotEmpty) _buildGreetingBanner(context, name),
+        const SizedBox(height: 20),
+        Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            const SizedBox(height: 12),
-            if (name.isNotEmpty) _buildGreetingBanner(context, name),
-            const SizedBox(height: 24),
-            _buildFeatureLauncher(context),
-            const SizedBox(height: 12),
+            Text(
+              'Got a doubt? Ask away.',
+              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                fontSize: 19,
+                fontWeight: FontWeight.w700,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(width: 8),
+            Icon(
+              Icons.psychology_alt_rounded,
+              color: AppTheme.accentColor,
+              size: 22,
+            ),
           ],
         ),
-      );
-    }
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(AppTheme.screenPadding),
-      child: Column(
-        children: [
-          const SizedBox(height: 12),
-          if (name.isNotEmpty) _buildGreetingBanner(context, name),
-          const SizedBox(height: 24),
-          Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                'Got a doubt? Ask away.',
-                style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                  fontSize: 19,
-                  fontWeight: FontWeight.w700,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.psychology_alt_rounded,
-                color: AppTheme.accentColor,
-                size: 22,
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          AnimatedSwitcher(
-            duration: const Duration(milliseconds: 500),
-            child: _showQuote
-                ? Padding(
-                    key: const ValueKey('quote'),
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    child: Text(
-                      _dailyQuote ??
-                          'Keep going — you\'re closer than you think.',
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        fontStyle: FontStyle.italic,
-                        color: AppTheme.getSecondaryText(context),
-                      ),
-                      textAlign: TextAlign.center,
+        const SizedBox(height: 8),
+        AnimatedSwitcher(
+          duration: const Duration(milliseconds: 500),
+          child: _showQuote
+              ? Padding(
+                  key: const ValueKey('quote'),
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    _dailyQuote ??
+                        'Keep going — you\'re closer than you think.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontStyle: FontStyle.italic,
+                      color: AppTheme.getSecondaryText(context),
                     ),
-                  )
-                : Text(
-                    key: const ValueKey('sub'),
-                    'Ask anything, or record a lecture for notes.',
-                    style: Theme.of(context).textTheme.bodySmall,
                     textAlign: TextAlign.center,
                   ),
-          ),
-          const SizedBox(height: 28),
-        ],
-      ),
-    );
-  }
-
+                )
+              : Text(
+                  key: const ValueKey('sub'),
+                  'Ask anything, or record a lecture for notes.',
+                  style: Theme.of(context).textTheme.bodySmall,
+                  textAlign: TextAlign.center,
+                ),
+        ),
+        const SizedBox(height: 24),
+        _buildFeatureLauncher(context),
+        const SizedBox(height: 12),
+      ],
+    ),
+  );
+}
   /// Home-page launcher — 3 feature cards shown before the user starts
   /// chatting. Tapping "Study AI" reveals the normal chat welcome (below);
   /// the other two navigate straight to their own screens.
   Widget _buildFeatureLauncher(BuildContext context) {
-    return Column(
-      children: [
-        _FeatureLauncherCard(
-          icon: Icons.auto_awesome_rounded,
-          title: 'Study AI',
-          tagline: 'Learn. Solve. Score.',
-          onTap: () => setState(() => _launcherDismissed = true),
-        ),
-        const SizedBox(height: 12),
-        _FeatureLauncherCard(
-          icon: Icons.record_voice_over_rounded,
-          title: 'English Practice',
-          tagline: 'Speak. Practice. Grow.',
-          onTap: () => Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const EnglishPracticeScreen(),
-            ),
+  return Column(
+    children: [
+      _FeatureLauncherCard(
+        icon: Icons.auto_awesome_rounded,
+        iconColor: const Color(0xFF7C4DFF),
+        title: 'Study AI',
+        tagline: 'Learn. Solve. Score.',
+        onTap: () => setState(() => _launcherDismissed = true),
+      ),
+      const SizedBox(height: 10),
+      _FeatureLauncherCard(
+        icon: Icons.record_voice_over_rounded,
+        iconColor: const Color(0xFF12A594),
+        title: 'English Practice',
+        tagline: 'Speak. Practice. Grow.',
+        onTap: () => Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const EnglishPracticeScreen(),
           ),
         ),
-        const SizedBox(height: 12),
-        _FeatureLauncherCard(
-          icon: Icons.eco_rounded,
-          title: 'GlowGuide',
-          tagline: 'Care. Simply. Better.',
-          onTap: () => Navigator.pushNamed(context, '/glow-guide'),
-        ),
-      ],
-    );
-  }
+      ),
+      const SizedBox(height: 10),
+      _FeatureLauncherCard(
+        icon: Icons.eco_rounded,
+        iconColor: const Color(0xFFD85A30),
+        title: 'GlowGuide',
+        tagline: 'Care. Simply. Better.',
+        onTap: () => Navigator.pushNamed(context, '/glow-guide'),
+      ),
+    ],
+  );
+}
 
   /// Welcome banner/card — "Hi, {name}" greeting shown once above the
   /// empty-chat Home screen (not in the top app bar).
@@ -3140,12 +3130,14 @@ class _PracticeQuestionBoxState extends State<_PracticeQuestionBox> {
 class _FeatureLauncherCard extends StatelessWidget {
   const _FeatureLauncherCard({
     required this.icon,
+    required this.iconColor,
     required this.title,
     required this.tagline,
     required this.onTap,
   });
 
   final IconData icon;
+  final Color iconColor;
   final String title;
   final String tagline;
   final VoidCallback onTap;
@@ -3154,28 +3146,28 @@ class _FeatureLauncherCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: AppTheme.getCardBackground(context),
-      borderRadius: BorderRadius.circular(16),
+      borderRadius: BorderRadius.circular(14),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(16),
+            borderRadius: BorderRadius.circular(14),
             border: Border.all(color: AppTheme.getCardBorder(context)),
           ),
           child: Row(
             children: [
               Container(
-                width: 44,
-                height: 44,
+                width: 36,
+                height: 36,
                 decoration: BoxDecoration(
-                  color: AppTheme.accentColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(12),
+                  color: iconColor.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(10),
                 ),
-                child: Icon(icon, color: AppTheme.accentColor, size: 22),
+                child: Icon(icon, color: iconColor, size: 18),
               ),
-              const SizedBox(width: 14),
+              const SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -3183,15 +3175,15 @@ class _FeatureLauncherCard extends StatelessWidget {
                     Text(
                       title,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontSize: 16,
+                        fontSize: 14,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 2),
                     Text(
                       tagline,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppTheme.getSecondaryText(context),
+                        fontSize: 11.5,
                       ),
                     ),
                   ],
@@ -3200,6 +3192,7 @@ class _FeatureLauncherCard extends StatelessWidget {
               Icon(
                 Icons.chevron_right_rounded,
                 color: AppTheme.getSecondaryText(context),
+                size: 18,
               ),
             ],
           ),
