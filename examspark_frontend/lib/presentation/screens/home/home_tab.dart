@@ -644,10 +644,19 @@ $rawText
 
     const fallbackModel = 'qwen3';
     final primaryModel = _textModel;
+    var turnApplied = false;
+
+    Future<void> applyOnce(Map<String, dynamic> result, {required bool animateReveal}) {
+      if (turnApplied) return;
+      turnApplied = true;
+      _applyHomeAiSuccess(result, animateReveal: animateReveal);
+    }
 
     Future<Map<String, dynamic>> runWithModel(String model) async {
+      Map<String, dynamic> result;
+      var animate = false;
       try {
-        return await _runHomeAiStream(
+        result = await _runHomeAiStream(
           query,
           studyChip: studyChip,
           parentResponseId: parentId,
@@ -656,31 +665,32 @@ $rawText
       } catch (_) {
         if (!mounted) rethrow;
         setState(() => _liveStreamText = null);
-        return await _runHomeAiJson(
+        result = await _runHomeAiJson(
           query,
           studyChip: studyChip,
           parentResponseId: parentId,
           textModelOverride: model,
         );
+        animate = true;
       }
+      if (!mounted) throw StateError('Not mounted');
+      applyOnce(result, animateReveal: animate);
+      return result;
     }
 
     try {
       await runWithModel(primaryModel);
     } catch (primaryError) {
       if (!mounted) return;
+      if (turnApplied) return;
       // Agar primary model != qwen3 hai → QWEN3 fallback try karo (kaam karta hai credits ke saath)
       if (primaryModel != fallbackModel) {
         try {
           await runWithModel(fallbackModel);
-          // Fallback success → next time seedha qwen3 use karo
-          if (mounted) {
-            setState(() => _textModel = fallbackModel);
-          }
-          unawaited(_saveTextModel(fallbackModel));
           return;
         } catch (fallbackError) {
           if (!mounted) return;
+          if (turnApplied) return;
           _addHomeAiErrorBubble(fallbackError, retryQuery: query);
           return;
         }
@@ -781,7 +791,7 @@ $rawText
     }
   }
 
-  Future<void> _runHomeAiStream(
+  Future<Map<String, dynamic>> _runHomeAiStream(
     String query, {
     String? studyChip,
     String? parentResponseId,
@@ -804,11 +814,11 @@ $rawText
         _scrollToBottom();
       },
     );
-    if (!mounted) return;
-    _applyHomeAiSuccess(done, animateReveal: false);
+    if (!mounted) throw StateError('Not mounted');
+    return done;
   }
 
-  Future<void> _runHomeAiJson(
+  Future<Map<String, dynamic>> _runHomeAiJson(
     String query, {
     String? studyChip,
     String? parentResponseId,
@@ -824,8 +834,8 @@ $rawText
       sessionId: _homeAiSessionId,
       textModel: model,
     );
-    if (!mounted) return;
-    _applyHomeAiSuccess(result, animateReveal: true);
+    if (!mounted) throw StateError('Not mounted');
+    return result;
   }
 
   void _applyHomeAiSuccess(
@@ -2016,11 +2026,16 @@ trailing: const [],
         final bubble = _messages[index];
         if (!bubble.isUser && !bubble.isError) {
           final hasText = bubble.text.trim().isNotEmpty;
-          final hasVisual = bubble.visualPayload != null &&
-              (bubble.visualPayload!.charts.isNotEmpty ||
-                  bubble.visualPayload!.diagram != null ||
-                  bubble.visualPayload!.formulas.isNotEmpty ||
-                  bubble.visualPayload!.tables.isNotEmpty);
+          final rawVisual = bubble.visualPayload;
+          bool hasVisual;
+          try {
+            hasVisual = rawVisual != null &&
+                (rawVisual['has_error'] == true ||
+                    rawVisual['error'] != null ||
+                    !VisualPayloadData.fromJson(rawVisual).isEmpty);
+          } catch (_) {
+            hasVisual = rawVisual != null && rawVisual.isNotEmpty;
+          }
           final hasActions = bubble.showStudyActions ||
               bubble.suggestedQuestions.isNotEmpty ||
               bubble.practiceQuestion != null;

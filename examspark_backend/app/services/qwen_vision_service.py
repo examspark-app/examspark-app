@@ -345,7 +345,69 @@ async def _call_vision_model(
     parsed = _parse_vision_json(content, model)
     return _normalize_notes(parsed)
 
+async def _call_openai_vision(
+    client: httpx.AsyncClient,
+    image_bytes: bytes,
+    mime_type: str,
+    text_hint: str | None,
+) -> dict:
+    if not AIConfig.openai_configured():
+        raise QwenVisionError("OPENAI_API_KEY not configured on the server.")
 
+    b64 = base64.b64encode(image_bytes).decode("ascii")
+    data_url = f"data:{mime_type};base64,{b64}"
+    user_text = text_hint or "Analyze this image and respond with the JSON schema described in the system prompt."
+
+    payload = {
+        "model": AIConfig.OPENAI_VISION_MODEL,
+        "messages": [
+            {"role": "system", "content": _VISION_SYSTEM_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_text},
+                    {"type": "image_url", "image_url": {"url": data_url}},
+                ],
+            },
+        ],
+        "temperature": 0.2,
+        "max_tokens": _VISION_MAX_TOKENS,
+        "response_format": {"type": "json_object"},
+    }
+    headers = {
+        "Authorization": f"Bearer {AIConfig.OPENAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    try:
+        response = await client.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers=headers,
+            json=payload,
+            timeout=35.0,
+        )
+    except httpx.TransportError as e:
+        raise QwenVisionError(
+            "Network error talking to OpenAI — please retry."
+        ) from e
+
+    if response.status_code != 200:
+        raise QwenVisionError(
+            f"OpenAI vision ({AIConfig.OPENAI_VISION_MODEL}) failed: "
+            f"{response.status_code} {response.text[:300]}"
+        )
+
+    data = response.json()
+    choices = data.get("choices") or []
+    if not choices:
+        err = data.get("error") or data
+        raise QwenVisionError(f"OpenAI vision returned no choices: {str(err)[:300]}")
+    content = choices[0].get("message", {}).get("content") or ""
+    if not content.strip():
+        raise QwenVisionError("OpenAI vision returned empty content.")
+
+    parsed = _parse_vision_json(content, AIConfig.OPENAI_VISION_MODEL)
+    return _normalize_notes(parsed)
 async def analyze_image(
     image_bytes: bytes,
     filename: str | None = None,
@@ -397,19 +459,22 @@ async def analyze_image(
                 return VisionResult(
                     notes=flash_notes, used_plus=False, notes_list=notes_meta
                 )
-            # Do not return empty notes (caused opaque L101/500 later).
+            # Both Qwen models failed — final fallback: OpenAI vision.
+            try:
+                openai_notes = await _call_openai_vision(
+                    client, image_bytes, mime, text_hint
+                )
+                if _notes_usable(openai_notes):
+                    notes_meta.append("Qwen Flash+Plus failed; used OpenAI fallback.")
+                    logger.warning("Vision fell back to OpenAI after Qwen failures.")
+                    return VisionResult(
+                        notes=openai_notes, used_plus=False, notes_list=notes_meta,
+                        model_name=AIConfig.OPENAI_VISION_MODEL,
+                    )
+            except QwenVisionError as openai_e:
+                notes_meta.append(f"OpenAI fallback also failed ({openai_e}).")
+                logger.warning("Vision OpenAI fallback failed: %s", openai_e)
             raise QwenVisionError(
                 "Image notes failed: vision model returned incomplete JSON. "
                 "Please Retry once — your photo is fine; the model cut off mid-response."
             ) from (e if flash_err is None else flash_err)
-
-        if _notes_usable(plus_notes):
-            return VisionResult(notes=plus_notes, used_plus=True, notes_list=notes_meta)
-
-        if flash_notes is not None and _notes_usable(flash_notes):
-            return VisionResult(notes=flash_notes, used_plus=False, notes_list=notes_meta)
-
-        raise QwenVisionError(
-            "Image analysis returned unusable or incomplete content after Flash and Plus attempts. "
-            "Please Retry."
-        )
