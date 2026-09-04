@@ -114,6 +114,7 @@ async def post_home_ai(
             parent_response_id=body.parent_response_id,
             session_id=body.session_id,
             charge_credits=True,
+            text_model=body.text_model,
         )
     except HomeAiError as e:
         raise HTTPException(
@@ -206,6 +207,7 @@ async def post_home_ai_stream(
                 parent_response_id=body.parent_response_id,
                 session_id=body.session_id,
                 charge_credits=True,
+                text_model=body.text_model,
             )
         ),
         media_type="text/event-stream",

@@ -56,6 +56,14 @@ _OHMS_LAW = re.compile(r"ohm.*law|v\s*=\s*i\s*\*?\s*r|v\s*=\s*ir", re.IGNORECASE
 _PROJECTILE_MOTION = re.compile(r"projectile\s*motion|trajectory", re.IGNORECASE)
 _MITOSIS = re.compile(r"mitosis|cell\s*division", re.IGNORECASE)
 _GRAVITY = re.compile(r"gravitation|gravity\s*law|free\s*fall", re.IGNORECASE)
+_PHOTOSYNTHESIS = re.compile(r"photosynth", re.IGNORECASE)
+_WATER_CYCLE = re.compile(r"water\s*cycle|evaporation|precipitation", re.IGNORECASE)
+_POLY = re.compile(
+    r"([+-]?\d*)x\^2"
+    r"(?:([+-])(\d*)x)?"
+    r"(?:([+-])(\d+))?",
+    re.IGNORECASE,
+)
 
 
 def wants_visual(query: str) -> bool:
@@ -77,7 +85,7 @@ def visual_reminder_user_line(query: str) -> str:
             "Text answer only."
         )
     return (
-        "VISUAL AUTO-TRIGGER (RULE 1 & 2): This educational topic benefits from a visual. "
+        "VISUAL REQUIRED (RULE 1 & 2): This educational topic benefits from a visual. "
         "After the full markdown answer, on its own line output exactly <<VISUAL_JSON>> "
         "then a compact, valid JSON object matching the 10 VISUAL AUTO-TRIGGER RULES. "
         "Choose the most specific visual for the subject: "

@@ -47,7 +47,7 @@ class AskAiRequest(BaseModel):
     conversation_language: Optional[ConversationLanguage] = None
     # Phase 4D — Study Workspace Ask AI conversation thread (same table as Home AI)
     session_id: Optional[str] = None
-    text_model: Literal["qwen3", "gemini", "claude"] = "qwen3"
+    text_model: Literal["qwen3", "gemini", "claude", "chatgpt"] = "qwen3"
 
     @field_validator("conversation_language", mode="before")
     @classmethod
@@ -68,7 +68,7 @@ class HomeAiRequest(BaseModel):
     parent_response_id: Optional[str] = None
     # Phase 4D — continue same Study Session thread.
     session_id: Optional[str] = None
-    text_model: Literal["qwen3", "gemini", "claude"] = "qwen3"
+    text_model: Literal["qwen3", "gemini", "claude", "chatgpt"] = "qwen3"
 
     @field_validator("conversation_language", mode="before")
     @classmethod

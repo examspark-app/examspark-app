@@ -52,8 +52,11 @@ def test_no_fake_generic_stub():
         "Draw a diagram of mitosis stages",
         "Mitosis has four stages.",
     )
-    # Unknown topic without arrows → None (never placeholder stub)
-    assert payload is None
+    assert payload is not None
+    diagram = payload["text_diagrams"][0]["content"]
+    assert "Prophase" in diagram
+    assert "Concept" not in diagram
+    assert "Key relation" not in diagram
 
 
 def test_visual_reminder_required_line():
