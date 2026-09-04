@@ -7,18 +7,21 @@ from __future__ import annotations
 
 import re
 
-_VISUAL_WORDS = re.compile(
+_SKIP_WORDS = re.compile(
+    r"^(hi+|hello+|hey+|greetings|thanks+|thank\s*you|ok|okay|bye|good\s*(morning|evening|night|afternoon))[!.]*$",
+    re.IGNORECASE,
+)
+
+_VISUAL_AUTO_TRIGGER_WORDS = re.compile(
     r"\b("
     # Direct visual requests (any subject)
     r"graph|diagram|parabola|timeline|flowchart|mind\s*map|"
     r"process\s*flow|draw|plot|visual|figure|sketch|chart|"
     r"show\s+(me\s+)?(a\s+)?(diagram|graph|figure|flowchart)|"
     r"make\s+(a\s+)?(diagram|graph|figure)|"
-    r"diagram\s+(do|bana|banao)|"
-    r"graph\s+(do|bana|banao)|"
-    # Universal "shape" words — question patterns that benefit from a
-    # visual regardless of subject (math/physics/chemistry/biology/
-    # history/geography/economics/CS all ask questions shaped like this)
+    r"diagram\s+(do|bana|banao)|graph\s+(do|bana|banao)|"
+    # Rule 1 triggers: Process, Cycle, Mechanism, Reaction, Classification, Comparison,
+    # Timeline, Cause & Effect, Structure, Spatial, Formula, Force, Trajectory, System
     r"process|cycle|mechanism|structure|steps?\s+of|stages?\s+of|"
     r"how\s+does|how\s+do|how\s+is|working\s+of|"
     r"types?\s+of|classification|hierarchy|"
@@ -27,56 +30,69 @@ _VISUAL_WORDS = re.compile(
     r"relationship\s+between|connection\s+between|"
     r"flow\s+of|sequence\s+of|order\s+of|"
     r"equation|formula|function|solve|"
-    r"circuit|reaction|pathway|lifecycle|life\s+cycle"
+    r"circuit|reaction|pathway|lifecycle|life\s+cycle|"
+    # Biology concepts
+    r"photosynth|respiration|mitosis|meiosis|mendel|genetics|dna|rna|"
+    r"cell\s+division|nephron|heart|circulation|digest|nervous|neuron|"
+    # Chemistry concepts
+    r"bonding|molecular|orbitals?|acid|base|titration|synthesis|haber|"
+    r"periodic|electron|covalent|ionic|"
+    # Physics concepts
+    r"newton|f\s*=\s*m\s*\*?\s*a|force|gravity|projectile|trajectory|"
+    r"ohm|circuit|resistor|voltage|current|kirchhoff|ray|lens|mirror|"
+    r"reflection|refraction|wave|frequency|optics|free\s*body|fbd|"
+    # Math concepts
+    r"quadratic|parabola|coordinate|number\s*line|triangle|circle|"
+    r"pythagoras|geometry|tangent|sine|cosine|trig|probability|"
+    # History & CS concepts
+    r"revolt|revolution|war|timeline|dynasty|treaty|"
+    r"algorithm|binary\s*tree|linked\s*list|data\s*structure|state\s*machine"
     r")\b",
     re.IGNORECASE,
 )
 
-_POLY = re.compile(
-    r"(?:y\s*=\s*)?"
-    r"([+-]?\s*\d*)\s*x\s*\^\s*2"
-    r"(?:\s*([+-])\s*(\d*)\s*x)?"
-    r"(?:\s*([+-])\s*(\d+))?"
-    r"(?:\s*=\s*0)?",
-    re.IGNORECASE,
-)
-
-_PHOTOSYNTHESIS = re.compile(r"photosynth", re.IGNORECASE)
-_WATER_CYCLE = re.compile(r"water\s*cycle", re.IGNORECASE)
+_NEWTON_SECOND_LAW = re.compile(r"newton.*second|f\s*=\s*m\s*\*?\s*a|f\s*=\s*ma", re.IGNORECASE)
+_OHMS_LAW = re.compile(r"ohm.*law|v\s*=\s*i\s*\*?\s*r|v\s*=\s*ir", re.IGNORECASE)
+_PROJECTILE_MOTION = re.compile(r"projectile\s*motion|trajectory", re.IGNORECASE)
+_MITOSIS = re.compile(r"mitosis|cell\s*division", re.IGNORECASE)
+_GRAVITY = re.compile(r"gravitation|gravity\s*law|free\s*fall", re.IGNORECASE)
 
 
 def wants_visual(query: str) -> bool:
-    """True only when the student asks for a visual — not topic auto-trigger."""
-    q = query or ""
-    return bool(_VISUAL_WORDS.search(q))
+    """Rule 1 & Rule 3: Auto-trigger when concept benefits visually; skip greetings/trivial."""
+    q = (query or "").strip()
+    if not q or len(q) <= 12 and _SKIP_WORDS.search(q):
+        return False
+    # Trivial 1-line check (e.g. "2+2", "hi")
+    if re.match(r"^\d+\s*[\+\-\*\/]\s*\d+\s*=?$", q):
+        return False
+    return bool(_VISUAL_AUTO_TRIGGER_WORDS.search(q)) or len(q) > 40
 
 
 def visual_reminder_user_line(query: str) -> str:
-    """Append to Home/Ask user message so visual JSON is hard to skip when needed."""
+    """Append to Home/Ask user message following the 10 VISUAL AUTO-TRIGGER RULES."""
     if not wants_visual(query):
         return (
-            "DIAGRAM RULE: Do NOT add <<VISUAL_JSON>> or any diagram/graph for this "
-            "question. Text answer only — unless the student explicitly asked for a "
-            "diagram/graph/figure."
+            "RULE 3 SKIP: Simple greeting or trivial query. Do NOT add <<VISUAL_JSON>>. "
+            "Text answer only."
         )
     return (
-        "VISUAL REQUIRED for this question. After the markdown answer, on its own "
-        "line output exactly <<VISUAL_JSON>> then a compact JSON object with "
-        "REAL topic-specific content (not placeholders). "
-        "Biology process → text_diagrams or process_flows with labelled steps "
-        "(e.g. Sunlight → Chloroplast → Glucose + O2). "
-        "NEVER use answer section titles (Direct Answer, Easy Explanation, Key Points, Source) "
-        "as diagram boxes. "
-        "Math parabola → graphs with y=x^2-5*x+6 style functions. "
-        "Use explicit multiplication (5*x). Do not omit the visual block."
+        "VISUAL AUTO-TRIGGER (RULE 1 & 2): This educational topic benefits from a visual. "
+        "After the full markdown answer, on its own line output exactly <<VISUAL_JSON>> "
+        "then a compact, valid JSON object matching the 10 VISUAL AUTO-TRIGGER RULES. "
+        "Choose the most specific visual for the subject: "
+        "Biology (process_flow, cycle, labelled_structure), "
+        "Chemistry (reaction_flow, molecular_structure, comparison), "
+        "Physics (free_body_diagram, gravity_diagram, projectile_motion, circuit, ray_diagram), "
+        "Math (function_graph, coordinate_graph, triangle, number_line), "
+        "History (timeline), CS (flowchart, binary_tree). "
+        "Use actual formulas, numbers, labels, relationships, and arrows (e.g. A → B → C) — "
+        "NEVER output generic section titles or placeholder stubs."
     )
 
 
 def fallback_visual_payload(query: str, answer: str = "") -> dict | None:
-    """Build a real visual ONLY when the student asked for one.
-
-    Never invent a generic stub. Never auto-attach from topic alone.
-    """
+    """Build a real visual following Rule 1 & Rule 4 (real educational content only)."""
     if not wants_visual(query):
         return None
 
@@ -112,13 +128,13 @@ def _topic_process_diagram(query: str, answer: str) -> dict | None:
                 {
                     "title": "Photosynthesis process",
                     "content": (
-                        "☀️ Sunlight + CO₂ + H₂O\n"
+                        "☀️ Sunlight + 6CO₂ + 6H₂O\n"
                         "        ↓\n"
-                        "🌿 Chloroplast (leaf)\n"
-                        "   • Light reactions\n"
-                        "   • Calvin cycle\n"
+                        "🌿 Chloroplast (Thylakoids & Stroma)\n"
+                        "   • Light Reactions (Photolysis: H₂O → O₂ + ATP/NADPH)\n"
+                        "   • Calvin Cycle (Dark Reactions: CO₂ Fixation)\n"
                         "        ↓\n"
-                        "🍬 Glucose (C₆H₁₂O₆) + O₂"
+                        "🍬 Glucose (C₆H₁₂O₆) + 6O₂"
                     ),
                 }
             ],
@@ -126,11 +142,11 @@ def _topic_process_diagram(query: str, answer: str) -> dict | None:
                 {
                     "title": "Inputs → Outputs",
                     "content": (
-                        "Inputs: CO₂ + H₂O + light\n"
+                        "Inputs: CO₂ + H₂O + light energy\n"
                         "↓\n"
-                        "Chloroplast reactions\n"
+                        "Chloroplast chemical conversion\n"
                         "↓\n"
-                        "Outputs: glucose + O₂"
+                        "Outputs: Glucose + O₂ released"
                     ),
                 }
             ],
@@ -141,16 +157,109 @@ def _topic_process_diagram(query: str, answer: str) -> dict | None:
                 {
                     "title": "Water cycle",
                     "content": (
-                        "🌊 Ocean / lake\n"
-                        "   ↓ evaporation\n"
-                        "☁️ Clouds\n"
-                        "   ↓ condensation\n"
-                        "🌧 Rain / precipitation\n"
-                        "   ↓ collection\n"
-                        "🌊 Back to water bodies"
+                        "🌊 Ocean / Lake (Surface Water)\n"
+                        "   ↓ Evaporation & Transpiration (Plants)\n"
+                        "☁️ Clouds (Condensation: Water vapor → Droplets)\n"
+                        "   ↓ Precipitation (Rain / Snow / Hail)\n"
+                        "⛰️ Surface Runoff & Infiltration (Groundwater)\n"
+                        "🌊 Back to oceans / water bodies"
                     ),
                 }
             ],
+        }
+    if _NEWTON_SECOND_LAW.search(blob):
+        return {
+            "text_diagrams": [
+                {
+                    "title": "Newton's Second Law (Free Body Diagram)",
+                    "content": (
+                        "           ↑ Normal Force (N)\n"
+                        "           │\n"
+                        "F_applied  │      [ Mass: m ]  ───→ Acceleration (a = F_net / m)\n"
+                        "──────────►[=========]────────►\n"
+                        "           │\n"
+                        "           ↓ Gravity (W = m · g)\n\n"
+                        "Core Equation: F_net = m · a\n"
+                        "• F = Net Force (Newtons, N)\n"
+                        "• m = Mass (kg)\n"
+                        "• a = Acceleration (m/s²)"
+                    ),
+                }
+            ]
+        }
+    if _OHMS_LAW.search(blob):
+        return {
+            "text_diagrams": [
+                {
+                    "title": "Ohm's Law & Circuit Relationship",
+                    "content": (
+                        "   ┌──[ + ]── Battery (V) ──[ - ]──┐\n"
+                        "   │                               │\n"
+                        "   │ → Current I (Amperes)         │\n"
+                        "   │                               │\n"
+                        "   └───▲▲▲▲── Resistor R (Ohms) ───┘\n\n"
+                        "Formula Triangle:\n"
+                        "       [  V  ]       V = I × R\n"
+                        "       ───────       I = V / R\n"
+                        "       [ I | R ]     R = V / I"
+                    ),
+                }
+            ]
+        }
+    if _PROJECTILE_MOTION.search(blob):
+        return {
+            "text_diagrams": [
+                {
+                    "title": "Projectile Motion Trajectory",
+                    "content": (
+                        "  Height (y)\n"
+                        "     ↑          Peak: v_y = 0\n"
+                        "     │            ╭───●───╮\n"
+                        "     │          ╭─         ─╮\n"
+                        "     │    v₀  ╭─             ─╮\n"
+                        "     │   ↗  ╭─                 ─╮\n"
+                        "     │  ● ╭─                     ─● Landing\n"
+                        "     └──┴───────────────────────────┴──→ Range (x)\n"
+                        "        ←────── Range R = v₀²·sin(2θ)/g ──────→"
+                    ),
+                }
+            ]
+        }
+    if _MITOSIS.search(blob):
+        return {
+            "text_diagrams": [
+                {
+                    "title": "Stages of Mitosis",
+                    "content": (
+                        "1. Prophase: Chromatin condenses, spindle forms\n"
+                        "        ↓\n"
+                        "2. Metaphase: Chromosomes align at equatorial plate\n"
+                        "        ↓\n"
+                        "3. Anaphase: Sister chromatids pulled to opposite poles\n"
+                        "        ↓\n"
+                        "4. Telophase: Nuclear membranes re-form\n"
+                        "        ↓\n"
+                        "Cytokinesis: Cytoplasm splits → 2 identical diploid cells"
+                    ),
+                }
+            ]
+        }
+    if _GRAVITY.search(blob):
+        return {
+            "text_diagrams": [
+                {
+                    "title": "Universal Gravitation",
+                    "content": (
+                        "  Body 1 (m₁)               Body 2 (m₂)\n"
+                        "     ( ● ) ─────── F ◄──► F ─────── ( ● )\n"
+                        "       └─── Distance (r) ───┘\n\n"
+                        "Law of Gravitation:\n"
+                        "   F = G · (m₁ · m₂) / r²\n"
+                        "• G = 6.674 × 10⁻¹¹ N·m²/kg²\n"
+                        "• Force is inversely proportional to r²"
+                    ),
+                }
+            ]
         }
     return None
 
@@ -231,3 +340,44 @@ def _coeff(raw: str | None, *, default: int) -> int:
         return int(s)
     except ValueError:
         return default
+
+
+async def generate_retry_visual(
+    query: str,
+    answer: str,
+    language: str | None = None,
+) -> dict | None:
+    """Generate or retrieve a visual payload specifically for a retry without regenerating text (Rule 8)."""
+    fb = fallback_visual_payload(query, answer)
+    if fb is not None:
+        return fb
+
+    try:
+        from app.config import AIConfig
+        from app.services.openai_chat_service import call_openai_chat
+        from app.services.visual_stream_parser import split_answer_and_visual
+        from app.constants.visual_notes_prompt import VISUAL_AUTO_TRIGGER_RULES
+
+        if AIConfig.openai_configured():
+            prompt = (
+                f"Student Question: {query}\n\n"
+                f"Educational Answer:\n{answer}\n\n"
+                "According to the 10 VISUAL AUTO-TRIGGER RULES, generate ONLY the <<VISUAL_JSON>> "
+                "followed by the compact valid JSON object for this educational concept. "
+                "Do not repeat the explanation text or add markdown fences."
+            )
+            raw = await call_openai_chat(
+                [
+                    {"role": "system", "content": VISUAL_AUTO_TRIGGER_RULES},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.2,
+                max_tokens=800,
+            )
+            _, visual = split_answer_and_visual(raw)
+            if visual is not None:
+                return visual
+    except Exception as exc:
+        logging.getLogger(__name__).warning("generate_retry_visual LLM call failed: %s", exc)
+
+    return fb

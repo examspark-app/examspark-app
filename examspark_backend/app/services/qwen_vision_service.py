@@ -29,39 +29,38 @@ _OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 
 # Compact prompt only — full visual schema belongs in text-notes path, not VL.
 _VISION_SYSTEM_PROMPT = (
-    "You are an expert visual content analyzer and exam tutor. "
+    "You are an expert visual content analyzer, OCR engine, and exam tutor. "
     "Analyze the image carefully using OCR, visual understanding, diagrams, "
     "tables, charts, equations, handwriting, and all visible content. "
     "Return ONLY a valid JSON object with these keys:\n"
     '- "contentType": EXACTLY one of: "question_paper" | "notes" | "textbook" | '
     '"diagram" | "handwritten_work" | "document" | "other"\n'
+    '- "detectedIntent": EXACTLY one of: "solve_problem" | "diagnose_error" | "multi_question" | "explain_concept" | "summarize_notes"\n'
+    '- "recognizedTopic": Short 1-line label of the primary question, problem, or concept recognized (e.g. "Quadratic Equation: 2x² - 5x + 3 = 0" or "Newton\'s 2nd Law (F=ma)")\n'
+    '- "studentAttempt": IF contentType is "handwritten_work" or student attempt is visible → '
+    '{"attemptFound": true, "correctSteps": ["Step 1..."], "errorStep": "Step 2: sign error...", "advice": "Watch negative sign when factoring"}; ELSE null\n'
     '- "extractedText": verbatim readable text found in the image — questions, '
-    'numbers, labels, sentences exactly as written; empty string if nothing readable\n'
+    'numbers, labels, sentences exactly as written with math in LaTeX format; empty string if nothing readable\n'
     '- "questionsFound": array of question strings detected; '
     'each element is one question/problem as written; [] if none\n'
     '- "cleanNotes": '
-    'IF contentType is "question_paper" or "handwritten_work" with questions → '
-    'write step-by-step solutions/answers to each question found, clearly numbered; '
+    'IF detectedIntent is "solve_problem" or contentType is "question_paper" → '
+    'write step-by-step pedagogical solutions using LaTeX math ($...$ or $$...$$): Given, Formula, Calculation, Final Answer; '
+    'IF detectedIntent is "diagnose_error" → evaluate the student\'s steps, state what was right, pinpoint mistake, and provide correct solution; '
     'ELSE → exam-focused explanation of what the image contains\n'
     '- "shortSummary": 2-3 sentences: what the image is and its main content\n'
     '- "keyPoints": array of short bullet strings (key facts, steps, or findings)\n'
     '- "importantTerms": array of {"term","definition"} for any technical terms\n'
-    '- "visualPayload": optional diagram/chart object; omit or use {} if not needed\n'
+    '- "visualPayload": optional diagram/chart object matching the 10 Visual Auto-Trigger Rules; omit or use {} if not needed\n'
     + STUDY_CONTENT_LANGUAGE_RULE
     + "\nCRITICAL RULES:\n"
-    "1. If contentType is question_paper or handwritten_work: cleanNotes MUST contain "
-    "direct answers/solutions — NOT generic notes about the topic.\n"
-    "2. Treat every worksheet, exercise, question paper, or activity as a task "
-    "to complete, not a picture to describe. First identify exactly what the "
-    "learner is being asked to do, then solve or complete it.\n"
-    "3. For empty boxes, blanks, matching exercises, picture clues, word banks, "
-    "or colored answer tabs: map each visible clue to its blank and provide "
-    "the completed answers in order. Do not stop at describing the layout.\n"
-    "4. extractedText must contain the actual readable text — never paraphrase it.\n"
-    "5. Never invent text, objects, or context not visible in the image.\n"
-    "6. If text is blurry or unreadable, say so in extractedText.\n"
-    "7. Answer in the language of the user's query if provided; "
-    "otherwise use the image's dominant language.\n"
+    "1. Math Formulas: Always write mathematical formulas, variables, and equations in clean standard LaTeX ($...$ or $$...$$).\n"
+    "2. Student Intent Understanding: If the image shows handwritten calculations, classify as 'diagnose_error' and analyze the student's work step-by-step.\n"
+    "3. Multi-Question Detection: If multiple questions appear, list all of them in questionsFound, solve the primary/first question in cleanNotes.\n"
+    "4. Treat every worksheet, exercise, question paper, or activity as a task to complete, not a picture to describe.\n"
+    "5. extractedText must contain the actual readable text verbatim — never paraphrase it.\n"
+    "6. Never invent text, objects, or context not visible in the image.\n"
+    "7. Answer in the language of the user's query if provided; otherwise use the image's dominant language.\n"
     "8. Raw JSON only — no markdown fences. Keep response complete and compact."
 )
 
@@ -150,6 +149,9 @@ def _normalize_notes(parsed: dict) -> dict:
     visual = parse_visual_payload(visual_raw if isinstance(visual_raw, dict) else None)
     result = {
         "contentType": (parsed.get("contentType") or "other").strip().lower(),
+        "detectedIntent": (parsed.get("detectedIntent") or "solve_problem").strip().lower(),
+        "recognizedTopic": (parsed.get("recognizedTopic") or "").strip(),
+        "studentAttempt": parsed.get("studentAttempt") if isinstance(parsed.get("studentAttempt"), dict) else None,
         "extractedText": (parsed.get("extractedText") or "").strip(),
         "questionsFound": parsed.get("questionsFound") or [],
         "cleanNotes": parsed.get("cleanNotes", "") or "",

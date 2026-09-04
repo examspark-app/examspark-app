@@ -53,7 +53,7 @@ class AiModelSelector extends StatelessWidget {
     ),
     AiModelOption(
       value: 'gemini',
-      label: 'Gemini 2.5 Flash',
+      label: 'Gemini Flash',
       icon: Icons.auto_awesome_rounded,
     ),
     AiModelOption(
@@ -69,7 +69,7 @@ class AiModelSelector extends StatelessWidget {
   static const glowGuideModels = <AiModelOption>[
     AiModelOption(
       value: 'gemini',
-      label: 'Gemini 2.5 Flash',
+      label: 'Gemini Flash',
       icon: Icons.auto_awesome_rounded,
     ),
     AiModelOption(
@@ -92,7 +92,7 @@ class AiModelSelector extends StatelessWidget {
   static const visionModels = <AiModelOption>[
     AiModelOption(
       value: 'gemini',
-      label: 'Gemini 2.5 Flash',
+      label: 'Gemini Flash',
       icon: Icons.auto_awesome_rounded,
     ),
     AiModelOption(
@@ -116,7 +116,7 @@ class AiModelSelector extends StatelessWidget {
   static const models = <({String value, String label, IconData icon})>[
     (value: 'chatgpt', label: 'GPT-4o-mini', icon: Icons.bolt_rounded),
     (value: 'qwen3', label: 'Qwen3', icon: Icons.speed_rounded),
-    (value: 'gemini', label: 'Gemini 2.5 Flash', icon: Icons.auto_awesome_rounded),
+    (value: 'gemini', label: 'Gemini Flash', icon: Icons.auto_awesome_rounded),
     (value: 'claude', label: 'Claude 3.5 Haiku', icon: Icons.workspace_premium_rounded),
   ];
 

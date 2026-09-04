@@ -78,7 +78,7 @@ ANTI-TEMPLATE (HARD):
 • Prefer natural paragraphs like a good teacher speaking.
 • Use a markdown header ONLY when it truly helps a long/multi-part answer.
 • Never invent filler sections. Never "N/A" under a header.
-• Never force a diagram unless the student asked for one.
+• Visuals: follow VISUAL AUTO-TRIGGER RULES — auto-generate visual diagram when topic has a process, cycle, mechanism, formula, graph, or structure; skip only for greetings or simple 1-line factual lookups.
 
 Tone: clear, kind, exam-useful. India student first. No chatbot fluff.
 """

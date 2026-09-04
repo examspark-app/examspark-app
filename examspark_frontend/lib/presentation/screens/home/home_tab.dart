@@ -89,7 +89,7 @@ class _ChatBubble {
 
   /// Once true, scroll rebuilds must not re-run typing animation.
   bool revealComplete;
-  final Map<String, dynamic>? visualPayload;
+  Map<String, dynamic>? visualPayload;
 
   /// Phase 4C master response id (null until SQL migration / persist).
   final String? responseId;
@@ -716,6 +716,46 @@ $rawText
     final q = bubble.retryQuery?.trim();
     if (q == null || q.isEmpty) return;
     await _handleSend(q, isRetry: true);
+  }
+
+  Future<void> _retryVisualOnly(_ChatBubble bubble) async {
+    String query = bubble.retryQuery?.trim() ?? '';
+    if (query.isEmpty) {
+      final index = _messages.indexOf(bubble);
+      if (index > 0) {
+        for (int i = index - 1; i >= 0; i--) {
+          if (_messages[i].isUser && _messages[i].text.trim().isNotEmpty) {
+            query = _messages[i].text.trim();
+            break;
+          }
+        }
+      }
+    }
+
+    try {
+      final visual = await LectureService.instance.retryVisualOnly(
+        query: query,
+        answer: bubble.text,
+        language: _conversationLanguage,
+      );
+      if (!mounted) return;
+      setState(() {
+        if (visual != null && visual.isNotEmpty) {
+          bubble.visualPayload = visual;
+        } else {
+          bubble.visualPayload = const {'has_error': true};
+        }
+      });
+      unawaited(_persistChatNow());
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        bubble.visualPayload = const {'has_error': true};
+      });
+      AppToast.show(
+        'Could not load visual explanation. Please try again.',
+      );
+    }
   }
 
   Future<void> _runHomeAiStream(
@@ -1991,6 +2031,7 @@ trailing: const [],
                   onSelectAi: _onHomeSelectAi,
                   animate: bubble.animateReveal && !bubble.revealComplete,
                   visualPayload: bubble.visualPayload,
+                  onRetryVisual: () => _retryVisualOnly(bubble),
                   onRevealComplete: () {
                     if (!mounted) return;
                     setState(() {

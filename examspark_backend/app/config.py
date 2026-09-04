@@ -60,16 +60,16 @@ class AIConfig:
     AI_CHAT_MODEL: str = os.getenv("AI_CHAT_MODEL", "qwen/qwen3")
     AI_FALLBACK_MODEL: str = os.getenv("AI_FALLBACK_MODEL", "qwen/qwen3")
     GEMINI_CHAT_MODEL: str = os.getenv(
-        "GEMINI_CHAT_MODEL", "gemini-2.5-flash-lite"
+        "GEMINI_CHAT_MODEL", "gemini-flash-latest"
     )
     GLOWGUIDE_GEMINI_MODEL: str = os.getenv(
-        "GLOWGUIDE_GEMINI_MODEL", "gemini-2.5-pro"
+        "GLOWGUIDE_GEMINI_MODEL", "gemini-pro-latest"
     )
     GLOWGUIDE_GEMINI_FREE_MODEL: str = os.getenv(
-        "GLOWGUIDE_GEMINI_FREE_MODEL", "gemini-2.5-flash"
+        "GLOWGUIDE_GEMINI_FREE_MODEL", "gemini-flash-latest"
     )
     GEMINI_VISION_MODEL: str = os.getenv(
-        "GEMINI_VISION_MODEL", "gemini-2.5-flash"
+        "GEMINI_VISION_MODEL", "gemini-flash-latest"
     )
     CLAUDE_API_KEY: str = os.getenv("CLAUDE_API_KEY", "")
     CLAUDE_CHAT_MODEL: str = os.getenv(

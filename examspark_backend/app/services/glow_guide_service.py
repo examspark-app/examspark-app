@@ -145,9 +145,7 @@ def rename_session(session_id: str, user_id: str, title: str) -> dict | None:
         .data or []
     )
     return rows[0] if rows else None
-async def _call_gemini(messages: list[dict[str, Any]]) -> str:
-    if not AIConfig.gemini_tts_configured():
-        raise GlowGuideError("Gemini is not configured.", 500)
+def _build_gemini_payload(messages: list[dict[str, Any]]) -> dict[str, Any]:
     system_text = messages[0]["content"]
     contents: list[dict[str, Any]] = []
     for message in messages[1:]:
@@ -166,15 +164,47 @@ async def _call_gemini(messages: list[dict[str, Any]]) -> str:
             "role": "model" if message["role"] == "assistant" else "user",
             "parts": parts,
         })
-    payload = {"systemInstruction": {"parts": [{"text": system_text}]}, "contents": contents, "generationConfig": {"temperature": 0.45, "maxOutputTokens": 1200, "responseMimeType": "application/json"}}
+    return {
+        "systemInstruction": {"parts": [{"text": system_text}]},
+        "contents": contents,
+        "generationConfig": {
+            "temperature": 0.45,
+            "maxOutputTokens": 1200,
+            "responseMimeType": "application/json",
+        },
+    }
+
+
+async def _call_gemini(messages: list[dict[str, Any]]) -> str:
+    if not AIConfig.gemini_tts_configured():
+        raise GlowGuideError("Gemini is not configured.", 500)
+    payload = _build_gemini_payload(messages)
+    candidates = [
+        AIConfig.GLOWGUIDE_GEMINI_MODEL,
+        "gemini-pro-latest",
+        "gemini-flash-latest",
+        "gemini-3.6-flash",
+    ]
+    last_err: str = ""
     async with httpx.AsyncClient(timeout=90) as client:
-        response = await client.post(f"https://generativelanguage.googleapis.com/v1beta/models/{AIConfig.GLOWGUIDE_GEMINI_MODEL}:generateContent", headers={"x-goog-api-key": AIConfig.GEMINI_API_KEY}, json=payload)
-    if response.status_code != 200:
-        raise GlowGuideError(f"Gemini failed: {response.status_code}", 502)
-    try:
-        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError, TypeError) as error:
-        raise GlowGuideError("Gemini returned no answer.", 502) from error
+        for model in candidates:
+            if not model:
+                continue
+            try:
+                response = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    headers={"x-goog-api-key": AIConfig.GEMINI_API_KEY},
+                    json=payload,
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    return data["candidates"][0]["content"]["parts"][0]["text"]
+                last_err = f"model {model} failed ({response.status_code})"
+                logger.warning("Gemini model %s failed with %s, trying next...", model, response.status_code)
+            except Exception as e:
+                last_err = f"model {model} error: {e}"
+                logger.warning("Gemini model %s exception %s, trying next...", model, e)
+    raise GlowGuideError(f"Gemini failed across all candidates: {last_err}", 502)
 
 
 async def _call_claude(messages: list[dict[str, Any]]) -> str:
@@ -194,77 +224,159 @@ async def _call_claude(messages: list[dict[str, Any]]) -> str:
                     blocks.append({"type": "image", "source": {"type": "base64", "media_type": header.split(";", 1)[0][5:], "data": data}})
             content = blocks
         turns.append({"role": message["role"], "content": content})
-    async with httpx.AsyncClient(timeout=90) as client:
-        response = await client.post("https://api.anthropic.com/v1/messages", headers={"x-api-key": AIConfig.CLAUDE_API_KEY, "anthropic-version": "2023-06-01", "content-type": "application/json"}, json={"model": AIConfig.CLAUDE_CHAT_MODEL, "system": system_text, "messages": turns, "max_tokens": 1200, "temperature": 0.45})
+    try:
+        async with httpx.AsyncClient(timeout=90) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": AIConfig.CLAUDE_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": AIConfig.CLAUDE_CHAT_MODEL,
+                    "system": system_text,
+                    "messages": turns,
+                    "max_tokens": 1200,
+                    "temperature": 0.45,
+                },
+            )
+    except Exception as exc:
+        raise GlowGuideError(f"Claude network error: {exc}", 502) from exc
     if response.status_code != 200:
         raise GlowGuideError(f"Claude failed: {response.status_code}", 502)
-    return "".join(block.get("text", "") for block in response.json().get("content", []) if block.get("type") == "text")
+    try:
+        return "".join(block.get("text", "") for block in response.json().get("content", []) if block.get("type") == "text")
+    except Exception as error:
+        raise GlowGuideError(f"Claude parse error: {error}", 502) from error
 
 
 async def _call_qwen(messages: list[dict[str, Any]]) -> str:
     if not AIConfig.openrouter_configured():
         raise GlowGuideError("Qwen is not configured.", 500)
-    async with httpx.AsyncClient(timeout=90) as client:
-        response = await client.post(OPENROUTER_URL, headers={"Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}", "Content-Type": "application/json"}, json={"model": AIConfig.AI_VISION_FLASH_MODEL, "messages": messages, "temperature": 0.45, "max_tokens": 1200, "response_format": {"type": "json_object"}})
+    try:
+        async with httpx.AsyncClient(timeout=90) as client:
+            response = await client.post(
+                OPENROUTER_URL,
+                headers={"Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                json={"model": AIConfig.AI_VISION_FLASH_MODEL, "messages": messages, "temperature": 0.45, "max_tokens": 1200, "response_format": {"type": "json_object"}},
+            )
+    except Exception as exc:
+        raise GlowGuideError(f"Qwen network error: {exc}", 502) from exc
     if response.status_code != 200:
         raise GlowGuideError(f"Qwen failed: {response.status_code}", 502)
-    return response.json()["choices"][0]["message"]["content"]
+    try:
+        return response.json()["choices"][0]["message"]["content"]
+    except Exception as error:
+        raise GlowGuideError(f"Qwen parse error: {error}", 502) from error
 
 
 async def _call_openai(messages: list[dict[str, Any]]) -> str:
     """OpenAI GPT-4o-mini adapter for GlowGuide fallback."""
     if not AIConfig.openai_configured():
         raise GlowGuideError("OpenAI is not configured.", 500)
-    async with httpx.AsyncClient(timeout=90) as client:
-        response = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={"Authorization": f"Bearer {AIConfig.OPENAI_API_KEY}", "Content-Type": "application/json"},
-            json={"model": AIConfig.OPENAI_CHAT_MODEL, "messages": messages, "temperature": 0.45, "max_tokens": 1200, "response_format": {"type": "json_object"}},
-        )
+    try:
+        async with httpx.AsyncClient(timeout=90) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {AIConfig.OPENAI_API_KEY}", "Content-Type": "application/json"},
+                json={"model": AIConfig.OPENAI_CHAT_MODEL, "messages": messages, "temperature": 0.45, "max_tokens": 1200, "response_format": {"type": "json_object"}},
+            )
+    except Exception as exc:
+        raise GlowGuideError(f"OpenAI network error: {exc}", 502) from exc
     if response.status_code != 200:
         raise GlowGuideError(f"OpenAI failed: {response.status_code}", 502)
-    return response.json()["choices"][0]["message"]["content"]
+    try:
+        return response.json()["choices"][0]["message"]["content"]
+    except Exception as error:
+        raise GlowGuideError(f"OpenAI parse error: {error}", 502) from error
+
+
+async def _call_groq(messages: list[dict[str, Any]]) -> str:
+    """Groq LLaMA 3.3 70B adapter — high-speed fallback."""
+    if not AIConfig.groq_configured():
+        raise GlowGuideError("Groq is not configured.", 500)
+    has_image = any(
+        isinstance(m.get("content"), list) and any(item.get("type") == "image_url" for item in m["content"])
+        for m in messages
+    )
+    if has_image:
+        raise GlowGuideError("Groq does not support image analysis.", 400)
+
+    groq_messages = []
+    for m in messages:
+        content = m.get("content", "")
+        if isinstance(content, list):
+            text_parts = [item.get("text", "") for item in content if item.get("type") == "text"]
+            content = " ".join(text_parts)
+        groq_messages.append({"role": m.get("role", "user"), "content": content})
+
+    try:
+        async with httpx.AsyncClient(timeout=45) as client:
+            response = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {AIConfig.GROQ_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": "llama-3.3-70b-versatile",
+                    "messages": groq_messages,
+                    "temperature": 0.45,
+                    "max_tokens": 1200,
+                    "response_format": {"type": "json_object"},
+                },
+            )
+    except Exception as exc:
+        raise GlowGuideError(f"Groq network error: {exc}", 502) from exc
+    if response.status_code != 200:
+        raise GlowGuideError(f"Groq failed: {response.status_code}", 502)
+    try:
+        return response.json()["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError, Exception) as error:
+        raise GlowGuideError(f"Groq parse error: {error}", 502) from error
 
 
 async def _call_gemini_free(messages: list[dict[str, Any]]) -> str:
-    """Gemini 2.5 Flash (cheap) for free-tier GlowGuide users."""
+    """Gemini Flash with multi-model fallback for free-tier GlowGuide users."""
     if not AIConfig.gemini_tts_configured():
         raise GlowGuideError("Gemini is not configured.", 500)
-    system_text = messages[0]["content"]
-    contents: list[dict[str, Any]] = []
-    for message in messages[1:]:
-        content = message["content"]
-        parts: list[dict[str, Any]] = []
-        if isinstance(content, list):
-            for item in content:
-                if item["type"] == "text":
-                    parts.append({"text": item["text"]})
-                else:
-                    header, data = item["image_url"]["url"].split(",", 1)
-                    parts.append({"inlineData": {"mimeType": header.split(";", 1)[0][5:], "data": data}})
-        else:
-            parts.append({"text": content})
-        contents.append({
-            "role": "model" if message["role"] == "assistant" else "user",
-            "parts": parts,
-        })
-    payload = {"systemInstruction": {"parts": [{"text": system_text}]}, "contents": contents, "generationConfig": {"temperature": 0.45, "maxOutputTokens": 1200, "responseMimeType": "application/json"}}
+    payload = _build_gemini_payload(messages)
+    candidates = [
+        AIConfig.GLOWGUIDE_GEMINI_FREE_MODEL,
+        "gemini-flash-latest",
+        "gemini-3.6-flash",
+        "gemini-pro-latest",
+    ]
+    last_err: str = ""
     async with httpx.AsyncClient(timeout=90) as client:
-        response = await client.post(f"https://generativelanguage.googleapis.com/v1beta/models/{AIConfig.GLOWGUIDE_GEMINI_FREE_MODEL}:generateContent", headers={"x-goog-api-key": AIConfig.GEMINI_API_KEY}, json=payload)
-    if response.status_code != 200:
-        raise GlowGuideError(f"Gemini Flash failed: {response.status_code}", 502)
-    try:
-        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
-    except (KeyError, IndexError, TypeError) as error:
-        raise GlowGuideError("Gemini Flash returned no answer.", 502) from error
+        for model in candidates:
+            if not model:
+                continue
+            try:
+                response = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    headers={"x-goog-api-key": AIConfig.GEMINI_API_KEY},
+                    json=payload,
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    return data["candidates"][0]["content"]["parts"][0]["text"]
+                last_err = f"model {model} returned {response.status_code}"
+                logger.warning("Gemini Flash candidate %s returned %s, trying next...", model, response.status_code)
+            except Exception as e:
+                last_err = f"model {model} error: {e}"
+                logger.warning("Gemini Flash candidate %s failed: %s, trying next...", model, e)
+    raise GlowGuideError(f"Gemini Flash failed across all candidates: {last_err}", 502)
 
 
 # --- Model display names for frontend ---
 _MODEL_DISPLAY_NAMES = {
     "gemini": "Gemini Pro",
-    "gemini_free": "Gemini 2.5 Flash",
-    "gemini_pro": "Gemini Pro", # Explicitly selected gemini pro
+    "gemini_free": "Gemini Flash",
+    "gemini_pro": "Gemini Pro",
     "claude": "Claude 3.5 Haiku",
+    "groq": "LLaMA 3.3 (Groq)",
     "openai": "GPT-4o-mini",
     "qwen": "Qwen 3",
 }
@@ -343,6 +455,15 @@ async def turn(
             + "\n- ".join(prior_questions)
         )
 
+    if image:
+        context_line += (
+            "\n\nPHOTO ATTACHED THIS TURN: The user uploaded a photo. "
+            "Inspect it immediately according to the 4 Core Vision Domains (Product Ingredients, Skin Care, Baby Care, Hair Care). "
+            "Always include the structured Visual Consultation Card (Markdown blockquote) at the top of your 'reply'. "
+            "If the photo shows a readable product label, visible skin/scalp concern, or fabric/rash, provide your evaluation and safety rating right away."
+        )
+
+
     prompt = system_prompt(active_category, text, preferred_language) + context_line
     research = await search_cached_research(text)
     if research is None:
@@ -386,6 +507,7 @@ async def turn(
             chain = [
                 ("gemini", _call_gemini),
                 ("claude", _call_claude),
+                ("groq", _call_groq),
                 ("openai", _call_openai),
                 ("qwen", _call_qwen),
             ]
@@ -394,13 +516,16 @@ async def turn(
             chain = [
                 ("claude", _call_claude),
                 ("gemini", _call_gemini),
+                ("groq", _call_groq),
                 ("openai", _call_openai),
                 ("qwen", _call_qwen),
             ]
     else:
-        # Free chain: Gemini Flash → GPT-4o-mini → Qwen (last)
+        # Free chain: Gemini Flash → Groq (ultra-fast for text/product) → Claude → GPT-4o-mini → Qwen
         chain = [
             ("gemini_free", _call_gemini_free),
+            ("groq", _call_groq),
+            ("claude", _call_claude),
             ("openai", _call_openai),
             ("qwen", _call_qwen),
         ]
@@ -411,7 +536,8 @@ async def turn(
             served_model = tier
             logger.info("glow_guide_model_served tier=%s user=%s", tier, user_id)
             break
-        except GlowGuideError as error:
+        except Exception as error:
+            logger.warning("glow_guide_tier_failed tier=%s error=%s, trying next...", tier, error)
             errors.append(f"{tier}: {error}")
     if parsed is None:
         raise GlowGuideError("GlowGuide unavailable. " + " | ".join(errors), 502)

@@ -93,6 +93,7 @@ class AskAiResponse(BaseModel):
     new_balance: Optional[int] = None
     mode: str = "normal"
     visual_payload: Optional[dict[str, Any]] = None
+    suggested_questions: list[str] = Field(default_factory=list)
     # Phase 4C — master response id for chip tools (null if SQL not run yet)
     response_id: Optional[str] = None
     # Phase 4D — Study Session id (null if SQL not run yet)

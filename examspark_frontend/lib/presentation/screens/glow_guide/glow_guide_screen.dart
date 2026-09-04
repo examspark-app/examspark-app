@@ -12,6 +12,7 @@ import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/glow_guide/glow_guide_history_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:examspark_frontend/core/config/app_config.dart';
 import 'package:examspark_frontend/presentation/widgets/ai_model_selector.dart';
 class GlowGuideScreen extends StatefulWidget {
   const GlowGuideScreen({super.key, this.startFresh = false, this.sessionId});
@@ -568,29 +569,61 @@ String _canonicalFirstLanguage(String label) {
   }
 
   void _continueAfterCategoryChoice(String key, String? display) {
+    final cat = key.toLowerCase();
+    String promptText;
+    List<String> chips;
+    bool isGender = false;
+    bool isAge = false;
+
+    if (cat.contains('baby')) {
+      promptText = '${display ?? "Baby Skin Care"} selected. How old is your little one?';
+      chips = const ['0-3 Months', '3-6 Months', '6-12 Months', '1-2 Years', '2+ Years'];
+      isAge = true;
+    } else if (cat.contains('cloth')) {
+      promptText = '${display ?? "Cloth Guide"} selected. What type of fabric or clothing do you need help with?';
+      chips = const [
+        'Check Fabric Tag',
+        'Baby-Safe Fabric',
+        'Cotton / Breathable',
+        'Synthetic / Polyester',
+      ];
+    } else if (cat.contains('hair')) {
+      promptText = '${display ?? "Hair Care"} selected. Hair patterns differ by biology — who is this consultation for?';
+      chips = const ['Female', 'Male'];
+      isGender = true;
+    } else {
+      promptText = '${display ?? key} selected. Who is this consultation for?';
+      chips = const ['Female', 'Male'];
+      isGender = true;
+    }
+
     setState(() {
       _category = key;
       _sessionTitle ??= display ?? key;
       _messages.add(
         _GlowMessage(
-          '${display ?? key} selected. Just so I can guide you accurately — is this for a male or female?',
+          promptText,
           false,
-          chips: const ['Male', 'Female'],
-          isGenderChips: true,
+          chips: chips,
+          isGenderChips: isGender,
+          isAgeChips: isAge,
         ),
       );
     });
     _scrollToBottom();
   }
 
+  void _selectBabyAge(String value) {
+    final clean = value.trim();
+    if (clean.isEmpty) return;
+    setState(() => _age = clean);
+    _sendSilentTurn('Baby age: $clean.');
+  }
+
   void _selectGender(String value) {
     final clean = value.trim();
     if (clean.isEmpty) return;
     setState(() => _gender = clean);
-    // Basic info collected — hand off to the AI for everything else.
-    // From here it's a fully open conversation: the AI decides what to ask
-    // (if anything), the user can send text or a photo at any time, and
-    // chips shown from now on are just optional quick-tap suggestions.
     _sendSilentTurn('Gender: $clean.');
   }
 
@@ -1397,9 +1430,11 @@ String _canonicalFirstLanguage(String label) {
                         _selectLanguage(chip);
                       } else if (message.isCategoryChips) {
                         _chooseTopCategory(chip);
+                      } else if (message.isAgeChips) {
+                        _selectBabyAge(chip);
                       } else if (message.isGenderChips) {
                         _selectGender(chip);
-                        } else if (chip == _typeOwnOption) {           // 👈 naya check
+                      } else if (chip == _typeOwnOption) {
                         setState(() => _customInputFlowOpen = true);
                       } else {
                         // Everything from here on is a free-flow AI
@@ -2012,10 +2047,11 @@ class _DetailedBreakdownExpander extends StatefulWidget {
 class _DetailedBreakdownExpanderState
     extends State<_DetailedBreakdownExpander>
     with SingleTickerProviderStateMixin {
-  bool _expanded = false;
+  bool _expanded = true;
 
-    @override
+  @override
   Widget build(BuildContext context) {
+    final primaryTextColor = AppTheme.getPrimaryText(context);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -2059,7 +2095,7 @@ class _DetailedBreakdownExpanderState
                       ? Icons.keyboard_arrow_up_rounded
                       : Icons.keyboard_arrow_down_rounded,
                   size: 18,
-                  color: AppTheme.glowGuidePink.withOpacity(0.7),
+                  color: AppTheme.glowGuidePink.withValues(alpha: 0.7),
                 ),
               ],
             ),
@@ -2083,12 +2119,46 @@ class _DetailedBreakdownExpanderState
                   color: AppTheme.glowGuidePink.withValues(alpha: 0.2),
                 ),
               ),
-              child: Text(
-                widget.breakdown,
-                style: TextStyle(
-                  color: AppTheme.getPrimaryText(context),
-                  fontSize: 14,
-                  height: 1.6,
+              child: SelectionArea(
+                child: MarkdownBody(
+                  data: widget.breakdown,
+                  selectable: false,
+                  styleSheet: MarkdownStyleSheet(
+                    p: TextStyle(
+                      color: primaryTextColor,
+                      fontSize: 14,
+                      height: 1.6,
+                    ),
+                    h1: TextStyle(
+                      color: primaryTextColor,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      height: 1.4,
+                    ),
+                    h2: TextStyle(
+                      color: primaryTextColor,
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      height: 1.4,
+                    ),
+                    h3: TextStyle(
+                      color: primaryTextColor,
+                      fontSize: 14.5,
+                      fontWeight: FontWeight.w600,
+                      height: 1.4,
+                    ),
+                    strong: TextStyle(
+                      color: primaryTextColor,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                    ),
+                    listBullet: TextStyle(
+                      color: AppTheme.glowGuidePink,
+                      fontSize: 14,
+                    ),
+                    blockSpacing: 8,
+                    listIndent: 16,
+                  ),
                 ),
               ),
             ),
@@ -2344,12 +2414,51 @@ class _CustomTopicInputState extends State<_CustomTopicInput> {
                 widget.onSaved(clean);
                 widget.onSubmitted(clean);
               },
-              onChanged: (value) {
-                widget.onSaved(value.trim());
-              },
             ),
           ),        // ← Expanded band
-        ],          // ← Row ke children list band (Save button hatane ke baad ye last item hai)
+          const SizedBox(width: 6),
+          ValueListenableBuilder<TextEditingValue>(
+            valueListenable: _ctrl,
+            builder: (context, val, _) {
+              final hasText = val.text.trim().isNotEmpty;
+              return Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  onTap: hasText
+                      ? () {
+                          final clean = _ctrl.text.trim();
+                          if (clean.isNotEmpty) {
+                            widget.onSaved(clean);
+                            widget.onSubmitted(clean);
+                          }
+                        }
+                      : null,
+                  borderRadius: BorderRadius.circular(20),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: hasText
+                          ? accent
+                          : (isDark
+                              ? Colors.white.withValues(alpha: 0.08)
+                              : Colors.black.withValues(alpha: 0.05)),
+                    ),
+                    child: Icon(
+                      Icons.arrow_upward_rounded,
+                      size: 18,
+                      color: hasText
+                          ? Colors.white
+                          : (isDark ? Colors.white38 : Colors.black26),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        ],          // ← Row ke children list band
       ),            // ← Row band
     );              // ← Container band
   }                 // ← build method band
@@ -2382,6 +2491,11 @@ class _SourceChips extends StatelessWidget {
       final url = source['url']?.toString();
       final domain = _domainFrom(url);
       if (domain == null || !seen.add(domain)) continue;
+      final baseUrl = AppConfig.resolvedApiBaseUrl.trim();
+      final proxyFavicon = baseUrl.isNotEmpty
+          ? '$baseUrl/api/v1/glow-guide/favicon?domain=$domain'
+          : 'https://www.google.com/s2/favicons?domain=$domain&sz=64';
+
       chips.add(
         InkWell(
           onTap: url == null
@@ -2401,13 +2515,20 @@ class _SourceChips extends StatelessWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: Image.network(
-                    'https://www.google.com/s2/favicons?domain=$domain&sz=64',
-                    width: 14,
-                    height: 14,
-                    errorBuilder: (_, __, ___) => Icon(
-                      Icons.public_rounded,
-                      size: 14,
-                      color: textColor,
+                    proxyFavicon,
+                    width: 15,
+                    height: 15,
+                    fit: BoxFit.contain,
+                    errorBuilder: (_, __, ___) => Image.network(
+                      'https://www.google.com/s2/favicons?domain=$domain&sz=64',
+                      width: 15,
+                      height: 15,
+                      fit: BoxFit.contain,
+                      errorBuilder: (_, __, ___) => Icon(
+                        Icons.public_rounded,
+                        size: 15,
+                        color: textColor,
+                      ),
                     ),
                   ),
                 ),

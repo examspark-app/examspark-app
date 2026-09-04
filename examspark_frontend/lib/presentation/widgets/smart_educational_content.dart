@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
@@ -36,19 +37,50 @@ class VisualPayloadData {
   });
 
   factory VisualPayloadData.fromJson(Map<String, dynamic>? json) {
-    if (json == null) return const VisualPayloadData();
+    if (json == null || json['show_visual'] == false) {
+      return const VisualPayloadData();
+    }
+
+    final rawGraphs = List<dynamic>.from(_list(json['graphs']));
+    final rawTextDiagrams = List<dynamic>.from(_list(json['text_diagrams'] ?? json['textDiagrams']));
+
+    if (json['data'] is Map) {
+      final d = Map<String, dynamic>.from(json['data'] as Map);
+      final vType = (json['visual_type'] ?? '').toString().toLowerCase();
+      final title = (json['title'] ?? '').toString();
+
+      if ((vType.contains('graph') || d.containsKey('equation')) && rawGraphs.isEmpty) {
+        final eq = (d['equation'] ?? d['function'] ?? '').toString();
+        if (eq.isNotEmpty) {
+          final xr = d['x_range'] is List ? (d['x_range'] as List) : [-3.0, 3.0];
+          rawGraphs.add({
+            'function': eq,
+            'x_range': xr.map((e) => (e as num).toDouble()).toList(),
+            'label': title.isNotEmpty ? title : 'Graph',
+          });
+        }
+      }
+
+      if ((vType.contains('diagram') || vType.contains('motion') || vType.contains('circuit')) && rawTextDiagrams.isEmpty) {
+        rawTextDiagrams.add({
+          'title': title.isNotEmpty ? title : vType,
+          'content': title,
+        });
+      }
+    }
+
     return VisualPayloadData(
-      graphs: _list(json['graphs'])
-          .map((e) => GraphDataItem.fromJson(Map<String, dynamic>.from(e)))
+      graphs: rawGraphs
+          .map((e) => GraphDataItem.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),
       barCharts: _list(json['bar_charts'] ?? json['barCharts'])       // 👈 naya
-          .map((e) => ChartDataItem.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => ChartDataItem.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),
       pieCharts: _list(json['pie_charts'] ?? json['pieCharts'])       // 👈 naya
-          .map((e) => ChartDataItem.fromJson(Map<String, dynamic>.from(e)))
+          .map((e) => ChartDataItem.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),    
-      textDiagrams: _list(json['text_diagrams'] ?? json['textDiagrams'])
-          .map((e) => TextDiagramData.fromJson(Map<String, dynamic>.from(e)))
+      textDiagrams: rawTextDiagrams
+          .map((e) => TextDiagramData.fromJson(Map<String, dynamic>.from(e as Map)))
           .toList(),
       timelines: _list(json['timelines'])
           .map((e) => TimelineItemData.fromJson(Map<String, dynamic>.from(e)))
@@ -585,6 +617,7 @@ class _BarChartCard extends StatelessWidget {
   Widget build(BuildContext context) {
     if (item.slices.isEmpty) return const SizedBox.shrink();
     final maxY = item.slices.map((s) => s.value).reduce((a, b) => a > b ? a : b);
+    final chartMaxY = maxY > 0 ? maxY * 1.2 : 10.0;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -608,7 +641,7 @@ class _BarChartCard extends StatelessWidget {
             height: 200,
             child: BarChart(
               BarChartData(
-                maxY: maxY * 1.2,
+                maxY: chartMaxY,
                 gridData: const FlGridData(show: true),
                 borderData: FlBorderData(show: false),
                 titlesData: FlTitlesData(
@@ -809,6 +842,48 @@ class _TextDiagramCard extends StatelessWidget {
               ],
             ),
           ),
+          if ((diagram.title ?? '').toLowerCase().contains('free-body') ||
+              (diagram.title ?? '').toLowerCase().contains('f = ma') ||
+              (diagram.title ?? '').toLowerCase().contains('force diagram')) ...[
+            Container(
+              height: 175,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Color(0xFF141414),
+                border: Border(bottom: BorderSide(color: Color(0xFF2A2A2A))),
+              ),
+              child: CustomPaint(
+                painter: _FreeBodyDiagramPainter(isDark: true),
+              ),
+            ),
+          ] else if ((diagram.title ?? '').toLowerCase().contains('projectile') ||
+              (diagram.title ?? '').toLowerCase().contains('trajectory') ||
+              (diagram.title ?? '').toLowerCase().contains('velocity')) ...[
+            Container(
+              height: 185,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Color(0xFF141414),
+                border: Border(bottom: BorderSide(color: Color(0xFF2A2A2A))),
+              ),
+              child: CustomPaint(
+                painter: _ProjectileTrajectoryPainter(isDark: true),
+              ),
+            ),
+          ] else if ((diagram.title ?? '').toLowerCase().contains('gravity') ||
+              (diagram.title ?? '').toLowerCase().contains('gravitation')) ...[
+            Container(
+              height: 185,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Color(0xFF141414),
+                border: Border(bottom: BorderSide(color: Color(0xFF2A2A2A))),
+              ),
+              child: CustomPaint(
+                painter: _GravityDiagramPainter(isDark: true),
+              ),
+            ),
+          ],
           Padding(
             padding: const EdgeInsets.all(14),
             child: SelectableText(
@@ -834,6 +909,277 @@ class _TextDiagramCard extends StatelessWidget {
     );
   }
 }
+
+class _FreeBodyDiagramPainter extends CustomPainter {
+  final bool isDark;
+  _FreeBodyDiagramPainter({required this.isDark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final lineColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF334155);
+    const surfaceColor = Color(0xFF3B82F6);
+
+    final linePaint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+
+    final blockPaint = Paint()
+      ..color = isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9)
+      ..style = PaintingStyle.fill;
+
+    final blockBorderPaint = Paint()
+      ..color = isDark ? Colors.white70 : Colors.black87
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+
+    final surfacePaint = Paint()
+      ..color = surfaceColor
+      ..strokeWidth = 2.5
+      ..style = PaintingStyle.stroke;
+
+    final cx = size.width / 2;
+    final cy = size.height / 2 + 10;
+    const blockW = 60.0;
+    const blockH = 46.0;
+    final blockRect = Rect.fromCenter(center: Offset(cx, cy), width: blockW, height: blockH);
+
+    final surfaceY = blockRect.bottom;
+    canvas.drawLine(Offset(cx - 95, surfaceY), Offset(cx + 95, surfaceY), surfacePaint);
+
+    canvas.drawRect(blockRect, blockPaint);
+    canvas.drawRect(blockRect, blockBorderPaint);
+
+    _drawText(canvas, 'm', Offset(cx, cy), textColor, 16, FontWeight.bold);
+
+    _drawArrow(canvas, Offset(cx, blockRect.top), Offset(cx, blockRect.top - 40), linePaint);
+    _drawText(canvas, 'N', Offset(cx + 12, blockRect.top - 30), textColor, 13, FontWeight.w600);
+
+    _drawArrow(canvas, Offset(cx, blockRect.bottom), Offset(cx, blockRect.bottom + 40), linePaint);
+    _drawText(canvas, 'mg', Offset(cx + 14, blockRect.bottom + 30), textColor, 13, FontWeight.w600);
+
+    _drawArrow(canvas, Offset(blockRect.right, cy), Offset(blockRect.right + 50, cy), linePaint);
+    _drawText(canvas, 'F', Offset(blockRect.right + 36, cy - 14), textColor, 13, FontWeight.w600);
+
+    final aY = blockRect.top - 18;
+    _drawArrow(canvas, Offset(cx, aY), Offset(cx + 42, aY), linePaint);
+    _drawText(canvas, 'a', Offset(cx + 22, aY - 14), textColor, 13, FontWeight.w600);
+  }
+
+  void _drawArrow(Canvas canvas, Offset from, Offset to, Paint paint) {
+    canvas.drawLine(from, to, paint);
+    final angle = (to - from).direction;
+    const arrowSize = 6.0;
+    final path = Path()
+      ..moveTo(to.dx, to.dy)
+      ..lineTo(to.dx - arrowSize * math.cos(angle - 0.5), to.dy - arrowSize * math.sin(angle - 0.5))
+      ..moveTo(to.dx, to.dy)
+      ..lineTo(to.dx - arrowSize * math.cos(angle + 0.5), to.dy - arrowSize * math.sin(angle + 0.5));
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawText(Canvas canvas, String text, Offset center, Color color, double fontSize, FontWeight weight) {
+    final span = TextSpan(text: text, style: TextStyle(color: color, fontSize: fontSize, fontWeight: weight));
+    final painter = TextPainter(text: span, textAlign: TextAlign.center, textDirection: TextDirection.ltr);
+    painter.layout();
+    painter.paint(canvas, Offset(center.dx - painter.width / 2, center.dy - painter.height / 2));
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _ProjectileTrajectoryPainter extends CustomPainter {
+  final bool isDark;
+  _ProjectileTrajectoryPainter({required this.isDark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final axisColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569);
+    const curveColor = Color(0xFF38BDF8);
+    const vectorColor = Color(0xFFF59E0B);
+
+    final axisPaint = Paint()
+      ..color = axisColor
+      ..strokeWidth = 1.8
+      ..style = PaintingStyle.stroke;
+
+    final curvePaint = Paint()
+      ..color = curveColor
+      ..strokeWidth = 2.4
+      ..style = PaintingStyle.stroke;
+
+    final vectorPaint = Paint()
+      ..color = vectorColor
+      ..strokeWidth = 2.0
+      ..style = PaintingStyle.stroke;
+
+    final dashPaint = Paint()
+      ..color = isDark ? Colors.white38 : Colors.black26
+      ..strokeWidth = 1.2
+      ..style = PaintingStyle.stroke;
+
+    const originX = 40.0;
+    final originY = size.height - 35.0;
+    final endX = size.width - 40.0;
+    final peakX = (originX + endX) / 2;
+    final peakY = originY - 95.0;
+
+    // Y Axis (Height)
+    canvas.drawLine(Offset(originX, originY + 10), const Offset(originX, 20), axisPaint);
+    _drawArrowHead(canvas, const Offset(originX, 20), -math.pi / 2, axisPaint);
+    _drawText(canvas, 'Height (y)', const Offset(originX + 34, 16), textColor, 11.5, FontWeight.w600);
+
+    // X Axis (Range)
+    canvas.drawLine(Offset(originX - 10, originY), Offset(size.width - 15, originY), axisPaint);
+    _drawArrowHead(canvas, Offset(size.width - 15, originY), 0, axisPaint);
+    _drawText(canvas, 'Range (x)', Offset(size.width - 35, originY + 16), textColor, 11.5, FontWeight.w600);
+
+    // Parabolic trajectory
+    final path = Path()
+      ..moveTo(originX, originY)
+      ..quadraticBezierTo(peakX, peakY - 15, endX, originY);
+    canvas.drawPath(path, curvePaint);
+
+    // Initial velocity vector v0
+    final v0End = Offset(originX + 48, originY - 48);
+    canvas.drawLine(Offset(originX, originY), v0End, vectorPaint);
+    _drawArrowHead(canvas, v0End, -math.pi / 4, vectorPaint);
+    _drawText(canvas, 'v₀', Offset(v0End.dx + 6, v0End.dy - 6), vectorColor, 13, FontWeight.bold);
+
+    // Angle theta arc
+    final arcRect = Rect.fromCircle(center: Offset(originX, originY), radius: 20);
+    canvas.drawArc(arcRect, -math.pi / 4, math.pi / 4, false, axisPaint);
+    _drawText(canvas, 'θ', Offset(originX + 24, originY - 10), textColor, 11, FontWeight.w600);
+
+    // Peak dot and label
+    final dotPaint = Paint()..color = const Color(0xFFEF4444);
+    canvas.drawCircle(Offset(peakX, peakY), 4.5, dotPaint);
+    _drawText(canvas, 'Peak (vy = 0)', Offset(peakX, peakY - 14), textColor, 11.5, FontWeight.bold);
+
+    // Dashed line from peak to ground (Hmax)
+    for (double y = peakY; y < originY; y += 8) {
+      canvas.drawLine(Offset(peakX, y), Offset(peakX, math.min(y + 4, originY)), dashPaint);
+    }
+    _drawText(canvas, 'H_max', Offset(peakX - 22, (peakY + originY) / 2), textColor, 10.5, FontWeight.w500);
+
+    // Landing dot
+    canvas.drawCircle(Offset(endX, originY), 4.0, dotPaint);
+    _drawText(canvas, 'Landing', Offset(endX, originY + 16), textColor, 11, FontWeight.w600);
+  }
+
+  void _drawArrowHead(Canvas canvas, Offset to, double angle, Paint paint) {
+    const arrowSize = 6.0;
+    final path = Path()
+      ..moveTo(to.dx, to.dy)
+      ..lineTo(to.dx - arrowSize * math.cos(angle - 0.5), to.dy - arrowSize * math.sin(angle - 0.5))
+      ..moveTo(to.dx, to.dy)
+      ..lineTo(to.dx - arrowSize * math.cos(angle + 0.5), to.dy - arrowSize * math.sin(angle + 0.5));
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawText(Canvas canvas, String text, Offset center, Color color, double fontSize, FontWeight weight) {
+    final span = TextSpan(text: text, style: TextStyle(color: color, fontSize: fontSize, fontWeight: weight));
+    final painter = TextPainter(text: span, textAlign: TextAlign.center, textDirection: TextDirection.ltr);
+    painter.layout();
+    painter.paint(canvas, Offset(center.dx - painter.width / 2, center.dy - painter.height / 2));
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+class _GravityDiagramPainter extends CustomPainter {
+  final bool isDark;
+  _GravityDiagramPainter({required this.isDark});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    const m1Color = Color(0xFF3B82F6);
+    const m2Color = Color(0xFF10B981);
+    const forceColor = Color(0xFFF59E0B);
+    final lineColor = isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8);
+
+    final linePaint = Paint()
+      ..color = lineColor
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+
+    final forcePaint = Paint()
+      ..color = forceColor
+      ..strokeWidth = 2.2
+      ..style = PaintingStyle.stroke;
+
+    final cy = size.height / 2 - 4;
+    final m1Center = Offset(size.width * 0.25, cy);
+    final m2Center = Offset(size.width * 0.75, cy);
+    const m1Radius = 26.0;
+    const m2Radius = 18.0;
+
+    final m1Paint = Paint()..color = m1Color..style = PaintingStyle.fill;
+    final m2Paint = Paint()..color = m2Color..style = PaintingStyle.fill;
+    canvas.drawCircle(m1Center, m1Radius, m1Paint);
+    canvas.drawCircle(m2Center, m2Radius, m2Paint);
+
+    final borderPaint = Paint()
+      ..color = isDark ? Colors.white70 : Colors.black87
+      ..strokeWidth = 1.5
+      ..style = PaintingStyle.stroke;
+    canvas.drawCircle(m1Center, m1Radius, borderPaint);
+    canvas.drawCircle(m2Center, m2Radius, borderPaint);
+
+    _drawText(canvas, 'm₁', m1Center, Colors.white, 14, FontWeight.bold);
+    _drawText(canvas, 'm₂', m2Center, Colors.white, 13, FontWeight.bold);
+
+    final dLineY = cy + 42.0;
+    canvas.drawLine(Offset(m1Center.dx, cy + m1Radius + 4), Offset(m1Center.dx, dLineY + 6), linePaint);
+    canvas.drawLine(Offset(m2Center.dx, cy + m2Radius + 4), Offset(m2Center.dx, dLineY + 6), linePaint);
+    canvas.drawLine(Offset(m1Center.dx, dLineY), Offset(m2Center.dx, dLineY), linePaint);
+
+    _drawArrowHead(canvas, Offset(m1Center.dx, dLineY), math.pi, linePaint);
+    _drawArrowHead(canvas, Offset(m2Center.dx, dLineY), 0, linePaint);
+    _drawText(canvas, 'Distance (r)', Offset((m1Center.dx + m2Center.dx) / 2, dLineY + 14), textColor, 11.5, FontWeight.w600);
+
+    final f1Start = Offset(m1Center.dx + m1Radius + 4, cy);
+    final f1End = Offset(m1Center.dx + m1Radius + 38, cy);
+    canvas.drawLine(f1Start, f1End, forcePaint);
+    _drawArrowHead(canvas, f1End, 0, forcePaint);
+    _drawText(canvas, 'F_grav →', Offset((f1Start.dx + f1End.dx) / 2, cy - 14), forceColor, 12, FontWeight.bold);
+
+    final f2Start = Offset(m2Center.dx - m2Radius - 4, cy);
+    final f2End = Offset(m2Center.dx - m2Radius - 38, cy);
+    canvas.drawLine(f2Start, f2End, forcePaint);
+    _drawArrowHead(canvas, f2End, math.pi, forcePaint);
+    _drawText(canvas, '← F_grav', Offset((f2Start.dx + f2End.dx) / 2, cy - 14), forceColor, 12, FontWeight.bold);
+
+    _drawText(canvas, 'F = G · (m₁ · m₂) / r²', Offset(size.width / 2, 16), textColor, 13, FontWeight.bold);
+  }
+
+  void _drawArrowHead(Canvas canvas, Offset to, double angle, Paint paint) {
+    const arrowSize = 6.0;
+    final path = Path()
+      ..moveTo(to.dx, to.dy)
+      ..lineTo(to.dx - arrowSize * math.cos(angle - 0.5), to.dy - arrowSize * math.sin(angle - 0.5))
+      ..moveTo(to.dx, to.dy)
+      ..lineTo(to.dx - arrowSize * math.cos(angle + 0.5), to.dy - arrowSize * math.sin(angle + 0.5));
+    canvas.drawPath(path, paint);
+  }
+
+  void _drawText(Canvas canvas, String text, Offset center, Color color, double fontSize, FontWeight weight) {
+    final span = TextSpan(text: text, style: TextStyle(color: color, fontSize: fontSize, fontWeight: weight));
+    final painter = TextPainter(text: span, textAlign: TextAlign.center, textDirection: TextDirection.ltr);
+    painter.layout();
+    painter.paint(canvas, Offset(center.dx - painter.width / 2, center.dy - painter.height / 2));
+  }
+
+  @override
+  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
+}
+
+
 
 class _TimelineList extends StatelessWidget {
   final List<TimelineItemData> items;

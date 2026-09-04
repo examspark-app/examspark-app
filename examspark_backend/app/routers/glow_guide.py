@@ -3,7 +3,8 @@ from collections.abc import AsyncIterator
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
+import httpx
 from pydantic import BaseModel, Field
 
 from app.services.auth_service import AuthenticatedUser, get_current_user
@@ -207,3 +208,47 @@ async def list_glow_guide_sessions(
         if session_id and session_id not in unique:
             unique[session_id] = session
     return {"sessions": list(unique.values())}
+
+
+_FAVICON_CACHE: dict[str, bytes] = {}
+
+
+@router.get("/favicon")
+async def get_favicon(domain: str):
+    """Proxy Google S2 favicon service with CORS headers and in-memory caching for Flutter Web."""
+    clean_domain = domain.strip().lower()
+    if clean_domain.startswith("www."):
+        clean_domain = clean_domain[4:]
+    if not clean_domain or len(clean_domain) > 120 or "/" in clean_domain:
+        raise HTTPException(status_code=400, detail="Invalid domain.")
+
+    if clean_domain in _FAVICON_CACHE:
+        return Response(
+            content=_FAVICON_CACHE[clean_domain],
+            media_type="image/png",
+            headers={
+                "Cache-Control": "public, max-age=86400",
+                "Access-Control-Allow-Origin": "*",
+            },
+        )
+
+    try:
+        async with httpx.AsyncClient(timeout=8.0) as client:
+            resp = await client.get(
+                f"https://www.google.com/s2/favicons?domain={clean_domain}&sz=64"
+            )
+            if resp.status_code == 200 and resp.content:
+                if len(_FAVICON_CACHE) < 500:
+                    _FAVICON_CACHE[clean_domain] = resp.content
+                return Response(
+                    content=resp.content,
+                    media_type="image/png",
+                    headers={
+                        "Cache-Control": "public, max-age=86400",
+                        "Access-Control-Allow-Origin": "*",
+                    },
+                )
+    except Exception:
+        pass
+
+    raise HTTPException(status_code=404, detail="Favicon not found.")

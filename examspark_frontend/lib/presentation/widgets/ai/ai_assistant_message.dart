@@ -17,6 +17,7 @@ class AiAssistantMessage extends StatefulWidget {
   final VoidCallback? onRevealComplete;
   final Widget? trailing;
   final Map<String, dynamic>? visualPayload;
+  final VoidCallback? onRetryVisual;
 
   final Future<void> Function(String actionId, String selectedText)? onSelectAi;
 
@@ -28,6 +29,7 @@ class AiAssistantMessage extends StatefulWidget {
     this.onRevealComplete,
     this.trailing,
     this.visualPayload,
+    this.onRetryVisual,
     this.onSelectAi,
   });
 
@@ -64,7 +66,12 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
   bool get _hasVisual {
     final raw = widget.visualPayload;
     if (raw == null || raw.isEmpty) return false;
-    return !VisualPayloadData.fromJson(raw).isEmpty;
+    if (raw['has_error'] == true || raw['error'] != null) return true;
+    try {
+      return !VisualPayloadData.fromJson(raw).isEmpty;
+    } catch (_) {
+      return true;
+    }
   }
 
   MarkdownStyleSheet _markdownStyle(BuildContext context) {
@@ -253,7 +260,10 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
             ],
             if (_hasVisual && _revealDone) ...[
               const SizedBox(height: 16),
-              HomeAiVisualCard(visualPayload: widget.visualPayload!),
+              HomeAiVisualCard(
+                visualPayload: widget.visualPayload!,
+                onRetry: widget.onRetryVisual,
+              ),
             ],
             if (widget.trustLine != null && _revealDone) ...[
               const SizedBox(height: 12),

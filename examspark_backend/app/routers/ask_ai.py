@@ -49,6 +49,7 @@ def _to_response(result: dict, mode: str) -> AskAiResponse:
         new_balance=result.get("new_balance"),
         mode=result.get("mode") or mode,
         visual_payload=result.get("visual_payload"),
+        suggested_questions=result.get("suggested_questions") or [],
         response_id=result.get("response_id"),
         session_id=result.get("session_id"),
         knowledge=result.get("knowledge"),
@@ -361,3 +362,29 @@ async def delete_home_ai_session(
     if not ok:
         raise HTTPException(status_code=404, detail="Study session not found.")
     return {"ok": True, "credits_charged": 0}
+
+
+class VisualRetryRequest(BaseModel):
+    query: str = Field("", description="Student question or context")
+    answer: str = Field(..., description="Educational answer text")
+    language: str | None = Field(None, description="Conversation language")
+
+
+@router.post("/ask-ai/visual-retry")
+async def post_visual_retry(
+    body: VisualRetryRequest,
+    user: AuthenticatedUser = Depends(get_current_user),
+):
+    """Rule 8: Retry only the visual payload without regenerating full text answer."""
+    from app.services.visual_fallback import generate_retry_visual
+
+    visual = await generate_retry_visual(
+        query=body.query,
+        answer=body.answer,
+        language=body.language,
+    )
+    return {
+        "visual_payload": visual,
+        "has_visual": visual is not None,
+        "credits_charged": 0,
+    }

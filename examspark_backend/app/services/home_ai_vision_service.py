@@ -39,8 +39,11 @@ _NOTES_TYPES = {"notes", "textbook", "document"}
 
 
 def _format_home_vision_answer(notes: dict[str, Any], *, query: str) -> str:
-    """Smart formatter — responds differently based on what the image actually is."""
+    """Pedagogical formatter with OCR Perception & Intention Understanding."""
     content_type = (notes.get("contentType") or "other").strip().lower()
+    intent = (notes.get("detectedIntent") or "solve_problem").strip().lower()
+    recognized_topic = (notes.get("recognizedTopic") or "").strip()
+    student_attempt = notes.get("studentAttempt") if isinstance(notes.get("studentAttempt"), dict) else None
     clean = (notes.get("cleanNotes") or "").strip()
     summary = (notes.get("shortSummary") or "").strip()
     key_points = notes.get("keyPoints") or []
@@ -50,10 +53,40 @@ def _format_home_vision_answer(notes: dict[str, Any], *, query: str) -> str:
 
     parts: list[str] = []
 
-    # ── Question Paper / Handwritten Work → Direct answer, no template headers ──
-    if content_type in _QUESTION_TYPES or questions_found:
-        if query.strip():
-            parts.append(f"*(Your question: {query.strip()[:200]})*\n")
+    # 1. OCR Context Pill / Badge
+    topic_pill = recognized_topic
+    if not topic_pill and questions_found:
+        topic_pill = str(questions_found[0])[:90].strip()
+    if not topic_pill and summary:
+        topic_pill = summary[:80].strip()
+    if topic_pill:
+        parts.append(f"> 📌 **Recognized:** {topic_pill}\n")
+
+    if query.strip():
+        parts.append(f"*(Your ask: {query.strip()[:200]})*\n")
+
+    # 2. Intention: Student Attempt / Error Diagnosis
+    if intent == "diagnose_error" or (student_attempt and student_attempt.get("attemptFound")):
+        parts.append("### 🔍 Your Attempt Review")
+        correct_steps = student_attempt.get("correctSteps") if student_attempt else []
+        error_step = student_attempt.get("errorStep") if student_attempt else None
+        advice = student_attempt.get("advice") if student_attempt else None
+
+        if correct_steps:
+            parts.append("**What you did right:**")
+            for cs in correct_steps:
+                parts.append(f"- ✅ {cs}")
+        if error_step:
+            parts.append(f"**Where the mistake happened:**\n- ⚠️ {error_step}")
+        if advice:
+            parts.append(f"💡 *Tip: {advice}*")
+
+        parts.append("\n### 💡 Correct Step-by-Step Solution")
+        parts.append(clean or summary or "See the correct working below.")
+        return "\n".join(parts).strip()
+
+    # 3. Intention: Question Paper / Problem Solving / Multi-Question
+    if intent in ("solve_problem", "multi_question") or content_type in _QUESTION_TYPES or questions_found:
         if clean:
             parts.append(clean)
         elif extracted:
@@ -63,7 +96,17 @@ def _format_home_vision_answer(notes: dict[str, Any], *, query: str) -> str:
                 "Could not generate full solutions — please retry with a clearer photo."
             )
         else:
-            parts.append("I analyzed your photo. See the key points below.")
+            parts.append(summary or "I analyzed your photo. See the key points below.")
+
+        if len(questions_found) > 1:
+            remaining = [str(q).strip() for q in questions_found[1:4] if str(q).strip()]
+            if remaining:
+                parts.append("\n---")
+                parts.append("*💡 Other questions detected on this page:*")
+                for idx, q in enumerate(remaining, start=2):
+                    parts.append(f"- **Q{idx}:** {q}")
+                parts.append("\n*Tap the suggestion chips below to solve any of them!*")
+
         if key_points:
             bullets = [str(kp).strip() for kp in key_points[:8] if str(kp).strip()]
             if bullets:
@@ -72,12 +115,10 @@ def _format_home_vision_answer(notes: dict[str, Any], *, query: str) -> str:
                     parts.append(f"- {s}")
         return "\n".join(parts).strip()
 
-    # ── Diagram → Explain what's shown ──
-    if content_type == "diagram":
+    # 4. Intention: Diagram / Conceptual Explanation
+    if intent == "explain_concept" or content_type == "diagram":
         parts.append("## What This Diagram Shows")
         parts.append(summary or clean or "I analyzed this diagram. See details below.")
-        if query.strip():
-            parts.append(f"\n*(Your ask: {query.strip()[:200]})*")
         if key_points:
             bullets = [str(kp).strip() for kp in key_points[:8] if str(kp).strip()]
             if bullets:
@@ -86,7 +127,7 @@ def _format_home_vision_answer(notes: dict[str, Any], *, query: str) -> str:
                     parts.append(f"- {s}")
         return "\n".join(parts).strip()
 
-    # ── Notes / Textbook / Document / Other → Standard notes template ──
+    # 5. Intention: Notes / Summarize
     first_para = clean.split("\n\n")[0][:500] if clean else ""
     direct = summary or first_para
 
@@ -95,9 +136,6 @@ def _format_home_vision_answer(notes: dict[str, Any], *, query: str) -> str:
         parts.append(direct)
     else:
         parts.append("I analyzed your photo. See the explanation below.")
-
-    if query.strip():
-        parts.append(f"\n*(Your ask: {query.strip()[:200]})*")
 
     if clean and ((summary and clean != summary) or (not summary and len(clean) > len(first_para) + 60)):
         parts.append("\n## Easy Explanation")
@@ -223,6 +261,12 @@ async def home_ai_vision(
     visual_payload = notes.get("visualPayload") or notes.get("visual_payload")
     if not isinstance(visual_payload, dict):
         visual_payload = None
+    if visual_payload is None:
+        from app.services.visual_fallback import fallback_visual_payload
+        visual_payload = fallback_visual_payload(
+            display_query or (notes.get("recognizedTopic") or ""),
+            answer,
+        )
 
     try:
         new_balance = deduct_credits(
@@ -299,6 +343,14 @@ async def home_ai_vision(
             image_path=image_path,
         )
 
+    suggested_questions: list[str] = []
+    if len(questions_found) > 1:
+        suggested_questions = [
+            f"Solve: {str(q).strip()[:80]}"
+            for q in questions_found[1:4]
+            if str(q).strip()
+        ]
+
     return {
         "answer": answer,
         "status": SUCCESS,
@@ -310,6 +362,7 @@ async def home_ai_vision(
         "new_balance": new_balance,
         "mode": "normal",
         "visual_payload": visual_payload,
+        "suggested_questions": suggested_questions,
         "response_id": rid,
         "session_id": result_session_id,
         "model_name": getattr(vision, "model_name", ""),

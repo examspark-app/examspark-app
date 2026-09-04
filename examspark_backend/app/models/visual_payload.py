@@ -88,7 +88,10 @@ def parse_visual_payload(raw: dict | None) -> VisualPayload | None:
 
 
 def _normalize_visual_dict(raw: dict) -> dict:
-    """Accept camelCase keys from Qwen JSON."""
+    """Accept legacy schema, camelCase keys, and the new contract schema."""
+    if raw.get("show_visual") is False:
+        return {}
+
     out = dict(raw)
     pairs = [
         ("textDiagrams", "text_diagrams"),
@@ -104,6 +107,39 @@ def _normalize_visual_dict(raw: dict) -> dict:
     for camel, snake in pairs:
         if camel in out and snake not in out:
             out[snake] = out.pop(camel)
+
+    # Support new contract: {show_visual: true, visual_type: ..., data: ...}
+    data = out.get("data")
+    if isinstance(data, dict):
+        v_type = str(out.get("visual_type") or "").lower()
+        title = out.get("title") or v_type.replace("_", " ").title()
+
+        if ("graph" in v_type or "equation" in data or "function" in data) and "graphs" not in out:
+            eq = data.get("equation") or data.get("function") or ""
+            if eq:
+                xr = data.get("x_range") or [-3.0, 3.0]
+                out["graphs"] = [
+                    {
+                        "function": str(eq),
+                        "x_range": [float(xr[0]), float(xr[1])],
+                        "label": title,
+                    }
+                ]
+
+        if ("diagram" in v_type or "motion" in v_type or "circuit" in v_type) and "text_diagrams" not in out:
+            lines = []
+            formulas = data.get("formulas") or []
+            for f in formulas:
+                lines.append(f"Formula: {f}")
+            forces = data.get("forces") or data.get("arrows") or []
+            for f in forces:
+                if isinstance(f, dict):
+                    lbl = f.get("label") or f.get("name") or ""
+                    dir_str = f.get("direction") or ""
+                    lines.append(f"• {lbl} ({dir_str})".strip())
+            content = "\n".join(lines) if lines else title
+            out["text_diagrams"] = [{"title": title, "content": content}]
+
     return out
 
 

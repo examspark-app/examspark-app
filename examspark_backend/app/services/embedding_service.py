@@ -25,42 +25,65 @@ async def embed_texts(texts: list[str]) -> list[list[float]]:
     """Embed one or more strings. Returns one vector per input string."""
     if not texts:
         return []
-    if not AIConfig.openrouter_configured():
-        raise EmbeddingError("OPENROUTER_API_KEY not configured on the server.")
 
-    model = AIConfig.AI_EMBEDDING_MODEL
-    async with httpx.AsyncClient() as client:
-        response = await client.post(
-            _OPENROUTER_EMBED_URL,
-            headers={
-                "Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={"model": model, "input": texts},
-            timeout=90.0,
-        )
+    errors: list[str] = []
 
-    if response.status_code != 200:
-        raise EmbeddingError(
-            f"Embedding ({model}) failed: {response.status_code} {response.text[:300]}"
-        )
+    # 1. Try OpenRouter if configured
+    if AIConfig.openrouter_configured():
+        model = AIConfig.AI_EMBEDDING_MODEL
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    _OPENROUTER_EMBED_URL,
+                    headers={
+                        "Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"model": model, "input": texts},
+                )
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get("data") or []
+                if len(items) == len(texts):
+                    vectors: list[list[float]] = []
+                    for item in sorted(items, key=lambda x: x.get("index", 0)):
+                        vec = item.get("embedding") or []
+                        if len(vec) == _EXPECTED_DIMS:
+                            vectors.append(vec)
+                    if len(vectors) == len(texts):
+                        return vectors
+            errors.append(f"OpenRouter status {response.status_code}: {response.text[:120]}")
+        except Exception as err:
+            errors.append(f"OpenRouter exception: {err}")
 
-    data = response.json()
-    items = data.get("data") or []
-    if len(items) != len(texts):
-        raise EmbeddingError(
-            f"Embedding returned {len(items)} vectors for {len(texts)} inputs."
-        )
+    # 2. Fallback to direct OpenAI if configured
+    if AIConfig.openai_configured():
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                response = await client.post(
+                    "https://api.openai.com/v1/embeddings",
+                    headers={
+                        "Authorization": f"Bearer {AIConfig.OPENAI_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={"model": "text-embedding-3-small", "input": texts},
+                )
+            if response.status_code == 200:
+                data = response.json()
+                items = data.get("data") or []
+                if len(items) == len(texts):
+                    vectors = []
+                    for item in sorted(items, key=lambda x: x.get("index", 0)):
+                        vec = item.get("embedding") or []
+                        if len(vec) == _EXPECTED_DIMS:
+                            vectors.append(vec)
+                    if len(vectors) == len(texts):
+                        return vectors
+            errors.append(f"OpenAI status {response.status_code}: {response.text[:120]}")
+        except Exception as err:
+            errors.append(f"OpenAI exception: {err}")
 
-    vectors: list[list[float]] = []
-    for item in sorted(items, key=lambda x: x.get("index", 0)):
-        vec = item.get("embedding") or []
-        if len(vec) != _EXPECTED_DIMS:
-            raise EmbeddingError(
-                f"Expected {_EXPECTED_DIMS}-dim embedding, got {len(vec)}."
-            )
-        vectors.append(vec)
-    return vectors
+    raise EmbeddingError(f"All embedding providers failed: {' | '.join(errors)}")
 
 
 async def embed_query(text: str) -> list[float]:

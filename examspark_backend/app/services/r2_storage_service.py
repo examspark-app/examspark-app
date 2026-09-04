@@ -113,6 +113,37 @@ class R2StorageService:
         middle = f"/{_safe_filename(category)}" if category else ""
         return f"{prefix}/{user_id}{middle}/{message_id}.{extension}"
 
+    def visual_explanation_path(
+        self,
+        user_id: str,
+        session_id: str,
+        visual_id: str,
+    ) -> str:
+        safe_user = _safe_filename(user_id, "anonymous")
+        safe_session = _safe_filename(session_id, "default")
+        safe_vid = _safe_filename(visual_id, "vis")
+        return f"Visuals/{safe_user}/{safe_session}/{safe_vid}.json"
+
+    def persist_visual_payload(
+        self,
+        user_id: str,
+        session_id: str,
+        visual_id: str,
+        payload: dict,
+    ) -> dict | None:
+        if not StorageConfig.configured():
+            return None
+        try:
+            path = self.visual_explanation_path(user_id, session_id, visual_id)
+            self.upload_text(path, json.dumps(payload, ensure_ascii=False), content_type="application/json")
+            return {
+                "visual_id": visual_id,
+                "r2_key": path,
+                "download_url": self.signed_url(path, expires_in=86400),
+            }
+        except Exception:
+            return None
+
     def signed_url(self, path: str, expires_in: int = 3600) -> str:
         try:
             return self._get_client().generate_presigned_url(

@@ -13,7 +13,7 @@ from app.services.tavily_service import TavilySearchResult, tavily_search
 
 logger = logging.getLogger(__name__)
 _CACHE_TTL_DAYS = 30
-_MATCH_THRESHOLD = 0.78
+_MATCH_THRESHOLD = 0.68
 
 _RESEARCH_TERMS = re.compile(
     r"(?i)\b(research|study|studies|evidence|clinical|trial|journal|pubmed|"
@@ -23,10 +23,41 @@ _RESEARCH_TERMS = re.compile(
 )
 _CURRENT_TERMS = re.compile(r"(?i)\b(latest|current|new|updated|recent|availability|changed)\b")
 
+_PRODUCT_BRANDS = re.compile(
+    r"(?i)\b(cerave|cetaphil|minimalist|ordinary|neutrogena|mamaearth|sebamed|"
+    r"johnson|johnsons|bioderma|derma\s*co|dot\s*&\s*key|la\s*roche|aveeno|"
+    r"biore|cosrx|innisfree|himalaya|nivea|dove|ponds|garnier|plum|dr\s*sheths|"
+    r"simple|clean\s*&\s*clear|vaseline|aquaphor|eucerin|laneige|vanicream)\b"
+)
+_PRODUCT_TYPES = re.compile(
+    r"(?i)\b(cream|serum|cleanser|moisturizer|moisturiser|lotion|sunscreen|"
+    r"shampoo|conditioner|face\s*wash|facewash|toner|gel|ointment|balm|"
+    r"body\s*wash|soap|micellar|essence|night\s*cream|day\s*cream)\b"
+)
+_PRODUCT_VERIFY_CUES = re.compile(
+    r"(?i)\b(is\s+this|is\s+it|check|review|ingredients?\s+of|suit\s+for|good\s+for|safe\s+for|can\s+i\s+use)\b"
+)
+
+
+def is_product_query(query: str) -> bool:
+    """Detect if the query mentions a specific cosmetic brand or product."""
+    text = (query or "").strip()
+    if len(text) < 5:
+        return False
+    if bool(_PRODUCT_BRANDS.search(text)):
+        return True
+    return bool(_PRODUCT_TYPES.search(text)) and (
+        bool(_RESEARCH_TERMS.search(text)) or bool(_PRODUCT_VERIFY_CUES.search(text))
+    )
+
 
 def is_targeted_research_query(query: str) -> bool:
-    """Cheap prefilter; uncertain or ordinary chat stays local-only."""
+    """Trigger research for scientific questions OR specific product checks."""
     text = (query or "").strip()
+    if len(text) < 6:
+        return False
+    if is_product_query(text):
+        return True
     return len(text) >= 12 and bool(_RESEARCH_TERMS.search(text))
 
 
@@ -35,7 +66,21 @@ def _normalized_query(query: str) -> str:
 
 
 def _domains_for_query(query: str) -> list[str]:
-    # Trusted scientific / regulatory sources ONLY — no random blogs, forums, or SEO spam
+    # Product verification needs cosmetic ingredient databases and brand sites, NOT PubMed exclusively
+    if is_product_query(query):
+        return [
+            "incidecoder.com",
+            "skincarisma.com",
+            "ewg.org",
+            "cir-safety.org",
+            "paulaschoice.com",
+            "cerave.com",
+            "cetaphil.com",
+            "beminimalist.co",
+            "theordinary.com",
+        ]
+
+    # Trusted scientific / regulatory sources ONLY for clinical queries
     _TRUSTED_DOMAINS = [
         "pubmed.ncbi.nlm.nih.gov",  # Medical literature
         "nih.gov",                   # National Institutes of Health
@@ -137,8 +182,14 @@ async def save_tavily_research(query: str, result: TavilySearchResult) -> None:
 async def tavily_research(query: str) -> dict[str, Any] | None:
     if not is_targeted_research_query(query):
         return None
+
+    # For product queries, optimize search query to fetch actual official ingredients
+    search_query = query
+    if is_product_query(query) and "ingredient" not in query.lower():
+        search_query = f"{query} full ingredients list official"
+
     result = await tavily_search(
-        query,
+        search_query,
         feature="glowguide_research",
         search_depth="basic",
         max_results=3,
@@ -146,8 +197,14 @@ async def tavily_research(query: str) -> dict[str, Any] | None:
     )
     if not result.usable:
         return None
+
+    header = (
+        "VERIFIED PRODUCT INGREDIENTS & FORMULATION (Live Web Search Verification):\n"
+        if is_product_query(query)
+        else "Targeted research evidence:\n"
+    )
     return {
-        "blocks": ["Targeted research evidence:\n" + "\n\n---\n\n".join(result.snippets)],
+        "blocks": [header + "\n\n---\n\n".join(result.snippets)],
         "sources": result.sources_meta,
         "used_web_search": True,
         "answer_source": "WEB",

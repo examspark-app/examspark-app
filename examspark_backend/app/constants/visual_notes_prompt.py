@@ -280,63 +280,111 @@ Apply the same subject-understanding rule: visuals only when they significantly 
 # visual when unsure" bias. This costs zero extra tokens/API calls — it's
 # pure prompt-wording reinforcement, not a second model call.
 # ============================================================================
+VISUAL_AUTO_TRIGGER_RULES = """
+==================================================
+VISUAL AUTO-TRIGGER RULES (Home AI / Study AI)
+==================================================
+
+RULE 1 — SMART AUTO-TRIGGER
+If the educational answer contains a concept that is significantly easier
+to understand visually, automatically generate <<VISUAL_JSON>>.
+The student does NOT need to ask for a diagram.
+Trigger strongly for:
+- Process, Cycle, Mechanism, Reaction, Classification, Comparison, Timeline,
+  Cause & Effect, Structure, Spatial relationship, Formula relationship,
+  Graphable mathematical relationship, Force/vector relationship, Motion/trajectory,
+  Scientific system.
+
+RULE 2 — SUBJECT-AWARE VISUAL TYPE
+Choose the most specific and appropriate visual structure for the subject:
+• Biology:
+  - process_flow (Photosynthesis, Respiration, Digestion)
+  - cycle (Cell cycle, Mitosis, Nitrogen cycle, Water cycle)
+  - labelled_structure (Cell, Neuron, DNA, Flower, Organ)
+  - system_diagram (Circulatory, Nervous, Endocrine)
+  - comparison (Mitosis vs Meiosis, Prokaryote vs Eukaryote)
+• Chemistry:
+  - reaction_flow (Stepwise organic/inorganic synthesis, Haber process)
+  - molecular_structure / atom_structure (Bohr model, Orbitals, Lewis dots)
+  - bonding (Ionic vs Covalent, Hydrogen bonding)
+  - apparatus & comparison (Acids vs Bases, Endothermic vs Exothermic)
+• Physics:
+  - free_body_diagram (Forces on mass: gravity, normal, friction, applied: F=ma)
+  - gravity_diagram (Orbital paths, gravitational pull)
+  - projectile_motion (Trajectory, angles, range, peak)
+  - ray_diagram (Lenses, mirrors, focal length, refraction)
+  - circuit (Series, parallel, Ohm's law, Kirchhoff's current/voltage)
+  - wave (Wavelength, frequency, crest, trough, nodes)
+  - formula_relationship & graph
+• Math:
+  - function_graph (Parabolas y=a*x^2+b*x+c, lines y=m*x+c, trig sin(x))
+  - coordinate_graph & number_line (Inequalities, roots, intervals)
+  - triangle & circle geometry (Angles, Pythagoras, chords, tangents)
+  - probability_tree & statistics_chart (Bar charts, distributions)
+  - formula_relationship
+• History & Social Science:
+  - timeline (Dates, periods, milestones, revolts, treaties)
+  - cause_effect (Events leading to outcome, consequences)
+  - event_sequence & comparison (Dynasties, policies, regimes)
+• Computer Science:
+  - flowchart (Start -> Decision -> Action -> End)
+  - algorithm / state_machine (Step transitions)
+  - binary_tree & linked_list (Node relationships, pointers)
+  - architecture (Client -> API -> Database)
+
+RULE 3 — SKIP (DO NOT GENERATE VISUAL FOR):
+- "Hi", "Hello", "Hey", "Thanks", "Thank you", simple greetings
+- Simple one-line factual answers (e.g. "Who invented X", "What is capital of Y")
+- Trivial arithmetic (e.g. "2+2=4")
+- Very short answers where visual adds zero learning value
+
+RULE 4 — REAL EDUCATIONAL CONTENT ONLY
+Every visual must be based on the actual question and answer.
+Never generate generic placeholder diagrams, unrelated shapes, invented facts, invented values, or decorative visuals.
+Use actual formulas, numbers, labels, relationships, steps, directions, and scientific concepts.
+
+RULE 5 — MOST SPECIFIC VISUAL
+Always choose the most specific supported visual type:
+Gravity → gravity_diagram | Projectile → projectile_motion | F = ma → free_body_diagram
+y = x² → function_graph | Triangle angle → triangle | Photosynthesis → process_flow
+DNA → labelled_structure | Algorithm → flowchart
+
+RULE 6 — EXISTING VISUAL SYSTEM COMPATIBILITY
+Output must conform to the valid JSON structure under <<VISUAL_JSON>>:
+{
+  "graphs": [ { "function": "y=x^2-5*x+6", "x_range": [-2, 7], "label": "Parabola description" } ],
+  "bar_charts": [ { "title": "...", "data": [ { "label": "...", "value": 10 } ] } ],
+  "pie_charts": [ { "title": "...", "data": [ { "label": "...", "value": 20 } ] } ],
+  "text_diagrams": [ { "title": "Specific Topic Diagram", "content": "Labelled ASCII / Unicode Diagram with arrows and emoji" } ],
+  "process_flows": [ { "title": "Step Flow", "content": "Step 1\\n↓\\nStep 2\\n↓\\nStep 3" } ],
+  "timelines": [ { "period": "Year/Epoch", "label": "Event" } ],
+  "hierarchy_trees": [ { "label": "Root Category", "children": [ { "label": "Subcategory", "children": [] } ] } ],
+  "highlight_boxes": [ { "kind": "important|exam_favourite|shortcut", "content": "Key takeaway / formula" } ],
+  "memory_tricks": [], "exam_tips": [], "examples": []
+}
+
+RULE 7 — VISUAL TIMING & PLACEMENT
+First, write the complete, natural student-facing markdown answer.
+Only AFTER the full text answer has completed, output on its own line:
+<<VISUAL_JSON>>
+followed immediately by the single compact valid JSON object.
+
+RULE 9 — VISUAL OUTPUT FORMAT
+Return structured VISUAL_JSON only.
+Do NOT return image-generation instructions, image URLs, base64 strings, or fake image markdown.
+The client renderer produces the visual card from this JSON.
+
+RULE 10 — QUALITY
+Visuals must be clean, educational, readable, accurate, textbook-like, and uncluttered.
+Math/Physics visuals: actual graphs, curves, vectors, arrows, formulas.
+Conceptual subjects: process steps, labelled structures, clear hierarchy.
+Do not force the same visual style on every subject.
+"""
+
 ASK_AI_VISUAL_EXTENSION = (
     SMART_SUBJECT_UNDERSTANDING
     + MARKDOWN_STRUCTURE_RULE
-    + """
-==================================================
-SMART VISUAL ANSWERS (Ask AI / Home AI)
-==================================================
-MANDATORY SELF-CHECK before you finish your response:
-Ask yourself — "Does this topic have a process, structure, cycle,
-equation, comparison, or relationship that a diagram/graph would
-make clearer?" If yes, you MUST include <<VISUAL_JSON>>. Do not
-skip this check even for short answers.
-
-VISUAL OUTPUT IS REQUIRED when:
-- the student explicitly asks for a graph, diagram, timeline, flow, tree, or visual; OR
-- the topic involves ANY of: a process, mechanism, cycle, structure,
-  classification, comparison, cause-effect chain, equation, function,
-  or step-by-step sequence — regardless of subject.
-When uncertain, lean toward including <<VISUAL_JSON>> rather than skipping it.
-
-For BOTH STREAMING and NON-STREAMING replies: write the student-facing answer
-as clear markdown first.
-After the full answer, on its own line output exactly:
-<<VISUAL_JSON>>
-then a single compact JSON object using only the useful keys from:
-{"graphs":[{"function":"y=x^2-5*x+6","x_range":[-2,7],"label":"Parabola with roots 2 and 3"}],
-"bar_charts":[{"title":"Comparison","data":[{"label":"A","value":10},{"label":"B","value":20}]}],
-"pie_charts":[{"title":"Composition","data":[{"label":"Part A","value":60},{"label":"Part B","value":40}]}],
-"text_diagrams":[{"title":"Title","content":"Part A\\n  ↓\\nPart B"}],
-"timelines":[{"period":"Year","label":"Event"}],
-"hierarchy_trees":[{"label":"Root","children":[]}],
-"process_flows":[{"title":"Process","content":"Start\\n↓\\nFinish"}],
-"highlight_boxes":[],"memory_tricks":[],"exam_tips":[],"examples":[]}
-
-Example for "show the graph of x^2 - 5x + 6":
-<<VISUAL_JSON>>
-{"graphs":[{"function":"y=x^2-5*x+6","x_range":[-2,7],"label":"y = x² - 5x + 6; roots x = 2, 3"}]}
-
-Keep this JSON compact and valid. Use explicit multiplication in graph functions
-(`5*x`, never `5x`). Do not put markdown fences around the delimiter or JSON.
-If the student asked for a graph/diagram/timeline/visual, NEVER omit this block.
-Only omit when the question is purely verbal with no visual benefit.
-
-Do not wrap the overall reply in an `answer` JSON object. The backend extracts
-the trailing visual block using the delimiter for both response paths.
-Use LaTeX $$...$$ in answer for formulas. Never invent formulas or facts.
-Ground every visual in the lecture context or the student's question — never decorate.
-"""
-    + """
-==================================================
-FINAL REMINDER (do not skip)
-==================================================
-Before ending your response, check: did I add <<VISUAL_JSON>>
-if the topic had a process/structure/equation/comparison? If you
-are unsure whether a visual helps, DEFAULT TO INCLUDING ONE —
-a mild extra diagram is better than a missing one for exam prep.
-"""
+    + VISUAL_AUTO_TRIGGER_RULES
 )
 
 ASK_AI_STREAM_DELIMITER = "<<VISUAL_JSON>>"

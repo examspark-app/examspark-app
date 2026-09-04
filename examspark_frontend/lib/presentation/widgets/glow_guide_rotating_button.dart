@@ -1,7 +1,6 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
-import 'package:examspark_frontend/core/theme/app_theme.dart';
 
 class GlowGuideRotatingButton extends StatefulWidget {
   const GlowGuideRotatingButton({super.key, required this.onTap});

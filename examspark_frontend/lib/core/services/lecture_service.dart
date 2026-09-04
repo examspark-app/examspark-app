@@ -2041,6 +2041,40 @@ class LectureService {
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
+  /// Retry only the visual payload for an existing answer (Rule 8: isolated visual retry).
+  Future<Map<String, dynamic>?> retryVisualOnly({
+    required String query,
+    required String answer,
+    String? language,
+  }) async {
+    if (!AppConfig.isApiConfigured) {
+      throw StateError('FASTAPI_BASE_URL not configured - see API_SETUP.md');
+    }
+    final accessToken = await _requireAccessToken();
+    final uri = Uri.parse(
+      '${AppConfig.resolvedApiBaseUrl}/api/v1/ask-ai/visual-retry',
+    );
+    final response = await http.post(
+      uri,
+      headers: {
+        'Authorization': 'Bearer $accessToken',
+        'Content-Type': 'application/json',
+      },
+      body: jsonEncode({
+        'query': query,
+        'answer': answer,
+        'language': language,
+      }),
+    );
+    if (response.statusCode != 200) {
+      throw Exception(_extractErrorDetail(response));
+    }
+    final data = jsonDecode(response.body) as Map<String, dynamic>;
+    return data['visual_payload'] is Map
+        ? Map<String, dynamic>.from(data['visual_payload'] as Map)
+        : null;
+  }
+
   /// Additive SSE Ask AI. On stream failure the caller should fall back to [askAi].
   Future<Map<String, dynamic>> askAiStream({
     required String lectureId,

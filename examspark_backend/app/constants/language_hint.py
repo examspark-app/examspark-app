@@ -50,20 +50,24 @@ _FORCE_HINGLISH = re.compile(
     r"switch\s+to\s+hinglish)\b"
 )
 _FORCE_HINDI = re.compile(
-    r"(?i)\b(answer\s+in\s+hindi|talk\s+in\s+hindi|hindi\s+mein\s+batao|"
-    r"hindi\s+me\s+batao|हिंदी\s+में|हिन्दी\s+में)\b"
+    r"(?i)\b(answer\s+in\s+hindi|talk\s+in\s+hindi|speak\s+hindi|speak\s+in\s+hindi|"
+    r"hindi\s+speak|in\s+hindi|hindi\s+mein\s+batao|hindi\s+me\s+batao|"
+    r"hindi\s+mein|hindi\s+me|हिंदी\s+में|हिन्दी\s+में)\b"
 )
 _FORCE_ENGLISH = re.compile(
-    r"(?i)\b(answer\s+in\s+english|talk\s+in\s+english|talk\s+english|"
+    r"(?i)\b(answer\s+in\s+english|talk\s+in\s+english|talk\s+english|speak\s+english|"
+    r"speak\s+in\s+english|english\s+speak|in\s+english|in\s+english\s+please|"
     r"english\s+mein\s+batao|english\s+me\s+batao|english\s+mein\s+baat|"
     r"english\s+me\s+baat|english\s+main\s+baat|english\s+main\s+bat|"
-    r"baat\s+karo\s+english|bat\s+karo\s+english|in\s+english\s+please|"
+    r"baat\s+karo\s+english|bat\s+karo\s+english|"
     r"switch\s+to\s+english|i\s+want\s+english|reply\s+in\s+english)\b"
 )
 _FORCE_BENGALI = re.compile(
     r"(?i)\b(answer\s+in\s+bengali|answer\s+in\s+bangla|talk\s+in\s+bengali|"
-    r"talk\s+in\s+bangla|bengali\s+mein|bengali\s+me|bangla\s+mein|"
-    r"bangla\s+me|bengali\s+te|bangla\s+te|বাংলা\s+তে|বাংলায়)\b"
+    r"talk\s+in\s+bangla|speak\s+bengali|speak\s+bangla|speak\s+in\s+bengali|"
+    r"speak\s+in\s+bangla|bengali\s+speak|bangla\s+speak|in\s+bengali|in\s+bangla|"
+    r"bengali\s+mein|bengali\s+me|bangla\s+mein|bangla\s+me|bengali\s+te|"
+    r"bangla\s+te|bengali\s+bolun|bangla\s+bolun|বাংলা\s+তে|বাংলায়)\b"
 )
 _ENGLISH_MARKERS = re.compile(
     r"(?i)\b(the|what|why|how|when|where|who|which|explain|describe|"
