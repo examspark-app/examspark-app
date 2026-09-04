@@ -31,6 +31,7 @@ from app.constants.answer_source import (
 from app.constants.credit_costs import ask_ai_cost
 from app.constants.answer_intelligence import ANSWER_INTELLIGENCE_BLOCK
 from app.constants.language_hint import (
+    GLOBAL_MULTILINGUAL_PROMPT,
     language_hint_user_line,
     resolve_answer_language,
     typo_intent_rule_block,
@@ -271,6 +272,8 @@ For current-events questions without usable web/notes: say you don't have
 reliable current information and suggest an official source.
 Never use web search for ordinary syllabus / conceptual doubts."""
     + ASK_AI_VISUAL_EXTENSION
+    + "\n\n"
+    + GLOBAL_MULTILINGUAL_PROMPT
 )
 
 def _fetch_matches(

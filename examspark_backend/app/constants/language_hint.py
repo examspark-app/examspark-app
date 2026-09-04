@@ -16,17 +16,43 @@ from __future__ import annotations
 import re
 from typing import Literal, Optional
 
-LanguageHint = Literal[
-    "ENGLISH",
-    "HINDI",
-    "BENGALI",
-    "HINGLISH",
-    "MATCH_QUESTION",
-]
+LanguageHint = str
 
-_VALID_LOCKS = frozenset(
-    {"ENGLISH", "HINDI", "BENGALI", "HINGLISH", "MATCH_QUESTION"}
-)
+SUPPORTED_WORLD_LANGUAGES: dict[str, list[str]] = {
+    "HINDI": ["hindi", "हिंदी", "हिन्दी"],
+    "BENGALI": ["bengali", "bangla", "বাংলা", "বাংলায়"],
+    "HINGLISH": ["hinglish"],
+    "BANGLISH": ["banglish", "benglish"],
+    "ENGLISH": ["english", "अंग्रेजी", "ইংরেজি"],
+    "TAMIL": ["tamil", "தமிழ்"],
+    "TELUGU": ["telugu", "తెలుగు"],
+    "MARATHI": ["marathi", "मराठी"],
+    "GUJARATI": ["gujarati", "ગુજરાતી"],
+    "KANNADA": ["kannada", "ಕನ್ನಡ"],
+    "MALAYALAM": ["malayalam", "മലയാളം"],
+    "PUNJABI": ["punjabi", "ਪੰਜਾਬੀ"],
+    "URDU": ["urdu", "اردو"],
+    "ODIA": ["odia", "oriya", "ଓଡ଼ିଆ"],
+    "ASSAMESE": ["assamese", "অসমীয়া"],
+    "NEPALI": ["nepali", "नेपाली"],
+    "SINHALA": ["sinhala", "සිංහල"],
+    "SPANISH": ["spanish", "español", "espanol"],
+    "FRENCH": ["french", "français", "francais"],
+    "ARABIC": ["arabic", "عربي", "العربية"],
+    "PORTUGUESE": ["portuguese", "português", "portugues"],
+    "GERMAN": ["german", "deutsch"],
+    "CHINESE": ["chinese", "mandarin", "中文"],
+    "JAPANESE": ["japanese", "日本語", "nihongo"],
+    "KOREAN": ["korean", "한국어"],
+    "RUSSIAN": ["russian", "русский"],
+    "TURKISH": ["turkish", "türkçe", "turkce"],
+    "INDONESIAN": ["indonesian", "bahasa"],
+    "ITALIAN": ["italian", "italiano"],
+    "DUTCH": ["dutch", "nederlands"],
+    "PERSIAN": ["persian", "farsi", "فارسی"],
+}
+
+_VALID_LOCKS = frozenset(SUPPORTED_WORLD_LANGUAGES.keys()) | {"MATCH_QUESTION"}
 
 _DEVANAGARI = re.compile(r"[\u0900-\u097F]")
 _BENGALI = re.compile(r"[\u0980-\u09FF]")
@@ -49,26 +75,51 @@ _FORCE_HINGLISH = re.compile(
     r"hinglish\s+me|hinglish\s+conversation|use\s+hinglish|"
     r"switch\s+to\s+hinglish)\b"
 )
-_FORCE_HINDI = re.compile(
-    r"(?i)\b(answer\s+in\s+hindi|talk\s+in\s+hindi|speak\s+hindi|speak\s+in\s+hindi|"
-    r"hindi\s+speak|in\s+hindi|hindi\s+mein\s+batao|hindi\s+me\s+batao|"
-    r"hindi\s+mein|hindi\s+me|हिंदी\s+में|हिन्दी\s+में)\b"
+_FORCE_BANGLISH = re.compile(
+    r"(?i)\b(i\s+want\s+banglish|want\s+banglish|talk\s+in\s+banglish|"
+    r"reply\s+in\s+banglish|answer\s+in\s+banglish|banglish\s+mein|"
+    r"banglish\s+me|banglish\s+conversation|use\s+banglish|"
+    r"switch\s+to\s+banglish|benglish)\b"
 )
-_FORCE_ENGLISH = re.compile(
-    r"(?i)\b(answer\s+in\s+english|talk\s+in\s+english|talk\s+english|speak\s+english|"
-    r"speak\s+in\s+english|english\s+speak|in\s+english|in\s+english\s+please|"
-    r"english\s+mein\s+batao|english\s+me\s+batao|english\s+mein\s+baat|"
-    r"english\s+me\s+baat|english\s+main\s+baat|english\s+main\s+bat|"
-    r"baat\s+karo\s+english|bat\s+karo\s+english|"
-    r"switch\s+to\s+english|i\s+want\s+english|reply\s+in\s+english)\b"
-)
-_FORCE_BENGALI = re.compile(
-    r"(?i)\b(answer\s+in\s+bengali|answer\s+in\s+bangla|talk\s+in\s+bengali|"
-    r"talk\s+in\s+bangla|speak\s+bengali|speak\s+bangla|speak\s+in\s+bengali|"
-    r"speak\s+in\s+bangla|bengali\s+speak|bangla\s+speak|in\s+bengali|in\s+bangla|"
-    r"bengali\s+mein|bengali\s+me|bangla\s+mein|bangla\s+me|bengali\s+te|"
-    r"bangla\s+te|bengali\s+bolun|bangla\s+bolun|বাংলা\s+তে|বাংলায়)\b"
-)
+
+# Custom extra native phrases per language
+_EXTRA_NATIVE_PATTERNS: dict[str, str] = {
+    "HINDI": r"हिंदी\s+में|हिन्दी\s+में",
+    "BENGALI": r"বাংলা\s+তে|বাংলায়|বাংলা\s+বলুন",
+    "SPANISH": r"responde\s+en\s+espa[nñ]ol|habla\s+en\s+espa[nñ]ol",
+    "FRENCH": r"r[eé]ponds?\s+en\s+fran[cç]ais|parle\s+en\s+fran[cç]ais",
+    "TAMIL": r"தமிழ்\s+பேசு|தமிழில்",
+    "TELUGU": r"తెలుగులో",
+    "MARATHI": r"मराठीत",
+    "ARABIC": r"تكلم\s+بالعربي|بالعربية",
+}
+
+def _compile_lang_pattern(lang: str, aliases: list[str]) -> re.Pattern:
+    escaped = [re.escape(a) for a in aliases]
+    alias_grp = "(?:" + "|".join(escaped) + ")"
+    cmd_before = (
+        r"(?:answer\s+in|reply\s+in|talk\s+in|talk|speak\s+in|speak|tell\s+me\s+in|"
+        r"explain\s+in|teach\s+in|write\s+in|switch\s+to|i\s+want|want|use|in)\s+"
+        + alias_grp + r"(?:\s+please)?"
+    )
+    cmd_after = (
+        alias_grp + r"\s+(?:speak|bolo|bolun|batao|bata|samjhao|samja|mein\s+batao|"
+        r"me\s+batao|mein\s+samjhao|me\s+samjhao|mein|me|te|te\s+bolo|main\s+baat|"
+        r"me\s+baat|conversation|language|please)"
+    )
+    extra = _EXTRA_NATIVE_PATTERNS.get(lang)
+    if extra:
+        pattern = r"(?i)(?:\b(?:" + cmd_before + r"|" + cmd_after + r")\b|" + extra + r")"
+    else:
+        pattern = r"(?i)\b(?:" + cmd_before + r"|" + cmd_after + r")\b"
+    return re.compile(pattern)
+
+_EXPLICIT_LANG_REGEXES: dict[str, re.Pattern] = {
+    lang: _compile_lang_pattern(lang, aliases)
+    for lang, aliases in SUPPORTED_WORLD_LANGUAGES.items()
+    if lang not in ("HINGLISH", "BANGLISH")
+}
+
 _ENGLISH_MARKERS = re.compile(
     r"(?i)\b(the|what|why|how|when|where|who|which|explain|describe|"
     r"define|list|summarize|summary|simple|words|please|about|should|"
@@ -79,24 +130,6 @@ _ENGLISH_MARKERS = re.compile(
 _STRONG_ENGLISH_START = re.compile(
     r"(?i)^\s*(what|why|how|when|where|who|which|explain|describe|define|"
     r"list|summarize|tell\s+me|can\s+you)\b"
-)
-_FORCE_NAMED_LANGUAGE = re.compile(
-    r"(?i)\b(answer\s+in\s+tamil|talk\s+in\s+tamil|answer\s+in\s+telugu|"
-    r"talk\s+in\s+telugu|answer\s+in\s+marathi|talk\s+in\s+marathi|"
-    r"marathi\s+mein|marathi\s+me|answer\s+in\s+gujarati|"
-    r"talk\s+in\s+gujarati|answer\s+in\s+kannada|talk\s+in\s+kannada|"
-    r"answer\s+in\s+malayalam|talk\s+in\s+malayalam|answer\s+in\s+punjabi|"
-    r"talk\s+in\s+punjabi|answer\s+in\s+odia|answer\s+in\s+oriya|"
-    r"talk\s+in\s+odia|answer\s+in\s+assamese|talk\s+in\s+assamese|"
-    r"answer\s+in\s+urdu|talk\s+in\s+urdu|answer\s+in\s+spanish|"
-    r"talk\s+in\s+spanish|responde\s+en\s+espa[nñ]ol|answer\s+in\s+french|"
-    r"talk\s+in\s+french|r[eé]ponds?\s+en\s+fran[cç]ais|"
-    r"answer\s+in\s+arabic|talk\s+in\s+arabic|answer\s+in\s+portuguese|"
-    r"talk\s+in\s+portuguese|answer\s+in\s+german|talk\s+in\s+german|"
-    r"answer\s+in\s+chinese|talk\s+in\s+chinese|answer\s+in\s+japanese|"
-    r"talk\s+in\s+japanese|answer\s+in\s+korean|talk\s+in\s+korean|"
-    r"answer\s+in\s+russian|talk\s+in\s+russian|answer\s+in\s+indonesian|"
-    r"talk\s+in\s+indonesian|answer\s+in\s+turkish|talk\s+in\s+turkish)\b"
 )
 _HINGLISH_ROMAN = re.compile(
     r"(?i)\b(kya|kyun|kyunki|hai|hain|nahi|nahin|nhi|tum|tumhara|tumhare|"
@@ -117,7 +150,7 @@ def normalize_lock(value: Optional[str]) -> Optional[LanguageHint]:
         return None
     key = value.strip().upper()
     if key in _VALID_LOCKS:
-        return key  # type: ignore[return-value]
+        return key
     return None
 
 
@@ -127,14 +160,11 @@ def detect_explicit_override(query: str) -> Optional[LanguageHint]:
         return None
     if _FORCE_HINGLISH.search(text):
         return "HINGLISH"
-    if _FORCE_BENGALI.search(text):
-        return "BENGALI"
-    if _FORCE_HINDI.search(text):
-        return "HINDI"
-    if _FORCE_ENGLISH.search(text):
-        return "ENGLISH"
-    if _FORCE_NAMED_LANGUAGE.search(text):
-        return "MATCH_QUESTION"
+    if _FORCE_BANGLISH.search(text):
+        return "BANGLISH"
+    for lang_key, pattern in _EXPLICIT_LANG_REGEXES.items():
+        if pattern.search(text):
+            return lang_key
     return None
 
 
@@ -354,7 +384,35 @@ def language_hint_user_line(
             "different script just because the notes use that script."
             + _NATURAL_MIRROR_NOTE
         )
-    # HINGLISH
+    if lang == "HINGLISH":
+        return (
+            f"Detected answer language: HINGLISH.{lock_note} "
+            "Reply in natural Hinglish (mix Hindi + English the way Indian students chat) — "
+            "section titles can be English or Hinglish. Do not switch to pure English or pure "
+            "Hindi unless the student asks. "
+            "ANTI-LEAK: do NOT copy notes language — follow the student."
+            + _NATURAL_MIRROR_NOTE
+        )
+    if lang == "BANGLISH":
+        return (
+            f"Detected answer language: BANGLISH.{lock_note} "
+            "Reply in natural Banglish (mix Bengali + English the way students chat in Roman script) — "
+            "section titles can be English or Banglish. Do not switch to pure English or pure "
+            "Bengali script unless the student asks. "
+            "ANTI-LEAK: do NOT copy notes language — follow the student."
+            + _NATURAL_MIRROR_NOTE
+        )
+    if lang in SUPPORTED_WORLD_LANGUAGES:
+        lang_title = lang.title()
+        return (
+            f"Detected answer language: {lang}.{lock_note} "
+            f"HARD LOCK: The user requested {lang_title}. Write the ENTIRE answer in authentic, natural {lang_title} "
+            f"— including section titles and explanations. "
+            f"Keep technical, scientific, chemical, and math formulas in standard universal notation ($...$). "
+            f"Do NOT answer in English or Hindi when {lang_title} is requested."
+            + _NATURAL_MIRROR_NOTE
+        )
+    # Default fallback
     return (
         f"Detected answer language: HINGLISH.{lock_note} "
         "Reply in natural Hinglish (mix Hindi + English the way Indian students chat) — "
@@ -363,6 +421,7 @@ def language_hint_user_line(
         "ANTI-LEAK: do NOT copy notes language — follow the student."
         + _NATURAL_MIRROR_NOTE
     )
+
 
 
 def typo_intent_rule_block() -> str:

@@ -2,6 +2,7 @@
 
 Selection-first, short answers, optional Smart Visual Notes in same call.
 """
+from app.constants.language_hint import GLOBAL_MULTILINGUAL_PROMPT
 from app.constants.visual_notes_prompt import (
     ASK_AI_STREAM_DELIMITER,
     SMART_SUBJECT_UNDERSTANDING,
@@ -22,7 +23,8 @@ Use LaTeX $$...$$ for formulas. Never invent facts beyond the selection + contex
 """
 )
 
-_BASE = """You are Sonaxia Select AI — a focused teacher for one selected passage.
+_BASE = (
+    """You are Sonaxia Select AI — a focused teacher for one selected passage.
 
 STRICT RULES:
 - The SELECTED TEXT is the primary focus. Do not lecture on the whole chapter.
@@ -36,6 +38,10 @@ and genuinely engaging (Gen-Z-friendly, never childish). Never write generic
 filler ("this is important", restating the selection back to the student).
 Every sentence should teach something specific and exam-useful.
 """
+    + "\n"
+    + GLOBAL_MULTILINGUAL_PROMPT
+)
+
 
 _ACTION_PROMPTS: dict[str, str] = {
     "explain": (

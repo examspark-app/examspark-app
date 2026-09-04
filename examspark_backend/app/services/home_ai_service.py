@@ -32,6 +32,7 @@ from app.constants.answer_source import (
 from app.constants.credit_costs import home_ai_cost_for_study_chip
 from app.constants.answer_intelligence import ANSWER_INTELLIGENCE_BLOCK
 from app.constants.language_hint import (
+    GLOBAL_MULTILINGUAL_PROMPT,
     language_hint_user_line,
     resolve_answer_language,
     typo_intent_rule_block,
@@ -851,6 +852,8 @@ Photo / Diagram based (when image context or diagram is mentioned):
 
 """
     + ASK_AI_VISUAL_EXTENSION
+    + "\n\n"
+    + GLOBAL_MULTILINGUAL_PROMPT
 )
 
 

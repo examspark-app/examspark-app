@@ -447,7 +447,7 @@ This rule overrides everything. Even if category names or system labels are in E
 """
 
 def system_prompt(category: str | None, user_query: str, conversation_language: str | None = None) -> str:
-    from app.constants.language_hint import detect_explicit_override
+    from app.constants.language_hint import GLOBAL_MULTILINGUAL_PROMPT, detect_explicit_override
 
     language_instruction = language_hint_user_line(
         user_query,
@@ -455,11 +455,11 @@ def system_prompt(category: str | None, user_query: str, conversation_language: 
         per_message=True,
     )
     # Build explicit native language lock for GlowGuide
-    # Use the conversation_language if explicitly set, or an explicit override in query ("bengali speak", etc.)
+    # Use the conversation_language if explicitly set, or an explicit override in query ("bengali speak", "tamil speak", etc.)
     effective_lang = (conversation_language or '').strip()
     override = detect_explicit_override(user_query)
     if override and override != "MATCH_QUESTION":
-        effective_lang = override
+        effective_lang = override.title()
 
     if effective_lang and effective_lang not in ('MATCH_QUESTION', 'Auto-detect', ''):
         lang_lock = _NATIVE_LANG_LOCK.format(lang=effective_lang)
@@ -472,6 +472,8 @@ def system_prompt(category: str | None, user_query: str, conversation_language: 
         )
     return (
         MASTER_PROMPT
+        + "\n\n"
+        + GLOBAL_MULTILINGUAL_PROMPT
         + "\n\n"
         + lang_lock
         + "\n\n"

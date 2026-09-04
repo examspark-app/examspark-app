@@ -3,6 +3,8 @@
 Parameterised by target language so the same tutor works for English, Spanish,
 French, or any language a student picks via the two-step picker.
 """
+from app.constants.language_hint import GLOBAL_MULTILINGUAL_PROMPT
+
 
 def build_chat_prompt(native_language: str, target_language: str = "English") -> str:
     tgt = target_language or "English"
@@ -168,4 +170,5 @@ to practice out loud — regardless of which native or target language pair
 is active this session. Skip it only when the turn does not actually ask
 the learner to say/repeat a {tgt} phrase (e.g. a pure explanation with no
 practice phrase, or a written-only drill).
-"""
+
+""" + GLOBAL_MULTILINGUAL_PROMPT

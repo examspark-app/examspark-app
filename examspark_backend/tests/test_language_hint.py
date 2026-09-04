@@ -38,7 +38,15 @@ def test_explicit_overrides():
     assert detect_question_language_hint("answer in english please") == "ENGLISH"
     assert detect_question_language_hint("english main baat karo") == "ENGLISH"
     assert detect_question_language_hint("bengali mein samjhao") == "BENGALI"
-    assert detect_question_language_hint("answer in spanish please") == "MATCH_QUESTION"
+    assert detect_question_language_hint("bengali speak what product i use") == "BENGALI"
+    assert detect_question_language_hint("tamil speak what product i use") == "TAMIL"
+    assert detect_question_language_hint("telugu speak what product i use") == "TELUGU"
+    assert detect_question_language_hint("gujarati speak what product i use") == "GUJARATI"
+    assert detect_question_language_hint("urdu speak what product i use") == "URDU"
+    assert detect_question_language_hint("punjabi speak what product i use") == "PUNJABI"
+    assert detect_question_language_hint("french speak what product i use") == "FRENCH"
+    assert detect_question_language_hint("answer in spanish please") == "SPANISH"
+
 
 
 def test_conversation_lock_is_default_not_hard_lock():
@@ -122,7 +130,7 @@ def test_notes_language_user_line_english_lock():
 def test_marathi_explicit_override():
     assert (
         detect_question_language_hint("Marathi mein samja: photosynthesis")
-        == "MATCH_QUESTION"
+        == "MARATHI"
     )
 
 

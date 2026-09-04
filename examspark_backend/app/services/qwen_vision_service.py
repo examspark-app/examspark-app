@@ -19,6 +19,7 @@ import re
 import httpx
 
 from app.config import AIConfig
+from app.constants.language_hint import GLOBAL_MULTILINGUAL_PROMPT
 from app.constants.visual_notes_prompt import STUDY_CONTENT_LANGUAGE_RULE
 from app.models.visual_payload import parse_visual_payload
 from app.services.qwen_service import _extract_json_object
@@ -62,6 +63,8 @@ _VISION_SYSTEM_PROMPT = (
     "6. Never invent text, objects, or context not visible in the image.\n"
     "7. Answer in the language of the user's query if provided; otherwise use the image's dominant language.\n"
     "8. Raw JSON only — no markdown fences. Keep response complete and compact."
+    + "\n\n"
+    + GLOBAL_MULTILINGUAL_PROMPT
 )
 
 _MIN_NOTES_CHARS = 40
