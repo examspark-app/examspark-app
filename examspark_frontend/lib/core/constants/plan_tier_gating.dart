@@ -22,6 +22,7 @@ enum GatedFeature {
   revision,
   importantQuestions,
   mindMap,
+  premiumAiModel, // Claude 3.5 Haiku — requires any paid plan (₹199+)
 }
 
 class PlanTierGating {
@@ -39,6 +40,8 @@ class PlanTierGating {
     GatedFeature.mindMap: 'free',
     // Open on every plan now — credit-based, not plan-locked (see note above).
     GatedFeature.recordLecture: 'free',
+    // Premium AI: any paid plan (₹199, ₹299, ₹499, ₹999, teacher) unlocks Claude Haiku.
+    GatedFeature.premiumAiModel: 'plan_199',
   };
 
   static const List<String> planRank = [
@@ -64,6 +67,11 @@ class PlanTierGating {
     return true;
   }
 
+  /// Any paid plan (≥ plan_199) unlocks Claude 3.5 Haiku across all features.
+  static bool isPremiumAiUnlocked(String currentPlanId) {
+    return _rank(currentPlanId) >= _rank('plan_199');
+  }
+
   /// Teacher Dashboard / teacherRecordOnly live Record — open on every
   /// plan (including Free); credits are still charged per use.
   static bool isTeacherLiveRecordUnlocked(String currentPlanId) {
@@ -77,6 +85,8 @@ class PlanTierGating {
 
   static String lockMessage(GatedFeature feature) {
     switch (feature) {
+      case GatedFeature.premiumAiModel:
+        return 'Claude 3.5 Haiku requires a paid plan (₹199+). Upgrade to unlock premium AI.';
       case GatedFeature.recordLecture:
       case GatedFeature.pdfAnalysis:
       case GatedFeature.diagramAnalysis:

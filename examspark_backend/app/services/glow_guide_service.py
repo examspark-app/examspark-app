@@ -261,8 +261,9 @@ async def _call_gemini_free(messages: list[dict[str, Any]]) -> str:
 
 # --- Model display names for frontend ---
 _MODEL_DISPLAY_NAMES = {
+    "gemini": "Gemini Pro",
     "gemini_free": "Gemini 2.5 Flash",
-    "gemini": "Gemini 2.5 Pro",
+    "gemini_pro": "Gemini Pro", # Explicitly selected gemini pro
     "claude": "Claude 3.5 Haiku",
     "openai": "GPT-4o-mini",
     "qwen": "Qwen 3",
@@ -368,7 +369,7 @@ async def turn(
     served_model = "gemini_free"
 
     # --- Determine fallback chain based on selected_model & plan ---
-    is_premium = selected_model == "claude"
+    is_premium = selected_model in ("claude", "gemini_pro")
     if is_premium:
         from app.services.plan_tier_service import (
             FeatureLockedError,
@@ -379,13 +380,23 @@ async def turn(
             require_feature_unlocked(user_id, GatedFeature.PREMIUM_VISION_MODEL)
         except FeatureLockedError as error:
             raise GlowGuideError(str(error), 403) from error
-        # Premium chain: Claude → Gemini Pro → GPT-4o-mini → Qwen (last)
-        chain = [
-            ("claude", _call_claude),
-            ("gemini", _call_gemini),
-            ("openai", _call_openai),
-            ("qwen", _call_qwen),
-        ]
+
+        if selected_model == "gemini_pro":
+            # Gemini Pro selected → Gemini Pro first (best for skin/ingredients/material)
+            chain = [
+                ("gemini", _call_gemini),
+                ("claude", _call_claude),
+                ("openai", _call_openai),
+                ("qwen", _call_qwen),
+            ]
+        else:
+            # Claude Haiku selected → Claude first
+            chain = [
+                ("claude", _call_claude),
+                ("gemini", _call_gemini),
+                ("openai", _call_openai),
+                ("qwen", _call_qwen),
+            ]
     else:
         # Free chain: Gemini Flash → GPT-4o-mini → Qwen (last)
         chain = [

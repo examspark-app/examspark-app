@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/core/theme/subject_theme_helper.dart';
 
 /// Generic reusable card for a lecture / note item — used in Library and
 /// Group "recent shared content" lists. Same visual language everywhere
@@ -9,7 +10,8 @@ class LectureCard extends StatelessWidget {
   final String? subject;
   final String dateLabel;
   final VoidCallback onTap;
-  final IconData icon;
+  final IconData? icon;
+  final Color? iconColor;
   final bool isFavorite;
   /// When set, shows a star control (does not trigger [onTap]).
   final ValueChanged<bool>? onFavoriteChanged;
@@ -20,13 +22,20 @@ class LectureCard extends StatelessWidget {
     this.subject,
     required this.dateLabel,
     required this.onTap,
-    this.icon = Icons.description_outlined,
+    this.icon,
+    this.iconColor,
     this.isFavorite = false,
     this.onFavoriteChanged,
   });
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final resolved = SubjectThemeHelper.getSubjectIconAndColor(subject, context);
+    final effectiveIcon = icon ?? resolved.$1;
+    final effectiveColor = iconColor ?? resolved.$2;
+    final bgTint = effectiveColor.withValues(alpha: isDark ? 0.18 : 0.12);
+
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(AppTheme.borderRadius),
@@ -43,11 +52,11 @@ class LectureCard extends StatelessWidget {
               width: 42,
               height: 42,
               decoration: BoxDecoration(
-                color: AppTheme.getAccentTint(context),
+                color: bgTint,
                 borderRadius: BorderRadius.circular(10),
               ),
               alignment: Alignment.center,
-              child: Icon(icon, color: AppTheme.accentColor, size: 20),
+              child: Icon(effectiveIcon, color: effectiveColor, size: 20),
             ),
             const SizedBox(width: 12),
             Expanded(

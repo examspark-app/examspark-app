@@ -62,7 +62,7 @@ class RazorpayGateway implements PaymentGatewayInterface {
     final gatewayOrderId = order.gatewayOrderId;
     if (keyId.isEmpty || gatewayOrderId == null || gatewayOrderId.isEmpty) {
       return PaymentResult.failed(
-        'Missing Razorpay key or gateway order id',
+        'Web payment under maintenance. Please download the Play Store app to buy plan.',
         orderId: order.orderId,
       );
     }

@@ -24,6 +24,7 @@ class AiModelSelector extends StatelessWidget {
     required this.onSelected,
     this.customModels,
     this.onPremiumTap,
+    this.isPremiumUnlocked = false,
   });
 
   final String selectedModel;
@@ -32,8 +33,11 @@ class AiModelSelector extends StatelessWidget {
   /// Override default model list per feature.
   final List<AiModelOption>? customModels;
 
-  /// Called when user taps a premium model — show upgrade sheet.
+  /// Called when user taps a premium model without a paid plan — show upgrade sheet.
   final VoidCallback? onPremiumTap;
+
+  /// When true, user has a paid plan — premium models work directly (no popup).
+  final bool isPremiumUnlocked;
 
   // --- Default model list (Study AI Chat) ---
   static const _defaultModels = <AiModelOption>[
@@ -67,6 +71,13 @@ class AiModelSelector extends StatelessWidget {
       value: 'gemini',
       label: 'Gemini 2.5 Flash',
       icon: Icons.auto_awesome_rounded,
+    ),
+    AiModelOption(
+      value: 'gemini_pro',
+      label: 'Gemini Pro',
+      icon: Icons.auto_awesome_rounded,
+      isPremium: true,
+      premiumBadge: '🔒 ₹199',
     ),
     AiModelOption(
       value: 'claude',
@@ -141,7 +152,9 @@ class AiModelSelector extends StatelessWidget {
           (m) => m.value == value,
           orElse: () => currentModels.first,
         );
-        if (option.isPremium && onPremiumTap != null) {
+        // Premium model: if user has no paid plan → show upgrade popup.
+        // If user has paid plan (isPremiumUnlocked=true) → allow directly.
+        if (option.isPremium && !isPremiumUnlocked && onPremiumTap != null) {
           onPremiumTap!();
           return;
         }

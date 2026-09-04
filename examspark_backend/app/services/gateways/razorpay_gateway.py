@@ -38,7 +38,7 @@ class RazorpayGateway(PaymentGatewayBase):
                 gateway=self.gateway,
                 gateway_order_id=None,
                 razorpay_key_id=None,
-                message="Razorpay not configured — set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET",
+                message="Web payment under maintenance. Please download the Play Store app to buy plan.",
             )
 
         notes = {

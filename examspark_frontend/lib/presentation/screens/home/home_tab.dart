@@ -41,6 +41,7 @@ import 'package:posthog_flutter/posthog_flutter.dart';
 import 'package:examspark_frontend/core/services/feature_analytics_tracker.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:shared_preferences/shared_preferences.dart';
 
 typedef OpenWorkspace =
     void Function(String lectureId, String title, String? subject);
@@ -166,8 +167,10 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 
     /// Locked after first successful turn (HINDI/BENGALI/ENGLISH/HINGLISH).
   String? _conversationLanguage;
-  String _visionModel = 'qwen-vl';
-  String _textModel = 'gemini';
+  // Vision model is auto-selected from plan — premium uses Claude Haiku, free uses Gemini Flash.
+  String get _visionModel =>
+      PlanTierGating.isPremiumAiUnlocked(_planTier) ? 'claude' : 'gemini';
+  String _textModel = 'chatgpt';
 
   /// Phase 4D — active Study Session (Supabase).
   String? _homeAiSessionId;
@@ -505,10 +508,27 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
         }
       } catch (_) {}
 
+      // Restore saved model choice (Study AI Chat)
+      String? savedModel;
+      try {
+        final prefs = await SharedPreferences.getInstance();
+        savedModel = prefs.getString('home_ai_text_model');
+      } catch (_) {}
+      final isPremium = PlanTierGating.isPremiumAiUnlocked(plan);
+      String resolvedModel;
+      if (savedModel != null) {
+        // Validate saved model is allowed for current plan
+        final isPremiumModel = savedModel == 'claude';
+        resolvedModel = (isPremiumModel && !isPremium) ? 'chatgpt' : savedModel;
+      } else {
+        resolvedModel = isPremium ? 'claude' : 'chatgpt';
+      }
+
       setState(() {
         _creditsBalance = profile?['credits_balance'] as int? ?? 0;
         _userName = (profile?['full_name'] as String?) ?? user.email ?? 'User';
         _planTier = plan;
+        _textModel = resolvedModel;
         _isTeacher = profile?['role'] == 'teacher';
         _recentLectures = lectures.take(5).toList();
         _preferredLanguage = preferredLang;
@@ -979,8 +999,6 @@ $rawText
     if (_isSending) return;
 
     try {
-      await _chooseVisionModel();
-      if (!mounted) return;
       Uint8List? bytes;
       var filename = fromCamera ? 'camera.jpg' : 'photo.jpg';
 
@@ -1107,37 +1125,53 @@ $rawText
     }
   }
 
-  Future<void> _chooseVisionModel() async {
-    final selected = await showModalBottomSheet<String>(
+  /// Shows upgrade popup when user taps a premium model without a paid plan.
+  void _showPremiumUpgradeSheet() {
+    showModalBottomSheet<void>(
       context: context,
-      builder: (sheetContext) => SafeArea(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const ListTile(
-              title: Text('Vision model'),
-              subtitle: Text('Choose how Home image questions are solved.'),
-            ),
-            RadioListTile<String>(
-              value: 'qwen-vl',
-              groupValue: _visionModel,
-              title: const Text('Qwen-VL'),
-              subtitle: const Text('Default vision model'),
-              onChanged: (value) => Navigator.pop(sheetContext, value),
-            ),
-            RadioListTile<String>(
-              value: 'gemini',
-              groupValue: _visionModel,
-              title: const Text('Gemini'),
-              subtitle: const Text('Gemini 2.5 Flash vision'),
-              onChanged: (value) => Navigator.pop(sheetContext, value),
-            ),
-          ],
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.workspace_premium_rounded,
+                  color: Colors.amber, size: 40),
+              const SizedBox(height: 12),
+              const Text('Unlock Premium AI',
+                  style: TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.w700)),
+              const SizedBox(height: 8),
+              const Text(
+                'Claude 3.5 Haiku requires any paid plan (₹199+).\nGet deeper, faster AI responses.',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 14, color: Colors.grey),
+              ),
+              const SizedBox(height: 20),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: const Text('Upgrade Plan',
+                      style: TextStyle(
+                          fontSize: 16, fontWeight: FontWeight.w600)),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
-    if (!mounted || selected == null) return;
-    setState(() => _visionModel = selected);
   }
 
   void _showAudioLockedSheet() {
@@ -1494,7 +1528,21 @@ trailing: const [],
 
   void _changeTextModel(String model) {
     if (_isSending || !mounted) return;
+    // Premium model gate: any paid plan (≥₹199) required for Claude Haiku.
+    if (model == 'claude' &&
+        !PlanTierGating.isPremiumAiUnlocked(_planTier)) {
+      _showPremiumUpgradeSheet();
+      return; // Don't set model — keep current free model
+    }
     setState(() => _textModel = model);
+    _saveTextModel(model); // Persist choice for next session
+  }
+
+  Future<void> _saveTextModel(String model) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('home_ai_text_model', model);
+    } catch (_) {}
   }
 
   Widget _buildWelcome(BuildContext context) {
@@ -1560,39 +1608,39 @@ trailing: const [],
   /// chatting. Tapping "Study AI" reveals the normal chat welcome (below);
   /// the other two navigate straight to their own screens.
   Widget _buildFeatureLauncher(BuildContext context) {
-  return Column(
-    children: [
-      _FeatureLauncherCard(
-        icon: Icons.auto_awesome_rounded,
-        iconColor: const Color(0xFF7C4DFF),
-        title: 'Study AI',
-        tagline: 'Learn. Solve. Score.',
-        onTap: () => setState(() => _launcherDismissed = true),
-      ),
-      const SizedBox(height: 10),
-      _FeatureLauncherCard(
-        icon: Icons.record_voice_over_rounded,
-        iconColor: const Color(0xFF12A594),
-        title: 'English Practice',
-        tagline: 'Speak. Practice. Grow.',
-        onTap: () => Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const EnglishPracticeScreen(),
+    return Column(
+      children: [
+        _FeatureLauncherCard(
+          icon: Icons.auto_awesome_rounded,
+          iconColor: const Color(0xFF7C4DFF),
+          title: 'Study AI',
+          tagline: 'Learn. Solve. Score.',
+          onTap: () => setState(() => _launcherDismissed = true),
+        ),
+        const SizedBox(height: 6),
+        _FeatureLauncherCard(
+          icon: Icons.eco_rounded,
+          iconColor: const Color(0xFFD85A30),
+          title: 'GlowGuide Care AI',
+          tagline: 'Care. Simply. Better.',
+          onTap: () => Navigator.pushNamed(context, '/glow-guide'),
+        ),
+        const SizedBox(height: 6),
+        _FeatureLauncherCard(
+          icon: Icons.record_voice_over_rounded,
+          iconColor: const Color(0xFF12A594),
+          title: 'English Practice',
+          tagline: 'Speak. Practice. Grow.',
+          onTap: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const EnglishPracticeScreen(),
+            ),
           ),
         ),
-      ),
-      const SizedBox(height: 10),
-      _FeatureLauncherCard(
-        icon: Icons.eco_rounded,
-        iconColor: const Color(0xFFD85A30),
-        title: 'GlowGuide',
-        tagline: 'Care. Simply. Better.',
-        onTap: () => Navigator.pushNamed(context, '/glow-guide'),
-      ),
-    ],
-  );
-}
+      ],
+    );
+  }
 
   /// Welcome banner/card — "Hi, {name}" greeting shown once above the
   /// empty-chat Home screen (not in the top app bar).
@@ -2375,18 +2423,7 @@ trailing: const [],
                       _openStudyHistory();
                     },
                   ),
-                  ListTile(
-                    leading: const Icon(Icons.visibility_outlined),
-                    title: const Text('Vision model'),
-                    subtitle: Text(
-                      _visionModel == 'gemini' ? 'Gemini' : 'Qwen-VL',
-                    ),
-                    onTap: () {
-                      Navigator.pop(context);
-                      _chooseVisionModel();
-                    },
-                  ),
-                  if (_isTeacher)
+                   if (_isTeacher)
                     ListTile(
                       leading: const Icon(Icons.school_rounded),
                       title: const Text('Teacher Dashboard'),
@@ -3146,36 +3183,37 @@ class _FeatureLauncherCard extends StatelessWidget {
   Widget build(BuildContext context) {
     return Material(
       color: AppTheme.getCardBackground(context),
-      borderRadius: BorderRadius.circular(14),
+      borderRadius: BorderRadius.circular(12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(12),
         onTap: onTap,
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(14),
+            borderRadius: BorderRadius.circular(12),
             border: Border.all(color: AppTheme.getCardBorder(context)),
           ),
           child: Row(
             children: [
               Container(
-                width: 36,
-                height: 36,
+                width: 30,
+                height: 30,
                 decoration: BoxDecoration(
                   color: iconColor.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(10),
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, color: iconColor, size: 18),
+                child: Icon(icon, color: iconColor, size: 16),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
                       title,
                       style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontSize: 14,
+                        fontSize: 13.5,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
@@ -3183,7 +3221,7 @@ class _FeatureLauncherCard extends StatelessWidget {
                       tagline,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                         color: AppTheme.getSecondaryText(context),
-                        fontSize: 11.5,
+                        fontSize: 11.0,
                       ),
                     ),
                   ],
@@ -3192,7 +3230,7 @@ class _FeatureLauncherCard extends StatelessWidget {
               Icon(
                 Icons.chevron_right_rounded,
                 color: AppTheme.getSecondaryText(context),
-                size: 18,
+                size: 16,
               ),
             ],
           ),

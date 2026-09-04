@@ -212,7 +212,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
   int? _mcqSelectedIndex;
   String? _sessionId;
   String? _analyticsSessionKey;
-  bool _loading = false;
+  bool _loading = true; // true initially → shows loader until first _load() completes
   int _latestSessionRequestId = 0;
   bool _sending = false;
   bool _recording = false;
@@ -405,7 +405,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
   Future<void> _load({bool initial = false}) async {
     if (mounted) {
       setState(() {
-        if (!initial) _loading = true;
+        _loading = true;
         _error = null;
       });
     }

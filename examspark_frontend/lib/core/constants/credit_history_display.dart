@@ -14,6 +14,13 @@ class CreditHistoryDisplay {
 
   static String featureLabel(String? action, String? description) {
     final a = normalizeAction(action);
+    final d = (description ?? '').toLowerCase();
+    if (a == 'english_practice' || a.contains('english_practice') || d.contains('english practice')) {
+      return 'English Practice';
+    }
+    if (a == 'glow_guide' || a.contains('glow_guide') || d.contains('glowguide') || d.contains('glow guide')) {
+      return 'GlowGuide Care AI';
+    }
     switch (a) {
       case 'audio_transcription':
         return 'Record Lecture';
@@ -59,56 +66,72 @@ class CreditHistoryDisplay {
               .map((p) => '${p[0].toUpperCase()}${p.substring(1)}')
               .join(' ');
         }
-        final d = (description ?? '').trim();
-        if (d.isNotEmpty) {
-          final first = d.split('\n').first.trim();
+        final dTrim = (description ?? '').trim();
+        if (dTrim.isNotEmpty) {
+          final first = dTrim.split('\n').first.trim();
           return first.length > 40 ? '${first.substring(0, 37)}…' : first;
         }
         return 'Credit change';
     }
   }
 
-  static IconData featureIcon(String? action) {
+  /// Feature icon and accent color based on action & description for clear visual recognition.
+  static (IconData, Color) featureTheme(String? action, String? description, BuildContext context) {
     final a = normalizeAction(action);
-    switch (a) {
-      case 'audio_transcription':
-        return Icons.mic_none_rounded;
-      case 'youtube_link':
-        return Icons.play_circle_outline;
-      case 'quiz':
-        return Icons.quiz_outlined;
-      case 'flashcards':
-        return Icons.style_outlined;
-      case 'revision':
-      case 'five_min_revision':
-        return Icons.menu_book_outlined;
-      case 'important_questions':
-        return Icons.star_outline;
-      case 'mind_map':
-        return Icons.account_tree_outlined;
-      case 'ask_ai':
-      case 'ask_ai_web':
-        return Icons.chat_bubble_outline;
-      case 'home_ai_vision':
-        return Icons.photo_camera_outlined;
-      case 'select_ai':
-        return Icons.text_fields_outlined;
-      case 'pdf_analysis':
-        return Icons.picture_as_pdf_outlined;
-      case 'diagram_image':
-        return Icons.image_outlined;
-      case 'credit_pack':
-      case 'subscription_monthly':
-      case 'payment_grant':
-        return Icons.add_circle_outline;
-      case 'refund':
-        return Icons.undo_rounded;
-      default:
-        if (a.startsWith('home_ai_tool_regen_')) {
-          return Icons.autorenew_rounded;
-        }
-        return Icons.bolt_outlined;
+    final d = (description ?? '').toLowerCase();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (a == 'english_practice' || a.contains('english_practice') || d.contains('english practice')) {
+      return (Icons.record_voice_over_rounded, isDark ? const Color(0xFF26A69A) : const Color(0xFF12A594));
     }
+    if (a == 'glow_guide' || a.contains('glow_guide') || d.contains('glowguide') || d.contains('glow guide')) {
+      return (Icons.eco_rounded, isDark ? const Color(0xFFFF7043) : const Color(0xFFD85A30));
+    }
+    if (a == 'ask_ai' || a == 'ask_ai_web' || a.startsWith('home_ai') || d.contains('home ai')) {
+      if (a == 'home_ai_vision' || d.contains('vision') || d.contains('photo') || d.contains('camera')) {
+        return (Icons.photo_camera_rounded, isDark ? const Color(0xFF26C6DA) : const Color(0xFF00ACC1));
+      }
+      return (Icons.auto_awesome_rounded, isDark ? const Color(0xFF9FA8DA) : const Color(0xFF7C4DFF));
+    }
+    if (a == 'audio_transcription' || d.contains('record') || d.contains('audio')) {
+      return (Icons.mic_none_rounded, isDark ? const Color(0xFF42A5F5) : const Color(0xFF1E88E5));
+    }
+    if (a == 'youtube_link' || d.contains('youtube')) {
+      return (Icons.smart_display_rounded, isDark ? const Color(0xFFEF5350) : const Color(0xFFD32F2F));
+    }
+    if (a == 'pdf_analysis' || d.contains('pdf')) {
+      return (Icons.picture_as_pdf_rounded, isDark ? const Color(0xFFE57373) : const Color(0xFFE53935));
+    }
+    if (a == 'diagram_image' || d.contains('diagram')) {
+      return (Icons.image_rounded, isDark ? const Color(0xFF4DB6AC) : const Color(0xFF00897B));
+    }
+    if (a == 'quiz' || d.contains('quiz')) {
+      return (Icons.quiz_rounded, isDark ? const Color(0xFFFFCA28) : const Color(0xFFFFA000));
+    }
+    if (a == 'flashcards' || d.contains('flashcard')) {
+      return (Icons.style_rounded, isDark ? const Color(0xFF7986CB) : const Color(0xFF3F51B5));
+    }
+    if (a == 'mind_map' || d.contains('mind map')) {
+      return (Icons.account_tree_rounded, isDark ? const Color(0xFFBA68C8) : const Color(0xFF8E24AA));
+    }
+    if (a == 'revision' || a == 'five_min_revision' || d.contains('revision')) {
+      return (Icons.auto_fix_high_rounded, isDark ? const Color(0xFF81C784) : const Color(0xFF43A047));
+    }
+    if (a == 'important_questions' || d.contains('question')) {
+      return (Icons.star_rounded, isDark ? const Color(0xFFFFB74D) : const Color(0xFFFB8C00));
+    }
+    if (a == 'credit_pack' || a == 'subscription_monthly' || a == 'payment_grant' || d.contains('credit') || d.contains('grant')) {
+      return (Icons.stars_rounded, isDark ? const Color(0xFFFFD54F) : const Color(0xFFFFB300));
+    }
+    if (a == 'refund') {
+      return (Icons.undo_rounded, isDark ? const Color(0xFFCE93D8) : const Color(0xFF8E24AA));
+    }
+
+    return (Icons.bolt_rounded, isDark ? const Color(0xFFAB47BC) : const Color(0xFF7B1FA2));
+  }
+
+  static IconData featureIcon(String? action) {
+    return featureTheme(action, null, null as dynamic).$1;
   }
 
   /// Filter bucket for chips. Grants appear under [filterAll] only.

@@ -384,6 +384,12 @@ class _CreditsHistoryScreenState extends State<CreditsHistoryScreen> {
         : '-${amount.abs()} Credits';
     final tappable = CreditHistoryDisplay.canOpenStudyWorkspace(row) || isCredit;
 
+    final featureTheme = CreditHistoryDisplay.featureTheme(action, description, context);
+    final effectiveIcon = featureTheme.$1;
+    final effectiveColor = featureTheme.$2;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bgTint = effectiveColor.withValues(alpha: isDark ? 0.18 : 0.12);
+
     final content = Padding(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
       child: Row(
@@ -393,13 +399,13 @@ class _CreditsHistoryScreenState extends State<CreditsHistoryScreen> {
             width: 40,
             height: 40,
             decoration: BoxDecoration(
-              color: Colors.grey.shade100,
+              color: bgTint,
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(
-              CreditHistoryDisplay.featureIcon(action),
+              effectiveIcon,
               size: 20,
-              color: Colors.black87,
+              color: effectiveColor,
             ),
           ),
           const SizedBox(width: 12),

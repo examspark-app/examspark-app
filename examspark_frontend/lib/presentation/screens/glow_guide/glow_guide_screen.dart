@@ -3,8 +3,10 @@ import 'dart:typed_data';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart'
     as app_supabase;
+import 'package:examspark_frontend/core/constants/plan_tier_gating.dart';
 import 'package:examspark_frontend/core/services/feature_analytics_tracker.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
@@ -22,6 +24,145 @@ class GlowGuideScreen extends StatefulWidget {
 }
 
 class _GlowGuideScreenState extends State<GlowGuideScreen> {
+  static const _categoryDetails = <String, ({IconData icon, Color color, String description})>{
+    'Skin Care': (
+      icon: Icons.face_retouching_natural_rounded,
+      color: Color(0xFFE91E63),
+      description: 'Skincare routines, tips, and product advice for healthy, glowing skin.',
+    ),
+    'Body Care': (
+      icon: Icons.spa_rounded,
+      color: Color(0xFFFF9800),
+      description: 'Body care tips, moisturization, and hygiene for soft, healthy skin.',
+    ),
+    'Baby Skin Care': (
+      icon: Icons.child_care_rounded,
+      color: Color(0xFFFFC107),
+      description: 'Gentle care tips and safe product advice for your baby\'s delicate skin.',
+    ),
+    'Cloth Guide': (
+      icon: Icons.checkroom_rounded,
+      color: Color(0xFF4CAF50),
+      description: 'Fabric care tips, stain removal, and best washing practices.',
+    ),
+    'Hair Care': (
+      icon: Icons.face_3_rounded,
+      color: Color(0xFF2196F3),
+      description: 'Hair care routines, solutions for hair problems and growth tips.',
+    ),
+  };
+
+  static const _commonOptionSubtitles = <String, String>{
+    'male': 'Personalized consultation tailored for men.',
+    'female': 'Personalized consultation tailored for women.',
+    'acne / pimples': 'Breakouts, blackheads, whiteheads, or inflamed spots.',
+    'dark spots': 'Hyperpigmentation, acne marks, and uneven skin tone.',
+    'dryness': 'Flaky, tight, rough texture needing intense hydration.',
+    'oily skin': 'Excess shine, enlarged pores, and sebum control.',
+    'check a product label': 'Scan or upload ingredients to check suitability.',
+    'body odor': 'Sweat management, antibacterial cleansing, and freshness.',
+    'dryness / patches': 'Rough elbow, knee, or body patches needing moisture.',
+    'stretch marks': 'Skin elasticity support and nourishing body care.',
+    'diaper rash': 'Soothe redness, barrier protection, and gentle care.',
+    'dry / sensitive skin': 'Hypoallergenic soothing formulas for delicate skin.',
+    'new product check': 'Ensure ingredients are 100% safe for baby.',
+    'check fabric composition': 'Identify cotton, polyester, wool, and sensitivities.',
+    'baby-safe check': 'Gentle detergents and skin-safe fabric guidance.',
+    'season suitability': 'Breathable fabrics for summer or warm layers for winter.',
+    'care instructions': 'Washing, stain removal, and fabric longevity tips.',
+    'hair loss': 'Excessive shedding, thinning hair, and scalp health.',
+    'hair whitening': 'Premature greying, melanin support, and hair care.',
+    'general hair care': 'Daily washing, conditioning, and frizz management.',
+    'short to long growth': 'Hair growth stimulation, nourishment, and length retention.',
+  };
+
+  static ({IconData icon, Color color, String title, String? subtitle}) resolveOptionVisuals(
+    String optionText,
+    int index,
+    BuildContext context,
+  ) {
+    final clean = optionText.trim();
+    final lower = clean.toLowerCase();
+
+    for (final entry in _categoryDetails.entries) {
+      if (lower == entry.key.toLowerCase() ||
+          lower.replaceAll(' ', '') ==
+              entry.key.toLowerCase().replaceAll(' ', '')) {
+        return (
+          icon: entry.value.icon,
+          color: entry.value.color,
+          title: entry.key,
+          subtitle: entry.value.description,
+        );
+      }
+    }
+
+    const palette = [
+      Color(0xFFE91E63),
+      Color(0xFFFF9800),
+      Color(0xFFFFB300),
+      Color(0xFF4CAF50),
+      Color(0xFF2196F3),
+      Color(0xFF9C27B0),
+      Color(0xFF00BCD4),
+    ];
+    final color = palette[index % palette.length];
+
+    String title = clean;
+    String? subtitle;
+    if (clean.contains(':')) {
+      final parts = clean.split(':');
+      title = parts[0].trim();
+      subtitle = parts.sublist(1).join(':').trim();
+    } else if (clean.contains('—')) {
+      final parts = clean.split('—');
+      title = parts[0].trim();
+      subtitle = parts.sublist(1).join('—').trim();
+    } else if (clean.contains('(') && clean.endsWith(')')) {
+      final startParen = clean.indexOf('(');
+      title = clean.substring(0, startParen).trim();
+      subtitle = clean.substring(startParen + 1, clean.length - 1).trim();
+    }
+
+    IconData icon = Icons.auto_awesome_rounded;
+    if (lower.contains('acne') || lower.contains('pimple') || lower.contains('spot')) {
+      icon = Icons.grain_rounded;
+    } else if (lower.contains('dry') || lower.contains('moistur') || lower.contains('hydrat')) {
+      icon = Icons.water_drop_outlined;
+    } else if (lower.contains('oil') || lower.contains('greas') || lower.contains('sebum')) {
+      icon = Icons.opacity_rounded;
+    } else if (lower.contains('sensitiv') || lower.contains('protect') || lower.contains('safe')) {
+      icon = Icons.shield_outlined;
+    } else if (lower.contains('sun') || lower.contains('summer') || lower.contains('uv')) {
+      icon = Icons.wb_sunny_outlined;
+    } else if (lower.contains('winter') || lower.contains('cold')) {
+      icon = Icons.ac_unit_rounded;
+    } else if (lower.contains('cloth') || lower.contains('fabric') || lower.contains('wear') || lower.contains('cotton')) {
+      icon = Icons.checkroom_rounded;
+    } else if (lower.contains('hair') || lower.contains('scalp')) {
+      icon = Icons.face_3_rounded;
+    } else if (lower.contains('baby') || lower.contains('child') || lower.contains('kid')) {
+      icon = Icons.child_care_rounded;
+    } else if (lower.contains('odor') || lower.contains('smell') || lower.contains('sweat')) {
+      icon = Icons.air_rounded;
+    } else if (lower.contains('check') || lower.contains('label') || lower.contains('product')) {
+      icon = Icons.qr_code_scanner_rounded;
+    } else if (lower.contains('routine') || lower.contains('daily') || lower.contains('morning')) {
+      icon = Icons.schedule_rounded;
+    } else {
+      icon = Icons.check_circle_outline_rounded;
+    }
+
+    subtitle ??= _commonOptionSubtitles[lower];
+
+    return (
+      icon: icon,
+      color: color,
+      title: title,
+      subtitle: subtitle,
+    );
+  }
+
   static const _categories = [
     ('Skin Care', Icons.face_retouching_natural_outlined),
     ('Body Care', Icons.spa_outlined),
@@ -96,13 +237,16 @@ static const _manualLanguageOption = 'Manual entry';
   String? _sessionTitle;
   bool _restoring = false;
   bool _customInputFlowOpen = false;
-  String _selectedModel = 'gemini'; // 'gemini' = free (Gemini 2.5 Flash); 'claude' = premium
+  // Default: gemini_pro (premium). _loadPlanTier resets to 'gemini' (free Flash) if no plan.
+  String _selectedModel = 'gemini_pro';
+  String _planTier = 'free'; // loaded in initState
 
   @override
   void initState() {
     super.initState();
     _analyticsSessionKey =
         FeatureAnalyticsTracker.instance.startFeature('glowguide');
+    _loadPlanTier();
     if (widget.sessionId != null && widget.sessionId!.isNotEmpty) {
       _restoreSessionById(widget.sessionId!);
     } else if (widget.startFresh) {
@@ -110,6 +254,38 @@ static const _manualLanguageOption = 'Manual entry';
     } else {
       _openLatestOrFresh();
     }
+  }
+
+  static const _kGlowModelKey = 'glowguide_selected_model';
+
+  Future<void> _loadPlanTier() async {
+    try {
+      final user = app_supabase.SupabaseClient.instance.currentUser;
+      if (user == null) return;
+      final plan = await app_supabase.SupabaseClient.instance.getPlanTier(user.id);
+      final prefs = await SharedPreferences.getInstance();
+      final savedModel = prefs.getString(_kGlowModelKey);
+      if (!mounted) return;
+      setState(() {
+        _planTier = plan;
+        final isPremium = PlanTierGating.isPremiumAiUnlocked(plan);
+        // Restore saved choice if valid for plan; else use plan-based default
+        if (savedModel != null) {
+          final premiumModels = {'gemini_pro', 'claude'};
+          final isValidForPlan = isPremium || !premiumModels.contains(savedModel);
+          _selectedModel = isValidForPlan ? savedModel : (isPremium ? 'gemini_pro' : 'gemini');
+        } else {
+          _selectedModel = isPremium ? 'gemini_pro' : 'gemini';
+        }
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _saveModel(String model) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(_kGlowModelKey, model);
+    } catch (_) {}
   }
 
   Future<void> _restoreSessionById(String sessionId) async {
@@ -351,7 +527,7 @@ String _canonicalFirstLanguage(String label) {
       if (!_messages.any((message) => message.chips.isNotEmpty && !message.isLanguageChips)) {
         _messages.add(
           _GlowMessage(
-            'First, what do you need help with?',
+            'Pick a guide or type your own topic (e.g. hair care, kids dress)',
             false,
             chips: [
               ..._categories.map((item) => item.$1),
@@ -1372,8 +1548,10 @@ String _canonicalFirstLanguage(String label) {
                     AiModelSelector(
                       selectedModel: _selectedModel,
                       customModels: AiModelSelector.glowGuideModels,
+                      isPremiumUnlocked: PlanTierGating.isPremiumAiUnlocked(_planTier),
                       onSelected: (value) {
                         setState(() => _selectedModel = value);
+                        _saveModel(value); // Persist choice for next session
                       },
                       onPremiumTap: () {
                         showModalBottomSheet<void>(
@@ -1391,7 +1569,7 @@ String _canonicalFirstLanguage(String label) {
                                 const Text('Unlock Premium AI', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
                                 const SizedBox(height: 8),
                                 const Text(
-                                  'Claude 3.5 Haiku requires ₹199 Plan.\nUpgrade for deeper ingredient analysis.',
+                                  'Claude 3.5 Haiku requires any paid plan (₹199+).\nUpgrade for deeper ingredient analysis.',
                                   textAlign: TextAlign.center,
                                   style: TextStyle(fontSize: 14, color: Colors.grey),
                                 ),
@@ -1407,19 +1585,19 @@ String _canonicalFirstLanguage(String label) {
                         );
                       },
                     ),
-                    const SizedBox(width: 8),
+                    const Spacer(),
                     Material(
                       color: AppTheme.glowGuidePink,
-                      borderRadius: BorderRadius.circular(20),
+                      shape: const CircleBorder(),
+                      clipBehavior: Clip.antiAlias,
                       child: InkWell(
-                        borderRadius: BorderRadius.circular(20),
                         onTap: _sending || _sessionComplete ? null : _send,
                         child: const Padding(
                           padding: EdgeInsets.all(10),
                           child: Icon(
                             Icons.arrow_upward_rounded,
                             color: Colors.white,
-                            size: 22,
+                            size: 20,
                           ),
                         ),
                       ),
@@ -1506,45 +1684,177 @@ String _canonicalFirstLanguage(String label) {
             ),
           ),
         ),
-        body: Column(
-          children: [
-            if (!_hasLoadedPreferredLanguage) const SizedBox(height: 8),
-            if (_restoring)
-              const Expanded(
-                child: _GlowGuideLoader(),
-              )
-            else
-              Expanded(
-                child: ListView.builder(
-                  controller: _scroll,
-                  padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
-                  itemCount: _messages.length + (_sending ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (_sending && index == _messages.length) {
-                      return Padding(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 4,
-                          vertical: 14,
-                        ),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: _GlowThinkingBubble(
-                            status: _webSearchStatus,
-                            processingPhoto: _processingPhoto,
-                            image: _messages.isNotEmpty ? _messages.last.image : null,
-                          ),
-                        ),
-                      );
-                    }
-                    return renderTile(_messages[index]);
-                  },
-                ),
-              ),
-            const SizedBox(height: 6),
-            _restoring ? const SizedBox.shrink() : renderInput(),
-            if (!_restoring) _buildDisclaimer(isDark, subText),
-          ],
+        body: Align(
+          alignment: Alignment.topCenter,
+          child: Container(
+            constraints: const BoxConstraints(maxWidth: 780),
+            child: Column(
+              children: [
+                if (!_hasLoadedPreferredLanguage) const SizedBox(height: 8),
+                if (_restoring)
+                  const Expanded(
+                    child: _GlowGuideLoader(),
+                  )
+                else
+                  Expanded(
+                    child: Builder(
+                      builder: (context) {
+                        final showBanner = _shouldShowTopBanner;
+                        final bannerOffset = showBanner ? 1 : 0;
+                        final totalCount = _messages.length + (_sending ? 1 : 0) + bannerOffset;
+
+                        return ListView.builder(
+                          controller: _scroll,
+                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+                          itemCount: totalCount,
+                          itemBuilder: (context, index) {
+                            if (showBanner && index == 0) {
+                              return _buildTopGuideBanner(context, isDark);
+                            }
+                            final msgIndex = index - bannerOffset;
+                            if (_sending && msgIndex == _messages.length) {
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 4,
+                                  vertical: 14,
+                                ),
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: _GlowThinkingBubble(
+                                    status: _webSearchStatus,
+                                    processingPhoto: _processingPhoto,
+                                    image: _messages.isNotEmpty
+                                        ? _messages.last.image
+                                        : null,
+                                  ),
+                                ),
+                              );
+                            }
+                            return renderTile(_messages[msgIndex]);
+                          },
+                        );
+                      },
+                    ),
+                  ),
+                const SizedBox(height: 6),
+                _restoring ? const SizedBox.shrink() : renderInput(),
+                if (!_restoring) _buildDisclaimer(isDark, subText),
+              ],
+            ),
+          ),
         ),
+      ),
+    );
+  }
+
+  bool get _hasVerdict =>
+      _messages.any((m) => m.verdict != null && m.verdict!.trim().isNotEmpty);
+
+  bool get _shouldShowTopBanner =>
+      !_hasVerdict &&
+      _messages.isNotEmpty &&
+      _messages.any((m) => m.chips.isNotEmpty);
+
+  IconData _categoryIcon(String? category) {
+    final c = (category ?? '').toLowerCase();
+    if (c.contains('skin')) return Icons.face_retouching_natural_rounded;
+    if (c.contains('body')) return Icons.spa_rounded;
+    if (c.contains('baby')) return Icons.child_care_rounded;
+    if (c.contains('cloth')) return Icons.checkroom_rounded;
+    if (c.contains('hair')) return Icons.face_3_rounded;
+    return Icons.spa_rounded;
+  }
+
+  Widget _buildTopGuideBanner(BuildContext context, bool isDark) {
+    final categoryName = _prettyCategory(_category ?? 'Skin Care');
+    final bgColors = isDark
+        ? [const Color(0xFF231E34), const Color(0xFF2A1C28)]
+        : [const Color(0xFFF7F2FE), const Color(0xFFFDF0F6)];
+    final borderColor = isDark ? const Color(0xFF3F3254) : const Color(0xFFEBE0FA);
+    final titleColor = isDark ? Colors.white : const Color(0xFF20182B);
+    final subtitleColor = isDark ? Colors.white70 : const Color(0xFF6B6578);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 16),
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: bgColors,
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: borderColor, width: 0.9),
+        boxShadow: [
+          BoxShadow(
+            color: (isDark ? Colors.black : const Color(0xFF8B5CF6))
+                .withValues(alpha: isDark ? 0.3 : 0.08),
+            blurRadius: 16,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: const BoxDecoration(
+              shape: BoxShape.circle,
+              gradient: LinearGradient(
+                colors: [Color(0xFF8B5CF6), Color(0xFFD946EF)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+            ),
+            child: const Icon(
+              Icons.auto_awesome_rounded,
+              color: Colors.white,
+              size: 22,
+            ),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Your Personal AI $categoryName Guide',
+                  style: TextStyle(
+                    color: titleColor,
+                    fontSize: 14.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: -0.2,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  'Get AI advice, routines, product guide and solutions for healthy, glowing skin.',
+                  style: TextStyle(
+                    color: subtitleColor,
+                    fontSize: 11.5,
+                    height: 1.35,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF362744) : const Color(0xFFFFEEF4),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(
+              _categoryIcon(_category),
+              color: AppTheme.glowGuidePink,
+              size: 20,
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -2204,10 +2514,12 @@ class _NumberedOptionCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       decoration: BoxDecoration(
         color: bg,
-        borderRadius: BorderRadius.circular(14),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(color: borderColor, width: 0.9),
       ),
       child: Column(
@@ -2217,48 +2529,112 @@ class _NumberedOptionCard extends StatelessWidget {
             InkWell(
               onTap: () => onSelect(options[i]),
               borderRadius: BorderRadius.vertical(
-                top: i == 0 ? const Radius.circular(14) : Radius.zero,
+                top: i == 0 ? const Radius.circular(16) : Radius.zero,
                 bottom: i == options.length - 1
-                    ? const Radius.circular(14)
+                    ? const Radius.circular(16)
                     : Radius.zero,
               ),
               child: Padding(
                 padding: const EdgeInsets.symmetric(
                   horizontal: 14,
-                  vertical: 13,
+                  vertical: 12,
                 ),
-                child: Row(
-                  children: [
-                    Text(
-                      '${i + 1}',
-                      style: TextStyle(
-                        color: subText,
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Text(
-                        options[i],
-                        style: TextStyle(
-                          color: textColor,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                child: Builder(
+                  builder: (context) {
+                    final visual = _GlowGuideScreenState.resolveOptionVisuals(
+                      options[i],
+                      i,
+                      context,
+                    );
+                    final iconColor = visual.color;
+                    final badgeBg =
+                        iconColor.withValues(alpha: isDark ? 0.22 : 0.12);
+
+                    return Row(
+                      children: [
+                        // 1. Number badge pill
+                        Container(
+                          width: 26,
+                          height: 26,
+                          decoration: BoxDecoration(
+                            color: badgeBg,
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          alignment: Alignment.center,
+                          child: Text(
+                            '${i + 1}',
+                            style: TextStyle(
+                              color: iconColor,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    Icon(
-                      Icons.arrow_forward_rounded,
-                      size: 16,
-                      color: subText,
-                    ),
-                  ],
+                        const SizedBox(width: 10),
+                        // 2. Feature icon container
+                        Container(
+                          width: 38,
+                          height: 38,
+                          decoration: BoxDecoration(
+                            color: badgeBg,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          alignment: Alignment.center,
+                          child: Icon(
+                            visual.icon,
+                            size: 19,
+                            color: iconColor,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        // 3. Title & Subtitle details
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                visual.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  color: textColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if (visual.subtitle != null &&
+                                  visual.subtitle!.isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  visual.subtitle!,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: subText,
+                                    fontSize: 11.5,
+                                    height: 1.3,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Icon(
+                          Icons.chevron_right_rounded,
+                          size: 20,
+                          color: subText.withValues(alpha: 0.6),
+                        ),
+                      ],
+                    );
+                  },
                 ),
               ),
             ),
             if (i != options.length - 1)
-              Divider(height: 1, color: borderColor),
+              Divider(height: 1, thickness: 0.8, color: borderColor),
           ],
         ],
       ),

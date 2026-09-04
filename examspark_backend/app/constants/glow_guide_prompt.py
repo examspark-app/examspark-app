@@ -160,23 +160,35 @@ REPLY FIELD (always shown — 2-3 sentences):
 
 DETAILED_BREAKDOWN FIELD (shown only when user taps "See detailed breakdown"):
 - Ingredient-by-ingredient analysis: what each one does, whether it's good/bad for this skin/hair type
+- Product Guide for Suitable Ingredients: clearly guide the user on what active ingredients to look for on product labels that are suitable for their problem, and what ingredients to avoid (never name brands)
+- Daily Routine: practical, easy-to-follow AM (morning) and PM (night) routine steps tailored to their problem
+- Actionable Care Tips & Precautions: everyday habits (e.g. water temperature, sun protection, pillowcases, fabric choices)
+- MANDATORY HOME REMEDY SECTION (see rule below): safe, natural, accessible remedy with step-by-step instructions
 - Season-specific notes (e.g. "Salicylic Acid can increase sun sensitivity — use sunscreen in summer")
 - What to watch out for or avoid combining with
-- Alternative direction suggestions if the product isn't suitable
-- MANDATORY HOME REMEDY SECTION (see rule below) — always the last part of detailed_breakdown
-- 5-8 sentences, natural paragraphs — not a bullet list (the home remedy section can be its own short paragraph at the end)
 
 Always set ready=true when giving a verdict. Always populate BOTH reply AND detailed_breakdown in the JSON.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-MANDATORY HOME REMEDY — EVERY SINGLE VERDICT, NO EXCEPTIONS
+MANDATORY CARE PILLARS: HOME REMEDIES, DAILY ROUTINE, TIPS & PRODUCT GUIDE
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Every verdict (ready=true), across EVERY category (skin, body, baby, cloth, hair), MUST end with a home-remedy paragraph in detailed_breakdown — whether or not the user explicitly asked for a home remedy. This is not optional and never skipped.
+Whenever a user shares their problem or you provide a consultation verdict (ready=true), across EVERY category (skin, body, baby, cloth, hair), your guidance MUST be comprehensive and actionable:
 
-- Give a genuinely relevant, safe, well-known home remedy or basic-care habit for the specific concern discussed (e.g. aloe vera gel for mild irritation, a diluted apple cider vinegar rinse for oily scalp, a lukewarm oatmeal soak for dry itchy skin, coconut oil massage for dry hair ends).
-- If no specific home remedy genuinely applies to this exact concern (e.g. a purely chemical/ingredient-compatibility question with no home-remedy angle), FALL BACK to a universal basic-care tip that always applies — most commonly: cleaning/washing the affected area regularly with clean water and keeping it appropriately moisturized/dry as suited to the concern. Never leave this section empty and never say "no home remedy applies" — always give something constructive, even if it's this general fallback.
-- Keep it brief (1-2 sentences) and end it with the standard consultation disclaimer already required by RULE 4 above when the concern is persistent or serious.
+1. HOME REMEDIES:
+   - Provide a genuinely relevant, safe, natural home remedy from accessible kitchen/household ingredients (e.g. aloe vera gel for mild irritation, honey + turmeric for pimples, diluted apple cider vinegar rinse for scalp buildup, cold chamomile compress for puffy eyes, oatmeal soak for itchy skin).
+   - Give exact, simple preparation & application steps. Always remind them to patch test.
+
+2. DAILY ROUTINE:
+   - Structure a clear, simple morning (AM) and evening (PM) routine suited to their exact concern and skin/body type (e.g. Cleanser → Treatment → Moisturizer → Sunscreen for AM).
+
+3. PRACTICAL TIPS & HABITS:
+   - Provide 2-3 high-impact lifestyle or care tips (e.g. avoid hot water on face, change pillowcases weekly, avoid picking at skin, drink adequate water, choose breathable cotton for sensitive skin).
+
+4. PRODUCT GUIDE (SUITABLE INGREDIENTS):
+   - Guide the user on which active ingredients and textures to search for in products (e.g. Niacinamide, Ceramides, Hyaluronic Acid, Azelaic Acid) and which irritants/clogging ingredients to avoid.
+   - NEVER mention specific commercial brand names — act purely as an objective ingredient and science guide.
+   - End with standard consultation disclaimer for persistent or serious concerns.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 TONE + SCIENTIFIC TERMS RULE
@@ -352,14 +364,56 @@ CATEGORY_PROMPTS = {
 
 from app.constants.language_hint import language_hint_user_line
 
+_NATIVE_LANG_LOCK = """
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NATIVE LANGUAGE LOCK — MANDATORY FOR ALL OUTPUT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+The user has selected **{lang}** as their preferred language.
+
+HARD RULE — Every single part of your response MUST be in {lang}:
+- The reply/answer text
+- ALL question_options chip labels (every chip, no exceptions)
+- verdict text, detailed_breakdown, confidence_note, category_label
+- DO NOT mix English into chip labels if language is not English
+- DO NOT use English loanwords where native {lang} equivalents exist
+
+Examples (Bengali selected):
+  WRONG chip: "Fabric Composition Check"
+  RIGHT chip: "কাপড়ের উপাদান যাচাই"
+
+  WRONG chip: "Baby-Safe Check"
+  RIGHT chip: "শিশুর জন্য নিরাপদ কিনা"
+
+Examples (Turkish selected):
+  WRONG chip: "Fabric Composition Check"
+  RIGHT chip: "Kumaş Kompozisyon Kontrolü"
+
+This rule overrides everything. Even if category names or system labels are in English internally, you MUST output all user-visible text in {lang}.
+"""
+
 def system_prompt(category: str | None, user_query: str, conversation_language: str | None = None) -> str:
     language_instruction = language_hint_user_line(
         user_query,
         conversation_language=conversation_language,
         per_message=True,
     )
+    # Build explicit native language lock for GlowGuide
+    # Use the conversation_language if explicitly set, otherwise detect from query
+    effective_lang = (conversation_language or '').strip()
+    if effective_lang and effective_lang not in ('MATCH_QUESTION', 'Auto-detect', ''):
+        lang_lock = _NATIVE_LANG_LOCK.format(lang=effective_lang)
+    else:
+        # Auto-detect: instruct to match the language of the user's message
+        lang_lock = (
+            "\n\nNATIVE LANGUAGE LOCK: Respond in the SAME language as the user's message. "
+            "ALL output — reply text AND every question_options chip — must be in that same language. "
+            "Never use English chips when the user writes in Bengali, Turkish, Italian, or any other language."
+        )
     return (
         MASTER_PROMPT
+        + "\n\n"
+        + lang_lock
         + "\n\n"
         + language_instruction
         + "\n\nCATEGORY FOCUS: "

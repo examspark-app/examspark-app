@@ -37,7 +37,7 @@ _MINIMUM_PLAN: dict[GatedFeature, str] = {
     GatedFeature.REVISION: "free",
     GatedFeature.IMPORTANT_QUESTIONS: "free",
     GatedFeature.MIND_MAP: "free",
-    GatedFeature.PREMIUM_CHAT_MODEL: "plan_499",
+    GatedFeature.PREMIUM_CHAT_MODEL: "plan_199",
     GatedFeature.PREMIUM_VISION_MODEL: "plan_199",
     
 }
@@ -126,16 +126,13 @@ def get_user_plan_tier(user_id: str) -> str:
 
 
 def require_feature_unlocked(user_id: str, feature: GatedFeature) -> str:
-    """Returns current plan tier. Raises FeatureLockedError if locked."""
+    """Returns current plan tier. Raises FeatureLockedError if locked.
+
+    Premium AI models (PREMIUM_CHAT_MODEL, PREMIUM_VISION_MODEL):
+      Any paid plan ≥ plan_199 (₹199, ₹299, ₹499, ₹999, teacher) → unlocked.
+      Free → FeatureLockedError.
+    """
     current = get_user_plan_tier(user_id)
-    if feature == GatedFeature.PREMIUM_VISION_MODEL:
-        if _rank(current) < _rank("plan_199"):
-            raise FeatureLockedError(feature, current, "plan_199")
-        return current
-    if feature == GatedFeature.PREMIUM_CHAT_MODEL:
-        if current not in ("plan_499", "plan_999"):
-            raise FeatureLockedError(feature, current, "plan_499")
-        return current
     required = _MINIMUM_PLAN[feature]
     if _rank(current) < _rank(required):
         raise FeatureLockedError(feature, current, required)

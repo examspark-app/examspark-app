@@ -1036,11 +1036,11 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                 ),
               ),
               const SizedBox(width: 10),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
+                    const Text(
                       'Roleplay Mode',
                       style: TextStyle(
                         color: _violet,
@@ -1048,11 +1048,11 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                         fontSize: 16.5,
                       ),
                     ),
-                    SizedBox(height: 2),
+                    const SizedBox(height: 2),
                     Text(
-                      'Pick a situation. Tap again to deselect.',
+                      'Please select mode then role play start',
                       style: TextStyle(
-                        color: Colors.black45,
+                        color: subText,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w600,
                       ),
@@ -1109,7 +1109,9 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
               style: OutlinedButton.styleFrom(
                 foregroundColor: _violet,
                 side: const BorderSide(color: _violet, width: 1.1),
-                backgroundColor: const Color(0xFFF6F5FB),
+                backgroundColor: Theme.of(context).brightness == Brightness.dark
+                    ? const Color(0xFF25252C)
+                    : const Color(0xFFF6F5FB),
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(16),
@@ -1129,6 +1131,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
     required bool selected,
     required VoidCallback onTap,
   }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
@@ -1142,9 +1145,13 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                   colors: [Color(0xFF6F56FF), Color(0xFF3020BF)],
                 )
               : null,
-          color: selected ? null : const Color(0xFFF6F5FB),
+          color: selected
+              ? null
+              : (isDark ? const Color(0xFF25252C) : const Color(0xFFF6F5FB)),
           border: Border.all(
-            color: selected ? Colors.transparent : const Color(0xFFE6E4F2),
+            color: selected
+                ? Colors.transparent
+                : (isDark ? const Color(0xFF383842) : const Color(0xFFE6E4F2)),
             width: 0.8,
           ),
           boxShadow: selected
@@ -1165,7 +1172,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
               decoration: BoxDecoration(
                 color: selected
                     ? Colors.white.withOpacity(0.14)
-                    : Colors.white,
+                    : (isDark ? const Color(0xFF30303A) : Colors.white),
                 borderRadius: BorderRadius.circular(10),
               ),
               alignment: Alignment.center,
@@ -1187,7 +1194,9 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                     style: TextStyle(
                       fontSize: 13,
                       fontWeight: FontWeight.w800,
-                      color: selected ? Colors.white : const Color(0xFF3A3659),
+                      color: selected
+                          ? Colors.white
+                          : (isDark ? Colors.white : const Color(0xFF3A3659)),
                     ),
                   ),
                   const SizedBox(height: 1),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
+import 'package:examspark_frontend/core/theme/subject_theme_helper.dart';
 import 'package:examspark_frontend/presentation/screens/home/home_tab.dart' show OpenWorkspace;
 import 'package:examspark_frontend/presentation/widgets/app_top_bar.dart';
 import 'package:examspark_frontend/presentation/widgets/lecture_card.dart';
@@ -34,6 +35,7 @@ class _LibraryTabState extends State<LibraryTab> {
   List<Map<String, dynamic>> _lectures = [];
   int _creditsBalance = 0;
   String _searchQuery = '';
+  String _typeFilter = 'All';
   /// null = root Library (folders list). Non-null = open subject folder.
   String? _openFolderName;
 
@@ -167,7 +169,7 @@ class _LibraryTabState extends State<LibraryTab> {
     final recent = filtered.take(5).toList();
     final folders = _groupBySubject(filtered);
 
-    // Subject folder open: show only that folder's lectures (IA: Library → Physics tap).
+    // Subject folder open: show only that folder's lectures.
     if (_openFolderName != null) {
       final folderLectures =
           _groupBySubject(_lectures)[_openFolderName!] ?? const <Map<String, dynamic>>[];
@@ -273,31 +275,22 @@ class _LibraryTabState extends State<LibraryTab> {
                 padding: const EdgeInsets.all(AppTheme.screenPadding),
                 children: [
                   _searchField(context),
+                  const SizedBox(height: 12),
+                  _filterChipsBar(context),
                   const SizedBox(height: 20),
-                  if (_lectures.isEmpty) _buildEmptyState(context) else ...[
+                  if (_lectures.isEmpty)
+                    _buildEmptyState(context)
+                  else ...[
+                    // Subject Folders Grid AT THE TOP (per uploaded mockup)
+                    if (folders.isNotEmpty) ...[
+                      _buildFoldersGrid(context, folders),
+                      const SizedBox(height: 24),
+                    ],
                     if (favorites.isNotEmpty)
                       ..._buildSection(context, 'Favorites', favorites),
-                    if (recent.isNotEmpty) ..._buildSection(context, 'Recent', recent),
-                    const SizedBox(height: 8),
-                    Text(
-                      'FOLDERS',
-                      style: TextStyle(
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1,
-                        color: AppTheme.getSecondaryText(context),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    for (final entry in folders.entries)
-                      Padding(
-                        padding: const EdgeInsets.only(bottom: 10),
-                        child: _FolderTile(
-                          name: entry.key,
-                          count: entry.value.length,
-                          onTap: () => _openFolder(entry.key),
-                        ),
-                      ),
+                    // Recent Files AT THE BOTTOM (per uploaded mockup)
+                    if (recent.isNotEmpty)
+                      ..._buildSection(context, 'Recent Files', recent),
                     const SizedBox(height: 16),
                   ],
                 ],
@@ -322,6 +315,80 @@ class _LibraryTabState extends State<LibraryTab> {
           contentPadding: const EdgeInsets.symmetric(vertical: 12),
         ),
       ),
+    );
+  }
+
+  Widget _filterChipsBar(BuildContext context) {
+    const categories = ['All', 'Notes', 'Quizzes', 'Flashcards', 'Audio'];
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      child: Row(
+        children: [
+          for (final cat in categories) ...[
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: ChoiceChip(
+                label: Text(cat),
+                selected: _typeFilter == cat,
+                onSelected: (_) => setState(() => _typeFilter = cat),
+                selectedColor: AppTheme.accentColor,
+                labelStyle: TextStyle(
+                  color: _typeFilter == cat ? Colors.white : AppTheme.getPrimaryText(context),
+                  fontWeight: FontWeight.w600,
+                  fontSize: 12.5,
+                ),
+                backgroundColor: AppTheme.getCardBackground(context),
+                side: BorderSide(color: AppTheme.getCardBorder(context)),
+                showCheckmark: false,
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFoldersGrid(
+      BuildContext context, Map<String, List<Map<String, dynamic>>> folders) {
+    final entries = folders.entries.toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'SUBJECT FOLDERS',
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            letterSpacing: 1,
+            color: AppTheme.getSecondaryText(context),
+          ),
+        ),
+        const SizedBox(height: 12),
+        LayoutBuilder(
+          builder: (context, constraints) {
+            final isTablet = constraints.maxWidth > 600;
+            final crossAxisCount = isTablet ? 3 : 2;
+            final itemWidth =
+                (constraints.maxWidth - (12 * (crossAxisCount - 1))) /
+                    crossAxisCount;
+            return Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              children: [
+                for (final entry in entries)
+                  SizedBox(
+                    width: itemWidth,
+                    child: _FolderGridCard(
+                      name: entry.key,
+                      count: entry.value.length,
+                      onTap: () => _openFolder(entry.key),
+                    ),
+                  ),
+              ],
+            );
+          },
+        ),
+      ],
     );
   }
 
@@ -378,6 +445,82 @@ class _LibraryTabState extends State<LibraryTab> {
   }
 }
 
+class _FolderGridCard extends StatelessWidget {
+  final String name;
+  final int count;
+  final VoidCallback onTap;
+
+  const _FolderGridCard({
+    required this.name,
+    required this.count,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final resolved = SubjectThemeHelper.getSubjectIconAndColor(name, context);
+    final effectiveColor = resolved.$2;
+    final bgTint = effectiveColor.withValues(alpha: isDark ? 0.18 : 0.12);
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: AppTheme.getCardBackground(context),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppTheme.getCardBorder(context)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: bgTint,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                alignment: Alignment.center,
+                child: Icon(resolved.$1, color: effectiveColor, size: 20),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                          ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '$count item${count == 1 ? '' : 's'}',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: AppTheme.getSecondaryText(context),
+                            fontSize: 11.5,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _FolderTile extends StatelessWidget {
   final String name;
   final int count;
@@ -391,6 +534,11 @@ class _FolderTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final resolved = SubjectThemeHelper.getSubjectIconAndColor(name, context);
+    final effectiveColor = resolved.$2;
+    final bgTint = effectiveColor.withValues(alpha: isDark ? 0.18 : 0.12);
+
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -409,11 +557,11 @@ class _FolderTile extends StatelessWidget {
                 width: 42,
                 height: 42,
                 decoration: BoxDecoration(
-                  color: AppTheme.getAccentTint(context),
+                  color: bgTint,
                   borderRadius: BorderRadius.circular(10),
                 ),
                 alignment: Alignment.center,
-                child: Icon(Icons.folder_outlined, color: AppTheme.accentColor, size: 20),
+                child: Icon(resolved.$1, color: effectiveColor, size: 20),
               ),
               const SizedBox(width: 12),
               Expanded(
