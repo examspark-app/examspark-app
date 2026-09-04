@@ -167,9 +167,10 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
 
     /// Locked after first successful turn (HINDI/BENGALI/ENGLISH/HINGLISH).
   String? _conversationLanguage;
-  // Vision model is auto-selected from plan — premium uses Claude Haiku, free uses Gemini Flash.
+    // Vision chain: free uses GPT-4o-mini -> Gemini -> Qwen-VL;
+    // premium uses Claude -> GPT-4o-mini -> Gemini -> Qwen-VL.
   String get _visionModel =>
-      PlanTierGating.isPremiumAiUnlocked(_planTier) ? 'claude' : 'gemini';
+      PlanTierGating.isPremiumAiUnlocked(_planTier) ? 'claude' : 'chatgpt';
   String _textModel = 'chatgpt';
 
   /// Phase 4D — active Study Session (Supabase).

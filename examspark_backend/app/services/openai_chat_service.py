@@ -15,7 +15,7 @@ from app.config import AIConfig
 logger = logging.getLogger(__name__)
 
 _OPENAI_URL = "https://api.openai.com/v1/chat/completions"
-_TIMEOUT_SECONDS = 60.0
+_TIMEOUT_SECONDS = 20.0
 
 
 class OpenAIChatError(Exception):

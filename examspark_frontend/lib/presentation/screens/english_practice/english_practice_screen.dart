@@ -276,7 +276,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       try {
         final prefs = await SharedPreferences.getInstance();
         final saved = prefs.getString(_modelPrefsKey);
-        if (saved == 'qwen3' || saved == 'gemini' || saved == 'claude') {
+        if (saved == 'chatgpt' || saved == 'qwen3' || saved == 'gemini' || saved == 'claude') {
           _selectedTextModel = saved!;
         }
       } catch (_) {
@@ -359,7 +359,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       _nativeLanguage = language ?? '';
       _targetLanguage = '${r['target_language'] ?? 'English'}';
       final savedModel = '${r['text_model'] ?? ''}';
-      if (savedModel == 'qwen3' ||
+        if (savedModel == 'chatgpt' ||
+          savedModel == 'qwen3' ||
           savedModel == 'gemini' ||
           savedModel == 'claude') {
         _selectedTextModel = savedModel;

@@ -23,12 +23,15 @@ from app.constants.english_teacher_prompt import build_teacher_prompt
 from app.constants.english_suggestion_prompt import SUGGESTION_INSTRUCTION
 from app.constants.english_conversation_flow import build_conversation_flow_instruction
 from app.services import english_learning_memory_service as learning_memory
-from app.services.credits_service import InsufficientCreditsError, deduct_credits
+from app.services.credits_service import (
+    InsufficientCreditsError,
+    deduct_credits,
+    get_credits_balance,
+)
 from app.services.supabase_admin import get_supabase_admin
-from app.services.openrouter_stream import OpenRouterStreamError, stream_chat_completions
 from app.services.plan_tier_service import GatedFeature, require_feature_unlocked
 from app.services.whisper_service import WhisperTranscriptionError, transcribe_audio
-from app.services.qwen_vision_service import analyze_image
+from app.services.home_ai_vision_model_service import analyze_image_with_fallback
 from app.services.r2_storage_service import R2StorageService
 
 logger = logging.getLogger(__name__)
@@ -616,10 +619,10 @@ async def _call_groq_model(messages: list[dict]) -> str:
 async def _call_chat_model(messages: list[dict], selected_model: str) -> str:
     """Route to the right model with Groq and OpenRouter ensuring zero-failure.
 
-    Free chain:    groq → chatgpt → gemini → qwen3
-    Claude chain:  claude → groq → chatgpt → gemini → qwen3
-    Gemini chain:  gemini → groq → qwen3
-    ChatGPT chain: chatgpt → groq → gemini → qwen3
+    Free chain:    chatgpt → gemini → qwen3
+    Claude chain:  claude → chatgpt → gemini → qwen3
+    Gemini chain:  gemini → qwen3
+    Qwen3 chain:   qwen3
     """
     model = selected_model if selected_model in _CHAT_MODELS else "groq"
 
@@ -632,24 +635,32 @@ async def _call_chat_model(messages: list[dict], selected_model: str) -> str:
             return await _call_openai_model(messages)
         if m == "gemini":
             return await _call_gemini_model(messages)
-        return await _call_model(messages)  # qwen/qwen-2.5-72b-instruct via OpenRouter
+        from app.config import AIConfig
+        return await _call_model(messages, AIConfig.AI_FALLBACK_MODEL)
 
     # Build fallback chain
     if model == "claude":
-        chain = ["claude", "groq", "chatgpt", "gemini", "qwen3"]
+        chain = ["claude", "chatgpt", "gemini", "qwen3"]
     elif model == "chatgpt":
-        chain = ["chatgpt", "groq", "gemini", "qwen3"]
+        chain = ["chatgpt", "gemini", "qwen3"]
     elif model == "gemini":
-        chain = ["gemini", "groq", "qwen3"]
+        chain = ["gemini", "qwen3"]
+    elif model == "qwen3":
+        chain = ["qwen3", "chatgpt", "gemini"]
     elif model == "groq":
-        chain = ["groq", "qwen3"]
-    else:
         chain = ["groq", "chatgpt", "gemini", "qwen3"]
+    else:
+        chain = ["chatgpt", "gemini", "qwen3"]
 
     last_error: Exception | None = None
     for step in chain:
         try:
             reply = await _try(step)
+            if not reply or not reply.strip():
+                raise EnglishPracticeError(
+                    f"{step} returned an empty response.",
+                    502,
+                )
             logger.info(
                 "english_practice_chat_model_selected=%s served=%s",
                 model, step,
@@ -668,22 +679,9 @@ async def _stream_model(
     messages: list[dict], selected_model: str = "qwen3"
 ) -> AsyncIterator[str]:
     model = selected_model if selected_model in _CHAT_MODELS else "qwen3"
-    if model in {"gemini", "claude"}:
-        yield await _call_chat_model(messages, model)
-        return
-    temperature = _temperature_for_messages(len(messages))
-    max_tokens = _max_tokens_for_messages(len(messages))
-    try:
-        async for delta in stream_chat_completions(
-            messages,
-            temperature=temperature,
-            max_tokens=max_tokens,
-            model=AIConfig.AI_CHAT_MODEL,
-            timeout=90.0,
-        ):
-            yield delta
-    except OpenRouterStreamError as e:
-        raise EnglishPracticeError(str(e), e.status_code) from e
+    # Keep every selected model on the same fallback chain. A direct
+    # OpenRouter stream would bypass GPT/Gemini/Qwen fallback handling.
+    yield await _call_chat_model(messages, model)
 
 
 def get_native_language(user_id: str) -> str:
@@ -1158,16 +1156,12 @@ async def send_message(
             {"practice_mode": practice_mode}
         ).eq("id", session_id).eq("user_id", user_id).execute()
 
-    _persist_message(session_id, user_id, "user", text, image_path=image_path)
-    try:
-        deduct_credits(
-            user_id,
-            _CREDIT_COST,
-            description="English Practice chat turn",
-            action="english_practice_turn",
+    if get_credits_balance(user_id) < _CREDIT_COST:
+        raise EnglishPracticeError(
+            f"Need {_CREDIT_COST} credits for English Practice.",
+            402,
         )
-    except InsufficientCreditsError as e:
-        raise EnglishPracticeError(str(e), 402) from e
+    _persist_message(session_id, user_id, "user", text, image_path=image_path)
     messages, total = _build_context_messages(
         session_id=session_id,
         user_id=user_id,
@@ -1180,6 +1174,15 @@ async def send_message(
     raw_reply = await _call_chat_model(messages, model)
     clean, suggestions, mcq = _split_and_extract(raw_reply)
     reply = clean or "Okay, let's continue."
+    try:
+        deduct_credits(
+            user_id,
+            _CREDIT_COST,
+            description="English Practice chat turn",
+            action="english_practice_turn",
+        )
+    except InsufficientCreditsError as e:
+        raise EnglishPracticeError(str(e), 402) from e
     _persist_message(session_id, user_id, "assistant", reply, suggestions=suggestions)
     learning_memory.schedule_update(
         user_id=user_id,
@@ -1231,12 +1234,19 @@ async def send_photo_message(
 ) -> dict:
     if not image_bytes:
         raise EnglishPracticeError("Photo is empty.", 400)
+    session = _session_row(session_id, user_id)
+    if not session:
+        raise EnglishPracticeError("Session not found.", 404)
+    selected_model = (session.get("text_model") or "chatgpt").strip().lower()
+    vision_model = "qwen-vl" if selected_model == "qwen3" else selected_model
     try:
-        vision = await analyze_image(
+        vision = await analyze_image_with_fallback(
             image_bytes,
             filename=filename,
             mime_type=mime_type,
             text_hint="Read this image and explain it briefly for English practice. Extract readable English text.",
+            selected_model=vision_model,
+            user_id=user_id,
         )
     except Exception as error:
         raise EnglishPracticeError(f"Could not analyze photo: {error}", 502) from error

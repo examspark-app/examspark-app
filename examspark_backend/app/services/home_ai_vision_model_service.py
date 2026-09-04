@@ -177,7 +177,7 @@ async def analyze_image_with_fallback(
     chatgpt (GPT-4o-mini): included as explicit primary option; qwen-vl is absolute last resort.
     """
     normalized = (selected_model or "").strip().lower()
-    is_premium_selected = normalized in ("claude", "chatgpt", "gpt-4o-mini", "gpt4omini")
+    is_premium_selected = normalized == "claude"
 
     if is_premium_selected and user_id:
         from app.services.plan_tier_service import (
@@ -193,12 +193,11 @@ async def analyze_image_with_fallback(
             normalized = "gemini"
 
     if is_premium_selected:
-        # Premium: start with user's selection, then the other premium, then Gemini, then Qwen-VL (ALWAYS last)
-        if normalized == "claude":
-            chain = ("claude", "chatgpt", "gemini", "qwen-vl")
-        else:
-            # chatgpt / gpt-4o-mini / gpt4omini
-            chain = ("chatgpt", "claude", "gemini", "qwen-vl")
+        # Premium: selected model first, then GPT-4o-mini, Gemini, Qwen-VL.
+        chain = ("claude", "chatgpt", "gemini", "qwen-vl")
+    elif normalized in ("chatgpt", "gpt-4o-mini", "gpt4omini"):
+        # GPT-4o-mini is available to free users as the default primary model.
+        chain = ("chatgpt", "gemini", "qwen-vl")
     elif normalized == "qwen-vl" or normalized.startswith("qwen"):
         chain = ("qwen-vl", "gemini")
     else:
@@ -221,7 +220,7 @@ async def analyze_image_with_fallback(
             result.model_name = _MODEL_DISPLAY_NAMES.get(model_key, model_key)
             logger.info(
                 "home_ai_vision selected=%s served=%s premium=%s",
-                selected_model, model_key, is_premium,
+                selected_model, model_key, is_premium_selected,
             )
             return result
         except Exception as error:

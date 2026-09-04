@@ -59,7 +59,9 @@ class AIConfig:
 
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
     AI_CHAT_MODEL: str = os.getenv("AI_CHAT_MODEL", "qwen/qwen-2.5-72b-instruct")
-    AI_FALLBACK_MODEL: str = os.getenv("AI_FALLBACK_MODEL", "qwen/qwen-2.5-72b-instruct")
+    AI_FALLBACK_MODEL: str = os.getenv(
+        "AI_FALLBACK_MODEL", "qwen/qwen3-30b-a3b-instruct-2507"
+    )
     GEMINI_CHAT_MODEL: str = os.getenv(
         "GEMINI_CHAT_MODEL", "gemini-flash-latest"
     )

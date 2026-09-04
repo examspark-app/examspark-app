@@ -51,7 +51,6 @@ from app.services.credits_service import (
     get_credits_balance as _credits_balance,
 )
 from app.services.home_ai_followup import looks_like_knowledge_follow_up
-from app.services.openrouter_stream import OpenRouterStreamError, stream_chat_completions
 from app.services.performance_timer import PerformanceTimer
 from app.services.plan_tier_service import (
     FeatureLockedError,
@@ -1555,8 +1554,6 @@ async def home_ai_stream(
 
     history = get_recent_messages(sid, user_id, limit=50) if sid else []
 
-    max_tokens = max_tokens_for_mode(mode)
-    temperature = 0.45 if mode == "deep" else 0.65
     messages = [{"role": "system", "content": _HOME_SYSTEM}]
     messages.extend(history)
     messages.append(
@@ -1577,39 +1574,16 @@ async def home_ai_stream(
     parser = VisualStreamParser()
     try:
         timer.start("llm")
-        from app.services.openrouter_stream import stream_chat_completions, OpenRouterStreamError
         from app.services.english_practice_service import _call_chat_model
 
-        if text_model in ("claude", "gemini", "chatgpt"):
-            full_reply = await _call_chat_model(messages, text_model)
-            safe = parser.feed(full_reply)
-            if safe:
-                yield {"type": "token", "text": safe}
-        else:
-            try:
-                async for delta in stream_chat_completions(
-                    messages,
-                    temperature=temperature,
-                    max_tokens=max_tokens,
-                ):
-                    safe = parser.feed(delta)
-                    if safe:
-                        yield {"type": "token", "text": safe}
-            except Exception as stream_err:
-                logger.warning("Home AI streaming failed, fallback to _call_chat_model: %s", stream_err)
-                full_reply = await _call_chat_model(messages, "groq")
-                safe = parser.feed(full_reply)
-                if safe:
-                    yield {"type": "token", "text": safe}
+        # Use the same fallback-aware router for every selected model.
+        # Direct OpenRouter streaming bypassed the GPT/Gemini/Qwen policy.
+        full_reply = await _call_chat_model(messages, text_model)
+        safe = parser.feed(full_reply)
+        if safe:
+            yield {"type": "token", "text": safe}
         parser.finish()
         timer.end("llm")
-    except OpenRouterStreamError as e:
-        yield {
-            "type": "error",
-            "status": e.result_status,
-            "message": str(e),
-        }
-        return
     except Exception as e:
         logger.error("Home AI stream unexpected error: %s", e)
         yield {
