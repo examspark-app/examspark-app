@@ -1173,14 +1173,56 @@ $rawText
     _scrollToBottom();
 
     try {
-      final result = await LectureService.instance.homeAiVision(
-        imageBytes: bytes,
-        filename: filename,
-        sessionId: _homeAiSessionId,
-        visionModel: _visionModel,
-      );
-      if (!mounted) return;
-      _applyHomeAiSuccess(result, animateReveal: true);
+      var served = false;
+      final fallbackVision = 'qwen-vl';
+      try {
+        final result = await LectureService.instance.homeAiVision(
+          imageBytes: bytes,
+          filename: filename,
+          sessionId: _homeAiSessionId,
+          visionModel: _visionModel,
+        );
+        if (!mounted) return;
+        _applyHomeAiSuccess(result, animateReveal: true);
+        served = true;
+      } catch (e) {
+        // Agar primary vision model (e.g. Claude / Gemini) fail hua — qwen-vl fallback try karo.
+        final fallbackNeeded = _visionModel.trim().toLowerCase() !=
+            fallbackVision.trim().toLowerCase();
+        if (fallbackNeeded) {
+          devtools.log(
+            'Home AI Vision primary failed ($_visionModel), retrying with qwen-vl fallback',
+            error: e,
+          );
+          try {
+            final result = await LectureService.instance.homeAiVision(
+              imageBytes: bytes,
+              filename: filename,
+              sessionId: _homeAiSessionId,
+              visionModel: fallbackVision,
+            );
+            if (!mounted) return;
+            // Fallback success → seedha qwen-vl use karo aage se
+            unawaited(
+              SharedPreferences.getInstance().then((sp) =>
+                  sp.setString('home_ai_vision_model', fallbackVision)),
+            );
+            _applyHomeAiSuccess(result, animateReveal: true);
+            served = true;
+          } catch (e2) {
+            if (!mounted) rethrow;
+            // Both failed → bubble error below using original exception
+            ErrorHandler.logError(
+              e2,
+              stackTrace: StackTrace.current,
+              context: '_sendHomeVision fallback qwen-vl also failed',
+            );
+          }
+        }
+        if (!served) {
+          rethrow;
+        }
+      }
     } catch (e) {
       if (!mounted) return;
       _addHomeAiErrorBubble(
@@ -1972,6 +2014,23 @@ trailing: const [],
           );
         }
         final bubble = _messages[index];
+        if (!bubble.isUser && !bubble.isError) {
+          final hasText = bubble.text.trim().isNotEmpty;
+          final hasVisual = bubble.visualPayload != null &&
+              (bubble.visualPayload!.charts.isNotEmpty ||
+                  bubble.visualPayload!.diagram != null ||
+                  bubble.visualPayload!.formulas.isNotEmpty ||
+                  bubble.visualPayload!.tables.isNotEmpty);
+          final hasActions = bubble.showStudyActions ||
+              bubble.suggestedQuestions.isNotEmpty ||
+              bubble.practiceQuestion != null;
+          final hasImage = (bubble.imageBytes != null &&
+                  bubble.imageBytes!.isNotEmpty) ||
+              (bubble.imageUrl != null && bubble.imageUrl!.isNotEmpty);
+          if (!hasText && !hasVisual && !hasActions && !hasImage) {
+            return const SizedBox.shrink();
+          }
+        }
         return Padding(
           key: ValueKey(bubble.id),
           padding: const EdgeInsets.only(bottom: 12),

@@ -246,42 +246,23 @@ async def _generate_select_answer(
         {"role": "system", "content": system},
         {"role": "user", "content": user_content},
     ]
-    if AIConfig.openrouter_configured():
-        try:
-            async with httpx.AsyncClient(timeout=25.0) as client:
-                response = await client.post(
-                    _OPENROUTER_URL,
-                    headers={
-                        "Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}",
-                        "Content-Type": "application/json",
-                    },
-                    json={
-                        "model": AIConfig.AI_CHAT_MODEL,
-                        "messages": chat_messages,
-                        "temperature": 0.3,
-                        "max_tokens": SELECT_MAX_TOKENS,
-                    },
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    choices = data.get("choices") or []
-                    if choices:
-                        content = (choices[0].get("message") or {}).get("content") or ""
-                        if content.strip():
-                            return content.strip()
-        except Exception as e:
-            logger.warning("Select AI OpenRouter primary failed: %s, falling back to Groq", e)
-
-    # Groq fallback
+    # Unified fallback chain: primary (AIConfig.AI_CHAT_MODEL model key) → chatgpt → groq → gemini → qwen3
+    # qwen3 is ALWAYS the absolute last-resort fallback so Select AI never dies on credit issues.
     from app.services.english_practice_service import _call_chat_model
-    try:
-        return await _call_chat_model(chat_messages, "groq")
-    except Exception as fallback_error:
-        raise SelectAiError(
-            f"Select AI failed on both OpenRouter and Groq: {fallback_error}",
-            status_code=502,
-            result_status=API_ERROR,
-        ) from fallback_error
+    last_error: Exception | None = None
+    for step in ("chatgpt", "groq", "gemini", "qwen3"):
+        try:
+            result = await _call_chat_model(chat_messages, step)
+            logger.info("select_ai_model_served step=%s", step)
+            return result
+        except Exception as e:
+            last_error = e
+            logger.warning("select_ai_step_failed step=%s error=%s", step, type(e).__name__)
+    raise SelectAiError(
+        f"Select AI failed on all models: {last_error}",
+        status_code=502,
+        result_status=API_ERROR,
+    ) from last_error
 
 
 def _validate_action(action: str) -> str:

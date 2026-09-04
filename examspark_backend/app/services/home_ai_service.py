@@ -1076,8 +1076,8 @@ async def home_ai(
         raise HomeAiError("Question is empty.", status_code=400)
     if mode not in ("normal", "deep"):
         raise HomeAiError("mode must be 'normal' or 'deep'.", status_code=400)
-    if text_model not in {"qwen3", "gemini", "claude"}:
-        text_model = "gemini"
+    if text_model not in {"qwen3", "gemini", "claude", "chatgpt", "groq"}:
+        text_model = "chatgpt"
     if text_model == "claude":
         
         try:

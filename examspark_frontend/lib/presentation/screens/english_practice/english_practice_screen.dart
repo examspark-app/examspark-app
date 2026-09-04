@@ -1041,6 +1041,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
               );
             final m = _messages[i];
                                     if (!m.isUser) {
+              if (m.text.trim().isEmpty) {
+                return const SizedBox.shrink();
+              }
               return Padding(
                 padding: const EdgeInsets.fromLTRB(18, 4, 18, 22),
                 child: SelectionArea(

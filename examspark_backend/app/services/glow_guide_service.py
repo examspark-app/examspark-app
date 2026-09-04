@@ -508,8 +508,16 @@ async def turn(
     served_model = "gemini_free"
 
     # --- Determine fallback chain based on selected_model & plan ---
-    is_premium = selected_model in ("claude", "gemini_pro")
-    if is_premium:
+    # Accept aliases and normalize so frontend variations don't break the chain.
+    normalized = (selected_model or "").strip().lower()
+    # User selects GPT-4o-mini / chatgpt on frontend
+    is_chatgpt_selected = normalized in ("chatgpt", "gpt4omini", "gpt-4o-mini", "openai")
+    is_qwen_selected = normalized.startswith("qwen") or normalized in ("qwen3", "qwen-vl", "qwen3-vl")
+    is_gemini_free_selected = normalized in ("gemini_free", "gemini_flash")
+    is_premium_selected = normalized in ("claude", "gemini_pro", "gemini") or is_chatgpt_selected
+    has_image = image is not None
+
+    if is_premium_selected:
         from app.services.plan_tier_service import (
             FeatureLockedError,
             GatedFeature,
@@ -518,41 +526,50 @@ async def turn(
         try:
             require_feature_unlocked(user_id, GatedFeature.PREMIUM_VISION_MODEL)
         except FeatureLockedError as error:
-            raise GlowGuideError(str(error), 403) from error
+            # Plan missing → silently downgrade to free chain so the user still gets an answer.
+            is_premium_selected = False
+            if normalized == "claude":
+                normalized = "gemini_free"
 
-        if selected_model == "gemini_pro":
-            chain = [
-                ("gemini", _call_gemini),
-                *( [("groq", _call_groq)] if not image else [] ),
-                ("qwen", _call_qwen),
-                ("claude", _call_claude),
-                ("openai", _call_openai),
-            ]
+    # Common base: every chain MUST end with Qwen (qwen3 text + qwen3-vl vision auto-switch)
+    tail: list[tuple[str, Any]] = [("qwen", _call_qwen)]
+
+    if is_premium_selected:
+        head: list[tuple[str, Any]] = []
+        if normalized == "claude":
+            head.append(("claude", _call_claude))
+        elif is_chatgpt_selected:
+            head.append(("chatgpt", _call_openai))
         else:
-            chain = [
-                ("claude", _call_claude),
-                *( [("groq", _call_groq)] if not image else [] ),
-                ("gemini", _call_gemini),
-                ("qwen", _call_qwen),
-                ("openai", _call_openai),
-            ]
+            # gemini / gemini_pro
+            head.append(("gemini", _call_gemini))
+        # Groq text booster (no vision)
+        if not has_image:
+            head.append(("groq", _call_groq))
+        # Alternate premium before Gemini Flash:
+        if normalized != "claude":
+            head.append(("claude", _call_claude))
+        if not is_chatgpt_selected:
+            head.append(("chatgpt", _call_openai))
+        # Free Gemini Flash for a robust middle tier:
+        head.append(("gemini_free", _call_gemini_free))
+        chain = [*head, *tail]
+    elif is_qwen_selected:
+        # User explicitly picked Qwen; still give it a Gemini Flash backup then tail=Qwen for consistency
+        chain = [("qwen", _call_qwen), ("gemini_free", _call_gemini_free), *tail]
     else:
-        # Free chain: Groq first for instant text replies, Gemini Flash first for images
-        if not image:
-            chain = [
-                ("groq", _call_groq),
-                ("qwen", _call_qwen),
-                ("gemini_free", _call_gemini_free),
-                ("claude", _call_claude),
-                ("openai", _call_openai),
-            ]
+        # Free chain: user picked 'gemini_free' / default or unknown value
+        head = []
+        if not has_image:
+            head.append(("groq", _call_groq))
+        if is_gemini_free_selected:
+            head.append(("gemini_free", _call_gemini_free))
         else:
-            chain = [
-                ("gemini_free", _call_gemini_free),
-                ("qwen", _call_qwen),
-                ("claude", _call_claude),
-                ("openai", _call_openai),
-            ]
+            # Unknown free value → try Gemini Flash first
+            head.append(("gemini_free", _call_gemini_free))
+        head.append(("chatgpt", _call_openai))
+        head.append(("claude", _call_claude))
+        chain = [*head, *tail]
 
     for tier, caller in chain:
         try:

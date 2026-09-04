@@ -173,11 +173,13 @@ async def analyze_image_with_fallback(
     """Route vision analysis through free or premium fallback chains.
 
     Free users:  gemini → qwen-vl (or qwen-vl → gemini)
-    Premium (₹199): claude → chatgpt → gemini → qwen-vl
+    Premium (₹199): claude/chatgpt → ... → gemini → qwen-vl (ALWAYS last)
+    chatgpt (GPT-4o-mini): included as explicit primary option; qwen-vl is absolute last resort.
     """
-    is_premium = selected_model in ("claude", "chatgpt")
+    normalized = (selected_model or "").strip().lower()
+    is_premium_selected = normalized in ("claude", "chatgpt", "gpt-4o-mini", "gpt4omini")
 
-    if is_premium and user_id:
+    if is_premium_selected and user_id:
         from app.services.plan_tier_service import (
             FeatureLockedError,
             GatedFeature,
@@ -187,13 +189,21 @@ async def analyze_image_with_fallback(
             require_feature_unlocked(user_id, GatedFeature.PREMIUM_VISION_MODEL)
         except FeatureLockedError:
             # Silently downgrade to free chain if plan check fails
-            is_premium = False
-            selected_model = "qwen-vl"
+            is_premium_selected = False
+            normalized = "gemini"
 
-    if is_premium:
-        chain = ("claude", "chatgpt", "qwen-vl", "gemini") if selected_model == "claude" else ("chatgpt", "claude", "qwen-vl", "gemini")
+    if is_premium_selected:
+        # Premium: start with user's selection, then the other premium, then Gemini, then Qwen-VL (ALWAYS last)
+        if normalized == "claude":
+            chain = ("claude", "chatgpt", "gemini", "qwen-vl")
+        else:
+            # chatgpt / gpt-4o-mini / gpt4omini
+            chain = ("chatgpt", "claude", "gemini", "qwen-vl")
+    elif normalized == "qwen-vl" or normalized.startswith("qwen"):
+        chain = ("qwen-vl", "gemini")
     else:
-        chain = ("qwen-vl", "gemini") if selected_model == "qwen-vl" else ("gemini", "qwen-vl")
+        # Default free chain: user may have selected 'gemini' or unknown value
+        chain = ("gemini", "qwen-vl")
 
     async def call(model: str) -> VisionResult:
         if model == "gemini":

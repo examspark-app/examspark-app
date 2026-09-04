@@ -1107,6 +1107,25 @@ String _canonicalFirstLanguage(String label) {
         isDark ? Colors.white : const Color(0xFF3C375A);
 
     Widget renderTile(_GlowMessage message) {
+      final hasImage = message.image != null ||
+          (message.imageUrl?.isNotEmpty ?? false);
+      final hasVerdict = message.verdict?.trim().isNotEmpty ?? false;
+      final hasText = message.text.trim().isNotEmpty;
+      final hasConfidence = (message.confidenceNote ?? '').trim().isNotEmpty;
+      final hasDetailed = (message.detailedBreakdown ?? '').trim().isNotEmpty;
+      final hasSources = message.sources.isNotEmpty;
+      final hasChips = message.chips.isNotEmpty ||
+          message.concernInputChips.isNotEmpty ||
+          message.categoryHeaderChips.isNotEmpty;
+      if (!hasImage &&
+          !hasVerdict &&
+          !hasText &&
+          !hasConfidence &&
+          !hasDetailed &&
+          !hasSources &&
+          !hasChips) {
+        return const SizedBox.shrink();
+      }
       return Padding(
         padding: const EdgeInsets.only(bottom: 18),
         child: Align(
@@ -1122,8 +1141,7 @@ String _canonicalFirstLanguage(String label) {
                   ? CrossAxisAlignment.end
                   : CrossAxisAlignment.start,
               children: [
-                if (message.image != null ||
-                    (message.imageUrl?.isNotEmpty ?? false))
+                if (hasImage)
                   Padding(
                     padding: const EdgeInsets.only(bottom: 8),
                     child: GestureDetector(
