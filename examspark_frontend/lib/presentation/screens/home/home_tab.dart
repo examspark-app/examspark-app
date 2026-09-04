@@ -170,7 +170,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   // Vision model is auto-selected from plan — premium uses Claude Haiku, free uses Gemini Flash.
   String get _visionModel =>
       PlanTierGating.isPremiumAiUnlocked(_planTier) ? 'claude' : 'gemini';
-  String _textModel = 'qwen3';
+  String _textModel = 'chatgpt';
 
   /// Phase 4D — active Study Session (Supabase).
   String? _homeAiSessionId;
@@ -519,9 +519,9 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       if (savedModel != null) {
         // Validate saved model is allowed for current plan
         final isPremiumModel = savedModel == 'claude' || savedModel == 'chatgpt' || savedModel == 'gemini';
-        resolvedModel = (isPremiumModel && !isPremium) ? 'qwen3' : savedModel;
+        resolvedModel = (isPremiumModel && !isPremium) ? 'chatgpt' : savedModel;
       } else {
-        resolvedModel = isPremium ? 'claude' : 'qwen3';
+        resolvedModel = isPremium ? 'claude' : 'chatgpt';
       }
 
       setState(() {
