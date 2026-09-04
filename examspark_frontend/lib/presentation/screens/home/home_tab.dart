@@ -170,7 +170,7 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   // Vision model is auto-selected from plan — premium uses Claude Haiku, free uses Gemini Flash.
   String get _visionModel =>
       PlanTierGating.isPremiumAiUnlocked(_planTier) ? 'claude' : 'gemini';
-  String _textModel = 'chatgpt';
+  String _textModel = 'qwen3';
 
   /// Phase 4D — active Study Session (Supabase).
   String? _homeAiSessionId;
@@ -518,10 +518,10 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
       String resolvedModel;
       if (savedModel != null) {
         // Validate saved model is allowed for current plan
-        final isPremiumModel = savedModel == 'claude';
-        resolvedModel = (isPremiumModel && !isPremium) ? 'chatgpt' : savedModel;
+        final isPremiumModel = savedModel == 'claude' || savedModel == 'chatgpt' || savedModel == 'gemini';
+        resolvedModel = (isPremiumModel && !isPremium) ? 'qwen3' : savedModel;
       } else {
-        resolvedModel = isPremium ? 'claude' : 'chatgpt';
+        resolvedModel = isPremium ? 'claude' : 'qwen3';
       }
 
       setState(() {
@@ -642,28 +642,51 @@ $rawText
     unawaited(_persistChatNow());
     _scrollToBottom();
 
-    try {
-      await _runHomeAiStream(
-        query,
-        studyChip: studyChip,
-        parentResponseId: parentId,
-      );
-    } catch (_) {
-      if (!mounted) return;
+    const fallbackModel = 'qwen3';
+    final primaryModel = _textModel;
 
-      setState(() => _liveStreamText = null);
-
+    Future<Map<String, dynamic>> runWithModel(String model) async {
       try {
-        await _runHomeAiJson(
+        return await _runHomeAiStream(
           query,
           studyChip: studyChip,
           parentResponseId: parentId,
+          textModelOverride: model,
         );
-      } catch (e) {
-        if (!mounted) return;
-
-        _addHomeAiErrorBubble(e, retryQuery: query);
+      } catch (_) {
+        if (!mounted) rethrow;
+        setState(() => _liveStreamText = null);
+        return await _runHomeAiJson(
+          query,
+          studyChip: studyChip,
+          parentResponseId: parentId,
+          textModelOverride: model,
+        );
       }
+    }
+
+    try {
+      await runWithModel(primaryModel);
+    } catch (primaryError) {
+      if (!mounted) return;
+      // Agar primary model != qwen3 hai → QWEN3 fallback try karo (kaam karta hai credits ke saath)
+      if (primaryModel != fallbackModel) {
+        try {
+          await runWithModel(fallbackModel);
+          // Fallback success → next time seedha qwen3 use karo
+          if (mounted) {
+            setState(() => _textModel = fallbackModel);
+          }
+          unawaited(_saveTextModel(fallbackModel));
+          return;
+        } catch (fallbackError) {
+          if (!mounted) return;
+          _addHomeAiErrorBubble(fallbackError, retryQuery: query);
+          return;
+        }
+      }
+      // Primary already qwen3 thi → direct error
+      _addHomeAiErrorBubble(primaryError, retryQuery: query);
     }
   }
 
@@ -762,7 +785,9 @@ $rawText
     String query, {
     String? studyChip,
     String? parentResponseId,
+    String? textModelOverride,
   }) async {
+    final model = textModelOverride ?? _textModel;
     final done = await LectureService.instance.homeAiStream(
       query: query,
       lectureId: widget.openLectureId,
@@ -770,7 +795,7 @@ $rawText
       studyChip: studyChip,
       parentResponseId: parentResponseId,
       sessionId: _homeAiSessionId,
-      textModel: _textModel,
+      textModel: model,
       onToken: (delta) {
         if (!mounted) return;
         setState(() {
@@ -787,7 +812,9 @@ $rawText
     String query, {
     String? studyChip,
     String? parentResponseId,
+    String? textModelOverride,
   }) async {
+    final model = textModelOverride ?? _textModel;
     final result = await LectureService.instance.homeAi(
       query: query,
       lectureId: widget.openLectureId,
@@ -795,7 +822,7 @@ $rawText
       studyChip: studyChip,
       parentResponseId: parentResponseId,
       sessionId: _homeAiSessionId,
-      textModel: _textModel,
+      textModel: model,
     );
     if (!mounted) return;
     _applyHomeAiSuccess(result, animateReveal: true);
@@ -873,7 +900,6 @@ $rawText
           practiceQuestion: (practiceQuestion?.isNotEmpty ?? false)
               ? practiceQuestion
               : null,
-          // Stream path already showed tokens live — never re-animate on scroll.
           animateReveal: animateReveal,
           revealComplete: !animateReveal,
           visualPayload: result['visual_payload'] is Map
