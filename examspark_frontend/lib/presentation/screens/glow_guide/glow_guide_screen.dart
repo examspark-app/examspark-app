@@ -1115,7 +1115,6 @@ String _canonicalFirstLanguage(String label) {
       final hasDetailed = (message.detailedBreakdown ?? '').trim().isNotEmpty;
       final hasSources = message.sources.isNotEmpty;
       final hasChips = message.chips.isNotEmpty ||
-          message.concernInputChips.isNotEmpty ||
           message.categoryHeaderChips.isNotEmpty;
       if (!hasImage &&
           !hasVerdict &&

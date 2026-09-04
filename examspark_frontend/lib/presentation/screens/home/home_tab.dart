@@ -31,6 +31,7 @@ import 'package:examspark_frontend/presentation/widgets/home/home_ai_tool_result
 import 'package:examspark_frontend/presentation/widgets/home/home_study_chip_bar.dart';
 import 'package:examspark_frontend/presentation/widgets/home/web_camera_capture_export.dart';
 import 'package:examspark_frontend/presentation/widgets/lecture_card.dart';
+import 'package:examspark_frontend/presentation/widgets/smart_educational_content.dart';
 import 'package:examspark_frontend/presentation/widgets/study_workspace/workspace_reading_utils.dart';
 import 'package:examspark_frontend/presentation/screens/search/search_overlay_screen.dart';
 import 'package:examspark_frontend/presentation/widgets/youtube_link_dialog.dart';
@@ -647,7 +648,7 @@ $rawText
     final primaryModel = _textModel;
     var turnApplied = false;
 
-    Future<void> applyOnce(Map<String, dynamic> result, {required bool animateReveal}) {
+    void applyOnce(Map<String, dynamic> result, {required bool animateReveal}) {
       if (turnApplied) return;
       turnApplied = true;
       _applyHomeAiSuccess(result, animateReveal: animateReveal);
@@ -1201,9 +1202,8 @@ $rawText
         final fallbackNeeded = _visionModel.trim().toLowerCase() !=
             fallbackVision.trim().toLowerCase();
         if (fallbackNeeded) {
-          devtools.log(
-            'Home AI Vision primary failed ($_visionModel), retrying with qwen-vl fallback',
-            error: e,
+          debugPrint(
+            'Home AI Vision primary failed ($_visionModel), retrying with qwen-vl fallback: $e',
           );
           try {
             final result = await LectureService.instance.homeAiVision(
@@ -1223,10 +1223,8 @@ $rawText
           } catch (e2) {
             if (!mounted) rethrow;
             // Both failed → bubble error below using original exception
-            ErrorHandler.logError(
-              e2,
-              stackTrace: StackTrace.current,
-              context: '_sendHomeVision fallback qwen-vl also failed',
+            debugPrint(
+              'Home AI Vision fallback qwen-vl also failed: $e2',
             );
           }
         }
