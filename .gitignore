@@ -35,3 +35,4 @@ google-services-account*.json
 *.jks
 *.keystore
 key.properties
+android_keystore_base64.txt
