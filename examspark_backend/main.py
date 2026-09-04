@@ -1,6 +1,8 @@
+from dotenv import load_dotenv
+load_dotenv()
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 from app.api.v1 import webhooks_google_play, webhooks_razorpay, webhooks_phonepe, daily_quote
 
 from app.routers import (
@@ -21,8 +23,6 @@ from app.routers import (
     english_sonia_routes,
 )
 from app.services.supabase_admin import get_supabase_admin
-
-load_dotenv()
 
 app = FastAPI(title="ExamSpark Backend", version="1.4.0")
 

@@ -165,7 +165,21 @@ async def tavily_search(
         if not content and not title:
             continue
         block = f"{title}\n{content}".strip() if title else content
-        snippets.append(block[:1200])
+        domain = ""
+        site_name = ""
+        favicon = ""
+        if url:
+            from urllib.parse import urlparse
+            try:
+                parsed = urlparse(url)
+                raw_host = parsed.netloc.lower()
+                domain = raw_host[4:] if raw_host.startswith("www.") else raw_host
+                if domain:
+                    parts = domain.split(".")
+                    site_name = parts[0].capitalize() if parts else domain
+                    favicon = f"https://www.google.com/s2/favicons?domain={domain}&sz=64"
+            except Exception:
+                pass
         sources_meta.append(
             {
                 "source_type": "web",
@@ -173,6 +187,9 @@ async def tavily_search(
                 "excerpt": (content or title)[:400],
                 "url": url or None,
                 "title": title or None,
+                "domain": domain or None,
+                "site_name": site_name or None,
+                "favicon": favicon or None,
             }
         )
 

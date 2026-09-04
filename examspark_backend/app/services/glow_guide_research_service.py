@@ -25,6 +25,7 @@ _CURRENT_TERMS = re.compile(r"(?i)\b(latest|current|new|updated|recent|availabil
 
 _PRODUCT_BRANDS = re.compile(
     r"(?i)\b(cerave|cetaphil|minimalist|ordinary|neutrogena|mamaearth|sebamed|"
+    r"fair\s*(?:&|and)?\s*lovely|glow\s*(?:&|and)?\s*lovely|lakme|olay|loreal|"
     r"johnson|johnsons|bioderma|derma\s*co|dot\s*&\s*key|la\s*roche|aveeno|"
     r"biore|cosrx|innisfree|himalaya|nivea|dove|ponds|garnier|plum|dr\s*sheths|"
     r"simple|clean\s*&\s*clear|vaseline|aquaphor|eucerin|laneige|vanicream)\b"

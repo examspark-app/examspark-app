@@ -56,6 +56,14 @@ class AppTheme {
   static const double elementSpacing = 16.0;
   static const double cardPadding = 16.0;
 
+  static const List<String> fontFallback = [
+    'Noto Sans Bengali',
+    'Hind Siliguri',
+    'Noto Sans Devanagari',
+    'Roboto',
+    'sans-serif',
+  ];
+
   static TextTheme get _lightTextTheme => GoogleFonts.interTextTheme(
         const TextTheme(
           displayLarge: TextStyle(
@@ -64,29 +72,34 @@ class AppTheme {
             color: lightPrimaryText,
             height: 1.3,
             letterSpacing: -0.5,
+            fontFamilyFallback: fontFallback,
           ),
           bodyLarge: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w400,
             color: lightPrimaryText,
             height: 1.65,
+            fontFamilyFallback: fontFallback,
           ),
           bodyMedium: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w400,
             color: lightPrimaryText,
             height: 1.6,
+            fontFamilyFallback: fontFallback,
           ),
           bodySmall: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w400,
             color: lightSecondaryText,
             height: 1.5,
+            fontFamilyFallback: fontFallback,
           ),
           labelMedium: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
             color: Colors.white,
+            fontFamilyFallback: fontFallback,
           ),
         ),
       );
@@ -99,29 +112,34 @@ class AppTheme {
             color: darkPrimaryText,
             height: 1.3,
             letterSpacing: -0.5,
+            fontFamilyFallback: fontFallback,
           ),
           bodyLarge: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.w400,
             color: darkPrimaryText,
             height: 1.65,
+            fontFamilyFallback: fontFallback,
           ),
           bodyMedium: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w400,
             color: darkPrimaryText,
             height: 1.6,
+            fontFamilyFallback: fontFallback,
           ),
           bodySmall: TextStyle(
             fontSize: 13,
             fontWeight: FontWeight.w400,
             color: darkSecondaryText,
             height: 1.5,
+            fontFamilyFallback: fontFallback,
           ),
           labelMedium: TextStyle(
             fontSize: 14,
             fontWeight: FontWeight.w500,
             color: darkPrimaryText,
+            fontFamilyFallback: fontFallback,
           ),
         ),
       );
@@ -132,6 +150,7 @@ class AppTheme {
       brightness: Brightness.light,
       scaffoldBackgroundColor: lightBackground,
       fontFamily: GoogleFonts.inter().fontFamily,
+      fontFamilyFallback: fontFallback,
       splashColor: babyPink.withValues(alpha: 0.3),
       highlightColor: babyPink.withValues(alpha: 0.18),
       colorScheme: ColorScheme.light(
@@ -195,6 +214,7 @@ class AppTheme {
       brightness: Brightness.dark,
       scaffoldBackgroundColor: darkBackground,
       fontFamily: GoogleFonts.inter().fontFamily,
+      fontFamilyFallback: fontFallback,
       splashColor: babyPink.withValues(alpha: 0.35),
       highlightColor: babyPink.withValues(alpha: 0.2),
       colorScheme: ColorScheme.dark(

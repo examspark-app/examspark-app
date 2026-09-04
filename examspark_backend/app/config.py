@@ -53,12 +53,13 @@ class AIConfig:
     """
 
     GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_CHAT_MODEL: str = os.getenv("GROQ_CHAT_MODEL", "qwen/qwen3.8-27b")
     GROQ_WHISPER_TURBO_MODEL: str = os.getenv("GROQ_WHISPER_TURBO_MODEL", "whisper-large-v3-turbo")
     GROQ_WHISPER_STANDARD_MODEL: str = os.getenv("GROQ_WHISPER_STANDARD_MODEL", "whisper-large-v3")
 
     OPENROUTER_API_KEY: str = os.getenv("OPENROUTER_API_KEY", "")
-    AI_CHAT_MODEL: str = os.getenv("AI_CHAT_MODEL", "qwen/qwen3")
-    AI_FALLBACK_MODEL: str = os.getenv("AI_FALLBACK_MODEL", "qwen/qwen3")
+    AI_CHAT_MODEL: str = os.getenv("AI_CHAT_MODEL", "qwen/qwen-2.5-72b-instruct")
+    AI_FALLBACK_MODEL: str = os.getenv("AI_FALLBACK_MODEL", "qwen/qwen-2.5-72b-instruct")
     GEMINI_CHAT_MODEL: str = os.getenv(
         "GEMINI_CHAT_MODEL", "gemini-flash-latest"
     )

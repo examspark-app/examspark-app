@@ -38,7 +38,7 @@ _CONTEXT_MESSAGES = 8          # last N messages sent to the model
 _MAX_SESSION_MESSAGES = 500
 _NEW_CHAT_SUGGESTION_THRESHOLD = 100
 _CREDIT_COST = 3
-_CHAT_MODELS = {"qwen3", "gemini", "claude", "chatgpt"}
+_CHAT_MODELS = {"qwen3", "gemini", "claude", "chatgpt", "groq"}
 _MCQ_MAX_GAP_MESSAGES = 20
 
 
@@ -406,7 +406,7 @@ async def _call_model(messages: list[dict], model: str | None = None) -> str:
         "max_tokens": max_tokens,
     }
     try:
-        async with httpx.AsyncClient(timeout=90.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
                 _OPENROUTER_URL,
                 headers=headers,
@@ -467,42 +467,38 @@ async def _call_gemini_model(messages: list[dict]) -> str:
             "maxOutputTokens": 900,
         },
     }
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"{AIConfig.GEMINI_CHAT_MODEL}:generateContent"
-    )
-    try:
-        async with httpx.AsyncClient(timeout=45.0) as client:
-            response = await client.post(
-                url,
-                headers={"x-goog-api-key": AIConfig.GEMINI_API_KEY},
-                json=payload,
-            )
-            if response.status_code != 200:
-                raise EnglishPracticeError(
-                    f"Gemini tutor call failed ({response.status_code}): "
-                    f"{response.text[:400]}",
-                    502,
-                )
+    candidates = [
+        AIConfig.GEMINI_CHAT_MODEL,
+        "gemini-flash-latest",
+        "gemini-3.6-flash",
+        "gemini-pro-latest",
+    ]
+    last_err = ""
+    async with httpx.AsyncClient(timeout=10.0) as client:
+        for model in candidates:
+            if not model:
+                continue
             try:
-                candidates = response.json().get("candidates") or []
-                parts = (candidates[0].get("content") or {}).get("parts") or []
-                text = "".join(
-                    part.get("text", "")
-                    for part in parts
-                    if isinstance(part, dict)
-                ).strip()
-            except (IndexError, KeyError, TypeError, ValueError) as error:
-                raise EnglishPracticeError(
-                    "Gemini returned an invalid response.", 502
-                ) from error
-            if not text:
-                raise EnglishPracticeError("Gemini returned an empty response.", 502)
-            return text
-    except httpx.TimeoutException as e:
-        raise EnglishPracticeError("Gemini tutor call timed out.", 504) from e
-    except httpx.RequestError as e:
-        raise EnglishPracticeError(f"Gemini tutor network error: {e}", 502) from e
+                response = await client.post(
+                    f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent",
+                    headers={"x-goog-api-key": AIConfig.GEMINI_API_KEY},
+                    json=payload,
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    candidates_resp = data.get("candidates") or []
+                    parts = (candidates_resp[0].get("content") or {}).get("parts") or []
+                    text = "".join(
+                        part.get("text", "")
+                        for part in parts
+                        if isinstance(part, dict)
+                    ).strip()
+                    if text:
+                        return text
+                last_err = f"model {model} returned {response.status_code}"
+            except Exception as e:
+                last_err = str(e)
+    raise EnglishPracticeError(f"Gemini tutor call failed: {last_err}", 502)
 
 
 async def _call_claude_model(messages: list[dict]) -> str:
@@ -529,7 +525,7 @@ async def _call_claude_model(messages: list[dict]) -> str:
         "temperature": 0.7,
     }
     try:
-        async with httpx.AsyncClient(timeout=45.0) as client:
+        async with httpx.AsyncClient(timeout=15.0) as client:
             response = await client.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={
@@ -569,33 +565,86 @@ async def _call_openai_model(messages: list[dict]) -> str:
         raise EnglishPracticeError(f"GPT-4o-mini call failed: {e}", 502) from e
 
 
-async def _call_chat_model(messages: list[dict], selected_model: str) -> str:
-    """Route to the right model with Qwen3 always as the LAST fallback.
+async def _call_groq_model(messages: list[dict]) -> str:
+    """Ultra-fast Groq LLM caller for instant answers."""
+    if not AIConfig.groq_configured():
+        raise EnglishPracticeError("GROQ_API_KEY not configured on the server.", 500)
+    groq_messages = []
+    for m in messages:
+        content = m.get("content", "")
+        if isinstance(content, list):
+            text_parts = [
+                item.get("text", "")
+                for item in content
+                if isinstance(item, dict) and item.get("type") == "text"
+            ]
+            content = " ".join(text_parts)
+        groq_messages.append({"role": m.get("role", "user"), "content": content})
 
-    Free chain:    chatgpt → qwen3
-    Premium chain: claude  → chatgpt → qwen3
-    Gemini:        gemini  → qwen3
+    try:
+        async with httpx.AsyncClient(timeout=12.0) as client:
+            response = await client.post(
+                "https://api.groq.com/openai/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {AIConfig.GROQ_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": AIConfig.GROQ_CHAT_MODEL,
+                    "messages": groq_messages,
+                    "temperature": 0.7,
+                    "max_tokens": 1200,
+                },
+            )
+    except (httpx.TimeoutException, httpx.RequestError) as e:
+        raise EnglishPracticeError(f"Groq network error: {e}", 502) from e
+
+    if response.status_code != 200:
+        raise EnglishPracticeError(
+            f"Groq call failed ({response.status_code}): {response.text[:300]}", 502
+        )
+    try:
+        choices = response.json().get("choices") or []
+        content = (choices[0].get("message") or {}).get("content") or ""
+        if not content.strip():
+            raise EnglishPracticeError("Groq returned an empty response.", 502)
+        return content
+    except Exception as e:
+        raise EnglishPracticeError(f"Groq parse error: {e}", 502) from e
+
+
+async def _call_chat_model(messages: list[dict], selected_model: str) -> str:
+    """Route to the right model with Groq and OpenRouter ensuring zero-failure.
+
+    Free chain:    groq → chatgpt → gemini → qwen3
+    Claude chain:  claude → groq → chatgpt → gemini → qwen3
+    Gemini chain:  gemini → groq → qwen3
+    ChatGPT chain: chatgpt → groq → gemini → qwen3
     """
-    model = selected_model if selected_model in _CHAT_MODELS else "chatgpt"
+    model = selected_model if selected_model in _CHAT_MODELS else "groq"
 
     async def _try(m: str) -> str:
+        if m == "groq":
+            return await _call_groq_model(messages)
         if m == "claude":
             return await _call_claude_model(messages)
         if m == "chatgpt":
             return await _call_openai_model(messages)
         if m == "gemini":
             return await _call_gemini_model(messages)
-        return await _call_model(messages)  # qwen3 via OpenRouter
+        return await _call_model(messages)  # qwen/qwen-2.5-72b-instruct via OpenRouter
 
-    # Build fallback chain — qwen3 is always last
+    # Build fallback chain
     if model == "claude":
-        chain = ["claude", "chatgpt", "gemini", "qwen3"]
+        chain = ["claude", "groq", "chatgpt", "gemini", "qwen3"]
     elif model == "chatgpt":
-        chain = ["chatgpt", "gemini", "qwen3"]
+        chain = ["chatgpt", "groq", "gemini", "qwen3"]
     elif model == "gemini":
-        chain = ["gemini", "qwen3"]
+        chain = ["gemini", "groq", "qwen3"]
+    elif model == "groq":
+        chain = ["groq", "qwen3"]
     else:
-        chain = ["qwen3"]  # already qwen3, no fallback needed
+        chain = ["groq", "chatgpt", "gemini", "qwen3"]
 
     last_error: Exception | None = None
     for step in chain:

@@ -254,12 +254,17 @@ async def _call_claude(messages: list[dict[str, Any]]) -> str:
 async def _call_qwen(messages: list[dict[str, Any]]) -> str:
     if not AIConfig.openrouter_configured():
         raise GlowGuideError("Qwen is not configured.", 500)
+    has_image = any(
+        isinstance(m.get("content"), list) and any(item.get("type") == "image_url" for item in m["content"])
+        for m in messages
+    )
+    model = AIConfig.AI_VISION_FLASH_MODEL if has_image else AIConfig.AI_CHAT_MODEL
     try:
-        async with httpx.AsyncClient(timeout=90) as client:
+        async with httpx.AsyncClient(timeout=20) as client:
             response = await client.post(
                 OPENROUTER_URL,
                 headers={"Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-                json={"model": AIConfig.AI_VISION_FLASH_MODEL, "messages": messages, "temperature": 0.45, "max_tokens": 1200, "response_format": {"type": "json_object"}},
+                json={"model": model, "messages": messages, "temperature": 0.45, "max_tokens": 1200, "response_format": {"type": "json_object"}},
             )
     except Exception as exc:
         raise GlowGuideError(f"Qwen network error: {exc}", 502) from exc
@@ -276,7 +281,7 @@ async def _call_openai(messages: list[dict[str, Any]]) -> str:
     if not AIConfig.openai_configured():
         raise GlowGuideError("OpenAI is not configured.", 500)
     try:
-        async with httpx.AsyncClient(timeout=90) as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {AIConfig.OPENAI_API_KEY}", "Content-Type": "application/json"},
@@ -293,7 +298,7 @@ async def _call_openai(messages: list[dict[str, Any]]) -> str:
 
 
 async def _call_groq(messages: list[dict[str, Any]]) -> str:
-    """Groq LLaMA 3.3 70B adapter — high-speed fallback."""
+    """Groq ultra-fast adapter — high-speed fallback."""
     if not AIConfig.groq_configured():
         raise GlowGuideError("Groq is not configured.", 500)
     has_image = any(
@@ -312,7 +317,7 @@ async def _call_groq(messages: list[dict[str, Any]]) -> str:
         groq_messages.append({"role": m.get("role", "user"), "content": content})
 
     try:
-        async with httpx.AsyncClient(timeout=45) as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             response = await client.post(
                 "https://api.groq.com/openai/v1/chat/completions",
                 headers={
@@ -320,7 +325,7 @@ async def _call_groq(messages: list[dict[str, Any]]) -> str:
                     "Content-Type": "application/json",
                 },
                 json={
-                    "model": "llama-3.3-70b-versatile",
+                    "model": AIConfig.GROQ_CHAT_MODEL,
                     "messages": groq_messages,
                     "temperature": 0.45,
                     "max_tokens": 1200,
@@ -503,32 +508,38 @@ async def turn(
             raise GlowGuideError(str(error), 403) from error
 
         if selected_model == "gemini_pro":
-            # Gemini Pro selected → Gemini Pro first (best for skin/ingredients/material)
             chain = [
                 ("gemini", _call_gemini),
+                *( [("groq", _call_groq)] if not image else [] ),
                 ("claude", _call_claude),
-                ("groq", _call_groq),
                 ("openai", _call_openai),
                 ("qwen", _call_qwen),
             ]
         else:
-            # Claude Haiku selected → Claude first
             chain = [
                 ("claude", _call_claude),
+                *( [("groq", _call_groq)] if not image else [] ),
                 ("gemini", _call_gemini),
-                ("groq", _call_groq),
                 ("openai", _call_openai),
                 ("qwen", _call_qwen),
             ]
     else:
-        # Free chain: Gemini Flash → Groq (ultra-fast for text/product) → Claude → GPT-4o-mini → Qwen
-        chain = [
-            ("gemini_free", _call_gemini_free),
-            ("groq", _call_groq),
-            ("claude", _call_claude),
-            ("openai", _call_openai),
-            ("qwen", _call_qwen),
-        ]
+        # Free chain: Groq first for instant text replies, Gemini Flash first for images
+        if not image:
+            chain = [
+                ("groq", _call_groq),
+                ("gemini_free", _call_gemini_free),
+                ("claude", _call_claude),
+                ("openai", _call_openai),
+                ("qwen", _call_qwen),
+            ]
+        else:
+            chain = [
+                ("gemini_free", _call_gemini_free),
+                ("claude", _call_claude),
+                ("openai", _call_openai),
+                ("qwen", _call_qwen),
+            ]
 
     for tier, caller in chain:
         try:
