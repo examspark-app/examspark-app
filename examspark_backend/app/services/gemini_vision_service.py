@@ -60,21 +60,31 @@ async def analyze_image(
             "responseMimeType": "application/json",
         },
     }
-    url = f"{_BASE_URL}/{AIConfig.GEMINI_VISION_MODEL}:generateContent"
-    try:
-        async with httpx.AsyncClient(timeout=120.0) as client:
-            response = await client.post(
-                url,
-                headers={"x-goog-api-key": AIConfig.GEMINI_API_KEY},
-                json=payload,
-            )
-    except (httpx.TimeoutException, httpx.RequestError) as error:
-        raise GeminiVisionError("Gemini vision network/timeout error.") from error
-
-    if response.status_code != 200:
-        raise GeminiVisionError(
-            f"Gemini vision failed: {response.status_code} {response.text[:300]}"
-        )
+    candidates = [
+        AIConfig.GEMINI_VISION_MODEL,
+        "gemini-flash-latest",
+        "gemini-3.6-flash",
+        "gemini-pro-latest",
+    ]
+    last_err = ""
+    async with httpx.AsyncClient(timeout=12.0) as client:
+        for model in candidates:
+            if not model:
+                continue
+            url = f"{_BASE_URL}/{model}:generateContent"
+            try:
+                response = await client.post(
+                    url,
+                    headers={"x-goog-api-key": AIConfig.GEMINI_API_KEY},
+                    json=payload,
+                )
+                if response.status_code == 200:
+                    break
+                last_err = f"Gemini vision {model} failed ({response.status_code}): {response.text[:200]}"
+            except (httpx.TimeoutException, httpx.RequestError) as error:
+                last_err = f"Gemini vision {model} network error: {error}"
+        else:
+            raise GeminiVisionError(f"Gemini vision failed: {last_err}")
     try:
         candidates = response.json().get("candidates") or []
         parts = (candidates[0].get("content") or {}).get("parts") or []

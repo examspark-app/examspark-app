@@ -186,7 +186,7 @@ async def _call_gemini(messages: list[dict[str, Any]]) -> str:
         "gemini-3.6-flash",
     ]
     last_err: str = ""
-    async with httpx.AsyncClient(timeout=90) as client:
+    async with httpx.AsyncClient(timeout=12) as client:
         for model in candidates:
             if not model:
                 continue
@@ -201,6 +201,9 @@ async def _call_gemini(messages: list[dict[str, Any]]) -> str:
                     return data["candidates"][0]["content"]["parts"][0]["text"]
                 last_err = f"model {model} failed ({response.status_code})"
                 logger.warning("Gemini model %s failed with %s, trying next...", model, response.status_code)
+                if response.status_code in (429, 403):
+                    # Key quota depleted or forbidden; skip all other models on this key
+                    break
             except Exception as e:
                 last_err = f"model {model} error: {e}"
                 logger.warning("Gemini model %s exception %s, trying next...", model, e)
@@ -225,7 +228,7 @@ async def _call_claude(messages: list[dict[str, Any]]) -> str:
             content = blocks
         turns.append({"role": message["role"], "content": content})
     try:
-        async with httpx.AsyncClient(timeout=90) as client:
+        async with httpx.AsyncClient(timeout=12) as client:
             response = await client.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={
@@ -258,22 +261,29 @@ async def _call_qwen(messages: list[dict[str, Any]]) -> str:
         isinstance(m.get("content"), list) and any(item.get("type") == "image_url" for item in m["content"])
         for m in messages
     )
-    model = AIConfig.AI_VISION_FLASH_MODEL if has_image else AIConfig.AI_CHAT_MODEL
-    try:
-        async with httpx.AsyncClient(timeout=20) as client:
-            response = await client.post(
-                OPENROUTER_URL,
-                headers={"Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-                json={"model": model, "messages": messages, "temperature": 0.45, "max_tokens": 1200, "response_format": {"type": "json_object"}},
-            )
-    except Exception as exc:
-        raise GlowGuideError(f"Qwen network error: {exc}", 502) from exc
-    if response.status_code != 200:
-        raise GlowGuideError(f"Qwen failed: {response.status_code}", 502)
-    try:
-        return response.json()["choices"][0]["message"]["content"]
-    except Exception as error:
-        raise GlowGuideError(f"Qwen parse error: {error}", 502) from error
+    models = (
+        [AIConfig.AI_VISION_FLASH_MODEL, AIConfig.AI_VISION_PLUS_MODEL]
+        if has_image
+        else [AIConfig.AI_CHAT_MODEL]
+    )
+    last_err: Exception | None = None
+    for model in models:
+        try:
+            async with httpx.AsyncClient(timeout=35.0) as client:
+                response = await client.post(
+                    OPENROUTER_URL,
+                    headers={"Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
+                    json={"model": model, "messages": messages, "temperature": 0.45, "max_tokens": 1200, "response_format": {"type": "json_object"}},
+                )
+            if response.status_code == 200:
+                try:
+                    return response.json()["choices"][0]["message"]["content"]
+                except Exception as error:
+                    raise GlowGuideError(f"Qwen parse error: {error}", 502) from error
+            last_err = GlowGuideError(f"Qwen ({model}) failed: {response.status_code}", 502)
+        except Exception as exc:
+            last_err = GlowGuideError(f"Qwen network error: {exc}", 502)
+    raise last_err or GlowGuideError("Qwen failed across all candidates", 502)
 
 
 async def _call_openai(messages: list[dict[str, Any]]) -> str:
@@ -354,7 +364,7 @@ async def _call_gemini_free(messages: list[dict[str, Any]]) -> str:
         "gemini-pro-latest",
     ]
     last_err: str = ""
-    async with httpx.AsyncClient(timeout=90) as client:
+    async with httpx.AsyncClient(timeout=12) as client:
         for model in candidates:
             if not model:
                 continue
@@ -369,6 +379,9 @@ async def _call_gemini_free(messages: list[dict[str, Any]]) -> str:
                     return data["candidates"][0]["content"]["parts"][0]["text"]
                 last_err = f"model {model} returned {response.status_code}"
                 logger.warning("Gemini Flash candidate %s returned %s, trying next...", model, response.status_code)
+                if response.status_code in (429, 403):
+                    # Key quota depleted or forbidden; skip all other models on this key
+                    break
             except Exception as e:
                 last_err = f"model {model} error: {e}"
                 logger.warning("Gemini Flash candidate %s failed: %s, trying next...", model, e)
@@ -511,34 +524,34 @@ async def turn(
             chain = [
                 ("gemini", _call_gemini),
                 *( [("groq", _call_groq)] if not image else [] ),
+                ("qwen", _call_qwen),
                 ("claude", _call_claude),
                 ("openai", _call_openai),
-                ("qwen", _call_qwen),
             ]
         else:
             chain = [
                 ("claude", _call_claude),
                 *( [("groq", _call_groq)] if not image else [] ),
                 ("gemini", _call_gemini),
-                ("openai", _call_openai),
                 ("qwen", _call_qwen),
+                ("openai", _call_openai),
             ]
     else:
         # Free chain: Groq first for instant text replies, Gemini Flash first for images
         if not image:
             chain = [
                 ("groq", _call_groq),
+                ("qwen", _call_qwen),
                 ("gemini_free", _call_gemini_free),
                 ("claude", _call_claude),
                 ("openai", _call_openai),
-                ("qwen", _call_qwen),
             ]
         else:
             chain = [
                 ("gemini_free", _call_gemini_free),
+                ("qwen", _call_qwen),
                 ("claude", _call_claude),
                 ("openai", _call_openai),
-                ("qwen", _call_qwen),
             ]
 
     for tier, caller in chain:

@@ -1347,9 +1347,8 @@ async def home_ai_stream(
             "status": "VALIDATION_ERROR",
             "message": "mode must be 'normal' or 'deep'.",
         }
-        return
-    if text_model not in {"qwen3", "gemini", "claude"}:
-        text_model = "gemini"
+    if text_model not in {"qwen3", "gemini", "claude", "chatgpt", "groq"}:
+        text_model = "qwen3"
     if text_model == "claude":
         
         try:
@@ -1575,23 +1574,44 @@ async def home_ai_stream(
     parser = VisualStreamParser()
     try:
         timer.start("llm")
-        # All models route through the fallback-aware _call_chat_model.
-        # Free default: chatgpt → qwen3 (last resort).
+        from app.services.openrouter_stream import stream_chat_completions, OpenRouterStreamError
         from app.services.english_practice_service import _call_chat_model
 
-        async def model_stream():
-            yield await _call_chat_model(messages, text_model)
-
-        async for delta in model_stream():
-            safe = parser.feed(delta)
+        if text_model in ("claude", "gemini", "chatgpt"):
+            full_reply = await _call_chat_model(messages, text_model)
+            safe = parser.feed(full_reply)
             if safe:
                 yield {"type": "token", "text": safe}
+        else:
+            try:
+                async for delta in stream_chat_completions(
+                    messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                ):
+                    safe = parser.feed(delta)
+                    if safe:
+                        yield {"type": "token", "text": safe}
+            except Exception as stream_err:
+                logger.warning("Home AI streaming failed, fallback to _call_chat_model: %s", stream_err)
+                full_reply = await _call_chat_model(messages, "groq")
+                safe = parser.feed(full_reply)
+                if safe:
+                    yield {"type": "token", "text": safe}
         parser.finish()
         timer.end("llm")
     except OpenRouterStreamError as e:
         yield {
             "type": "error",
             "status": e.result_status,
+            "message": str(e),
+        }
+        return
+    except Exception as e:
+        logger.error("Home AI stream unexpected error: %s", e)
+        yield {
+            "type": "error",
+            "status": API_ERROR,
             "message": str(e),
         }
         return

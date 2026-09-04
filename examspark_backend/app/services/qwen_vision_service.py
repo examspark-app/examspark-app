@@ -294,7 +294,7 @@ async def _call_vision_model(
                 _OPENROUTER_URL,
                 headers=headers,
                 json=payload,
-                timeout=120.0,
+                timeout=35.0,
             )
             break
         except httpx.TransportError as e:

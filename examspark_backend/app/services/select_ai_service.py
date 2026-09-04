@@ -242,64 +242,46 @@ async def _generate_select_answer(
     system: str,
     user_content: str,
 ) -> str:
-    if not AIConfig.openrouter_configured():
-        raise SelectAiError(
-            "OPENROUTER_API_KEY not configured on the server.", status_code=500
-        )
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(
-                _OPENROUTER_URL,
-                headers={
-                    "Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": AIConfig.AI_CHAT_MODEL,
-                    "messages": [
-                        {"role": "system", "content": system},
-                        {"role": "user", "content": user_content},
-                    ],
-                    "temperature": 0.3,
-                    "max_tokens": SELECT_MAX_TOKENS,
-                },
-                timeout=60.0,
-            )
-    except httpx.TimeoutException as e:
-        raise SelectAiError(
-            "Select AI timed out.",
-            status_code=504,
-            result_status=TIMEOUT,
-        ) from e
-    except httpx.RequestError as e:
-        raise SelectAiError(
-            f"Select AI network error: {e}",
-            status_code=502,
-            result_status=NETWORK_ERROR,
-        ) from e
+    chat_messages = [
+        {"role": "system", "content": system},
+        {"role": "user", "content": user_content},
+    ]
+    if AIConfig.openrouter_configured():
+        try:
+            async with httpx.AsyncClient(timeout=25.0) as client:
+                response = await client.post(
+                    _OPENROUTER_URL,
+                    headers={
+                        "Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}",
+                        "Content-Type": "application/json",
+                    },
+                    json={
+                        "model": AIConfig.AI_CHAT_MODEL,
+                        "messages": chat_messages,
+                        "temperature": 0.3,
+                        "max_tokens": SELECT_MAX_TOKENS,
+                    },
+                )
+                if response.status_code == 200:
+                    data = response.json()
+                    choices = data.get("choices") or []
+                    if choices:
+                        content = (choices[0].get("message") or {}).get("content") or ""
+                        if content.strip():
+                            return content.strip()
+        except Exception as e:
+            logger.warning("Select AI OpenRouter primary failed: %s, falling back to Groq", e)
 
-    if response.status_code != 200:
+    # Groq fallback
+    from app.services.english_practice_service import _call_chat_model
+    try:
+        return await _call_chat_model(chat_messages, "groq")
+    except Exception as fallback_error:
         raise SelectAiError(
-            f"Select AI failed: {response.status_code} {response.text[:300]}",
+            f"Select AI failed on both OpenRouter and Groq: {fallback_error}",
             status_code=502,
             result_status=API_ERROR,
-        )
-    data = response.json()
-    choices = data.get("choices") or []
-    if not choices:
-        raise SelectAiError(
-            "Select AI returned no choices.",
-            status_code=502,
-            result_status=API_ERROR,
-        )
-    content = (choices[0].get("message") or {}).get("content") or ""
-    if not content.strip():
-        raise SelectAiError(
-            "Select AI returned an empty answer.",
-            status_code=502,
-            result_status=API_ERROR,
-        )
-    return content.strip()
+        ) from fallback_error
 
 
 def _validate_action(action: str) -> str:

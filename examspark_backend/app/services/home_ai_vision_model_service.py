@@ -59,21 +59,25 @@ async def _call_chatgpt_vision(
         },
     ]
 
-    async with httpx.AsyncClient(timeout=90) as client:
-        response = await client.post(
-            "https://api.openai.com/v1/chat/completions",
-            headers={
-                "Authorization": f"Bearer {AIConfig.OPENAI_API_KEY}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": AIConfig.OPENAI_VISION_MODEL,
-                "messages": messages,
-                "temperature": 0.2,
-                "max_tokens": 4096,
-                "response_format": {"type": "json_object"},
-            },
-        )
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post(
+                "https://api.openai.com/v1/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {AIConfig.OPENAI_API_KEY}",
+                    "Content-Type": "application/json",
+                },
+                json={
+                    "model": AIConfig.OPENAI_VISION_MODEL,
+                    "messages": messages,
+                    "temperature": 0.2,
+                    "max_tokens": 4096,
+                    "response_format": {"type": "json_object"},
+                },
+            )
+    except Exception as exc:
+        raise GeminiVisionError(f"OpenAI vision network error: {exc}") from exc
+
     if response.status_code != 200:
         raise GeminiVisionError(f"OpenAI vision failed: {response.status_code}")
 
@@ -121,22 +125,26 @@ async def _call_claude_vision(
         },
     ]
 
-    async with httpx.AsyncClient(timeout=90) as client:
-        response = await client.post(
-            "https://api.anthropic.com/v1/messages",
-            headers={
-                "x-api-key": AIConfig.CLAUDE_API_KEY,
-                "anthropic-version": "2023-06-01",
-                "content-type": "application/json",
-            },
-            json={
-                "model": AIConfig.CLAUDE_CHAT_MODEL,
-                "system": _VISION_SYSTEM_PROMPT,
-                "messages": messages,
-                "max_tokens": 4096,
-                "temperature": 0.2,
-            },
-        )
+    try:
+        async with httpx.AsyncClient(timeout=15) as client:
+            response = await client.post(
+                "https://api.anthropic.com/v1/messages",
+                headers={
+                    "x-api-key": AIConfig.CLAUDE_API_KEY,
+                    "anthropic-version": "2023-06-01",
+                    "content-type": "application/json",
+                },
+                json={
+                    "model": AIConfig.CLAUDE_CHAT_MODEL,
+                    "system": _VISION_SYSTEM_PROMPT,
+                    "messages": messages,
+                    "max_tokens": 4096,
+                    "temperature": 0.2,
+                },
+            )
+    except Exception as exc:
+        raise GeminiVisionError(f"Claude vision network error: {exc}") from exc
+
     if response.status_code != 200:
         raise GeminiVisionError(f"Claude vision failed: {response.status_code}")
 
@@ -164,8 +172,8 @@ async def analyze_image_with_fallback(
 ) -> VisionResult:
     """Route vision analysis through free or premium fallback chains.
 
-    Free users:  gemini → qwen-vl  (never Claude/ChatGPT premium)
-    Premium (₹199): claude → chatgpt → gemini
+    Free users:  gemini → qwen-vl (or qwen-vl → gemini)
+    Premium (₹199): claude → chatgpt → gemini → qwen-vl
     """
     is_premium = selected_model in ("claude", "chatgpt")
 
@@ -180,9 +188,12 @@ async def analyze_image_with_fallback(
         except FeatureLockedError:
             # Silently downgrade to free chain if plan check fails
             is_premium = False
-            selected_model = "gemini"
+            selected_model = "qwen-vl"
 
-    chain = _PREMIUM_CHAIN if is_premium else _FREE_CHAIN
+    if is_premium:
+        chain = ("claude", "chatgpt", "qwen-vl", "gemini") if selected_model == "claude" else ("chatgpt", "claude", "qwen-vl", "gemini")
+    else:
+        chain = ("qwen-vl", "gemini") if selected_model == "qwen-vl" else ("gemini", "qwen-vl")
 
     async def call(model: str) -> VisionResult:
         if model == "gemini":
@@ -203,7 +214,7 @@ async def analyze_image_with_fallback(
                 selected_model, model_key, is_premium,
             )
             return result
-        except (QwenVisionError, GeminiVisionError) as error:
+        except Exception as error:
             last_error = error
             logger.warning(
                 "home_ai_vision_failed model=%s error=%s",

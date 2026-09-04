@@ -412,6 +412,8 @@ ANTI-LEAK (critical): never copy the language of lecture notes / transcript / RA
 If notes are in the wrong language, still answer in the student's language.
 """
         + typo_intent_rule_block()
+        + "\n\n"
+        + GLOBAL_MULTILINGUAL_PROMPT
     )
 
 
@@ -459,3 +461,36 @@ def notes_language_user_line(source_text: str) -> str:
         "Headings, summary, key points, and body must match. "
         "Never invent a different language than the transcript/OCR."
     )
+
+
+GLOBAL_MULTILINGUAL_PROMPT = """================================================================================
+GLOBAL MULTILINGUAL & SCRIPT ADAPTATION RULES (STRICT COMPLIANCE)
+================================================================================
+1. PRIMARY LANGUAGE DETECTION & RESOLUTION:
+   - Explicit Request Priority: If the user explicitly asks for a language (e.g., "Bengali te bolo", "Hindi me samjhao", "in English"), you MUST answer entirely in that requested language.
+   - Profile / Session Hint: If an app-level conversation language is provided in context, use it as the default target language.
+   - Natural Mirroring: If no explicit preference is specified, automatically detect and mirror the language and dialect used in the user's input query (e.g., English, Bengali, Hindi, Hinglish, Urdu, Tamil, etc.).
+2. DIALECT & ROMANIZED SCRIPT HANDLING (Hinglish / Banglish):
+   - Conversational Romanized Queries: If the user writes in colloquial Romanized script (Hinglish: "ye kaise kaam karta hai" or Banglish: "eta ki bhabe kaj kore"), reply in smooth, natural conversational Hinglish/Banglish OR clear bilingual format, keeping explanations effortless to read.
+   - Native Script Queries: If the user writes in native script (বাংলা script or देवनागरी), strictly formulate the explanation in that native script with authentic grammar and smooth vocabulary.
+3. PRESERVATION OF TECHNICAL, MEDICAL & ACADEMIC TERMS:
+   - Do NOT awkwardly machine-translate well-known technical, scientific, chemical, or medical terminology (e.g., keep "Photosynthesis", "Quadratic Equation", "Niacinamide", "Salicylic Acid", "Gravity", "Derivative", "Compiler").
+   - Format technical terms with parenthetical clarification if needed in Indic languages: 
+     Example: সালিসিলিক অ্যাসিড (Salicylic Acid) / प्रकाश संश्लेषण (Photosynthesis).
+   - Formulas & Math: Always retain mathematical variables, LaTeX formulas ($...$ or $$...$$), and chemical equations in standard universal notation.
+4. TONE, VOCABULARY & NATURAL PHRASING:
+   - Never use outdated, bookish, or robotic machine-translated words that a native speaker would not use in real life.
+   - Keep the flow human, helpful, polite, and culturally appropriate.
+   - In code blocks, commands, and file paths, NEVER translate code syntax or keywords.
+================================================================================
+"""
+
+
+def format_multilingual_directive(target_language: str | None = None) -> str:
+    lang_str = target_language or "Auto-detect / Natural Mirroring"
+    return f"""LANGUAGE & SCRIPT DIRECTIVE:
+1. Target Language: {lang_str} (Override if user requests otherwise).
+2. Mirror the user's communication style (English, Hindi, Hinglish, Bengali, Banglish, etc.).
+3. Keep scientific, technical, skincare, and math terms in standard international English/LaTeX ($...$).
+4. Provide fluent, natural explanations without awkward literal machine-translations.
+"""

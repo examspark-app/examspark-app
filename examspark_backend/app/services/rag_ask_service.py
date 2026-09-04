@@ -654,7 +654,7 @@ async def _call_qwen3(chat_messages: list[dict], temperature: float, max_tokens:
                     "temperature": temperature,
                     "max_tokens": max_tokens,
                 },
-                timeout=90.0,
+                timeout=25.0,
             )
     except httpx.TimeoutException as e:
         raise AskAiError(
@@ -704,11 +704,9 @@ async def _generate_answer(
     used_web_search: bool = False,
     history: list[dict] | None = None,
 ) -> str:
-    """Default model is qwen3. If qwen3 fails for any reason (timeout, network,
-    API error, empty answer), automatically retry once with Gemini — the
-    student never sees the qwen3 failure unless Gemini also fails."""
-    if not AIConfig.openrouter_configured():
-        raise AskAiError("OPENROUTER_API_KEY not configured on the server.", status_code=500)
+    """Default model is qwen3 with Groq fallback — zero crashes."""
+    if not AIConfig.openrouter_configured() and not AIConfig.groq_configured():
+        raise AskAiError("No AI providers configured on the server.", status_code=500)
 
     context = "\n\n---\n\n".join(context_blocks) if context_blocks else "(no context retrieved)"
     max_tokens = max_tokens_for_mode(mode)
@@ -735,21 +733,21 @@ async def _generate_answer(
         return await _call_qwen3(chat_messages, temperature, max_tokens)
     except AskAiError as primary_error:
         logger.warning(
-            "Qwen3 failed for Ask AI, falling back to Gemini: %s", primary_error
+            "Qwen3 failed for Ask AI, falling back to Groq/Gemini: %s", primary_error
         )
         from app.services.english_practice_service import _call_chat_model
 
         try:
-            content = await _call_chat_model(chat_messages, "gemini")
+            content = await _call_chat_model(chat_messages, "groq")
         except Exception as fallback_error:  # noqa: BLE001
             raise AskAiError(
-                f"Ask AI failed on both Qwen3 and Gemini fallback: {fallback_error}",
+                f"Ask AI failed on both Qwen3 and Groq fallback: {fallback_error}",
                 status_code=502,
                 result_status=API_ERROR,
             ) from fallback_error
         if not content or not content.strip():
             raise AskAiError(
-                "Gemini fallback returned an empty answer.",
+                "AI fallback returned an empty answer.",
                 status_code=502,
                 result_status=API_ERROR,
             )
@@ -1227,29 +1225,28 @@ async def ask_ai_stream(
                 yield {"type": "token", "text": safe}
         parser.finish()
         timer.end("llm")
-    except OpenRouterStreamError as e:
-        # Qwen3 streaming failed — fall back to Gemini (single non-streaming
-        # call), then replay the answer as chunks so the app still sees a
-        # stream. Student never sees the qwen3 error unless Gemini also fails.
+    except (OpenRouterStreamError, Exception) as e:
         logger.warning(
-            "Qwen3 stream failed for Ask AI, falling back to Gemini: %s", e
+            "Streaming failed for Ask AI, falling back to Groq: %s", e
         )
         from app.services.english_practice_service import _call_chat_model
 
         try:
-            fallback_answer = await _call_chat_model(messages, "gemini")
+            fallback_answer = await _call_chat_model(messages, "groq")
         except Exception as fallback_error:  # noqa: BLE001
+            status = getattr(e, "result_status", API_ERROR)
             yield {
                 "type": "error",
-                "status": e.result_status,
-                "message": f"Ask AI failed on both Qwen3 and Gemini fallback: {fallback_error}",
+                "status": status,
+                "message": f"Ask AI failed on both streaming and fallback: {fallback_error}",
             }
             return
         if not fallback_answer or not fallback_answer.strip():
+            status = getattr(e, "result_status", API_ERROR)
             yield {
                 "type": "error",
-                "status": e.result_status,
-                "message": "Gemini fallback returned an empty answer.",
+                "status": status,
+                "message": "AI fallback returned an empty answer.",
             }
             return
         for piece in _replay_cached_tokens(fallback_answer.strip()):
