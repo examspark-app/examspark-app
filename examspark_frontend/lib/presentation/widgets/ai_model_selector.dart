@@ -1,30 +1,123 @@
 import 'package:flutter/material.dart';
 
+/// Configurable model option — supports free vs premium distinction.
+class AiModelOption {
+  final String value;
+  final String label;
+  final IconData icon;
+  final bool isPremium;
+  final String? premiumBadge;
+
+  const AiModelOption({
+    required this.value,
+    required this.label,
+    required this.icon,
+    this.isPremium = false,
+    this.premiumBadge,
+  });
+}
+
 class AiModelSelector extends StatelessWidget {
   const AiModelSelector({
     super.key,
     required this.selectedModel,
     required this.onSelected,
+    this.customModels,
+    this.onPremiumTap,
   });
 
   final String selectedModel;
   final ValueChanged<String> onSelected;
 
+  /// Override default model list per feature.
+  final List<AiModelOption>? customModels;
+
+  /// Called when user taps a premium model — show upgrade sheet.
+  final VoidCallback? onPremiumTap;
+
+  // --- Default model list (Study AI Chat) ---
+  static const _defaultModels = <AiModelOption>[
+    AiModelOption(
+      value: 'chatgpt',
+      label: 'GPT-4o-mini',
+      icon: Icons.bolt_rounded,
+    ),
+    AiModelOption(
+      value: 'qwen3',
+      label: 'Qwen3',
+      icon: Icons.speed_rounded,
+    ),
+    AiModelOption(
+      value: 'gemini',
+      label: 'Gemini 2.5 Flash',
+      icon: Icons.auto_awesome_rounded,
+    ),
+    AiModelOption(
+      value: 'claude',
+      label: 'Claude 3.5 Haiku',
+      icon: Icons.workspace_premium_rounded,
+      isPremium: true,
+      premiumBadge: '🔒 ₹199',
+    ),
+  ];
+
+  // --- GlowGuide models ---
+  static const glowGuideModels = <AiModelOption>[
+    AiModelOption(
+      value: 'gemini',
+      label: 'Gemini 2.5 Flash',
+      icon: Icons.auto_awesome_rounded,
+    ),
+    AiModelOption(
+      value: 'claude',
+      label: 'Claude 3.5 Haiku',
+      icon: Icons.workspace_premium_rounded,
+      isPremium: true,
+      premiumBadge: '🔒 ₹199',
+    ),
+  ];
+
+  // --- Vision models ---
+  static const visionModels = <AiModelOption>[
+    AiModelOption(
+      value: 'gemini',
+      label: 'Gemini 2.5 Flash',
+      icon: Icons.auto_awesome_rounded,
+    ),
+    AiModelOption(
+      value: 'chatgpt',
+      label: 'GPT-4o-mini',
+      icon: Icons.bolt_rounded,
+      isPremium: true,
+      premiumBadge: '🔒 ₹199',
+    ),
+    AiModelOption(
+      value: 'claude',
+      label: 'Claude 3.5 Haiku',
+      icon: Icons.workspace_premium_rounded,
+      isPremium: true,
+      premiumBadge: '🔒 ₹199',
+    ),
+  ];
+
+  List<AiModelOption> get _models => customModels ?? _defaultModels;
+
   static const models = <({String value, String label, IconData icon})>[
-    (value: 'qwen3', label: 'qwen3-30b', icon: Icons.bolt_rounded),
-    (value: 'gemini', label: 'gemini-2.5-flash', icon: Icons.auto_awesome_rounded),
-    (value: 'claude', label: 'claude-3-5-haiku', icon: Icons.workspace_premium_rounded),
+    (value: 'chatgpt', label: 'GPT-4o-mini', icon: Icons.bolt_rounded),
+    (value: 'qwen3', label: 'Qwen3', icon: Icons.speed_rounded),
+    (value: 'gemini', label: 'Gemini 2.5 Flash', icon: Icons.auto_awesome_rounded),
+    (value: 'claude', label: 'Claude 3.5 Haiku', icon: Icons.workspace_premium_rounded),
   ];
 
   static String labelFor(String model) {
-    for (final option in models) {
+    for (final option in _defaultModels) {
       if (option.value == model) return option.label;
     }
-    return 'Qwen3';
+    return 'GPT-4o-mini';
   }
 
   static IconData _iconFor(String model) {
-    for (final option in models) {
+    for (final option in _defaultModels) {
       if (option.value == model) return option.icon;
     }
     return Icons.bolt_rounded;
@@ -38,11 +131,22 @@ class AiModelSelector extends StatelessWidget {
     final border = isDark ? const Color(0xFF3A3A3C) : const Color(0xFFDDDDDD);
     final selectedBg = isDark ? const Color(0xFF2C2C2E) : const Color(0xFFF2F2F7);
     final muted = isDark ? Colors.white60 : Colors.black54;
+    final currentModels = _models;
 
     return PopupMenuButton<String>(
       tooltip: 'Select AI Model',
       initialValue: selectedModel,
-      onSelected: onSelected,
+      onSelected: (value) {
+        final option = currentModels.firstWhere(
+          (m) => m.value == value,
+          orElse: () => currentModels.first,
+        );
+        if (option.isPremium && onPremiumTap != null) {
+          onPremiumTap!();
+          return;
+        }
+        onSelected(value);
+      },
       offset: const Offset(0, -340),
       elevation: 6,
       shadowColor: Colors.black.withValues(alpha: 0.12),
@@ -53,7 +157,7 @@ class AiModelSelector extends StatelessWidget {
         side: BorderSide(color: border, width: 0.8),
       ),
       itemBuilder: (context) => [
-        for (final model in models)
+        for (final model in currentModels)
           PopupMenuItem<String>(
             value: model.value,
             height: 38,
@@ -85,6 +189,24 @@ class AiModelSelector extends StatelessWidget {
                       color: model.value == selectedModel ? fg : muted,
                     ),
                   ),
+                  if (model.premiumBadge != null) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        model.premiumBadge!,
+                        style: const TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.amber,
+                        ),
+                      ),
+                    ),
+                  ],
                   const SizedBox(width: 16),
                   if (model.value == selectedModel)
                     Icon(Icons.check_rounded, color: fg, size: 16),

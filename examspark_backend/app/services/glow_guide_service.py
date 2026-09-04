@@ -27,7 +27,7 @@ from app.services.glow_guide_research_service import (
 
 logger = logging.getLogger(__name__)
 GLOW_GUIDE_TEXT_COST = 2
-GLOW_GUIDE_PHOTO_COST = 5
+GLOW_GUIDE_PHOTO_COST = 8
 GLOW_GUIDE_RESEARCH_COST = 10
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MAX_GLOW_GUIDE_EXCHANGES = 100
@@ -211,6 +211,64 @@ async def _call_qwen(messages: list[dict[str, Any]]) -> str:
     return response.json()["choices"][0]["message"]["content"]
 
 
+async def _call_openai(messages: list[dict[str, Any]]) -> str:
+    """OpenAI GPT-4o-mini adapter for GlowGuide fallback."""
+    if not AIConfig.openai_configured():
+        raise GlowGuideError("OpenAI is not configured.", 500)
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Authorization": f"Bearer {AIConfig.OPENAI_API_KEY}", "Content-Type": "application/json"},
+            json={"model": AIConfig.OPENAI_CHAT_MODEL, "messages": messages, "temperature": 0.45, "max_tokens": 1200, "response_format": {"type": "json_object"}},
+        )
+    if response.status_code != 200:
+        raise GlowGuideError(f"OpenAI failed: {response.status_code}", 502)
+    return response.json()["choices"][0]["message"]["content"]
+
+
+async def _call_gemini_free(messages: list[dict[str, Any]]) -> str:
+    """Gemini 2.5 Flash (cheap) for free-tier GlowGuide users."""
+    if not AIConfig.gemini_tts_configured():
+        raise GlowGuideError("Gemini is not configured.", 500)
+    system_text = messages[0]["content"]
+    contents: list[dict[str, Any]] = []
+    for message in messages[1:]:
+        content = message["content"]
+        parts: list[dict[str, Any]] = []
+        if isinstance(content, list):
+            for item in content:
+                if item["type"] == "text":
+                    parts.append({"text": item["text"]})
+                else:
+                    header, data = item["image_url"]["url"].split(",", 1)
+                    parts.append({"inlineData": {"mimeType": header.split(";", 1)[0][5:], "data": data}})
+        else:
+            parts.append({"text": content})
+        contents.append({
+            "role": "model" if message["role"] == "assistant" else "user",
+            "parts": parts,
+        })
+    payload = {"systemInstruction": {"parts": [{"text": system_text}]}, "contents": contents, "generationConfig": {"temperature": 0.45, "maxOutputTokens": 1200, "responseMimeType": "application/json"}}
+    async with httpx.AsyncClient(timeout=90) as client:
+        response = await client.post(f"https://generativelanguage.googleapis.com/v1beta/models/{AIConfig.GLOWGUIDE_GEMINI_FREE_MODEL}:generateContent", headers={"x-goog-api-key": AIConfig.GEMINI_API_KEY}, json=payload)
+    if response.status_code != 200:
+        raise GlowGuideError(f"Gemini Flash failed: {response.status_code}", 502)
+    try:
+        return response.json()["candidates"][0]["content"]["parts"][0]["text"]
+    except (KeyError, IndexError, TypeError) as error:
+        raise GlowGuideError("Gemini Flash returned no answer.", 502) from error
+
+
+# --- Model display names for frontend ---
+_MODEL_DISPLAY_NAMES = {
+    "gemini_free": "Gemini 2.5 Flash",
+    "gemini": "Gemini 2.5 Pro",
+    "claude": "Claude 3.5 Haiku",
+    "openai": "GPT-4o-mini",
+    "qwen": "Qwen 3",
+}
+
+
 async def turn(
     user_id: str,
     session_id: str | None,
@@ -222,6 +280,7 @@ async def turn(
     age: str | None = None,
     weather: str | None = None,
     on_event: Callable[[dict[str, Any]], Awaitable[None]] | None = None,
+    selected_model: str | None = None,
 ) -> dict[str, Any]:
     if not text.strip() and not image:
         raise GlowGuideError("Add a question or photo.", 400)
@@ -306,9 +365,39 @@ async def turn(
     messages = [{"role": "system", "content": prompt}, *_multimodal_messages(rows, text, image, filename)]
     parsed: dict[str, Any] | None = None
     errors: list[str] = []
-    for tier, caller in (("gemini", _call_gemini), ("claude", _call_claude), ("qwen", _call_qwen)):
+    served_model = "gemini_free"
+
+    # --- Determine fallback chain based on selected_model & plan ---
+    is_premium = selected_model == "claude"
+    if is_premium:
+        from app.services.plan_tier_service import (
+            FeatureLockedError,
+            GatedFeature,
+            require_feature_unlocked,
+        )
+        try:
+            require_feature_unlocked(user_id, GatedFeature.PREMIUM_VISION_MODEL)
+        except FeatureLockedError as error:
+            raise GlowGuideError(str(error), 403) from error
+        # Premium chain: Claude → Gemini Pro → GPT-4o-mini → Qwen (last)
+        chain = [
+            ("claude", _call_claude),
+            ("gemini", _call_gemini),
+            ("openai", _call_openai),
+            ("qwen", _call_qwen),
+        ]
+    else:
+        # Free chain: Gemini Flash → GPT-4o-mini → Qwen (last)
+        chain = [
+            ("gemini_free", _call_gemini_free),
+            ("openai", _call_openai),
+            ("qwen", _call_qwen),
+        ]
+
+    for tier, caller in chain:
         try:
             parsed = _json(await caller(messages))
+            served_model = tier
             logger.info("glow_guide_model_served tier=%s user=%s", tier, user_id)
             break
         except GlowGuideError as error:
@@ -382,4 +471,4 @@ async def turn(
     if new_exchange_count >= MAX_GLOW_GUIDE_EXCHANGES:
         session_update["status"] = "archived"
     db.table("glow_guide_sessions").update(session_update).eq("id", session_id).eq("user_id", user_id).execute()
-    return {"session_id": session_id, "reply": reply, "detailed_breakdown": parsed.get("detailed_breakdown"), "category": parsed.get("category") or active_category, "question_options": parsed.get("question_options") or [], "ready": bool(parsed.get("ready")), "verdict": parsed.get("verdict"), "category_label": parsed.get("category_label"), "confidence_note": parsed.get("confidence_note") or "", "credits_charged": required_credits, "new_balance": balance, "exchange_count": new_exchange_count, "session_complete": new_exchange_count >= MAX_GLOW_GUIDE_EXCHANGES, "answer_source": research.get("answer_source") if research else "MODEL", "used_web_search": bool(research and research.get("used_web_search")), "web_search_status": "complete" if research and research.get("used_web_search") else "not_used", "sources": research.get("sources", []) if research else []}
+    return {"session_id": session_id, "reply": reply, "detailed_breakdown": parsed.get("detailed_breakdown"), "category": parsed.get("category") or active_category, "question_options": parsed.get("question_options") or [], "ready": bool(parsed.get("ready")), "verdict": parsed.get("verdict"), "category_label": parsed.get("category_label"), "confidence_note": parsed.get("confidence_note") or "", "credits_charged": required_credits, "new_balance": balance, "exchange_count": new_exchange_count, "session_complete": new_exchange_count >= MAX_GLOW_GUIDE_EXCHANGES, "answer_source": research.get("answer_source") if research else "MODEL", "used_web_search": bool(research and research.get("used_web_search")), "web_search_status": "complete" if research and research.get("used_web_search") else "not_used", "sources": research.get("sources", []) if research else [], "model_name": _MODEL_DISPLAY_NAMES.get(served_model, served_model)}

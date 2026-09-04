@@ -24,6 +24,7 @@ async def _glow_guide_sse(
     weather: str | None,
     image_bytes: bytes | None,
     filename: str | None,
+    selected_model: str | None,
 ) -> AsyncIterator[str]:
     events: asyncio.Queue[dict] = asyncio.Queue()
 
@@ -43,6 +44,7 @@ async def _glow_guide_sse(
                 age,
                 weather,
                 on_event=on_event,
+                selected_model=selected_model,
             )
             await events.put({"type": "done", **result})
         except GlowGuideError as error:
@@ -74,6 +76,7 @@ async def glow_guide_turn(
     language: str | None = Form(None),
     age: str | None = Form(None),
     weather: str | None = Form(None),
+    selected_model: str | None = Form(None),
     image: UploadFile | None = File(None),
     user: AuthenticatedUser = Depends(get_current_user),
 ):
@@ -85,7 +88,7 @@ async def glow_guide_turn(
         if len(image_bytes) > 8 * 1024 * 1024:
             raise HTTPException(status_code=413, detail="Photo is too large (max 8 MB).")
     try:
-        return await turn(user.user_id, session_id, category, text, image_bytes, filename, language, age, weather)
+        return await turn(user.user_id, session_id, category, text, image_bytes, filename, language, age, weather, selected_model=selected_model)
     except GlowGuideError as error:
         raise HTTPException(status_code=error.status_code, detail=str(error)) from error
 
@@ -98,6 +101,7 @@ async def glow_guide_turn_stream(
     language: str | None = Form(None),
     age: str | None = Form(None),
     weather: str | None = Form(None),
+    selected_model: str | None = Form(None),
     image: UploadFile | None = File(None),
     user: AuthenticatedUser = Depends(get_current_user),
 ):
@@ -119,6 +123,7 @@ async def glow_guide_turn_stream(
             weather=weather,
             image_bytes=image_bytes,
             filename=filename,
+            selected_model=selected_model,
         ),
         media_type="text/event-stream",
         headers={

@@ -17,7 +17,7 @@ from app.config import AIConfig
 from app.services import english_learning_memory_service as learning_memory
 
 _BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models"
-_TIMEOUT_SECONDS = 45.0
+_TIMEOUT_SECONDS = 10.0
 _SAMPLE_RATE = 24000
 _MAX_ATTEMPTS = 2
 

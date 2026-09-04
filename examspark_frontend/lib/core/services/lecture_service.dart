@@ -899,6 +899,7 @@ class LectureService {
     String? language,
     String? age,
     String? weather,
+    String? selectedModel,
     void Function(String status)? onStatus,
   }) async {
     final token = await _requireAccessToken();
@@ -916,7 +917,8 @@ class LectureService {
           ..fields['session_id'] = sessionId ?? ''
           ..fields['language'] = language ?? ''
           ..fields['age'] = age ?? ''
-          ..fields['weather'] = weather ?? '';
+          ..fields['weather'] = weather ?? ''
+          ..fields['selected_model'] = selectedModel ?? '';
     if (imageBytes != null && imageBytes.isNotEmpty) {
       request.files.add(
         http.MultipartFile.fromBytes(

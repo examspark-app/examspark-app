@@ -74,10 +74,11 @@ class QwenVisionError(Exception):
 
 
 class VisionResult:
-    def __init__(self, notes: dict, used_plus: bool, notes_list: list[str] | None = None):
+    def __init__(self, notes: dict, used_plus: bool, notes_list: list[str] | None = None, model_name: str | None = None):
         self.notes = notes
         self.used_plus = used_plus
         self.notes_list = notes_list or []
+        self.model_name = model_name or ""
 
 
 def _mime_from_filename(filename: str | None) -> str:

@@ -86,6 +86,8 @@ def home_ai_cost_for_study_chip(
 DIAGRAM_IMAGE = 25
 # Home AI Camera / Upload Image → chat answer (not Study Workspace lecture).
 HOME_AI_VISION = 10
+# GlowGuide premium vision (Claude 3.5 Haiku / premium model) — 8 credits per photo.
+GLOW_GUIDE_PREMIUM_PHOTO = 8
 PDF_ANALYSIS = 10
 OCR_IMAGE = 10
 

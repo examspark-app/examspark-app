@@ -65,12 +65,23 @@ class AIConfig:
     GLOWGUIDE_GEMINI_MODEL: str = os.getenv(
         "GLOWGUIDE_GEMINI_MODEL", "gemini-2.5-pro"
     )
+    GLOWGUIDE_GEMINI_FREE_MODEL: str = os.getenv(
+        "GLOWGUIDE_GEMINI_FREE_MODEL", "gemini-2.5-flash"
+    )
     GEMINI_VISION_MODEL: str = os.getenv(
         "GEMINI_VISION_MODEL", "gemini-2.5-flash"
     )
     CLAUDE_API_KEY: str = os.getenv("CLAUDE_API_KEY", "")
     CLAUDE_CHAT_MODEL: str = os.getenv(
         "CLAUDE_CHAT_MODEL", "claude-3-5-haiku-latest"
+    )
+    # OpenAI — English Practice default, Study AI chat, vision fallback.
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
+    OPENAI_CHAT_MODEL: str = os.getenv(
+        "OPENAI_CHAT_MODEL", "gpt-4o-mini"
+    )
+    OPENAI_VISION_MODEL: str = os.getenv(
+        "OPENAI_VISION_MODEL", "gpt-4o-mini"
     )
     # Roleplay voice output reuses the same OpenRouter credential as Qwen3.
     # Keeping the model and voice configurable avoids embedding provider values
@@ -188,6 +199,10 @@ class AIConfig:
     @classmethod
     def gemini_tts_configured(cls) -> bool:
         return bool(cls.GEMINI_API_KEY)
+
+    @classmethod
+    def openai_configured(cls) -> bool:
+        return bool(cls.OPENAI_API_KEY)
 
     @classmethod
     def fish_audio_configured(cls) -> bool:

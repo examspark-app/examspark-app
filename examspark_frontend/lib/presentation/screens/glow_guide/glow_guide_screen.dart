@@ -10,6 +10,7 @@ import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/glow_guide/glow_guide_history_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:examspark_frontend/presentation/widgets/ai_model_selector.dart';
 class GlowGuideScreen extends StatefulWidget {
   const GlowGuideScreen({super.key, this.startFresh = false, this.sessionId});
 
@@ -95,6 +96,7 @@ static const _manualLanguageOption = 'Manual entry';
   String? _sessionTitle;
   bool _restoring = false;
   bool _customInputFlowOpen = false;
+  String _selectedModel = 'gemini'; // 'gemini' = free (Gemini 2.5 Flash); 'claude' = premium
 
   @override
   void initState() {
@@ -434,6 +436,7 @@ String _canonicalFirstLanguage(String label) {
         imageBytes: null,
         filename: null,
         language: _preferredLanguage,
+        selectedModel: _selectedModel,
         onStatus: (status) {
           if (!mounted) return;
           setState(() => _webSearchStatus = status);
@@ -458,6 +461,7 @@ String _canonicalFirstLanguage(String label) {
             verdict: result['verdict'] as String?,
             confidenceNote: result['confidence_note'] as String?,
             detailedBreakdown: result['detailed_breakdown'] as String?,
+            modelName: result['model_name'] as String?,
           ),
         );
         _sending = false;
@@ -671,6 +675,7 @@ String _canonicalFirstLanguage(String label) {
         imageBytes: image,
         filename: imageName,
         language: languageForRequest,
+        selectedModel: _selectedModel,
         onStatus: (status) {
           if (!mounted) return;
           setState(() => _webSearchStatus = status);
@@ -699,6 +704,7 @@ String _canonicalFirstLanguage(String label) {
             verdict: result['verdict'] as String?,
             confidenceNote: result['confidence_note'] as String?,
             detailedBreakdown: result['detailed_breakdown'] as String?,
+            modelName: result['model_name'] as String?,
             sources: (result['sources'] as List?)
                     ?.whereType<Map>()
                     .map((e) => Map<String, dynamic>.from(e))
@@ -1017,6 +1023,24 @@ String _canonicalFirstLanguage(String label) {
                                       letterSpacing: 0.1,
                                     ),
                                   ),
+                                  if (message.modelName != null && message.modelName!.isNotEmpty) ...[
+                                    const SizedBox(width: 6),
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: AppTheme.glowGuidePink.withValues(alpha: 0.12),
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        message.modelName!,
+                                        style: TextStyle(
+                                          color: AppTheme.glowGuidePink,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                               const SizedBox(height: 10),
@@ -1345,7 +1369,45 @@ String _canonicalFirstLanguage(String label) {
                         ),
                       ),
                     ),
-                    const Spacer(),
+                    AiModelSelector(
+                      selectedModel: _selectedModel,
+                      customModels: AiModelSelector.glowGuideModels,
+                      onSelected: (value) {
+                        setState(() => _selectedModel = value);
+                      },
+                      onPremiumTap: () {
+                        showModalBottomSheet<void>(
+                          context: context,
+                          shape: const RoundedRectangleBorder(
+                            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+                          ),
+                          builder: (ctx) => Padding(
+                            padding: const EdgeInsets.all(24),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.workspace_premium_rounded, color: Colors.amber, size: 36),
+                                const SizedBox(height: 12),
+                                const Text('Unlock Premium AI', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+                                const SizedBox(height: 8),
+                                const Text(
+                                  'Claude 3.5 Haiku requires ₹199 Plan.\nUpgrade for deeper ingredient analysis.',
+                                  textAlign: TextAlign.center,
+                                  style: TextStyle(fontSize: 14, color: Colors.grey),
+                                ),
+                                const SizedBox(height: 20),
+                                ElevatedButton(
+                                  onPressed: () => Navigator.pop(ctx),
+                                  style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
+                                  child: const Text('Upgrade Now', style: TextStyle(color: Colors.white)),
+                                ),
+                              ],
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(width: 8),
                     Material(
                       color: AppTheme.glowGuidePink,
                       borderRadius: BorderRadius.circular(20),
@@ -1604,6 +1666,7 @@ class _GlowMessage {
     this.confidenceNote,
     this.detailedBreakdown,
     this.sources = const [],
+    this.modelName,
   });
   final String text;
   final bool isUser;
@@ -1623,6 +1686,7 @@ class _GlowMessage {
   final String? confidenceNote;
   final String? detailedBreakdown;
   final List<Map<String, dynamic>> sources;
+  final String? modelName;
 }
 
 class _DetailedBreakdownExpander extends StatefulWidget {

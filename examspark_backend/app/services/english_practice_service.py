@@ -38,7 +38,7 @@ _CONTEXT_MESSAGES = 8          # last N messages sent to the model
 _MAX_SESSION_MESSAGES = 500
 _NEW_CHAT_SUGGESTION_THRESHOLD = 100
 _CREDIT_COST = 3
-_CHAT_MODELS = {"qwen3", "gemini", "claude"}
+_CHAT_MODELS = {"qwen3", "gemini", "claude", "chatgpt"}
 _MCQ_MAX_GAP_MESSAGES = 20
 
 
@@ -560,45 +560,59 @@ async def _call_claude_model(messages: list[dict]) -> str:
         raise EnglishPracticeError(f"Claude tutor network error: {e}", 502) from e
 
 
-async def _call_chat_model(messages: list[dict], selected_model: str) -> str:
-    model = selected_model if selected_model in _CHAT_MODELS else "qwen3"
-    if model == "claude":
-        reply = await _call_claude_model(messages)
-        logger.info("english_practice_chat_model_selected=claude served=claude")
-        return reply
-    fallback = "gemini" if model == "qwen3" else "qwen3"
+async def _call_openai_model(messages: list[dict]) -> str:
+    """GPT-4o-mini non-streaming call for English practice."""
+    from app.services.openai_chat_service import call_openai_chat
     try:
-        if model == "gemini":
-            reply = await _call_gemini_model(messages)
-        else:
-            reply = await _call_model(messages)
-        logger.info("english_practice_chat_model_selected=%s served=%s", model, model)
-        return reply
-    except EnglishPracticeError as primary_error:
-        logger.warning(
-            "english_practice_chat_model_failed selected=%s fallback=%s error=%s",
-            model,
-            fallback,
-            type(primary_error).__name__,
-        )
+        return await call_openai_chat(messages, max_tokens=900, temperature=0.7)
+    except Exception as e:
+        raise EnglishPracticeError(f"GPT-4o-mini call failed: {e}", 502) from e
+
+
+async def _call_chat_model(messages: list[dict], selected_model: str) -> str:
+    """Route to the right model with Qwen3 always as the LAST fallback.
+
+    Free chain:    chatgpt → qwen3
+    Premium chain: claude  → chatgpt → qwen3
+    Gemini:        gemini  → qwen3
+    """
+    model = selected_model if selected_model in _CHAT_MODELS else "chatgpt"
+
+    async def _try(m: str) -> str:
+        if m == "claude":
+            return await _call_claude_model(messages)
+        if m == "chatgpt":
+            return await _call_openai_model(messages)
+        if m == "gemini":
+            return await _call_gemini_model(messages)
+        return await _call_model(messages)  # qwen3 via OpenRouter
+
+    # Build fallback chain — qwen3 is always last
+    if model == "claude":
+        chain = ["claude", "chatgpt", "gemini", "qwen3"]
+    elif model == "chatgpt":
+        chain = ["chatgpt", "gemini", "qwen3"]
+    elif model == "gemini":
+        chain = ["gemini", "qwen3"]
+    else:
+        chain = ["qwen3"]  # already qwen3, no fallback needed
+
+    last_error: Exception | None = None
+    for step in chain:
         try:
-            if fallback == "gemini":
-                reply = await _call_gemini_model(messages)
-            else:
-                reply = await _call_model(messages)
+            reply = await _try(step)
             logger.info(
                 "english_practice_chat_model_selected=%s served=%s",
-                model,
-                fallback,
+                model, step,
             )
             return reply
-        except EnglishPracticeError:
-            logger.exception(
-                "english_practice_chat_models_failed selected=%s fallback=%s",
-                model,
-                fallback,
+        except EnglishPracticeError as e:
+            last_error = e
+            logger.warning(
+                "english_practice_chat_model_failed step=%s error=%s",
+                step, type(e).__name__,
             )
-            raise primary_error
+    raise last_error or EnglishPracticeError("All chat models failed.", 502)
 
 
 async def _stream_model(

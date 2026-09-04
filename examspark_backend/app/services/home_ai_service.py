@@ -991,7 +991,9 @@ async def _generate_home_answer(
         }
     )
 
-    if text_model != "qwen3":
+    # All models (chatgpt/claude/gemini/qwen3) go through the fallback-aware router.
+    # Default for free users: chatgpt → qwen3 (last resort).
+    if text_model != "qwen3_direct":
         from app.services.english_practice_service import _call_chat_model
 
         return await _call_chat_model(chat_messages, text_model)
@@ -1573,22 +1575,14 @@ async def home_ai_stream(
     parser = VisualStreamParser()
     try:
         timer.start("llm")
-        if text_model == "qwen3":
-            model_stream = stream_chat_completions(
-                messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                model=AIConfig.AI_CHAT_MODEL,
-            )
-        else:
-            from app.services.english_practice_service import _call_chat_model
+        # All models route through the fallback-aware _call_chat_model.
+        # Free default: chatgpt → qwen3 (last resort).
+        from app.services.english_practice_service import _call_chat_model
 
-            async def model_stream():
-                yield await _call_chat_model(messages, text_model)
+        async def model_stream():
+            yield await _call_chat_model(messages, text_model)
 
-            model_stream = model_stream()
-
-        async for delta in model_stream:
+        async for delta in model_stream():
             safe = parser.feed(delta)
             if safe:
                 yield {"type": "token", "text": safe}

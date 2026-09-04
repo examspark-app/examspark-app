@@ -23,6 +23,7 @@ class GatedFeature(str, Enum):
     IMPORTANT_QUESTIONS = "important_questions"
     MIND_MAP = "mind_map"
     PREMIUM_CHAT_MODEL = "premium_chat_model"
+    PREMIUM_VISION_MODEL = "premium_vision_model"
 
 
 # Free monthly credits; Ask/PDF/Photo/YouTube = credits. Audio record/upload = ₹499+.
@@ -37,6 +38,7 @@ _MINIMUM_PLAN: dict[GatedFeature, str] = {
     GatedFeature.IMPORTANT_QUESTIONS: "free",
     GatedFeature.MIND_MAP: "free",
     GatedFeature.PREMIUM_CHAT_MODEL: "plan_499",
+    GatedFeature.PREMIUM_VISION_MODEL: "plan_199",
     
 }
 
@@ -97,6 +99,8 @@ def lock_user_message(feature: GatedFeature, required_plan: str) -> str:
         return "Available on Free and all paid plans (uses credits)."
     if feature == GatedFeature.PREMIUM_CHAT_MODEL:
         return "Premium AI models require a paid plan. Upgrade to continue."
+    if feature == GatedFeature.PREMIUM_VISION_MODEL:
+        return "Premium AI models require the ₹199+ Plan. Upgrade to continue."
     return f"Feature locked. Upgrade to {label}+ to continue."
 
 
@@ -124,6 +128,10 @@ def get_user_plan_tier(user_id: str) -> str:
 def require_feature_unlocked(user_id: str, feature: GatedFeature) -> str:
     """Returns current plan tier. Raises FeatureLockedError if locked."""
     current = get_user_plan_tier(user_id)
+    if feature == GatedFeature.PREMIUM_VISION_MODEL:
+        if _rank(current) < _rank("plan_199"):
+            raise FeatureLockedError(feature, current, "plan_199")
+        return current
     if feature == GatedFeature.PREMIUM_CHAT_MODEL:
         if current not in ("plan_499", "plan_999"):
             raise FeatureLockedError(feature, current, "plan_499")

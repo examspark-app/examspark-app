@@ -202,6 +202,7 @@ async def home_ai_vision(
             mime_type=mime_type,
             text_hint=hint,
             selected_model=vision_model,
+            user_id=user_id,
         )
     except Exception as e:
         raise HomeAiError(
@@ -311,6 +312,7 @@ async def home_ai_vision(
         "visual_payload": visual_payload,
         "response_id": rid,
         "session_id": result_session_id,
+        "model_name": getattr(vision, "model_name", ""),
         "knowledge": {
             "summary": knowledge.get("summary"),
             "key_points": knowledge.get("key_points"),
