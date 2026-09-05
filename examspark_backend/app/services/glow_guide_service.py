@@ -529,6 +529,19 @@ async def turn(
         )
     messages = [{"role": "system", "content": prompt}, *_multimodal_messages(rows, text, image, filename)]
     parsed: dict[str, Any] | None = None
+        image_path_early = None
+    if image:
+        image_path_early = R2StorageService().chat_image_path(
+            "glowguide", user_id, str(uuid.uuid4()), filename=filename, category=active_category
+        )
+        R2StorageService().upload_bytes(image_path_early, image, _mime(filename))
+    db.table("glow_guide_messages").insert({
+        "session_id": session_id,
+        "user_id": user_id,
+        "role": "user",
+        "message": text or "",
+        "image_path": image_path_early,
+    }).execute()
     errors: list[str] = []
     served_model = "gemini_free"
 
@@ -568,9 +581,6 @@ async def turn(
         else:
             # gemini / gemini_pro
             head.append(("gemini", _call_gemini))
-        # Groq text booster (no vision)
-        if not has_image:
-            head.append(("groq", _call_groq))
         # Alternate premium before Gemini Flash:
         if normalized != "claude":
             head.append(("claude", _call_claude))
@@ -585,8 +595,6 @@ async def turn(
     else:
         # Free chain: user picked 'gemini_free' / default or unknown value
         head = []
-        if not has_image:
-            head.append(("groq", _call_groq))
         if is_gemini_free_selected:
             head.append(("gemini_free", _call_gemini_free))
         else:
@@ -617,21 +625,7 @@ async def turn(
     except InsufficientCreditsError as error:
         raise GlowGuideError(str(error), 402) from error
     reply = str(parsed.get("reply") or "I need a little more detail before I can help.").strip()
-    image_path = None
-    if image:
-        image_path = R2StorageService().chat_image_path(
-            "glowguide", user_id, str(uuid.uuid4()), filename=filename, category=active_category
-        )
-        R2StorageService().upload_bytes(image_path, image, _mime(filename))
-    db.table("glow_guide_messages").insert([
-    {
-        "session_id": session_id,
-        "user_id": user_id,
-        "role": "user",
-        "message": text or "",
-        "image_path": image_path,
-    },
-    {
+    db.table("glow_guide_messages").insert({
         "session_id": session_id,
         "user_id": user_id,
         "role": "assistant",
@@ -641,8 +635,7 @@ async def turn(
         "confidence_note": parsed.get("confidence_note") or "",
         "detailed_breakdown": parsed.get("detailed_breakdown"),
         "sources": research.get("sources", []) if research else [],
-    },
-]).execute()
+    }).execute()
     new_exchange_count = exchange_count + 1
     next_context = dict(context) if isinstance(context, dict) else {}
     for key in (
