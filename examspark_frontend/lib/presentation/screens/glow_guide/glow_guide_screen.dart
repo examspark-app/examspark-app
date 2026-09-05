@@ -994,7 +994,31 @@ String _canonicalFirstLanguage(String label) {
       }
     });
   }
-
+  void _freezeMessageChips(_GlowMessage target) {
+  final index = _messages.indexOf(target);
+  if (index == -1) return;
+  setState(() {
+    _messages[index] = _GlowMessage(
+      target.text,
+      target.isUser,
+      image: target.image,
+      imageName: target.imageName,
+      imageUrl: target.imageUrl,
+      verdict: target.verdict,
+      confidenceNote: target.confidenceNote,
+      detailedBreakdown: target.detailedBreakdown,
+      sources: target.sources,
+      modelName: target.modelName,
+    );
+  });
+}
+String _formatBulletText(String raw) {
+  // Insert a line break before every "•" that doesn't already start a new line.
+  return raw.replaceAllMapped(
+    RegExp(r'(?<!^)(?<!\n)•'),
+    (match) => '\n\n•',
+  );
+}
   // ← YAHAN PASTE KARO (naya method neeche se shuru)
   MarkdownStyleSheet _markdownStyle(
     BuildContext context,
@@ -1254,7 +1278,7 @@ String _canonicalFirstLanguage(String label) {
                                 padding: const EdgeInsets.only(left: 30),
                                 child: SelectionArea(
                                   child: MarkdownBody(
-                                    data: message.text,
+                                    data: _formatBulletText(message.text),
                                     selectable: false,
                                     styleSheet: _markdownStyle(
                                       context,
@@ -1393,14 +1417,20 @@ String _canonicalFirstLanguage(String label) {
                 ],
                 if (message.chips.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  _PillOptionChips(
+                  _ClaudeStyleOptionCard(
                     options: message.chips,
-                    numbered: message.isCategoryChips,
                     textColor: chipText,
+                    subText: subText,
                     borderColor: chipBorder,
                     bg: chipBg,
+                    showTypeOwn: false,
+                    onTypeOwn: () {
+                      if (_sending || _sessionComplete) return;
+                      setState(() => _customInputFlowOpen = true);
+                    },
                     onSelect: (chip) {
                       if (_sending || _sessionComplete) return;
+                      _freezeMessageChips(message);  
                       if (message.isLanguageChips) {
                         _selectLanguage(chip);
                       } else if (message.isCategoryChips) {
@@ -2093,7 +2123,7 @@ class _DetailedBreakdownExpanderState
               ),
               child: SelectionArea(
                 child: MarkdownBody(
-                  data: widget.breakdown,
+                  data: _formatBulletText(widget.breakdown),
                   selectable: false,
                   styleSheet: MarkdownStyleSheet(
                     p: TextStyle(
@@ -2603,6 +2633,7 @@ class _ClaudeStyleOptionCard extends StatefulWidget {
     required this.subText,
     required this.borderColor,
     required this.bg,
+    this.showTypeOwn = true,
   });
 
   final List<String> options;
@@ -2612,6 +2643,7 @@ class _ClaudeStyleOptionCard extends StatefulWidget {
   final Color subText;
   final Color borderColor;
   final Color bg;
+  final bool showTypeOwn;
 
   @override
   State<_ClaudeStyleOptionCard> createState() =>
@@ -2623,85 +2655,115 @@ class _ClaudeStyleOptionCardState extends State<_ClaudeStyleOptionCard> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: widget.bg,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: widget.borderColor, width: 1),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < widget.options.length; i++) ...[
-            MouseRegion(
-              onEnter: (_) => setState(() => _hovered = i),
-              onExit: (_) => setState(() => _hovered = null),
-              child: InkWell(
-                onTap: () => widget.onSelect(widget.options[i]),
-                borderRadius: BorderRadius.vertical(
-                  top: i == 0 ? const Radius.circular(14) : Radius.zero,
-                  bottom: (i == widget.options.length - 1)
-                      ? Radius.zero
-                      : Radius.zero,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 13,
+  return Container(
+    decoration: BoxDecoration(
+      color: widget.bg,
+      borderRadius: BorderRadius.circular(14),
+      border: Border.all(color: widget.borderColor, width: 1),
+    ),
+    child: Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < widget.options.length; i++) ...[
+          Builder(
+            builder: (_) {
+              final visuals = _GlowGuideScreenState.resolveOptionVisuals(
+                widget.options[i],
+                i,
+                context,
+              );
+              return MouseRegion(
+                onEnter: (_) => setState(() => _hovered = i),
+                onExit: (_) => setState(() => _hovered = null),
+                child: InkWell(
+                  onTap: () => widget.onSelect(widget.options[i]),
+                  borderRadius: BorderRadius.vertical(
+                    top: i == 0 ? const Radius.circular(14) : Radius.zero,
+                    bottom: (!widget.showTypeOwn && i == widget.options.length - 1)
+                        ? const Radius.circular(14)
+                        : Radius.zero,
                   ),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 22,
-                        height: 22,
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          color: widget.subText.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          '${i + 1}',
-                          style: TextStyle(
-                            color: widget.textColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    child: Row(
+                      children: [
+                        // Number badge (1, 2, 3...) — colored circle
+                        Container(
+                          width: 26,
+                          height: 26,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: visuals.color.withOpacity(0.18),
+                            shape: BoxShape.circle,
+                          ),
+                          child: Text(
+                            '${i + 1}',
+                            style: TextStyle(
+                              color: visuals.color,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w800,
+                            ),
                           ),
                         ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          widget.options[i],
-                          style: TextStyle(
-                            color: widget.textColor,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w600,
+                        const SizedBox(width: 10),
+                        // Icon badge — colored rounded square
+                        Container(
+                          width: 36,
+                          height: 36,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: visuals.color.withOpacity(0.15),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Icon(visuals.icon, color: visuals.color, size: 18),
+                        ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                visuals.title,
+                                style: TextStyle(
+                                  color: widget.textColor,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              if ((visuals.subtitle ?? '').trim().isNotEmpty) ...[
+                                const SizedBox(height: 2),
+                                Text(
+                                  visuals.subtitle!,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    color: widget.subText,
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ],
                           ),
                         ),
-                      ),
-                      if (_hovered == i)
-                        Icon(
-                          Icons.keyboard_return_rounded,
-                          size: 16,
-                          color: widget.subText,
-                        ),
-                    ],
+                        Icon(Icons.arrow_forward_ios_rounded, size: 13, color: widget.subText),
+                      ],
+                    ),
                   ),
                 ),
-              ),
-            ),
+              );
+            },
+          ),
+          if (widget.showTypeOwn || i != widget.options.length - 1)
             Divider(height: 1, thickness: 0.8, color: widget.borderColor),
-          ],
+        ],
+        if (widget.showTypeOwn)
           InkWell(
             onTap: widget.onTypeOwn,
-            borderRadius: const BorderRadius.vertical(
-              bottom: Radius.circular(14),
-            ),
+            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14)),
             child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 14,
-                vertical: 13,
-              ),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
               child: Row(
                 children: [
                   Icon(Icons.edit_outlined, size: 16, color: widget.subText),
@@ -2709,21 +2771,16 @@ class _ClaudeStyleOptionCardState extends State<_ClaudeStyleOptionCard> {
                   Expanded(
                     child: Text(
                       'Something else',
-                      style: TextStyle(
-                        color: widget.subText,
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w500,
-                      ),
+                      style: TextStyle(color: widget.subText, fontSize: 13.5, fontWeight: FontWeight.w500),
                     ),
                   ),
                 ],
               ),
             ),
           ),
-        ],
-      ),
-    );
-  }
+      ],
+    ),
+  );
 }
 class _PillOptionChips extends StatelessWidget {
   const _PillOptionChips({
