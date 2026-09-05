@@ -419,6 +419,12 @@ MULTI-CONCERN HANDLING
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 If the user mentions more than one concern in a single message (e.g. "I have acne AND dark spots"), address BOTH in the verdict rather than picking one arbitrarily — dermatological advice for one concern can sometimes conflict with another (e.g. an acne treatment that could worsen dryness-related dark spots), and pointing that out is exactly the kind of expert nuance that makes this feel like a real consultation rather than a generic chatbot.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WELL-KNOWN ACTIVE INGREDIENT RECOGNITION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If the user names a widely-known, standardized ACTIVE INGREDIENT by its generic/scientific name — not a brand — (e.g. Minoxidil, Retinol, Niacinamide, Salicylic Acid, Hyaluronic Acid, Benzoyl Peroxide, Azelaic Acid), you already know this ingredient's properties from your own training — do NOT ask for a photo or a typed ingredient list just to identify it. Only ask for a photo/label if you need the SPECIFIC CONCENTRATION (e.g. "2% vs 5% Minoxidil") and the user hasn't stated it, or if they mention it's a multi-ingredient product where other actives might also be present that you'd want to check. If the user gives you the concentration too (e.g. "5% Minoxidil"), you have enough — move to the verdict using your own knowledge of that ingredient, don't ask for a photo you don't need.
 """
 
 CATEGORY_PROMPTS = {
@@ -471,6 +477,8 @@ PRIORITY GUIDANCE: get the fabric composition (tag photo or description) as earl
 
     "hair": """DOMAIN: Hair and scalp concerns (loss, greying, general care, growth) — needs a genuinely scientific + home-remedy blended approach.
 
+QUESTION-COMBINING RULE (mandatory for this category): Never ask gender, age, and product-usage as 3 separate back-to-back messages — this feels like an interrogation/form. Instead combine them into ONE natural message early in the conversation, e.g. "To point you toward the right cause, could you tell me a few things — your gender, your age, and whether you're currently using any hair product or home remedy?" Only split into separate follow-ups if the user's answer to the combined question was partial and something specific is still missing.
+
 KNOWLEDGE — factors that genuinely matter here:
 - Gender is unusually important for this category specifically — hair loss patterns and their typical root causes genuinely diverge by gender (e.g. androgenetic patterns differ, hormonal factors differ). Knowing gender early often changes the entire direction of your reasoning, more than in other categories.
 - Age: young vs older hair loss/greying often point to very different causes (e.g. premature greying at a young age suggests genetics/stress/nutrition; greying at older age is typically just natural aging) — this can be as important as gender for hair-whitening concerns specifically.
@@ -480,8 +488,11 @@ KNOWLEDGE — factors that genuinely matter here:
 
 COMMON CONCERNS TO RECOGNIZE: hair loss/thinning, hair whitening/premature greying, general hair care & maintenance, hair growth (short to long).
 
-PRIORITY GUIDANCE: for hair loss and whitening specifically, gender and age are often the highest-value early questions since they redirect your whole reasoning — but this is judgment, not a rule; if the user's first message already makes the cause clear, don't ask redundantly. Always close the verdict with BOTH a scientific/chemical explanation and a home remedy — this category specifically blends "what the science says" with "what to try at home".""",
-}
+PRIORITY GUIDANCE: for hair loss and whitening specifically, gender and age are often the highest-value early questions since they redirect your whole reasoning — but this is judgment, not a rule; if the user's first message already makes the cause clear, don't ask redundantly. Always close the verdict with BOTH a scientific/chemical explanation and a home remedy — this category specifically blends "what the science says" with "what to try at home".
+
+QUESTION-COMBINING RULE (mandatory for this category): Never ask gender, age, and product-usage as 3-4 separate back-to-back messages — this feels like a form/interrogation, not a consultation. Instead, combine them into ONE natural message early in the conversation, e.g. "To point you toward the right cause, could you tell me your gender, your age, and whether you're currently using any hair product or home remedy?" Only ask a separate follow-up if the user's combined answer left something specific still unclear.
+
+WELL-KNOWN PRODUCT/INGREDIENT NAMES — DO NOT ASK FOR PHOTO WHEN UNNECESSARY: If the user names a widely-known, standardized active ingredient by its generic name (e.g. Minoxidil, Finasteride, Biotin, Ketoconazole) — not a vague brand guess — you already know this ingredient's properties, typical concentrations, and common side effects from your own knowledge. Do NOT ask for a photo or a typed ingredient list just to identify what it is. Only ask for a photo/label if you specifically need the CONCENTRATION (e.g. "2% vs 5% Minoxidil") and the user hasn't stated it, or if they mention it's part of a multi-ingredient product where other actives might matter. If they give you the concentration too, move straight to the verdict.""",
 
 
 from app.constants.language_hint import language_hint_user_line
@@ -529,14 +540,35 @@ def system_prompt(category: str | None, user_query: str, conversation_language: 
     if override and override != "MATCH_QUESTION":
         effective_lang = override.title()
 
+    romanized_note = (
+        "\n\nCRITICAL — ROMANIZED/HINGLISH DETECTION: Judge language by VOCABULARY and WORD "
+        "CHOICE, never by script alone. A message typed in Roman/Latin letters can still be Hindi, "
+        "Bengali, or another language written phonetically (e.g. Hinglish, Benglish) — this is NOT "
+        "English just because the letters are Roman. Examples: 'are yaar mere ko hair problem hai' "
+        "is Hindi (Hinglish), NOT English. If the user writes in Hinglish/Benglish/any romanized "
+        "language, reply in THAT SAME language using THAT SAME Roman script style — do NOT switch "
+        "to pure English, and do NOT switch to native Devanagari/Bengali script either. Match "
+        "exactly what the user did: same language, same script convention."
+    )
     if effective_lang and effective_lang not in ('MATCH_QUESTION', 'Auto-detect', ''):
-        lang_lock = _NATIVE_LANG_LOCK.format(lang=effective_lang)
+        lang_lock = _NATIVE_LANG_LOCK.format(lang=effective_lang) + romanized_note
     else:
         # Auto-detect: instruct to match the language of the user's message
         lang_lock = (
             "\n\nNATIVE LANGUAGE LOCK: Respond in the SAME language as the user's message. "
             "ALL output — reply text AND every question_options chip — must be in that same language. "
             "Never use English chips when the user writes in Bengali, Turkish, Italian, or any other language."
+            + romanized_note
+        )
+            "CRITICAL — ROMANIZED/HINGLISH DETECTION: Judge the language by VOCABULARY and WORD "
+            "CHOICE, never by script alone. A message typed in Roman/Latin letters can still be Hindi, "
+            "Bengali, or another language written phonetically (e.g. Hinglish, Benglish) — this is NOT "
+            "English just because the letters are Roman. Examples: 'are yaar mere ko hair problem hai' "
+            "is Hindi (Hinglish), NOT English — 'mujhe pata hai', 'kya haal hai', 'accha bताओ' are Hindi "
+            "words in Roman script. If you detect Hinglish/Benglish/romanized-any-language, reply in "
+            "THAT SAME language using THAT SAME Roman script style (Hinglish in, Hinglish out) — do NOT "
+            "switch to pure English, and do NOT switch to native Devanagari/Bengali script either. Match "
+            "exactly what the user did: same language, same script convention."
         )
     return (
         MASTER_PROMPT

@@ -133,10 +133,11 @@ _STRONG_ENGLISH_START = re.compile(
 )
 _HINGLISH_ROMAN = re.compile(
     r"(?i)\b(kya|kyun|kyunki|hai|hain|nahi|nahin|nhi|tum|tumhara|tumhare|"
-    r"mera|meri|acha|accha|achha|theek|thik|batao|bata|bolo|bol|samajh|"
-    r"samjha|matlab|chahiye|karo|karna|raha|rahi|rahe|sakhta|sakte|sakti|"
-    r"woh|yeh|kaise|kitna|kitni|kahan|kab|kiya|kiye|bhai|yaar|pls\s+bata|"
-    r"please\s+bata)\b"
+    r"mera|meri|mere|mujhe|mujhko|ko|acha|accha|achha|theek|thik|batao|bata|"
+    r"bolo|bol|samajh|samjha|matlab|chahiye|karo|karna|kar|raha|rahi|rahe|"
+    r"sakhta|sakte|sakti|woh|yeh|ye|kaise|kitna|kitni|kahan|kab|kiya|kiye|"
+    r"bhai|yaar|hoga|hogi|thi|tha|the|liye|apna|apni|apne|iska|uska|"
+    r"pls\s+bata|please\s+bata)\b"
 )
 _BENGLISH_ROMAN = re.compile(
     r"(?i)\b(ami|amar|amader|tumi|tomar|tomader|apni|apnar|keno|ki|ache|"
@@ -196,8 +197,10 @@ def detect_question_language_hint(query: str) -> Optional[LanguageHint]:
         return None
     if has_non_latin:
         return "MATCH_QUESTION"
-    if has_latin and len(_HINGLISH_ROMAN.findall(text)) >= 2:
+    if has_latin and len(_HINGLISH_ROMAN.findall(text)) >= 1:
         return "HINGLISH"
+    if has_latin and len(_BENGLISH_ROMAN.findall(text)) >= 1:
+        return "BANGLISH"
     if has_latin and (
         len(_ENGLISH_MARKERS.findall(text)) >= 2
         or _STRONG_ENGLISH_START.search(text)
@@ -379,6 +382,16 @@ def language_hint_user_line(
             "(English, Spanish, French, Arabic, Chinese, Japanese, Portuguese, "
             "German, Russian, Indonesian, Turkish, etc.). "
             "Do NOT force English unless the question is in English. "
+            "CRITICAL — ROMAN SCRIPT IS NOT ENGLISH: A message typed in Roman/Latin "
+            "letters can be ANY language written phonetically, not just English — "
+            "Tamil, Telugu, Marathi, Gujarati, Punjabi, Urdu, or any other language "
+            "can be typed in Roman script by a native speaker who doesn't use a "
+            "native keyboard. Judge the ACTUAL WORDS and their meaning, never the "
+            "script alone. If you recognize the vocabulary as a language other than "
+            "English (even romanized), reply in THAT language, using the SAME Roman "
+            "script convention the user used — do not switch to that language's "
+            "native script, and do not default to English just because the letters "
+            "are Latin. "
             "ANTI-LEAK: ignore the language of lecture notes / transcript / RAG. "
             "If the student wrote Latin English or Hinglish, NEVER reply in a "
             "different script just because the notes use that script."
