@@ -1003,6 +1003,89 @@ String _canonicalFirstLanguage(String label) {
     return '${r[0].toUpperCase()}${r.substring(1)}';
   }
 
+  String _localizedUiText(String key) {
+    final language = _activeDisplayLanguage;
+    final isHindi = language == 'HINDI';
+    final isBengali = language == 'BENGALI';
+    final isHinglish = language == 'HINGLISH';
+    if (isHindi) {
+      return {
+        'assessment': 'GlowGuide आकलन',
+        'breakdown': 'विस्तृत विवरण देखें',
+        'hide_breakdown': 'विस्तृत विवरण छिपाएँ',
+        'not_suitable': 'उपयुक्त नहीं',
+        'not_suitable_subtitle': 'आपकी त्वचा के लिए सही विकल्प नहीं हो सकता',
+        'safe_to_use': 'उपयोग के लिए सुरक्षित',
+        'safe_to_use_subtitle': 'आपकी जानकारी के आधार पर उपयुक्त',
+        'use_caution': 'सावधानी से उपयोग करें',
+        'use_caution_subtitle': 'उपयोग से पहले कुछ बातें ध्यान दें',
+      }[key] ?? key;
+    }
+    if (isBengali) {
+      return {
+        'assessment': 'GlowGuide মূল্যায়ন',
+        'breakdown': 'বিস্তারিত বিশ্লেষণ দেখুন',
+        'hide_breakdown': 'বিস্তারিত বিশ্লেষণ লুকান',
+        'not_suitable': 'উপযুক্ত নয়',
+        'not_suitable_subtitle': 'আপনার ত্বকের জন্য সঠিক নাও হতে পারে',
+        'safe_to_use': 'ব্যবহারের জন্য নিরাপদ',
+        'safe_to_use_subtitle': 'আপনার তথ্য অনুযায়ী উপযুক্ত',
+        'use_caution': 'সতর্কতার সঙ্গে ব্যবহার করুন',
+        'use_caution_subtitle': 'ব্যবহারের আগে কিছু বিষয় মনে রাখুন',
+      }[key] ?? key;
+    }
+    if (isHinglish) {
+      return {
+        'assessment': 'GlowGuide Assessment',
+        'breakdown': 'Detailed breakdown dekhein',
+        'hide_breakdown': 'Detailed breakdown chhupayein',
+        'not_suitable': 'Suitable nahi hai',
+        'not_suitable_subtitle': 'Aapki skin ke liye sahi fit nahi ho sakta',
+        'safe_to_use': 'Use karna safe hai',
+        'safe_to_use_subtitle': 'Aapki shared details ke basis par suitable',
+        'use_caution': 'Caution ke saath use karein',
+        'use_caution_subtitle': 'Use karne se pehle kuch baatein dhyan dein',
+      }[key] ?? key;
+    }
+    return {
+      'assessment': 'GLOWGUIDE ASSESSMENT',
+      'breakdown': 'View full ingredient breakdown',
+      'hide_breakdown': 'Hide detailed breakdown',
+      'not_suitable': 'Not Suitable',
+      'not_suitable_subtitle': 'May not be the right fit for your skin',
+      'safe_to_use': 'Safe to Use',
+      'safe_to_use_subtitle': 'Suitable based on what you shared',
+      'use_caution': 'Use with Caution',
+      'use_caution_subtitle': 'Some considerations before using',
+    }[key] ?? key;
+  }
+
+  String get _activeDisplayLanguage {
+    final selected = _preferredLanguage.trim().toUpperCase();
+    if (selected != 'MATCH_QUESTION' && selected.isNotEmpty) return selected;
+
+    String latestUserText = '';
+    for (final message in _messages.reversed) {
+      if (message.isUser && message.text.trim().isNotEmpty) {
+        latestUserText = message.text.trim();
+        break;
+      }
+    }
+    if (RegExp(r'[\u0980-\u09FF]').hasMatch(latestUserText)) {
+      return 'BENGALI';
+    }
+    if (RegExp(r'[\u0900-\u097F]').hasMatch(latestUserText)) {
+      return 'HINDI';
+    }
+
+    final lower = latestUserText.toLowerCase();
+    final hinglishWords = RegExp(
+      r'\b(meri|mujhe|mere|mujh|hai|hain|nahi|nahin|kya|kaise|karu|karo|chahiye|acha|accha|problem|ke|ki|ka|main|mein|yaar|batao|dikh raha)\b',
+    );
+    if (hinglishWords.hasMatch(lower)) return 'HINGLISH';
+    return 'ENGLISH';
+  }
+
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scroll.hasClients) {
@@ -1133,7 +1216,7 @@ String _canonicalFirstLanguage(String label) {
               : Alignment.centerLeft,
           child: ConstrainedBox(
             constraints: BoxConstraints(
-              maxWidth: MediaQuery.sizeOf(context).width * .86,
+              maxWidth: MediaQuery.sizeOf(context).width * .92,
             ),
             child: Column(
               crossAxisAlignment: message.isUser
@@ -1176,9 +1259,9 @@ String _canonicalFirstLanguage(String label) {
                     ),
                   ),
                 if (message.verdict != null) ...[
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 10),
                   _verdictBadge(message.verdict!),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 14),
                 ],
                                 if (message.text.isNotEmpty)
                   message.isUser
@@ -1270,7 +1353,7 @@ String _canonicalFirstLanguage(String label) {
                                   ],
                                 ],
                               ),
-                              const SizedBox(height: 10),
+                              const SizedBox(height: 14),
                               if (message.verdict != null) ...[
                                 Row(
                                   children: [
@@ -1281,7 +1364,7 @@ String _canonicalFirstLanguage(String label) {
                                     ),
                                     const SizedBox(width: 5),
                                     Text(
-                                      'GLOWGUIDE ASSESSMENT',
+                                      _localizedUiText('assessment'),
                                       style: TextStyle(
                                         color: AppTheme.glowGuidePink,
                                         fontSize: 10.5,
@@ -1294,7 +1377,7 @@ String _canonicalFirstLanguage(String label) {
                                 const SizedBox(height: 8),
                               ],
                               Padding(
-                                padding: const EdgeInsets.only(left: 30),
+                                padding: const EdgeInsets.only(left: 30, right: 6),
                                 child: SelectionArea(
                                   child: MarkdownBody(
                                     data: _formatBulletText(message.text),
@@ -1315,7 +1398,7 @@ String _canonicalFirstLanguage(String label) {
                         ),
                                 if ((message.confidenceNote ?? '').trim().isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(2, 8, 2, 0),
+                    padding: const EdgeInsets.fromLTRB(2, 18, 2, 0),
                     child: Container(
                       padding: const EdgeInsets.symmetric(
                         horizontal: 10,
@@ -1350,13 +1433,15 @@ String _canonicalFirstLanguage(String label) {
                     ),
                   ),
                 if ((message.detailedBreakdown ?? '').trim().isNotEmpty) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 18),
                   _DetailedBreakdownExpander(
                     breakdown: message.detailedBreakdown!,
+                    title: _localizedUiText('breakdown'),
+                    expandedTitle: _localizedUiText('hide_breakdown'),
                   ),
                 ],
                 if (message.sources.isNotEmpty) ...[
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 18),
                   _SourceChips(sources: message.sources),
                 ],
                 if (message.categoryHeaderChips.isNotEmpty) ...[
@@ -1843,6 +1928,20 @@ String _canonicalFirstLanguage(String label) {
     final borderColor = isDark ? const Color(0xFF3F3254) : const Color(0xFFEBE0FA);
     final titleColor = isDark ? Colors.white : const Color(0xFF20182B);
     final subtitleColor = isDark ? Colors.white70 : const Color(0xFF6B6578);
+    final bannerTitle = _activeDisplayLanguage == 'HINDI'
+      ? 'आपका व्यक्तिगत AI $categoryName गाइड'
+      : _activeDisplayLanguage == 'BENGALI'
+        ? 'আপনার ব্যক্তিগত AI $categoryName গাইড'
+        : _activeDisplayLanguage == 'HINGLISH'
+          ? 'Aapka personal AI $categoryName guide'
+          : 'Your Personal AI $categoryName Guide';
+    final bannerSubtitle = _activeDisplayLanguage == 'HINDI'
+      ? 'स्वस्थ और चमकदार त्वचा के लिए AI सलाह, रूटीन और समाधान पाएँ।'
+      : _activeDisplayLanguage == 'BENGALI'
+        ? 'স্বাস্থ্যকর ও উজ্জ্বল ত্বকের জন্য AI পরামর্শ, রুটিন এবং সমাধান পান।'
+        : _activeDisplayLanguage == 'HINGLISH'
+          ? 'Healthy aur glowing skin ke liye AI advice, routine aur solutions paayein.'
+          : 'Get AI advice, routines, product guide and solutions for healthy, glowing skin.';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
@@ -1889,7 +1988,7 @@ String _canonicalFirstLanguage(String label) {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Your Personal AI $categoryName Guide',
+                  bannerTitle,
                   style: TextStyle(
                     color: titleColor,
                     fontSize: 14.5,
@@ -1899,7 +1998,7 @@ String _canonicalFirstLanguage(String label) {
                 ),
                 const SizedBox(height: 3),
                 Text(
-                  'Get AI advice, routines, product guide and solutions for healthy, glowing skin.',
+                  bannerSubtitle,
                   style: TextStyle(
                     color: subtitleColor,
                     fontSize: 11.5,
@@ -1956,20 +2055,20 @@ String _canonicalFirstLanguage(String label) {
     case 'harmful':
       color = const Color(0xFFD64545);
       icon = Icons.report_gmailerrorred_rounded;
-      label = 'Not Suitable';
-      subtitle = 'May not be the right fit for your skin';
+      label = _localizedUiText('not_suitable');
+      subtitle = _localizedUiText('not_suitable_subtitle');
       break;
     case 'good_fit':
       color = const Color(0xFF2FA75F);
       icon = Icons.verified_rounded;
-      label = 'Safe to Use';
-      subtitle = 'Suitable based on what you shared';
+      label = _localizedUiText('safe_to_use');
+      subtitle = _localizedUiText('safe_to_use_subtitle');
       break;
     case 'careful':
       color = const Color(0xFFC98A1F);
       icon = Icons.shield_outlined;
-      label = 'Use with Caution';
-      subtitle = 'Some considerations before using';
+      label = _localizedUiText('use_caution');
+      subtitle = _localizedUiText('use_caution_subtitle');
       break;
     default:
       return const SizedBox.shrink();
@@ -2092,9 +2191,15 @@ class _GlowMessage {
 }
 
 class _DetailedBreakdownExpander extends StatefulWidget {
-  const _DetailedBreakdownExpander({required this.breakdown});
+  const _DetailedBreakdownExpander({
+    required this.breakdown,
+    required this.title,
+    required this.expandedTitle,
+  });
 
   final String breakdown;
+  final String title;
+  final String expandedTitle;
 
   @override
   State<_DetailedBreakdownExpander> createState() =>
@@ -2138,9 +2243,9 @@ class _DetailedBreakdownExpanderState
                 Expanded(
                   child: Text(
                     _expanded
-                        ? 'Hide detailed breakdown'
-                        : 'View full ingredient breakdown',
-                    style: const TextStyle(
+                        ? widget.expandedTitle
+                        : widget.title,
+                    style: TextStyle(
                       color: AppTheme.glowGuidePink,
                       fontSize: 13.5,
                       fontWeight: FontWeight.w700,

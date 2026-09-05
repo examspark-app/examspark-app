@@ -586,5 +586,12 @@ def system_prompt(category: str | None, user_query: str, conversation_language: 
         "or any romanized Indian language — your reply MUST be in that exact "
         "same language and script. This overrides every other instruction "
         "above if there is ever a conflict. Check the student's most recent "
-        "message one more time before you write your reply."
+        "message one more time before you write your reply. "
+        "Before returning JSON, translate every user-visible structured field "
+        "into that same language: verdict wording, detailed_breakdown, "
+        "confidence_note, category_label, source/research summaries, action "
+        "tips, section headings, and question_options. Never leave these "
+        "fields in English because the internal schema or research source was "
+        "English. Keep only proper nouns, ingredient names, URLs, and standard "
+        "scientific units in their necessary original form."
     )
