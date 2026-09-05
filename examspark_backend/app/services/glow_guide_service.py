@@ -529,7 +529,7 @@ async def turn(
         )
     messages = [{"role": "system", "content": prompt}, *_multimodal_messages(rows, text, image, filename)]
     parsed: dict[str, Any] | None = None
-        image_path_early = None
+    image_path_early = None
     if image:
         image_path_early = R2StorageService().chat_image_path(
             "glowguide", user_id, str(uuid.uuid4()), filename=filename, category=active_category

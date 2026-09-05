@@ -14,6 +14,13 @@ import 'package:examspark_frontend/presentation/screens/glow_guide/glow_guide_hi
 import 'package:url_launcher/url_launcher.dart';
 import 'package:examspark_frontend/core/config/app_config.dart';
 import 'package:examspark_frontend/presentation/widgets/ai_model_selector.dart';
+String _formatBulletText(String raw) {
+  // Insert a line break before every "•" that doesn't already start a new line.
+  return raw.replaceAllMapped(
+    RegExp(r'(?<!^)(?<!\n)•'),
+    (match) => '\n\n•',
+  );
+}
 class GlowGuideScreen extends StatefulWidget {
   const GlowGuideScreen({super.key, this.startFresh = false, this.sessionId});
 
@@ -994,6 +1001,11 @@ String _canonicalFirstLanguage(String label) {
       }
     });
   }
+  void _skipCurrentQuestion() {
+  if (_sending || _sessionComplete) return;
+  _text.text = 'Skip this question.';
+  _send();
+}
   void _freezeMessageChips(_GlowMessage target) {
   final index = _messages.indexOf(target);
   if (index == -1) return;
@@ -1012,13 +1024,7 @@ String _canonicalFirstLanguage(String label) {
     );
   });
 }
-String _formatBulletText(String raw) {
-  // Insert a line break before every "•" that doesn't already start a new line.
-  return raw.replaceAllMapped(
-    RegExp(r'(?<!^)(?<!\n)•'),
-    (match) => '\n\n•',
-  );
-}
+
   // ← YAHAN PASTE KARO (naya method neeche se shuru)
   MarkdownStyleSheet _markdownStyle(
     BuildContext context,
@@ -1382,6 +1388,19 @@ String _formatBulletText(String raw) {
     (!message.isLanguageChips || _customInputFlowOpen)) ...[
   const SizedBox(height: 12),
   _CustomTopicInput(
+      const SizedBox(height: 8),
+  if (!message.isLanguageChips && !message.isCategoryChips)
+    Align(
+      alignment: Alignment.centerRight,
+      child: TextButton(
+        onPressed: _skipCurrentQuestion,
+        child: Text(
+          'Skip this question',
+          style: TextStyle(color: subText, fontSize: 12.5, fontWeight: FontWeight.w600),
+        ),
+      ),
+    ),
+],
                     hint: message.isLanguageChips
                         ? 'Or type your own language…'
                         : message.isCategoryChips
@@ -2655,132 +2674,131 @@ class _ClaudeStyleOptionCardState extends State<_ClaudeStyleOptionCard> {
 
   @override
   Widget build(BuildContext context) {
-  return Container(
-    decoration: BoxDecoration(
-      color: widget.bg,
-      borderRadius: BorderRadius.circular(14),
-      border: Border.all(color: widget.borderColor, width: 1),
-    ),
-    child: Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < widget.options.length; i++) ...[
-          Builder(
-            builder: (_) {
-              final visuals = _GlowGuideScreenState.resolveOptionVisuals(
-                widget.options[i],
-                i,
-                context,
-              );
-              return MouseRegion(
-                onEnter: (_) => setState(() => _hovered = i),
-                onExit: (_) => setState(() => _hovered = null),
-                child: InkWell(
-                  onTap: () => widget.onSelect(widget.options[i]),
-                  borderRadius: BorderRadius.vertical(
-                    top: i == 0 ? const Radius.circular(14) : Radius.zero,
-                    bottom: (!widget.showTypeOwn && i == widget.options.length - 1)
-                        ? const Radius.circular(14)
-                        : Radius.zero,
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    child: Row(
-                      children: [
-                        // Number badge (1, 2, 3...) — colored circle
-                        Container(
-                          width: 26,
-                          height: 26,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: visuals.color.withOpacity(0.18),
-                            shape: BoxShape.circle,
-                          ),
-                          child: Text(
-                            '${i + 1}',
-                            style: TextStyle(
-                              color: visuals.color,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
+    return Container(
+      decoration: BoxDecoration(
+        color: widget.bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: widget.borderColor, width: 1),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < widget.options.length; i++) ...[
+            Builder(
+              builder: (_) {
+                final visuals = _GlowGuideScreenState.resolveOptionVisuals(
+                  widget.options[i],
+                  i,
+                  context,
+                );
+                return MouseRegion(
+                  onEnter: (_) => setState(() => _hovered = i),
+                  onExit: (_) => setState(() => _hovered = null),
+                  child: InkWell(
+                    onTap: () => widget.onSelect(widget.options[i]),
+                    borderRadius: BorderRadius.vertical(
+                      top: i == 0 ? const Radius.circular(14) : Radius.zero,
+                      bottom: (!widget.showTypeOwn && i == widget.options.length - 1)
+                          ? const Radius.circular(14)
+                          : Radius.zero,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 26,
+                            height: 26,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: visuals.color.withOpacity(0.18),
+                              shape: BoxShape.circle,
+                            ),
+                            child: Text(
+                              '${i + 1}',
+                              style: TextStyle(
+                                color: visuals.color,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w800,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        // Icon badge — colored rounded square
-                        Container(
-                          width: 36,
-                          height: 36,
-                          alignment: Alignment.center,
-                          decoration: BoxDecoration(
-                            color: visuals.color.withOpacity(0.15),
-                            borderRadius: BorderRadius.circular(10),
+                          const SizedBox(width: 10),
+                          Container(
+                            width: 36,
+                            height: 36,
+                            alignment: Alignment.center,
+                            decoration: BoxDecoration(
+                              color: visuals.color.withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(10),
+                            ),
+                            child: Icon(visuals.icon, color: visuals.color, size: 18),
                           ),
-                          child: Icon(visuals.icon, color: visuals.color, size: 18),
-                        ),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                visuals.title,
-                                style: TextStyle(
-                                  color: widget.textColor,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              if ((visuals.subtitle ?? '').trim().isNotEmpty) ...[
-                                const SizedBox(height: 2),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
                                 Text(
-                                  visuals.subtitle!,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                                  visuals.title,
                                   style: TextStyle(
-                                    color: widget.subText,
-                                    fontSize: 11.5,
-                                    fontWeight: FontWeight.w500,
+                                    color: widget.textColor,
+                                    fontSize: 14,
+                                    fontWeight: FontWeight.w700,
                                   ),
                                 ),
+                                if ((visuals.subtitle ?? '').trim().isNotEmpty) ...[
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    visuals.subtitle!,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                      color: widget.subText,
+                                      fontSize: 11.5,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ],
                               ],
-                            ],
+                            ),
                           ),
-                        ),
-                        Icon(Icons.arrow_forward_ios_rounded, size: 13, color: widget.subText),
-                      ],
+                          Icon(Icons.arrow_forward_ios_rounded, size: 13, color: widget.subText),
+                        ],
+                      ),
                     ),
                   ),
+                );
+              },
+            ),
+            if (widget.showTypeOwn || i != widget.options.length - 1)
+              Divider(height: 1, thickness: 0.8, color: widget.borderColor),
+          ],
+          if (widget.showTypeOwn)
+            InkWell(
+              onTap: widget.onTypeOwn,
+              borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14)),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_outlined, size: 16, color: widget.subText),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: Text(
+                        'Something else',
+                        style: TextStyle(color: widget.subText, fontSize: 13.5, fontWeight: FontWeight.w500),
+                      ),
+                    ),
+                  ],
                 ),
-              );
-            },
-          ),
-          if (widget.showTypeOwn || i != widget.options.length - 1)
-            Divider(height: 1, thickness: 0.8, color: widget.borderColor),
-        ],
-        if (widget.showTypeOwn)
-          InkWell(
-            onTap: widget.onTypeOwn,
-            borderRadius: const BorderRadius.vertical(bottom: Radius.circular(14)),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 13),
-              child: Row(
-                children: [
-                  Icon(Icons.edit_outlined, size: 16, color: widget.subText),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Something else',
-                      style: TextStyle(color: widget.subText, fontSize: 13.5, fontWeight: FontWeight.w500),
-                    ),
-                  ),
-                ],
               ),
             ),
-          ),
-      ],
-    ),
-  );
+        ],
+      ),
+    );
+  }
 }
 class _PillOptionChips extends StatelessWidget {
   const _PillOptionChips({
