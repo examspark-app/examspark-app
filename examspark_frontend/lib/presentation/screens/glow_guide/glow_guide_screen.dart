@@ -184,6 +184,19 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
 static const _autoDetectLanguageOption = 'Auto-detect';
 static const _manualLanguageOption = 'Manual entry';
 
+  bool _shouldShowCustomInput(_GlowMessage message) {
+    return glowGuideShouldShowCustomInput(
+      hasCustomInput: message.hasCustomInput,
+      isLanguageChips: message.isLanguageChips,
+      isCategoryChips: message.isCategoryChips,
+      isConcernChips: message.isConcernChips,
+      isAgeChips: message.isAgeChips,
+      isGenderChips: message.isGenderChips,
+      isSeasonChips: message.isSeasonChips,
+      customInputFlowOpen: _customInputFlowOpen,
+    );
+  }
+
 
 
   static const _concernsByCategory = {
@@ -1384,23 +1397,9 @@ String _canonicalFirstLanguage(String label) {
                   ),
                 ],
 
-                if (message.hasCustomInput &&
-    (!message.isLanguageChips || _customInputFlowOpen)) ...[
-  const SizedBox(height: 12),
-  _CustomTopicInput(
-      const SizedBox(height: 8),
-  if (!message.isLanguageChips && !message.isCategoryChips)
-    Align(
-      alignment: Alignment.centerRight,
-      child: TextButton(
-        onPressed: _skipCurrentQuestion,
-        child: Text(
-          'Skip this question',
-          style: TextStyle(color: subText, fontSize: 12.5, fontWeight: FontWeight.w600),
-        ),
-      ),
-    ),
-],
+                if (_shouldShowCustomInput(message)) ...[
+                  const SizedBox(height: 12),
+                  _CustomTopicInput(
                     hint: message.isLanguageChips
                         ? 'Or type your own language…'
                         : message.isCategoryChips
@@ -1433,6 +1432,21 @@ String _canonicalFirstLanguage(String label) {
                       }
                     },
                   ),
+                  if (!message.isLanguageChips && !message.isCategoryChips)
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: TextButton(
+                        onPressed: _skipCurrentQuestion,
+                        child: Text(
+                          'Skip this question',
+                          style: TextStyle(
+                            color: subText,
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
                 ],
                 if (message.chips.isNotEmpty) ...[
                   const SizedBox(height: 10),
@@ -2012,6 +2026,28 @@ String _canonicalFirstLanguage(String label) {
   );
 }
 }
+bool glowGuideShouldShowCustomInput({
+  required bool hasCustomInput,
+  required bool isLanguageChips,
+  required bool isCategoryChips,
+  required bool isConcernChips,
+  required bool isAgeChips,
+  required bool isGenderChips,
+  required bool isSeasonChips,
+  required bool customInputFlowOpen,
+}) {
+  if (!hasCustomInput || !customInputFlowOpen) {
+    return false;
+  }
+
+  return isLanguageChips ||
+      isCategoryChips ||
+      isConcernChips ||
+      isAgeChips ||
+      isGenderChips ||
+      isSeasonChips;
+}
+
 class _GlowMessage {
   const _GlowMessage(
     this.text,
