@@ -32,7 +32,7 @@ GLOW_GUIDE_RESEARCH_COST = 10
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MAX_GLOW_GUIDE_EXCHANGES = 100
 
-REQUIRED_FIELDS = ["concern", "skin_type", "season", "product_info"]  # product_info = OCR'd/manual ingredients
+
 
 
 def _log_research_save_result(task: asyncio.Task[None]) -> None:
@@ -95,21 +95,7 @@ def glow_guide_language_for_turn(text: str, preferred_language: str | None = Non
     return resolved or "MATCH_QUESTION"
 
 
-def _next_missing_field(ctx: dict, active_category: str | None, has_image_this_turn: bool, image: bytes | None) -> str | None:
-    if not ctx.get("concern"):
-        return "concern"
-    if not ctx.get("age") and active_category == "baby":
-        return "age"
-    if active_category == "hair":
-        if not ctx.get("hair_type"):
-            return "hair_type"
-    elif not ctx.get("skin_type") and active_category != "baby":
-        return "skin_type"
-    if not ctx.get("season") and not ctx.get("weather"):
-        return "season"
-    if not ctx.get("concern_details") and not has_image_this_turn and not image:
-        return "product_info"
-    return None
+
 
 def _title_for_session(active_category: str | None, context: dict, user_text: str) -> str:
     concern = (context.get("concern") or "").strip()
@@ -453,18 +439,11 @@ async def turn(
     if isinstance(context, dict) and context:
         context_line = "\nPERSISTED CONVERSATION CONTEXT (do not ask for these again): " + json.dumps(context, ensure_ascii=True)
 
-    missing_field = _next_missing_field(context, active_category, bool(image), image)
-    questions_asked_so_far = len(context.get("asked_questions") or [])
-    if missing_field and questions_asked_so_far < 4:
-        context_line += (
-            f"\n\nNEXT REQUIRED QUESTION: Ask specifically about '{missing_field}' only. "
-            f"This is question #{questions_asked_so_far + 1} of max 4. "
-            f"The user's LAST message is their answer to your PREVIOUS question — extract it correctly into the matching JSON field before asking this new one."
-        )
-    elif missing_field and questions_asked_so_far >= 4:
-        context_line += "\n\nYou have asked 4 questions already. Give a PARTIAL verdict now (ready=true) with a disclaimer about missing info — do NOT ask another question."
-    else:
-        context_line += "\n\nAll required info is known. Give the final verdict now (ready=true)."
+    context_line += (
+        "\n\nUse your own judgment (per the FREE-FLOW CONVERSATION rules) to decide "
+        "whether to ask a further question or give the verdict now — there is no "
+        "fixed question count or fixed field list to complete."
+    )
 
     prior_questions = context.get("asked_questions") or []
     if prior_questions:
@@ -498,9 +477,20 @@ async def turn(
             )
             save_task.add_done_callback(_log_research_save_result)
     if research:
+        source_note = (
+            "This evidence came from a fresh live web search just now."
+            if research.get("used_web_search")
+            else "This evidence came from previously verified research on this exact topic."
+        )
         prompt += (
             "\n\nRESEARCH EVIDENCE (supplemental; cite uncertainty and do not diagnose):\n"
             + "\n\n---\n\n".join(research["blocks"])
+            + f"\n\n{source_note} Use it to strengthen your verdict's accuracy and confidence, "
+            "and where it naturally fits, briefly acknowledge in your reply that this reflects "
+            "current/verified information (e.g. \"based on current formulation data\" or "
+            "\"recent safety guidance confirms...\") — keep it to a short natural phrase, not a "
+            "citation dump. The clickable source links are shown separately below your reply, "
+            "so do not repeat raw URLs or domain names inside your reply text."
         )
     messages = [{"role": "system", "content": prompt}, *_multimodal_messages(rows, text, image, filename)]
     parsed: dict[str, Any] | None = None

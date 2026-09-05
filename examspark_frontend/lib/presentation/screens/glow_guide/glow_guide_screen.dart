@@ -428,23 +428,14 @@ final latest = sorted.first;
   void _showLanguageChoice() {
     if (!mounted) return;
     if (_hasLoadedPreferredLanguage) return;
+    // Language step removed — backend always auto-detects the language the
+    // user actually types in (MATCH_QUESTION). Go straight to categories.
     setState(() {
       _customInputFlowOpen = false;
       _hasLoadedPreferredLanguage = true;
-      _messages.add(
-        _GlowMessage(
-          'Which language would you like to chat in?\nPick a preset below, or type your own (हिन्दी, বাংলা, anything).',
-          false,
-          chips: const [
-  _defaultLanguageOption,
-  _autoDetectLanguageOption,
-  _manualLanguageOption,
-],
-isLanguageChips: true,
-hasCustomInput: true,
-        ),
-      );
+      _preferredLanguage = 'MATCH_QUESTION';
     });
+    _showCategoryChoices();
   }
 
   String? _lastCustomLanguageLabel;
@@ -569,48 +560,14 @@ String _canonicalFirstLanguage(String label) {
   }
 
   void _continueAfterCategoryChoice(String key, String? display) {
-    final cat = key.toLowerCase();
-    String promptText;
-    List<String> chips;
-    bool isGender = false;
-    bool isAge = false;
-
-    if (cat.contains('baby')) {
-      promptText = '${display ?? "Baby Skin Care"} selected. How old is your little one?';
-      chips = const ['0-3 Months', '3-6 Months', '6-12 Months', '1-2 Years', '2+ Years'];
-      isAge = true;
-    } else if (cat.contains('cloth')) {
-      promptText = '${display ?? "Cloth Guide"} selected. What type of fabric or clothing do you need help with?';
-      chips = const [
-        'Check Fabric Tag',
-        'Baby-Safe Fabric',
-        'Cotton / Breathable',
-        'Synthetic / Polyester',
-      ];
-    } else if (cat.contains('hair')) {
-      promptText = '${display ?? "Hair Care"} selected. Hair patterns differ by biology — who is this consultation for?';
-      chips = const ['Female', 'Male'];
-      isGender = true;
-    } else {
-      promptText = '${display ?? key} selected. Who is this consultation for?';
-      chips = const ['Female', 'Male'];
-      isGender = true;
-    }
-
     setState(() {
       _category = key;
       _sessionTitle ??= display ?? key;
-      _messages.add(
-        _GlowMessage(
-          promptText,
-          false,
-          chips: chips,
-          isGenderChips: isGender,
-          isAgeChips: isAge,
-        ),
-      );
     });
-    _scrollToBottom();
+    // No hardcoded age/gender/fabric chips here anymore — the AI decides
+    // the first genuinely useful question for this category itself, per
+    // its own knowledge profile and judgment (FREE-FLOW rules).
+    _sendSilentTurn('Category: ${display ?? key} selected.');
   }
 
   void _selectBabyAge(String value) {

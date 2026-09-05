@@ -159,10 +159,14 @@ async def save_tavily_research(query: str, result: TavilySearchResult) -> None:
     rows = []
     for index, source in enumerate(result.sources_meta):
         content = result.snippets[index] if index < len(result.snippets) else ""
-        if not content:
+        url = (source.get("url") or "").strip()
+        # Skip entries without a real source URL — without it we can't show
+        # a domain reference chip on a future cache hit, so it's not worth
+        # caching (the content alone, with no attributable source, isn't
+        # useful evidence to resurface later).
+        if not content or not url:
             continue
-        url = source.get("url")
-        key = hashlib.sha256(f"{normalized}|{url or index}".encode()).hexdigest()
+        key = hashlib.sha256(f"{normalized}|{url}".encode()).hexdigest()
         rows.append({
             "cache_key": key,
             "normalized_query": normalized,
