@@ -52,7 +52,7 @@ _VOICE_IDS: Final[dict[str, dict[str, str]]] = {
     },
 }
 _DEFAULT_PROVIDER = "gemini"
-_DEFAULT_VOICE_KEY = "female"
+_DEFAULT_VOICE_KEY = "warm"
 _DEFAULT_LANGUAGE = "English"
 SUPPORTED_ROLEPLAY_LANGUAGES = frozenset({
     "English", "Spanish", "French", "Japanese", "German", "Korean",

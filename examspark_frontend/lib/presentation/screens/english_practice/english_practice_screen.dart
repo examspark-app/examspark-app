@@ -1719,13 +1719,6 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                _smallIconBtn(
-                  Icons.add_rounded,
-                  _pickPhoto,
-                  tooltip: 'Attach photo',
-                  subText: subText,
-                ),
-                const SizedBox(width: 2),
                 AiModelSelector(
                   selectedModel: _selectedTextModel,
                   onSelected: _changeTextModel,

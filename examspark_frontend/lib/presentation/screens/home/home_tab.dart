@@ -1167,9 +1167,7 @@ $rawText
     bool isRetry = false,
     String? caption,
   }) async {
-    final label = (caption != null && caption.isNotEmpty)
-        ? caption
-        : '📷 Photo Ask · $filename';
+    final label = caption ?? '';
     setState(() {
       _isSending = true;
       _liveStreamText = null;
@@ -2112,11 +2110,12 @@ trailing: const [],
                           ),
                           const SizedBox(height: 8),
                         ],
-                        _CollapsibleUserText(
-                          text: bubble.text,
-                          textColor: _userBubbleTextColor(context),
-                          bubbleColor: _userBubbleColor(context),
-                        ),
+                        if (bubble.text.trim().isNotEmpty)
+                          _CollapsibleUserText(
+                            text: bubble.text,
+                            textColor: _userBubbleTextColor(context),
+                            bubbleColor: _userBubbleColor(context),
+                          ),
                       ],
                     ),
                   ),
@@ -3051,13 +3050,13 @@ class _CollapsibleUserText extends StatefulWidget {
 
 class _CollapsibleUserTextState extends State<_CollapsibleUserText> {
   bool _expanded = false;
-  static const int _collapsedLines = 2;
+  static const int _collapsedLines = 3;
 
   @override
   Widget build(BuildContext context) {
     final style = TextStyle(
       color: widget.textColor,
-      fontSize: 15.5,
+      fontSize: 14.5,
       height: 1.5,
       letterSpacing: 0.1,
     );

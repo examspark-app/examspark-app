@@ -28,7 +28,7 @@ class RoleplaySetupScreen extends StatefulWidget {
 class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
   String? scenario;
   String _ttsProvider = 'gemini';
-  String _ttsVoiceKey = 'female';
+  String _ttsVoiceKey = 'warm';
   String _targetLanguage = 'English';
   bool _preferenceLoaded = false;
   bool _hasSavedPreference = false;
@@ -48,7 +48,12 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
       if (!mounted) return;
       setState(() {
         _ttsProvider = preference['provider'] as String? ?? 'gemini';
-        _ttsVoiceKey = preference['voice_key'] as String? ?? 'female';
+        final savedVoice = preference['voice_key'] as String?;
+        _ttsVoiceKey = _ttsProvider == 'gemini'
+          ? (savedVoice == 'friendly' || savedVoice == 'upbeat'
+            ? savedVoice!
+            : 'warm')
+          : (savedVoice ?? 'female');
         _targetLanguage = widget.targetLanguage ??
           preference['language'] as String? ??
           'English';
@@ -189,7 +194,11 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
       showDragHandle: true,
       builder: (sheetContext) {
         var selectedProvider = forcePicker ? 'gemini' : _ttsProvider;
-        var selectedVoiceKey = _ttsVoiceKey;
+        var selectedVoiceKey = selectedProvider == 'gemini'
+          ? (_ttsVoiceKey == 'friendly' || _ttsVoiceKey == 'upbeat'
+            ? _ttsVoiceKey
+            : 'warm')
+          : (_ttsVoiceKey == 'male' ? 'male' : 'female');
         var selectedLanguage = forcePicker ? 'English' : _targetLanguage;
         var selectedTextModel = _textModel;
         var query = '';
