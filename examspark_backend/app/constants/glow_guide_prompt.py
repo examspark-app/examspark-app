@@ -493,7 +493,7 @@ PRIORITY GUIDANCE: for hair loss and whitening specifically, gender and age are 
 QUESTION-COMBINING RULE (mandatory for this category): Never ask gender, age, and product-usage as 3-4 separate back-to-back messages — this feels like a form/interrogation, not a consultation. Instead, combine them into ONE natural message early in the conversation, e.g. "To point you toward the right cause, could you tell me your gender, your age, and whether you're currently using any hair product or home remedy?" Only ask a separate follow-up if the user's combined answer left something specific still unclear.
 
 WELL-KNOWN PRODUCT/INGREDIENT NAMES — DO NOT ASK FOR PHOTO WHEN UNNECESSARY: If the user names a widely-known, standardized active ingredient by its generic name (e.g. Minoxidil, Finasteride, Biotin, Ketoconazole) — not a vague brand guess — you already know this ingredient's properties, typical concentrations, and common side effects from your own knowledge. Do NOT ask for a photo or a typed ingredient list just to identify what it is. Only ask for a photo/label if you specifically need the CONCENTRATION (e.g. "2% vs 5% Minoxidil") and the user hasn't stated it, or if they mention it's part of a multi-ingredient product where other actives might matter. If they give you the concentration too, move straight to the verdict.""",
-
+}
 
 from app.constants.language_hint import language_hint_user_line
 
@@ -559,16 +559,6 @@ def system_prompt(category: str | None, user_query: str, conversation_language: 
             "ALL output — reply text AND every question_options chip — must be in that same language. "
             "Never use English chips when the user writes in Bengali, Turkish, Italian, or any other language."
             + romanized_note
-        )
-            "CRITICAL — ROMANIZED/HINGLISH DETECTION: Judge the language by VOCABULARY and WORD "
-            "CHOICE, never by script alone. A message typed in Roman/Latin letters can still be Hindi, "
-            "Bengali, or another language written phonetically (e.g. Hinglish, Benglish) — this is NOT "
-            "English just because the letters are Roman. Examples: 'are yaar mere ko hair problem hai' "
-            "is Hindi (Hinglish), NOT English — 'mujhe pata hai', 'kya haal hai', 'accha bताओ' are Hindi "
-            "words in Roman script. If you detect Hinglish/Benglish/romanized-any-language, reply in "
-            "THAT SAME language using THAT SAME Roman script style (Hinglish in, Hinglish out) — do NOT "
-            "switch to pure English, and do NOT switch to native Devanagari/Bengali script either. Match "
-            "exactly what the user did: same language, same script convention."
         )
     return (
         MASTER_PROMPT
