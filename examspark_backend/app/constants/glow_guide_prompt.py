@@ -564,10 +564,16 @@ def system_prompt(category: str | None, user_query: str, conversation_language: 
         MASTER_PROMPT
         + "\n\n"
         + GLOBAL_MULTILINGUAL_PROMPT
+        + "\n\nCATEGORY FOCUS: "
+        + CATEGORY_PROMPTS.get(category or "", "Infer the category from the user's question. If ambiguous, ask which category they need help with using chips: [Skin Care, Body Care, Baby Skin Care, Cloth Guide, Hair Care].")
         + "\n\n"
         + lang_lock
         + "\n\n"
         + language_instruction
-        + "\n\nCATEGORY FOCUS: "
-        + CATEGORY_PROMPTS.get(category or "", "Infer the category from the user's question. If ambiguous, ask which category they need help with using chips: [Skin Care, Body Care, Baby Skin Care, Cloth Guide, Hair Care].")
+        + "\n\n⚠️ FINAL, HIGHEST-PRIORITY INSTRUCTION: Whatever language the "
+        "student just typed their message in — including Hinglish, Benglish, "
+        "or any romanized Indian language — your reply MUST be in that exact "
+        "same language and script. This overrides every other instruction "
+        "above if there is ever a conflict. Check the student's most recent "
+        "message one more time before you write your reply."
     )

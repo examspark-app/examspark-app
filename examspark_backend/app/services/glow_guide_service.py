@@ -112,7 +112,27 @@ def _title_for_session(active_category: str | None, context: dict, user_text: st
         return (text[:40] + "…") if len(text) > 40 else text
     return "GlowGuide Chat"
 
+def _load_user_profile(db, user_id: str) -> dict:
+    """Long-term GlowGuide profile — persists across sessions (returning-user context)."""
+    rows = (
+        db.table("glow_guide_user_profiles")
+        .select("profile_json")
+        .eq("user_id", user_id)
+        .limit(1)
+        .execute()
+        .data or []
+    )
+    if rows and isinstance(rows[0].get("profile_json"), dict):
+        return rows[0]["profile_json"]
+    return {}
 
+
+def _save_user_profile(db, user_id: str, profile: dict) -> None:
+    db.table("glow_guide_user_profiles").upsert({
+        "user_id": user_id,
+        "profile_json": profile,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).execute()
 def rename_session(session_id: str, user_id: str, title: str) -> dict | None:
     cleaned = (title or "").strip()[:120]
     if not cleaned:
@@ -435,9 +455,24 @@ async def turn(
     if get_credits_balance(user_id) < base_cost:
         raise GlowGuideError(f"Need at least {base_cost} credits for GlowGuide.", 402)
 
+    long_term_profile = _load_user_profile(db, user_id)
+
     context_line = ""
     if isinstance(context, dict) and context:
         context_line = "\nPERSISTED CONVERSATION CONTEXT (do not ask for these again): " + json.dumps(context, ensure_ascii=True)
+
+    if long_term_profile:
+        context_line += (
+            "\n\nRETURNING USER — LONG-TERM PROFILE (learned from previous GlowGuide "
+            "sessions; may be slightly outdated — treat as background knowledge, not "
+            "gospel, and update naturally if the user contradicts it): "
+            + json.dumps(long_term_profile, ensure_ascii=True)
+            + "\nUse this naturally where relevant — e.g. skip re-asking a known skin "
+            "type, or briefly reference a past verdict if it's genuinely relevant "
+            "('last time you checked a Niacinamide serum...'). Never recite this back "
+            "mechanically or announce that you 'have a profile' on them — just use it "
+            "the way a consultant remembers a returning client."
+        )
 
     context_line += (
         "\n\nUse your own judgment (per the FREE-FLOW CONVERSATION rules) to decide "
@@ -639,4 +674,26 @@ async def turn(
     if new_exchange_count >= MAX_GLOW_GUIDE_EXCHANGES:
         session_update["status"] = "archived"
     db.table("glow_guide_sessions").update(session_update).eq("id", session_id).eq("user_id", user_id).execute()
+
+    if parsed.get("verdict"):
+        updated_profile = dict(long_term_profile)
+        for key in ("skin_type", "hair_type", "concern"):
+            value = next_context.get(key)
+            if value:
+                updated_profile[key] = value
+        updated_profile["last_category"] = active_category
+        updated_profile["last_verdict"] = parsed.get("verdict")
+        updated_profile["last_verdict_at"] = datetime.now(timezone.utc).date().isoformat()
+        history = list(updated_profile.get("history") or [])
+        history.append({
+            "category": active_category,
+            "concern": next_context.get("concern"),
+            "verdict": parsed.get("verdict"),
+            "date": datetime.now(timezone.utc).date().isoformat(),
+        })
+        updated_profile["history"] = history[-10:]
+        try:
+            _save_user_profile(db, user_id, updated_profile)
+        except Exception as error:  # noqa: BLE001
+            logger.warning("glow_guide_profile_save_failed user=%s error=%s", user_id, error)
     return {"session_id": session_id, "reply": reply, "detailed_breakdown": parsed.get("detailed_breakdown"), "category": parsed.get("category") or active_category, "question_options": parsed.get("question_options") or [], "ready": bool(parsed.get("ready")), "verdict": parsed.get("verdict"), "category_label": parsed.get("category_label"), "confidence_note": parsed.get("confidence_note") or "", "credits_charged": required_credits, "new_balance": balance, "exchange_count": new_exchange_count, "session_complete": new_exchange_count >= MAX_GLOW_GUIDE_EXCHANGES, "answer_source": research.get("answer_source") if research else "MODEL", "used_web_search": bool(research and research.get("used_web_search")), "web_search_status": "complete" if research and research.get("used_web_search") else "not_used", "sources": research.get("sources", []) if research else [], "model_name": _MODEL_DISPLAY_NAMES.get(served_model, served_model)}

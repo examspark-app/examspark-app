@@ -1393,10 +1393,10 @@ String _canonicalFirstLanguage(String label) {
                 ],
                 if (message.chips.isNotEmpty) ...[
                   const SizedBox(height: 10),
-                  _NumberedOptionCard(
+                  _PillOptionChips(
                     options: message.chips,
+                    numbered: message.isCategoryChips,
                     textColor: chipText,
-                    subText: subText,
                     borderColor: chipBorder,
                     bg: chipBg,
                     onSelect: (chip) {
@@ -1412,9 +1412,6 @@ String _canonicalFirstLanguage(String label) {
                       } else if (chip == _typeOwnOption) {
                         setState(() => _customInputFlowOpen = true);
                       } else {
-                        // Everything from here on is a free-flow AI
-                        // conversation — a chip tap is just a quick way to
-                        // send that text as the user's own message.
                         _text.text = chip;
                         _send();
                       }
@@ -1522,7 +1519,7 @@ String _canonicalFirstLanguage(String label) {
                       height: 1.4,
                     ),
                     decoration: InputDecoration(
-                      hintText: 'Ask about skin, body care, or cloth...',
+                      hintText: 'Type your answer, or ask me anything...',
                       hintTextDirection: TextDirection.ltr,
                       hintStyle: TextStyle(
                         color: subText,
@@ -2597,10 +2594,11 @@ class _WebSearchBubbleState extends State<_WebSearchBubble>
     );
   }
 }
-class _NumberedOptionCard extends StatelessWidget {
-  const _NumberedOptionCard({
+class _ClaudeStyleOptionCard extends StatefulWidget {
+  const _ClaudeStyleOptionCard({
     required this.options,
     required this.onSelect,
+    required this.onTypeOwn,
     required this.textColor,
     required this.subText,
     required this.borderColor,
@@ -2609,136 +2607,269 @@ class _NumberedOptionCard extends StatelessWidget {
 
   final List<String> options;
   final ValueChanged<String> onSelect;
+  final VoidCallback onTypeOwn;
   final Color textColor;
   final Color subText;
   final Color borderColor;
   final Color bg;
 
   @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  State<_ClaudeStyleOptionCard> createState() =>
+      _ClaudeStyleOptionCardState();
+}
 
+class _ClaudeStyleOptionCardState extends State<_ClaudeStyleOptionCard> {
+  int? _hovered;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: borderColor, width: 0.9),
+        color: widget.bg,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: widget.borderColor, width: 1),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          for (var i = 0; i < options.length; i++) ...[
-            InkWell(
-              onTap: () => onSelect(options[i]),
-              borderRadius: BorderRadius.vertical(
-                top: i == 0 ? const Radius.circular(16) : Radius.zero,
-                bottom: i == options.length - 1
-                    ? const Radius.circular(16)
-                    : Radius.zero,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 12,
+          for (var i = 0; i < widget.options.length; i++) ...[
+            MouseRegion(
+              onEnter: (_) => setState(() => _hovered = i),
+              onExit: (_) => setState(() => _hovered = null),
+              child: InkWell(
+                onTap: () => widget.onSelect(widget.options[i]),
+                borderRadius: BorderRadius.vertical(
+                  top: i == 0 ? const Radius.circular(14) : Radius.zero,
+                  bottom: (i == widget.options.length - 1)
+                      ? Radius.zero
+                      : Radius.zero,
                 ),
-                child: Builder(
-                  builder: (context) {
-                    final visual = _GlowGuideScreenState.resolveOptionVisuals(
-                      options[i],
-                      i,
-                      context,
-                    );
-                    final iconColor = visual.color;
-                    final badgeBg =
-                        iconColor.withValues(alpha: isDark ? 0.22 : 0.12);
-
-                    return Row(
-                      children: [
-                        // 1. Number badge pill
-                        Container(
-                          width: 26,
-                          height: 26,
-                          decoration: BoxDecoration(
-                            color: badgeBg,
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          alignment: Alignment.center,
-                          child: Text(
-                            '${i + 1}',
-                            style: TextStyle(
-                              color: iconColor,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w800,
-                            ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 13,
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 22,
+                        height: 22,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: widget.subText.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                        child: Text(
+                          '${i + 1}',
+                          style: TextStyle(
+                            color: widget.textColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
                           ),
                         ),
-                        const SizedBox(width: 10),
-                        // 2. Feature icon container
-                        Container(
-                          width: 38,
-                          height: 38,
-                          decoration: BoxDecoration(
-                            color: badgeBg,
-                            borderRadius: BorderRadius.circular(10),
-                          ),
-                          alignment: Alignment.center,
-                          child: Icon(
-                            visual.icon,
-                            size: 19,
-                            color: iconColor,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          widget.options[i],
+                          style: TextStyle(
+                            color: widget.textColor,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        // 3. Title & Subtitle details
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                visual.title,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  color: textColor,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                              if (visual.subtitle != null &&
-                                  visual.subtitle!.isNotEmpty) ...[
-                                const SizedBox(height: 2),
-                                Text(
-                                  visual.subtitle!,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: TextStyle(
-                                    color: subText,
-                                    fontSize: 11.5,
-                                    height: 1.3,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ],
-                          ),
-                        ),
-                        const SizedBox(width: 6),
+                      ),
+                      if (_hovered == i)
                         Icon(
-                          Icons.chevron_right_rounded,
-                          size: 20,
-                          color: subText.withValues(alpha: 0.6),
+                          Icons.keyboard_return_rounded,
+                          size: 16,
+                          color: widget.subText,
                         ),
-                      ],
-                    );
-                  },
+                    ],
+                  ),
                 ),
               ),
             ),
-            if (i != options.length - 1)
-              Divider(height: 1, thickness: 0.8, color: borderColor),
+            Divider(height: 1, thickness: 0.8, color: widget.borderColor),
           ],
+          InkWell(
+            onTap: widget.onTypeOwn,
+            borderRadius: const BorderRadius.vertical(
+              bottom: Radius.circular(14),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 14,
+                vertical: 13,
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.edit_outlined, size: 16, color: widget.subText),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      'Something else',
+                      style: TextStyle(
+                        color: widget.subText,
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ],
+      ),
+    );
+  }
+}
+class _PillOptionChips extends StatelessWidget {
+  const _PillOptionChips({
+    required this.options,
+    required this.onSelect,
+    required this.textColor,
+    required this.borderColor,
+    required this.bg,
+    this.numbered = false,
+  });
+
+  final List<String> options;
+  final ValueChanged<String> onSelect;
+  final Color textColor;
+  final Color borderColor;
+  final Color bg;
+  final bool numbered;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        for (var i = 0; i < options.length; i++)
+          _StaggeredPillChip(
+            index: i,
+            label: options[i],
+            numbered: numbered,
+            textColor: textColor,
+            borderColor: borderColor,
+            bg: bg,
+            onTap: () => onSelect(options[i]),
+          ),
+      ],
+    );
+  }
+}
+
+class _StaggeredPillChip extends StatefulWidget {
+  const _StaggeredPillChip({
+    required this.index,
+    required this.label,
+    required this.numbered,
+    required this.textColor,
+    required this.borderColor,
+    required this.bg,
+    required this.onTap,
+  });
+
+  final int index;
+  final String label;
+  final bool numbered;
+  final Color textColor;
+  final Color borderColor;
+  final Color bg;
+  final VoidCallback onTap;
+
+  @override
+  State<_StaggeredPillChip> createState() => _StaggeredPillChipState();
+}
+
+class _StaggeredPillChipState extends State<_StaggeredPillChip>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _fade;
+  late final Animation<Offset> _slide;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 260),
+    );
+    _fade = CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+    _slide = Tween<Offset>(
+      begin: const Offset(0, 0.15),
+      end: Offset.zero,
+    ).animate(_fade);
+    // Sequential reveal — each chip pops in ~70ms after the previous one.
+    Future.delayed(Duration(milliseconds: 70 * widget.index), () {
+      if (mounted) _controller.forward();
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: SlideTransition(
+        position: _slide,
+        child: Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: widget.onTap,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(
+                color: widget.bg,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: widget.borderColor, width: 1),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (widget.numbered) ...[
+                    Container(
+                      width: 18,
+                      height: 18,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: widget.textColor.withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Text(
+                        '${widget.index + 1}',
+                        style: TextStyle(
+                          color: widget.textColor,
+                          fontSize: 10,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 7),
+                  ],
+                  Text(
+                    widget.label,
+                    style: TextStyle(
+                      color: widget.textColor,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
