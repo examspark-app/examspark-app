@@ -1060,6 +1060,8 @@ String _canonicalFirstLanguage(String label) {
         'assessment': 'Care AI आकलन',
         'breakdown': 'विस्तृत विवरण देखें',
         'hide_breakdown': 'विस्तृत विवरण छिपाएँ',
+        'breakdown_subtitle': 'मुख्य सामग्री, कारण और उपयोग की बातें',
+        'confidence': 'ध्यान देने योग्य बात',
         'not_suitable': 'उपयुक्त नहीं',
         'not_suitable_subtitle': 'आपकी त्वचा के लिए सही विकल्प नहीं हो सकता',
         'safe_to_use': 'उपयोग के लिए सुरक्षित',
@@ -1073,6 +1075,8 @@ String _canonicalFirstLanguage(String label) {
         'assessment': 'Care AI মূল্যায়ন',
         'breakdown': 'বিস্তারিত বিশ্লেষণ দেখুন',
         'hide_breakdown': 'বিস্তারিত বিশ্লেষণ লুকান',
+        'breakdown_subtitle': 'মূল উপাদান, কারণ এবং ব্যবহারের বিষয়গুলি',
+        'confidence': 'মনে রাখার বিষয়',
         'not_suitable': 'উপযুক্ত নয়',
         'not_suitable_subtitle': 'আপনার ত্বকের জন্য সঠিক নাও হতে পারে',
         'safe_to_use': 'ব্যবহারের জন্য নিরাপদ',
@@ -1086,6 +1090,8 @@ String _canonicalFirstLanguage(String label) {
         'assessment': 'Care AI Assessment',
         'breakdown': 'Detailed breakdown dekhein',
         'hide_breakdown': 'Detailed breakdown chhupayein',
+        'breakdown_subtitle': 'Main ingredients, reason aur use karne ki baatein',
+        'confidence': 'Dhyan dene wali baat',
         'not_suitable': 'Suitable nahi hai',
         'not_suitable_subtitle': 'Aapki skin ke liye sahi fit nahi ho sakta',
         'safe_to_use': 'Use karna safe hai',
@@ -1098,6 +1104,8 @@ String _canonicalFirstLanguage(String label) {
       'assessment': 'CARE AI ASSESSMENT',
       'breakdown': 'View full ingredient breakdown',
       'hide_breakdown': 'Hide detailed breakdown',
+      'breakdown_subtitle': 'Key ingredients, reasoning and practical use notes',
+      'confidence': 'A note about this assessment',
       'not_suitable': 'Not Suitable',
       'not_suitable_subtitle': 'May not be the right fit for your skin',
       'safe_to_use': 'Safe to Use',
@@ -1468,50 +1476,26 @@ String _canonicalFirstLanguage(String label) {
                         ),
                                 if ((message.confidenceNote ?? '').trim().isNotEmpty)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(2, 18, 2, 0),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: subText.withOpacity(0.06),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(
-                            Icons.fact_check_outlined,
-                            size: 13,
-                            color: subText,
-                          ),
-                          const SizedBox(width: 6),
-                          Flexible(
-                            child: Text(
-                              message.confidenceNote!,
-                              style: TextStyle(
-                                color: subText,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
+                                    padding: const EdgeInsets.fromLTRB(2, 20, 2, 0),
+                                    child: _OpenTextSection(
+                                      icon: Icons.fact_check_outlined,
+                                      title: _localizedUiText('confidence'),
+                                      text: message.confidenceNote!,
+                                      titleColor: subText,
+                                      textColor: subText,
                     ),
                   ),
                 if ((message.detailedBreakdown ?? '').trim().isNotEmpty) ...[
-                  const SizedBox(height: 18),
+                                  const SizedBox(height: 24),
                   _DetailedBreakdownExpander(
                     breakdown: message.detailedBreakdown!,
                     title: _localizedUiText('breakdown'),
                     expandedTitle: _localizedUiText('hide_breakdown'),
+                                    subtitle: _localizedUiText('breakdown_subtitle'),
                   ),
                 ],
                 if (message.sources.isNotEmpty) ...[
-                  const SizedBox(height: 18),
+                                  const SizedBox(height: 24),
                   _SourceChips(sources: message.sources),
                 ],
                 if (message.verdict != null) ...[
@@ -2544,16 +2528,73 @@ class _RoundHeaderAction extends StatelessWidget {
   }
 }
 
+class _OpenTextSection extends StatelessWidget {
+  const _OpenTextSection({
+    required this.icon,
+    required this.title,
+    required this.text,
+    required this.titleColor,
+    required this.textColor,
+  });
+
+  final IconData icon;
+  final String title;
+  final String text;
+  final Color titleColor;
+  final Color textColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Padding(
+          padding: const EdgeInsets.only(top: 2),
+          child: Icon(icon, size: 16, color: titleColor),
+        ),
+        const SizedBox(width: 9),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                title,
+                style: TextStyle(
+                  color: titleColor,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                text,
+                style: TextStyle(
+                  color: textColor,
+                  fontSize: 13,
+                  height: 1.55,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _DetailedBreakdownExpander extends StatefulWidget {
   const _DetailedBreakdownExpander({
     required this.breakdown,
     required this.title,
     required this.expandedTitle,
+    required this.subtitle,
   });
 
   final String breakdown;
   final String title;
   final String expandedTitle;
+  final String subtitle;
 
   @override
   State<_DetailedBreakdownExpander> createState() =>
@@ -2574,16 +2615,8 @@ class _DetailedBreakdownExpanderState
         InkWell(
           onTap: () => setState(() => _expanded = !_expanded),
           borderRadius: BorderRadius.circular(10),
-          child: Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 11),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: AppTheme.glowGuidePink.withValues(alpha: 0.35),
-              ),
-              color: AppTheme.glowGuidePink.withValues(alpha: 0.05),
-            ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 2),
             child: Row(
               children: [
                 Icon(
@@ -2595,15 +2628,27 @@ class _DetailedBreakdownExpanderState
                 ),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text(
-                    _expanded
-                        ? widget.expandedTitle
-                        : widget.title,
-                    style: TextStyle(
-                      color: AppTheme.glowGuidePink,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                    ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _expanded ? widget.expandedTitle : widget.title,
+                        style: TextStyle(
+                          color: AppTheme.glowGuidePink,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        widget.subtitle,
+                        style: TextStyle(
+                          color: AppTheme.getSecondaryText(context),
+                          fontSize: 11.5,
+                          height: 1.35,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
                 Icon(
@@ -2624,18 +2669,8 @@ class _DetailedBreakdownExpanderState
               : CrossFadeState.showFirst,
           firstChild: const SizedBox.shrink(),
           secondChild: Padding(
-            padding: const EdgeInsets.only(top: 10),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(12),
-                color: AppTheme.glowGuidePink.withValues(alpha: 0.04),
-                border: Border.all(
-                  color: AppTheme.glowGuidePink.withValues(alpha: 0.2),
-                ),
-              ),
-              child: SelectionArea(
+            padding: const EdgeInsets.only(top: 16, left: 25),
+            child: SelectionArea(
                 child: MarkdownBody(
                   data: _formatBulletText(widget.breakdown),
                   selectable: false,
@@ -2692,7 +2727,6 @@ class _DetailedBreakdownExpanderState
                   ),
                 ),
               ),
-            ),
           ),
         ),
       ],

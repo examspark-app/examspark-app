@@ -1189,6 +1189,7 @@ $rawText
         final result = await LectureService.instance.homeAiVision(
           imageBytes: bytes,
           filename: filename,
+          query: caption,
           sessionId: _homeAiSessionId,
           visionModel: _visionModel,
         );
@@ -1207,6 +1208,7 @@ $rawText
             final result = await LectureService.instance.homeAiVision(
               imageBytes: bytes,
               filename: filename,
+              query: caption,
               sessionId: _homeAiSessionId,
               visionModel: fallbackVision,
             );

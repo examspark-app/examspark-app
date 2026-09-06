@@ -231,7 +231,9 @@ async def home_ai_vision(
             "Do not invent text, objects, or context not visible in the image. "
             "Use the dominant language of the readable content."
         )
-    display_query = user_q
+    # A photo-only turn still needs a durable user message so the generated
+    # analysis remains available to the next text follow-up in this session.
+    display_query = user_q or "Please analyze this photo."
 
     try:
         vision = await analyze_image_with_fallback(
