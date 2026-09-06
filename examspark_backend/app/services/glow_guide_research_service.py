@@ -1,6 +1,7 @@
 """GlowGuide research cache: RAG first, Tavily only on targeted cache misses."""
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import re
@@ -111,20 +112,38 @@ def _cache_is_fresh(row: dict[str, Any]) -> bool:
     except ValueError:
         return False
 
+
+def _run_rpc_sync(query_embedding: list[float]) -> Any:
+    """Blocking Supabase RPC call — run via asyncio.to_thread so it never
+    blocks the event loop (supabase-py's client is synchronous under the
+    hood, even when the calling function is `async def`)."""
+    return get_supabase_admin().rpc(
+        "match_glow_guide_research",
+        {
+            "query_embedding": query_embedding,
+            "match_threshold": _MATCH_THRESHOLD,
+            "match_count": 3,
+        },
+    ).execute()
+
+
+def _run_upsert_sync(rows: list[dict[str, Any]]) -> Any:
+    """Blocking Supabase upsert — same reasoning as _run_rpc_sync above."""
+    return get_supabase_admin().table("glow_guide_research_documents").upsert(
+        rows, on_conflict="cache_key"
+    ).execute()
+
+
 async def search_cached_research(query: str) -> dict[str, Any] | None:
     """Return the best fresh research hit, or None without external calls."""
     if not is_targeted_research_query(query):
         return None
     try:
         vector = await embed_query(query)
-        result = get_supabase_admin().rpc(
-            "match_glow_guide_research",
-            {
-                "query_embedding": vector,
-                "match_threshold": _MATCH_THRESHOLD,
-                "match_count": 3,
-            },
-        ).execute()
+        # Supabase's .execute() is synchronous — off-load it to a worker
+        # thread so this coroutine doesn't block the event loop while
+        # waiting on the database round-trip.
+        result = await asyncio.to_thread(_run_rpc_sync, vector)
         rows = [r for r in (result.data or []) if _cache_is_fresh(r)]
         if not rows:
             return None
@@ -143,15 +162,18 @@ async def search_cached_research(query: str) -> dict[str, Any] | None:
             "used_web_search": False,
             "answer_source": "GLOWGUIDE_RAG",
         }
-    except Exception as error:  # soft-fail until migration is deployed
-        logger.warning("GlowGuide research RAG lookup failed: %s", error)
+    except Exception:  # soft-fail until migration is deployed
+        # logger.exception (not .warning) so the full stack trace lands in
+        # the server logs — a bare error message doesn't say which line
+        # failed, which makes debugging RAG issues much slower.
+        logger.exception("GlowGuide research RAG lookup failed")
         return None
+
 
 async def save_tavily_research(query: str, result: TavilySearchResult) -> None:
     """Embed and upsert cleaned evidence; failure never blocks the answer."""
     if not result.usable:
         return
-    db = get_supabase_admin()
     normalized = _normalized_query(query)
     expires = datetime.now(timezone.utc) + timedelta(
         days=7 if _CURRENT_TERMS.search(query) else _CACHE_TTL_DAYS
@@ -182,7 +204,10 @@ async def save_tavily_research(query: str, result: TavilySearchResult) -> None:
     vectors = await embed_texts([row["content"] for row in rows])
     for row, vector in zip(rows, vectors):
         row["embedding"] = vector
-    db.table("glow_guide_research_documents").upsert(rows, on_conflict="cache_key").execute()
+    # Same event-loop-blocking concern as the RPC call above — run the
+    # upsert in a worker thread instead of blocking on the sync client.
+    await asyncio.to_thread(_run_upsert_sync, rows)
+
 
 async def tavily_research(query: str) -> dict[str, Any] | None:
     if not is_targeted_research_query(query):

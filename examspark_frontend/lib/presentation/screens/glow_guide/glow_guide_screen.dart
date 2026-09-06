@@ -1140,10 +1140,11 @@ String _canonicalFirstLanguage(String label) {
       listIndent: 18,
       blockSpacing: 8,
       code: TextStyle(
-        color: primaryText,
-        fontSize: baseFontSize - 1,
-        fontFamily: 'monospace',
-        backgroundColor: isDark ? Colors.white.withOpacity(0.08) : Colors.black.withOpacity(0.05),
+        color: AppTheme.glowGuidePink,
+        fontSize: baseFontSize - 0.5,
+        fontWeight: FontWeight.w700,
+        fontFamily: null,
+        backgroundColor: AppTheme.glowGuidePink.withOpacity(isDark ? 0.18 : 0.12),
       ),
       codeblockDecoration: BoxDecoration(
         color: isDark ? Colors.white.withOpacity(0.06) : Colors.black.withOpacity(0.04),
@@ -1151,11 +1152,27 @@ String _canonicalFirstLanguage(String label) {
       ),
       codeblockPadding: const EdgeInsets.all(12),
       blockquoteDecoration: BoxDecoration(
-        color: AppTheme.glowGuidePink.withOpacity(0.06),
-        borderRadius: BorderRadius.circular(8),
-        border: Border(left: BorderSide(color: AppTheme.glowGuidePink, width: 3)),
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: isDark
+              ? [const Color(0xFF241B33), const Color(0xFF2A1C28)]
+              : [const Color(0xFFF7F2FE), const Color(0xFFFDF0F6)],
+        ),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: AppTheme.glowGuidePink.withOpacity(0.25),
+          width: 1,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: AppTheme.glowGuidePink.withOpacity(isDark ? 0.15 : 0.06),
+            blurRadius: 10,
+            offset: const Offset(0, 3),
+          ),
+        ],
       ),
-      blockquotePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      blockquotePadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
     );
   }
 
@@ -2319,12 +2336,21 @@ class _DetailedBreakdownExpanderState
                       fontSize: 14,
                       fontFamilyFallback: AppTheme.fontFallback,
                     ),
+                    code: TextStyle(
+                      color: AppTheme.glowGuidePink,
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      fontFamily: null,
+                      backgroundColor: AppTheme.glowGuidePink.withValues(
+                        alpha: Theme.of(context).brightness == Brightness.dark ? 0.18 : 0.12,
+                      ),
+                    ),
                     listBullet: TextStyle(
                       color: AppTheme.glowGuidePink,
                       fontSize: 14,
                       fontFamilyFallback: AppTheme.fontFallback,
                     ),
-                    blockSpacing: 8,
+                    blockSpacing: 12,
                     listIndent: 16,
                   ),
                 ),

@@ -5,6 +5,7 @@ import base64
 import asyncio
 import json
 import logging
+import re
 import uuid
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
@@ -32,7 +33,13 @@ GLOW_GUIDE_RESEARCH_COST = 10
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
 MAX_GLOW_GUIDE_EXCHANGES = 100
 
-
+# --- Centralized LLM hyperparameters -----------------------------------
+# Previously each _call_* function hardcoded its own temperature/max_tokens.
+# Pulling these from AIConfig (with a safe fallback if not defined there yet)
+# means the bot's creativity/length can be tuned in one place. Add
+# DEFAULT_TEMPERATURE / DEFAULT_MAX_TOKENS to AIConfig to override.
+DEFAULT_TEMPERATURE: float = getattr(AIConfig, "GLOWGUIDE_TEMPERATURE", 0.45)
+DEFAULT_MAX_TOKENS: int = getattr(AIConfig, "GLOWGUIDE_MAX_TOKENS", 1200)
 
 
 def _log_research_save_result(task: asyncio.Task[None]) -> None:
@@ -54,22 +61,53 @@ class GlowGuideError(Exception):
 
 
 def _json(raw: str) -> dict[str, Any]:
-    text = (raw or "").strip().strip('`')
-    if text.lower().startswith("json"):
-        text = text[4:].strip()
+    """Safely extract and parse JSON from LLM output, handling markdown fences,
+    leading/trailing conversational text, and both dict and list top-level
+    JSON — because weaker fallback models often wrap or precede JSON with
+    extra text (e.g. "Here is the JSON:\n```json\n{...}\n```")."""
+    text = (raw or "").strip()
+
+    # Step 1: try a direct parse first — the happy path for well-behaved models.
     try:
         value = json.loads(text)
+        if isinstance(value, dict):
+            return value
+        raise GlowGuideError("GlowGuide returned invalid JSON.", 502)
     except json.JSONDecodeError:
-        start, end = text.find("{"), text.rfind("}")
-        if start < 0 or end <= start:
-            raise GlowGuideError("GlowGuide returned invalid JSON.", 502)
+        pass
+
+    # Step 2: pull JSON out of a ```json ... ``` or ``` ... ``` markdown block,
+    # wherever it sits relative to any surrounding chatter.
+    markdown_match = re.search(r"```(?:json)?\s*(.*?)\s*```", text, re.DOTALL | re.IGNORECASE)
+    if markdown_match:
+        try:
+            value = json.loads(markdown_match.group(1))
+            if isinstance(value, dict):
+                return value
+        except json.JSONDecodeError:
+            pass
+
+    # Step 3: no markdown fence — find the outermost { } or [ ] span and
+    # ignore any conversational prefix/suffix text around it.
+    start_dict, end_dict = text.find("{"), text.rfind("}")
+    start_list, end_list = text.find("["), text.rfind("]")
+    valid_starts = [s for s in (start_dict, start_list) if s != -1]
+    start = min(valid_starts) if valid_starts else -1
+    end = max(end_dict, end_list)
+
+    if start != -1 and end != -1 and start < end:
         try:
             value = json.loads(text[start:end + 1])
-        except json.JSONDecodeError as error:
-            raise GlowGuideError("GlowGuide returned invalid JSON.", 502) from error
-    if not isinstance(value, dict):
-        raise GlowGuideError("GlowGuide returned invalid JSON.", 502)
-    return value
+            if isinstance(value, dict):
+                return value
+        except json.JSONDecodeError:
+            pass
+
+    # Step 4: everything failed — raise a clear, debuggable error instead of
+    # crashing on an unhandled JSONDecodeError.
+    raise GlowGuideError(
+        f"GlowGuide returned invalid JSON. Raw output started with: {text[:200]!r}", 502
+    )
 
 
 def _mime(filename: str | None) -> str:
@@ -95,8 +133,6 @@ def glow_guide_language_for_turn(text: str, preferred_language: str | None = Non
     return resolved or "MATCH_QUESTION"
 
 
-
-
 def _title_for_session(active_category: str | None, context: dict, user_text: str) -> str:
     concern = (context.get("concern") or "").strip()
     if concern:
@@ -111,6 +147,7 @@ def _title_for_session(active_category: str | None, context: dict, user_text: st
     if text:
         return (text[:40] + "…") if len(text) > 40 else text
     return "GlowGuide Chat"
+
 
 def _load_user_profile(db, user_id: str) -> dict:
     """Long-term GlowGuide profile — persists across sessions (returning-user context)."""
@@ -133,6 +170,8 @@ def _save_user_profile(db, user_id: str, profile: dict) -> None:
         "profile_json": profile,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }).execute()
+
+
 def rename_session(session_id: str, user_id: str, title: str) -> dict | None:
     cleaned = (title or "").strip()[:120]
     if not cleaned:
@@ -151,6 +190,8 @@ def rename_session(session_id: str, user_id: str, title: str) -> dict | None:
         .data or []
     )
     return rows[0] if rows else None
+
+
 def _build_gemini_payload(messages: list[dict[str, Any]]) -> dict[str, Any]:
     system_text = messages[0]["content"]
     contents: list[dict[str, Any]] = []
@@ -174,8 +215,8 @@ def _build_gemini_payload(messages: list[dict[str, Any]]) -> dict[str, Any]:
         "systemInstruction": {"parts": [{"text": system_text}]},
         "contents": contents,
         "generationConfig": {
-            "temperature": 0.45,
-            "maxOutputTokens": 1200,
+            "temperature": DEFAULT_TEMPERATURE,
+            "maxOutputTokens": DEFAULT_MAX_TOKENS,
             "responseMimeType": "application/json",
         },
     }
@@ -246,8 +287,8 @@ async def _call_claude(messages: list[dict[str, Any]]) -> str:
                     "model": AIConfig.CLAUDE_CHAT_MODEL,
                     "system": system_text,
                     "messages": turns,
-                    "max_tokens": 1200,
-                    "temperature": 0.45,
+                    "max_tokens": DEFAULT_MAX_TOKENS,
+                    "temperature": DEFAULT_TEMPERATURE,
                 },
             )
     except Exception as exc:
@@ -279,7 +320,13 @@ async def _call_qwen(messages: list[dict[str, Any]]) -> str:
                 response = await client.post(
                     OPENROUTER_URL,
                     headers={"Authorization": f"Bearer {AIConfig.OPENROUTER_API_KEY}", "Content-Type": "application/json"},
-                    json={"model": model, "messages": messages, "temperature": 0.45, "max_tokens": 1200, "response_format": {"type": "json_object"}},
+                    json={
+                        "model": model,
+                        "messages": messages,
+                        "temperature": DEFAULT_TEMPERATURE,
+                        "max_tokens": DEFAULT_MAX_TOKENS,
+                        "response_format": {"type": "json_object"},
+                    },
                 )
             if response.status_code == 200:
                 try:
@@ -301,7 +348,13 @@ async def _call_openai(messages: list[dict[str, Any]]) -> str:
             response = await client.post(
                 "https://api.openai.com/v1/chat/completions",
                 headers={"Authorization": f"Bearer {AIConfig.OPENAI_API_KEY}", "Content-Type": "application/json"},
-                json={"model": AIConfig.OPENAI_CHAT_MODEL, "messages": messages, "temperature": 0.45, "max_tokens": 1200, "response_format": {"type": "json_object"}},
+                json={
+                    "model": AIConfig.OPENAI_CHAT_MODEL,
+                    "messages": messages,
+                    "temperature": DEFAULT_TEMPERATURE,
+                    "max_tokens": DEFAULT_MAX_TOKENS,
+                    "response_format": {"type": "json_object"},
+                },
             )
     except Exception as exc:
         raise GlowGuideError(f"OpenAI network error: {exc}", 502) from exc
@@ -343,8 +396,8 @@ async def _call_groq(messages: list[dict[str, Any]]) -> str:
                 json={
                     "model": AIConfig.GROQ_CHAT_MODEL,
                     "messages": groq_messages,
-                    "temperature": 0.45,
-                    "max_tokens": 1200,
+                    "temperature": DEFAULT_TEMPERATURE,
+                    "max_tokens": DEFAULT_MAX_TOKENS,
                     "response_format": {"type": "json_object"},
                 },
             )
@@ -494,7 +547,6 @@ async def turn(
             "Always include the structured Visual Consultation Card (Markdown blockquote) at the top of your 'reply'. "
             "If the photo shows a readable product label, visible skin/scalp concern, or fabric/rash, provide your evaluation and safety rating right away."
         )
-
 
     prompt = system_prompt(active_category, text, preferred_language) + context_line
     research = await search_cached_research(text)
