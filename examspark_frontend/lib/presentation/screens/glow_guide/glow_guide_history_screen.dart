@@ -73,7 +73,7 @@ class _GlowGuideHistoryScreenState extends State<GlowGuideHistoryScreen> {
     final title = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Rename GlowGuide chat'),
+        title: const Text('Rename Care AI chat'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -121,13 +121,24 @@ class _GlowGuideHistoryScreenState extends State<GlowGuideHistoryScreen> {
     final title = session['title']?.toString().trim() ?? '';
     if (title.isNotEmpty) return title;
     final category = session['category_type']?.toString().trim() ?? '';
-    return category.isEmpty ? 'GlowGuide Chat' : category;
+    return category.isEmpty ? 'Care AI Chat' : category;
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('GlowGuide History')),
+      appBar: AppBar(
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Care AI History'),
+            Text(
+              'Skin, Hair, Body & Baby Care',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
+      ),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : _error != null
@@ -137,7 +148,7 @@ class _GlowGuideHistoryScreenState extends State<GlowGuideHistoryScreen> {
                   FilledButton(onPressed: _load, child: const Text('Retry')),
                 ]))
               : _sessions.isEmpty
-                  ? const Center(child: Text('No GlowGuide history yet.'))
+                  ? const Center(child: Text('No Care AI history yet.'))
                   : RefreshIndicator(
                       onRefresh: _load,
                       child: ListView.separated(
@@ -149,7 +160,19 @@ class _GlowGuideHistoryScreenState extends State<GlowGuideHistoryScreen> {
                           final id = session['id']?.toString() ?? '';
                           return Card(
                             child: ListTile(
-                              leading: const Icon(Icons.eco_outlined, color: Color(0xFFB64B85)),
+                              leading: Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFB64B85).withValues(alpha: 0.12),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.shopping_bag_rounded,
+                                  color: Color(0xFFB64B85),
+                                  size: 19,
+                                ),
+                              ),
                               title: Text(_title(session), maxLines: 2, overflow: TextOverflow.ellipsis),
                               subtitle: Text(_date(session['updated_at']?.toString())),
                               onTap: () => _openSession(id),

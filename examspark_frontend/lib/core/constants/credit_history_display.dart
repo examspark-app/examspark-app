@@ -16,10 +16,10 @@ class CreditHistoryDisplay {
     final a = normalizeAction(action);
     final d = (description ?? '').toLowerCase();
     if (a == 'english_practice' || a.contains('english_practice') || d.contains('english practice')) {
-      return 'English Practice';
+      return 'Speak AI';
     }
     if (a == 'glow_guide' || a.contains('glow_guide') || d.contains('glowguide') || d.contains('glow guide')) {
-      return 'GlowGuide Care AI';
+      return 'Care AI';
     }
     switch (a) {
       case 'audio_transcription':

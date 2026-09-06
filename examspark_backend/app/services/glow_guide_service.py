@@ -172,6 +172,152 @@ def _save_user_profile(db, user_id: str, profile: dict) -> None:
     }).execute()
 
 
+_CATEGORY_PROFILE_FIELDS = {
+    "skin": {
+        "scalars": ("skin_type", "climate", "weather", "concern"),
+        "lists": ("sensitivities", "routine_actives", "product_reactions", "practiced_concerns"),
+    },
+    "body": {
+        "scalars": ("skin_type", "climate", "weather", "concern"),
+        "lists": ("sensitivities", "routine_actives", "product_reactions", "practiced_concerns"),
+    },
+    "hair": {
+        "scalars": ("hair_type", "climate", "weather", "concern"),
+        "lists": ("sensitivities", "routine_actives", "product_reactions", "practiced_concerns"),
+    },
+    "baby": {
+        "scalars": ("baby_age_range", "climate", "weather", "concern"),
+        "lists": ("sensitivities", "product_reactions", "practiced_concerns"),
+    },
+    "cloth": {
+        "scalars": ("climate", "weather", "concern", "fabric_preference"),
+        "lists": ("sensitivities", "product_reactions", "practiced_concerns"),
+    },
+}
+
+
+def _profile_for_category(profile: dict[str, Any], category: str | None) -> dict[str, Any]:
+    """Return only the active domain's facts; legacy flat profiles remain readable."""
+    category_key = category if category in _CATEGORY_PROFILE_FIELDS else "skin"
+    categories = profile.get("categories") if isinstance(profile, dict) else None
+    if isinstance(categories, dict) and isinstance(categories.get(category_key), dict):
+        return dict(categories[category_key])
+    fields = _CATEGORY_PROFILE_FIELDS[category_key]
+    legacy_keys = (*fields["scalars"], *fields["lists"])
+    return {key: profile[key] for key in legacy_keys if isinstance(profile, dict) and profile.get(key)}
+
+
+def _clean_profile_values(value: Any, *, limit: int = 12) -> list[str]:
+    """Normalize model-extracted profile lists without retaining raw chat text."""
+    candidates = value if isinstance(value, list) else [value]
+    cleaned: list[str] = []
+    for item in candidates:
+        text = str(item or "").strip()
+        if not text or len(text) > 120:
+            continue
+        if text.casefold() not in {seen.casefold() for seen in cleaned}:
+            cleaned.append(text)
+        if len(cleaned) >= limit:
+            break
+    return cleaned
+
+
+def _product_analysis(parsed: dict[str, Any]) -> dict[str, Any] | None:
+    """Keep only the compact, UI-safe product decision returned by the model."""
+    interaction_type = str(parsed.get("interaction_type") or "normal_consultation")
+    if interaction_type not in {"product_fit", "product_comparison"}:
+        return None
+    assessments: list[dict[str, Any]] = []
+    for entry in parsed.get("product_assessments") or []:
+        if not isinstance(entry, dict):
+            continue
+        verdict = str(entry.get("verdict") or "")
+        name = str(entry.get("product_name") or "").strip()
+        if verdict not in {"good_fit", "careful", "harmful"} or not name:
+            continue
+        assessments.append({
+            "product_name": name[:160],
+            "verdict": verdict,
+            "why": _clean_profile_values(entry.get("why"), limit=3),
+            "what_to_avoid": _clean_profile_values(entry.get("what_to_avoid"), limit=3),
+            "confidence_note": str(entry.get("confidence_note") or "").strip()[:240],
+        })
+    comparison = parsed.get("comparison") if isinstance(parsed.get("comparison"), dict) else None
+    if interaction_type == "product_comparison" and (not comparison or len(assessments) < 2):
+        return None
+    if interaction_type == "product_fit" and not assessments:
+        return None
+    result: dict[str, Any] = {
+        "interaction_type": interaction_type,
+        "product_assessments": assessments[:2],
+    }
+    if comparison:
+        result["comparison"] = {
+            "best_match": str(comparison.get("best_match") or "").strip()[:160],
+            "why": _clean_profile_values(comparison.get("why"), limit=3),
+            "what_to_avoid": _clean_profile_values(comparison.get("what_to_avoid"), limit=3),
+        }
+    return result
+
+
+def _updated_long_term_profile(
+    profile: dict[str, Any],
+    *,
+    parsed: dict[str, Any],
+    context: dict[str, Any],
+    category: str | None,
+    analysis: dict[str, Any] | None,
+) -> dict[str, Any]:
+    """Merge only structured, useful facts on every meaningful GlowGuide turn."""
+    updated = dict(profile) if isinstance(profile, dict) else {}
+    category_key = category if category in _CATEGORY_PROFILE_FIELDS else "skin"
+    fields = _CATEGORY_PROFILE_FIELDS[category_key]
+    categories = dict(updated.get("categories") or {})
+    category_profile = dict(categories.get(category_key) or _profile_for_category(updated, category_key))
+    update = parsed.get("memory_update") if isinstance(parsed.get("memory_update"), dict) else {}
+    source = {**context, **update}
+    if category_key == "baby" and source.get("age") and not source.get("baby_age_range"):
+        source["baby_age_range"] = source["age"]
+    has_useful_fact = False
+    for key in fields["scalars"]:
+        value = source.get(key)
+        if value is not None and str(value).strip():
+            category_profile[key] = str(value).strip()[:120]
+            has_useful_fact = True
+    for key in fields["lists"]:
+        incoming = _clean_profile_values(source.get(key))
+        if incoming:
+            category_profile[key] = _clean_profile_values([*(category_profile.get(key) or []), *incoming])
+            has_useful_fact = True
+
+    if category and (has_useful_fact or analysis or parsed.get("verdict")):
+        categories[category_key] = category_profile
+        updated["categories"] = categories
+        updated["last_category"] = category
+    verdict = parsed.get("verdict")
+    if verdict in {"good_fit", "careful", "harmful"}:
+        updated["last_verdict"] = verdict
+        updated["last_verdict_at"] = datetime.now(timezone.utc).date().isoformat()
+
+    if analysis:
+        saved = list(updated.get("saved_product_verdicts") or [])
+        for assessment in analysis["product_assessments"]:
+            saved.append({
+                "product_name": assessment["product_name"],
+                "verdict": assessment["verdict"],
+                "category": category,
+                "date": datetime.now(timezone.utc).date().isoformat(),
+            })
+        # De-duplicate by product name, keeping the newest verdict, and cap profile size.
+        deduped: dict[str, dict[str, Any]] = {}
+        for item in saved:
+            name = str(item.get("product_name") or "").strip().casefold()
+            if name:
+                deduped[name] = item
+        updated["saved_product_verdicts"] = list(deduped.values())[-15:]
+    return updated
+
+
 def rename_session(session_id: str, user_id: str, title: str) -> dict | None:
     cleaned = (title or "").strip()[:120]
     if not cleaned:
@@ -366,49 +512,7 @@ async def _call_openai(messages: list[dict[str, Any]]) -> str:
         raise GlowGuideError(f"OpenAI parse error: {error}", 502) from error
 
 
-async def _call_groq(messages: list[dict[str, Any]]) -> str:
-    """Groq ultra-fast adapter — high-speed fallback."""
-    if not AIConfig.groq_configured():
-        raise GlowGuideError("Groq is not configured.", 500)
-    has_image = any(
-        isinstance(m.get("content"), list) and any(item.get("type") == "image_url" for item in m["content"])
-        for m in messages
-    )
-    if has_image:
-        raise GlowGuideError("Groq does not support image analysis.", 400)
 
-    groq_messages = []
-    for m in messages:
-        content = m.get("content", "")
-        if isinstance(content, list):
-            text_parts = [item.get("text", "") for item in content if item.get("type") == "text"]
-            content = " ".join(text_parts)
-        groq_messages.append({"role": m.get("role", "user"), "content": content})
-
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-            response = await client.post(
-                "https://api.groq.com/openai/v1/chat/completions",
-                headers={
-                    "Authorization": f"Bearer {AIConfig.GROQ_API_KEY}",
-                    "Content-Type": "application/json",
-                },
-                json={
-                    "model": AIConfig.GROQ_CHAT_MODEL,
-                    "messages": groq_messages,
-                    "temperature": DEFAULT_TEMPERATURE,
-                    "max_tokens": DEFAULT_MAX_TOKENS,
-                    "response_format": {"type": "json_object"},
-                },
-            )
-    except Exception as exc:
-        raise GlowGuideError(f"Groq network error: {exc}", 502) from exc
-    if response.status_code != 200:
-        raise GlowGuideError(f"Groq failed: {response.status_code}", 502)
-    try:
-        return response.json()["choices"][0]["message"]["content"]
-    except (KeyError, IndexError, TypeError, Exception) as error:
-        raise GlowGuideError(f"Groq parse error: {error}", 502) from error
 
 
 async def _call_gemini_free(messages: list[dict[str, Any]]) -> str:
@@ -509,17 +613,22 @@ async def turn(
         raise GlowGuideError(f"Need at least {base_cost} credits for GlowGuide.", 402)
 
     long_term_profile = _load_user_profile(db, user_id)
+    active_profile = _profile_for_category(long_term_profile, active_category)
+    saved_verdicts = [
+        item for item in (long_term_profile.get("saved_product_verdicts") or [])
+        if isinstance(item, dict) and item.get("category") == active_category
+    ][-5:]
 
     context_line = ""
     if isinstance(context, dict) and context:
         context_line = "\nPERSISTED CONVERSATION CONTEXT (do not ask for these again): " + json.dumps(context, ensure_ascii=True)
 
-    if long_term_profile:
+    if active_profile or saved_verdicts:
         context_line += (
-            "\n\nRETURNING USER — LONG-TERM PROFILE (learned from previous GlowGuide "
-            "sessions; may be slightly outdated — treat as background knowledge, not "
-            "gospel, and update naturally if the user contradicts it): "
-            + json.dumps(long_term_profile, ensure_ascii=True)
+            "\n\nRETURNING USER — ACTIVE CATEGORY PROFILE (learned only from this "
+            "GlowGuide category; may be slightly outdated — treat as background knowledge, "
+            "not gospel, and update naturally if the user contradicts it): "
+            + json.dumps({"profile": active_profile, "recent_product_verdicts": saved_verdicts}, ensure_ascii=True)
             + "\nUse this naturally where relevant — e.g. skip re-asking a known skin "
             "type, or briefly reference a past verdict if it's genuinely relevant "
             "('last time you checked a Niacinamide serum...'). Never recite this back "
@@ -548,12 +657,34 @@ async def turn(
             "If the photo shows a readable product label, visible skin/scalp concern, or fabric/rash, provide your evaluation and safety rating right away."
         )
 
-    prompt = system_prompt(active_category, text, preferred_language) + context_line
-    research = await search_cached_research(text)
+    # Detect language from each real user message. Preserve the previous
+    # language only for short ambiguous chip taps (for example, "Oily skin")
+    # so they cannot accidentally switch a Hinglish or Hindi conversation.
+    detected_turn_language = glow_guide_language_for_turn(text, preferred_language)
+    previous_response_language = str(context.get("response_language") or "").strip()
+    is_short_ambiguous_reply = (
+        bool(text.strip())
+        and len(text.split()) <= 4
+        and detected_turn_language == "MATCH_QUESTION"
+        and previous_response_language
+    )
+    turn_language = (
+        previous_response_language if is_short_ambiguous_reply else detected_turn_language
+    )
+    prompt = system_prompt(active_category, text, turn_language) + context_line
+    if exchange_count >= 2 and not image:
+        prompt += (
+            "\n\nCONSULTATION PACING: This is the user's third or later real "
+            "answer. Give a concise, useful verdict now (ready=true) instead of "
+            "asking another routine follow-up. You may ask one more question only "
+            "when the photo/label is unreadable, the baby-safety risk is unclear, "
+            "or the missing detail would materially reverse the safety verdict."
+        )
+    research = await search_cached_research(text, active_category)
     if research is None:
         if is_targeted_research_query(text) and on_event is not None:
             await on_event({"type": "web_search_started"})
-        research = await tavily_research(text)
+        research = await tavily_research(text, active_category)
         if is_targeted_research_query(text) and on_event is not None:
             await on_event({
                 "type": "web_search_complete" if research else "web_search_failed",
@@ -677,6 +808,7 @@ async def turn(
     except InsufficientCreditsError as error:
         raise GlowGuideError(str(error), 402) from error
     reply = str(parsed.get("reply") or "I need a little more detail before I can help.").strip()
+    analysis = _product_analysis(parsed)
     db.table("glow_guide_messages").insert({
         "session_id": session_id,
         "user_id": user_id,
@@ -687,6 +819,7 @@ async def turn(
         "confidence_note": parsed.get("confidence_note") or "",
         "detailed_breakdown": parsed.get("detailed_breakdown"),
         "sources": research.get("sources", []) if research else [],
+        "analysis_json": analysis,
     }).execute()
     new_exchange_count = exchange_count + 1
     next_context = dict(context) if isinstance(context, dict) else {}
@@ -704,7 +837,16 @@ async def turn(
         value = parsed.get(key)
         if value is not None and str(value).strip():
             next_context[key] = value
+    memory_update = parsed.get("memory_update")
+    if isinstance(memory_update, dict):
+        memory_fields = _CATEGORY_PROFILE_FIELDS.get(active_category or "skin", _CATEGORY_PROFILE_FIELDS["skin"])
+        for key in (*memory_fields["scalars"], *memory_fields["lists"]):
+            value = memory_update.get(key)
+            if value is not None and str(value).strip():
+                next_context[key] = value
     next_context["category_type"] = parsed.get("category") or active_category
+    if turn_language != "MATCH_QUESTION":
+        next_context["response_language"] = turn_language
     asked_questions = list(context.get("asked_questions") or [])
     if reply:
         asked_questions.append(reply)
@@ -720,25 +862,16 @@ async def turn(
         session_update["status"] = "archived"
     db.table("glow_guide_sessions").update(session_update).eq("id", session_id).eq("user_id", user_id).execute()
 
-    if parsed.get("verdict"):
-        updated_profile = dict(long_term_profile)
-        for key in ("skin_type", "hair_type", "concern"):
-            value = next_context.get(key)
-            if value:
-                updated_profile[key] = value
-        updated_profile["last_category"] = active_category
-        updated_profile["last_verdict"] = parsed.get("verdict")
-        updated_profile["last_verdict_at"] = datetime.now(timezone.utc).date().isoformat()
-        history = list(updated_profile.get("history") or [])
-        history.append({
-            "category": active_category,
-            "concern": next_context.get("concern"),
-            "verdict": parsed.get("verdict"),
-            "date": datetime.now(timezone.utc).date().isoformat(),
-        })
-        updated_profile["history"] = history[-10:]
+    updated_profile = _updated_long_term_profile(
+        long_term_profile,
+        parsed=parsed,
+        context=next_context,
+        category=active_category,
+        analysis=analysis,
+    )
+    if updated_profile != long_term_profile:
         try:
             _save_user_profile(db, user_id, updated_profile)
         except Exception as error:  # noqa: BLE001
             logger.warning("glow_guide_profile_save_failed user=%s error=%s", user_id, error)
-    return {"session_id": session_id, "reply": reply, "detailed_breakdown": parsed.get("detailed_breakdown"), "category": parsed.get("category") or active_category, "question_options": parsed.get("question_options") or [], "ready": bool(parsed.get("ready")), "verdict": parsed.get("verdict"), "category_label": parsed.get("category_label"), "confidence_note": parsed.get("confidence_note") or "", "credits_charged": required_credits, "new_balance": balance, "exchange_count": new_exchange_count, "session_complete": new_exchange_count >= MAX_GLOW_GUIDE_EXCHANGES, "answer_source": research.get("answer_source") if research else "MODEL", "used_web_search": bool(research and research.get("used_web_search")), "web_search_status": "complete" if research and research.get("used_web_search") else "not_used", "sources": research.get("sources", []) if research else [], "model_name": _MODEL_DISPLAY_NAMES.get(served_model, served_model)}
+    return {"session_id": session_id, "reply": reply, "detailed_breakdown": parsed.get("detailed_breakdown"), "category": parsed.get("category") or active_category, "question_options": parsed.get("question_options") or [], "ready": bool(parsed.get("ready")), "verdict": parsed.get("verdict"), "category_label": parsed.get("category_label"), "confidence_note": parsed.get("confidence_note") or "", "analysis": analysis, "credits_charged": required_credits, "new_balance": balance, "exchange_count": new_exchange_count, "session_complete": new_exchange_count >= MAX_GLOW_GUIDE_EXCHANGES, "answer_source": research.get("answer_source") if research else "MODEL", "used_web_search": bool(research and research.get("used_web_search")), "web_search_status": "complete" if research and research.get("used_web_search") else "not_used", "sources": research.get("sources", []) if research else [], "model_name": _MODEL_DISPLAY_NAMES.get(served_model, served_model)}

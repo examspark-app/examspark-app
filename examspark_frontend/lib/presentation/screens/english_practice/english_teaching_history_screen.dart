@@ -263,7 +263,7 @@ class _EnglishTeachingHistoryScreenState
                 child: Row(
                   children: [
                     _tab('Chat', Icons.chat_bubble_outline, 0),
-                    _tab('Roleplay', Icons.masks_outlined, 1),
+                    _tab('Speak AI', Icons.masks_outlined, 1),
                   ],
                 ),
               ),
@@ -287,7 +287,7 @@ class _EnglishTeachingHistoryScreenState
                           : Icons.masks_outlined,
                       title: _mode == 0
                           ? 'No chat history yet'
-                          : 'No roleplay history yet',
+                          : 'No Speak AI history yet',
                       detail: 'Your saved conversations will appear here.',
                     )
                   : RefreshIndicator(
@@ -345,10 +345,10 @@ class _EnglishTeachingHistoryScreenState
   Widget _historyItem(Map<String, dynamic> item) {
     final roleplay = _mode == 1;
     final title = roleplay
-        ? (item['scenario'] as String? ?? 'Roleplay')
+        ? (item['scenario'] as String? ?? 'Speak AI')
         : ((item['title'] as String?)?.trim().isNotEmpty == true
               ? item['title'] as String
-              : 'English Practice');
+              : 'Speak AI');
     final preview = (item['preview'] as String? ?? '').trim();
     final date = _date((item['updated_at'] ?? item['started_at']) as String?);
     return Material(

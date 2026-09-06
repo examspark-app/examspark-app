@@ -31,22 +31,22 @@ class FeatureOnboardingScreen extends StatelessWidget {
       _FeatureCardData(
         icon: Icons.record_voice_over_outlined,
         iconColor: const Color(0xFF12A594),
-        title: 'English practice',
-        tagline: 'Speak, roleplay, get fluent by doing',
+        title: 'Speak AI',
+        tagline: 'Practice speaking any language',
         bullets: const [
           'Live voice chat with instant correction',
-          'Roleplay interviews, travel, office chats',
+          'Speak AI interviews, travel, office chats',
           'Any language, any accent, your pace',
         ],
-        ctaLabel: 'Try English practice',
+        ctaLabel: 'Try Speak AI',
         popular: false,
         feature: 'english',
       ),
       _FeatureCardData(
         icon: Icons.auto_awesome_outlined,
         iconColor: const Color(0xFFD85A30),
-        title: 'Skin care AI',
-        tagline: 'Glow, body and baby care guidance',
+        title: 'Care AI',
+        tagline: 'Skin, Hair, Body & Baby Care',
         bullets: const [
           'Science-based skin and body routines',
           'Baby skin care and cloth guidance',

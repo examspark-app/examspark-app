@@ -42,13 +42,23 @@ class EnglishPracticeDrawer extends StatelessWidget {
               ),
               child: Align(
                 alignment: Alignment.bottomLeft,
-                child: Text(
-                  'English Practice',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: primaryText,
-                  ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Speak AI',
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: primaryText,
+                      ),
+                    ),
+                    Text(
+                      'Practice speaking any language',
+                      style: TextStyle(fontSize: 11, color: subText),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -118,7 +128,7 @@ class EnglishPracticeDrawer extends StatelessWidget {
             ),
             Divider(color: divider),
 
-            // GlowGuide / Skin Care AI — moved here from the header to free
+            // Care AI — moved here from the header to free
             // up space on mobile. Professional icon inside a soft tinted
             // square, consistent with a premium-feature entry.
             ListTile(
@@ -137,11 +147,11 @@ class EnglishPracticeDrawer extends StatelessWidget {
                 ),
               ),
               title: Text(
-                'Skin Care AI',
+                'Care AI',
                 style: TextStyle(color: primaryText, fontWeight: FontWeight.w600),
               ),
               subtitle: Text(
-                'GlowGuide skin & body guidance',
+                'Skin, Hair, Body & Baby Care',
                 style: TextStyle(color: subText, fontSize: 12),
               ),
               onTap: () {

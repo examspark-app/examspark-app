@@ -50,7 +50,7 @@ class _RoleplayTranscriptScreenState extends State<RoleplayTranscriptScreen> {
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      session?['scenario'] as String? ?? 'Roleplay history',
+                      session?['scenario'] as String? ?? 'Speak AI history',
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
@@ -78,7 +78,7 @@ class _RoleplayTranscriptScreenState extends State<RoleplayTranscriptScreen> {
                       ),
                     )
                   : messages.isEmpty
-                  ? const Center(child: Text('No saved transcript for this roleplay.'))
+                  ? const Center(child: Text('No saved transcript for this Speak AI session.'))
                   : ListView.builder(
                       padding: const EdgeInsets.fromLTRB(20, 10, 20, 28),
                       itemCount: messages.length,

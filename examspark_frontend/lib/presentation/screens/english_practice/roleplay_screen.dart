@@ -242,7 +242,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   Text(
-                                    'Roleplay preferences',
+                                    'Speak AI preferences',
                                     style: TextStyle(
                                       fontSize: 18,
                                       fontWeight: FontWeight.w800,
@@ -580,7 +580,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
           padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
           children: [
             const Text(
-              'Roleplay language',
+              'Speak AI language',
               style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
             ),
             const SizedBox(height: 8),
@@ -653,7 +653,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
     final value = await showDialog<String>(
       context: context,
       builder: (c) => AlertDialog(
-        title: const Text('Custom Roleplay'),
+        title: const Text('Custom Speak AI'),
         content: TextField(
           controller: input,
           autofocus: true,
@@ -753,11 +753,20 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                   ),
                   const SizedBox(width: 4),
                   Text(
-                    'Roleplay',
+                    'Speak AI',
                     style: TextStyle(
                       color: primaryText,
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Practice speaking any language',
+                    style: TextStyle(
+                      color: subText,
+                      fontSize: 10.5,
+                      fontWeight: FontWeight.w500,
                     ),
                   ),
                   const Spacer(),
@@ -1050,7 +1059,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Roleplay Mode',
+                      'Speak AI Mode',
                       style: TextStyle(
                         color: _violet,
                         fontWeight: FontWeight.w800,
@@ -1109,7 +1118,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
               onPressed: custom,
               icon: const Icon(Icons.add_rounded, color: _violet),
               label: const Text(
-                'Custom Roleplay',
+                'Custom Speak AI',
                 style: TextStyle(
                   color: _violet,
                   fontWeight: FontWeight.w800,
@@ -1403,7 +1412,7 @@ class _RoleplaySetupScreenState extends State<RoleplaySetupScreen> {
                   const SizedBox(width: 6),
                   const Expanded(
                     child: Text(
-                      'Pick a roleplay mode first, then tap Enter.',
+                      'Pick a Speak AI mode first, then tap Enter.',
                       style: TextStyle(
                         color: Colors.white70,
                         fontSize: 12,

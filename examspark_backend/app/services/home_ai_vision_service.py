@@ -343,13 +343,14 @@ async def home_ai_vision(
             image_path=image_path,
         )
 
-    suggested_questions: list[str] = []
-    if len(questions_found) > 1:
-        suggested_questions = [
-            f"Solve: {str(q).strip()[:80]}"
-            for q in questions_found[1:4]
-            if str(q).strip()
-        ]
+    suggested_questions = notes.get("suggestedQuestions") or []
+    if not isinstance(suggested_questions, list):
+        suggested_questions = []
+
+    practice_question = notes.get("practiceQuestion")
+    if not isinstance(practice_question, str) or not practice_question.strip():
+        practice_question = None
+
 
     return {
         "answer": answer,
@@ -363,6 +364,7 @@ async def home_ai_vision(
         "mode": "normal",
         "visual_payload": visual_payload,
         "suggested_questions": suggested_questions,
+        "practice_question": practice_question,
         "response_id": rid,
         "session_id": result_session_id,
         "model_name": getattr(vision, "model_name", ""),

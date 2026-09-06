@@ -3,49 +3,38 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
-  testWidgets('GlowGuide opens with language choice before categories', (tester) async {
+  testWidgets('GlowGuide opens directly to polished category choices', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: GlowGuideScreen()),
+      const MaterialApp(home: GlowGuideScreen(startFresh: true)),
     );
 
-    expect(find.text('Skin Care AI 🌿'), findsOneWidget);
-    expect(find.text('English'), findsOneWidget);
-    expect(find.text('Hindi'), findsOneWidget);
-    expect(find.text('Bengali'), findsOneWidget);
-    expect(find.text('Auto-detect'), findsOneWidget);
-    expect(find.text('Skin Care'), findsNothing);
-    expect(find.byIcon(Icons.camera_alt_outlined), findsOneWidget);
+    expect(find.text('Skin Care'), findsOneWidget);
+    expect(find.text('Hair Care'), findsOneWidget);
     expect(find.byType(TextField), findsOneWidget);
-    expect(find.byTooltip('Send'), findsOneWidget);
   });
 
-  testWidgets('GlowGuide category chip adds the selected category', (tester) async {
+  testWidgets('selected category becomes a compact locked receipt', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: GlowGuideScreen()),
+      const MaterialApp(home: GlowGuideScreen(startFresh: true)),
     );
 
-    await tester.tap(find.text('English'));
-    await tester.pump();
     await tester.tap(find.text('Cloth Guide'));
     await tester.pump();
 
-    expect(find.text('Cloth Guide'), findsNWidgets(2));
+    expect(find.text('Selected'), findsOneWidget);
+    expect(find.text('Body Care'), findsNothing);
+    expect(find.text('What would you like to check about this fabric or garment?'), findsOneWidget);
   });
 
-  testWidgets('Typing-own-concern chip focuses the input instead of sending a dummy message', (tester) async {
+  testWidgets('category selection does not make an invisible AI request', (tester) async {
     await tester.pumpWidget(
-      const MaterialApp(home: GlowGuideScreen()),
+      const MaterialApp(home: GlowGuideScreen(startFresh: true)),
     );
 
-    await tester.tap(find.text('English'));
-    await tester.pump();
     await tester.tap(find.text('Baby Skin Care'));
     await tester.pump();
-    await tester.tap(find.text("Something else — I'll type it"));
-    await tester.pump();
 
-    final field = tester.widget<TextField>(find.byType(TextField));
-    expect(field.controller?.text, isEmpty);
-    expect(Focus.of(tester.element(find.byType(TextField))).hasPrimaryFocus, isTrue);
+    expect(find.text('Tell me your baby’s concern, or share a clear product-label photo.'), findsOneWidget);
+    expect(find.byType(CircularProgressIndicator), findsNothing);
   });
 }

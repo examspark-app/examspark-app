@@ -8,11 +8,18 @@ CREATE TABLE IF NOT EXISTS glow_guide_research_documents (
   topic_type text NOT NULL CHECK (topic_type IN ('current', 'science_ingredient')),
   title text,
   source_url text,
+  source_domain text,
+  favicon_url text,
   content text NOT NULL,
   embedding vector(1536) NOT NULL,
   fetched_at timestamptz NOT NULL DEFAULT now(),
   expires_at timestamptz NOT NULL
 );
+
+ALTER TABLE glow_guide_research_documents
+  ADD COLUMN IF NOT EXISTS source_domain text;
+ALTER TABLE glow_guide_research_documents
+  ADD COLUMN IF NOT EXISTS favicon_url text;
 
 CREATE INDEX IF NOT EXISTS idx_glow_guide_research_expiry
   ON glow_guide_research_documents (expires_at);
@@ -23,11 +30,11 @@ CREATE OR REPLACE FUNCTION match_glow_guide_research(
   match_count int
 )
 RETURNS TABLE (
-  id uuid, title text, source_url text, content text,
+  id uuid, title text, source_url text, source_domain text, favicon_url text, content text,
   similarity float, expires_at timestamptz
 )
 LANGUAGE sql STABLE AS $$
-  SELECT d.id, d.title, d.source_url, d.content,
+  SELECT d.id, d.title, d.source_url, d.source_domain, d.favicon_url, d.content,
     1 - (d.embedding <=> query_embedding) AS similarity, d.expires_at
   FROM glow_guide_research_documents d
   WHERE d.expires_at > now()

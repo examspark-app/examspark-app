@@ -25,6 +25,8 @@ class AiModelSelector extends StatelessWidget {
     this.customModels,
     this.onPremiumTap,
     this.isPremiumUnlocked = false,
+    this.displayLabel,
+    this.menuTitle,
   });
 
   final String selectedModel;
@@ -38,6 +40,13 @@ class AiModelSelector extends StatelessWidget {
 
   /// When true, user has a paid plan — premium models work directly (no popup).
   final bool isPremiumUnlocked;
+
+  /// Consumer-friendly label shown in the compact input bar, such as
+  /// "Fast" or "Detailed". Technical model names remain inside the menu.
+  final String? displayLabel;
+
+  /// Optional heading for the technical model menu.
+  final String? menuTitle;
 
   // --- Default model list (Study AI Chat) ---
   static const _defaultModels = <AiModelOption>[
@@ -170,6 +179,19 @@ class AiModelSelector extends StatelessWidget {
         side: BorderSide(color: border, width: 0.8),
       ),
       itemBuilder: (context) => [
+        if (menuTitle != null)
+          PopupMenuItem<String>(
+            enabled: false,
+            height: 32,
+            child: Text(
+              menuTitle!,
+              style: TextStyle(
+                color: muted,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
         for (final model in currentModels)
           PopupMenuItem<String>(
             value: model.value,
@@ -248,7 +270,7 @@ class AiModelSelector extends StatelessWidget {
             Icon(_iconFor(selectedModel), color: muted, size: 14.5),
             const SizedBox(width: 5),
             Text(
-              labelFor(selectedModel),
+              displayLabel ?? labelFor(selectedModel),
               style: TextStyle(
                 color: fg,
                 fontSize: 13,

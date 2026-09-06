@@ -21,6 +21,14 @@ String _formatBulletText(String raw) {
     (match) => '\n\n•',
   );
 }
+
+Map<String, dynamic>? _productAnalysisFrom(dynamic raw) {
+  if (raw is! Map) return null;
+  final value = Map<String, dynamic>.from(raw);
+  final type = value['interaction_type']?.toString();
+  if (type != 'product_fit' && type != 'product_comparison') return null;
+  return value;
+}
 class GlowGuideScreen extends StatefulWidget {
   const GlowGuideScreen({super.key, this.startFresh = false, this.sessionId});
 
@@ -173,10 +181,10 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
 
   static const _categories = [
     ('Skin Care', Icons.face_retouching_natural_outlined),
-    ('Body Care', Icons.spa_outlined),
-    ('Baby Skin Care', Icons.child_friendly_outlined),
-    ('Cloth Guide', Icons.checkroom_outlined),
     ('Hair Care', Icons.content_cut_outlined),
+    ('Body Care', Icons.spa_outlined),
+    ('Cloth Guide', Icons.checkroom_outlined),
+    ('Baby Skin Care', Icons.child_friendly_outlined),
   ];
 
   static const _typeOwnOption = 'Something else — I\'ll type it';
@@ -313,31 +321,7 @@ static const _manualLanguageOption = 'Manual entry';
     try {
       final restored = await LectureService.instance.restoreGlowGuideSession(sessionId);
       if (!mounted) return;
-      final restoredMessages = (restored['messages'] as List? ?? const [])
-          .whereType<Map>()
-          .map((message) => _GlowMessage(
-                message['message']?.toString() ?? '',
-                message['role'] == 'user',
-                imageUrl: message['image_url']?.toString(),
-                chips: (message['question_options'] as List?)
-                        ?.map((c) => c.toString())
-                        .where((c) => c.trim().isNotEmpty)
-                        .toList() ??
-                    const [],
-                isConcernChips: ((message['question_options'] as List?)
-                        ?.isNotEmpty ??
-                    false),
-                hasCustomInput: true,
-                verdict: message['verdict']?.toString(),
-                confidenceNote: message['confidence_note']?.toString(),
-                detailedBreakdown: message['detailed_breakdown']?.toString(),
-                sources: (message['sources'] as List?)
-                        ?.whereType<Map>()
-                        .map((e) => Map<String, dynamic>.from(e))
-                        .toList() ??
-                    const [],
-              ))
-          .toList();
+      final restoredMessages = _messagesFromStored(restored['messages'] as List? ?? const []);
       setState(() {
         _restoring = false;
         _sessionId = sessionId;
@@ -391,24 +375,7 @@ final latest = sorted.first;
         await LectureService.instance.restoreGlowGuideSession(id);
     if (!mounted) return true;
     final messageList = restored['messages'] as List? ?? const [];
-    final restoredMessages = messageList
-    .whereType<Map>()
-    .map(
-      (message) => _GlowMessage(
-        message['message']?.toString() ?? '',
-        message['role'] == 'user',
-        imageUrl: message['image_url']?.toString(),
-        chips: (message['question_options'] as List?)
-                ?.map((c) => c.toString())
-                .where((c) => c.trim().isNotEmpty)
-                .toList() ??
-            const [],
-        verdict: message['verdict']?.toString(),
-        confidenceNote: message['confidence_note']?.toString(),
-        detailedBreakdown: message['detailed_breakdown']?.toString(),
-      ),
-    )
-    .toList();
+    final restoredMessages = _messagesFromStored(messageList);
     final computedTitle =
         (restored['title']?.toString().trim().isNotEmpty ?? false)
             ? restored['title'].toString()
@@ -429,6 +396,43 @@ final latest = sorted.first;
     });
     _scrollToBottom();
     return true;
+  }
+
+  List<_GlowMessage> _messagesFromStored(List stored) {
+    final rows = stored.whereType<Map>().toList(growable: false);
+    return List.generate(rows.length, (index) {
+      final message = rows[index];
+      final options = (message['question_options'] as List?)
+              ?.map((c) => c.toString())
+              .where((c) => c.trim().isNotEmpty)
+              .toList() ??
+          const <String>[];
+      final next = index + 1 < rows.length ? rows[index + 1] : null;
+      final selected = message['role'] == 'assistant' &&
+              options.isNotEmpty &&
+            next != null &&
+            next['role'] == 'user'
+          ? next['message']?.toString().trim()
+          : null;
+      return _GlowMessage(
+        message['message']?.toString() ?? '',
+        message['role'] == 'user',
+        imageUrl: message['image_url']?.toString(),
+        chips: selected?.isNotEmpty == true ? const [] : options,
+        isConcernChips: options.isNotEmpty,
+        hasCustomInput: true,
+        verdict: message['verdict']?.toString(),
+        confidenceNote: message['confidence_note']?.toString(),
+        detailedBreakdown: message['detailed_breakdown']?.toString(),
+        productAnalysis: _productAnalysisFrom(message['analysis_json']),
+        sources: (message['sources'] as List?)
+                ?.whereType<Map>()
+                .map((e) => Map<String, dynamic>.from(e))
+                .toList() ??
+            const [],
+        selectedOption: selected?.isNotEmpty == true ? selected : null,
+      );
+    });
   }
 
   String _deriveTitleFromMessages(List<_GlowMessage> list) {
@@ -583,11 +587,52 @@ String _canonicalFirstLanguage(String label) {
     setState(() {
       _category = key;
       _sessionTitle ??= display ?? key;
+      _messages.add(
+        _GlowMessage(
+          _starterQuestionForCategory(key),
+          false,
+          hasCustomInput: true,
+        ),
+      );
     });
-    // No hardcoded age/gender/fabric chips here anymore — the AI decides
-    // the first genuinely useful question for this category itself, per
-    // its own knowledge profile and judgment (FREE-FLOW rules).
-    _sendSilentTurn('Category: ${display ?? key} selected.');
+    // Do not send an invisible English "category selected" turn. The backend
+    // detects the user's language afresh on every real message.
+    _scrollToBottom();
+  }
+
+  String _starterQuestionForCategory(String category) {
+    final languageCode = Localizations.localeOf(context).languageCode.toLowerCase();
+    final hindi = languageCode == 'hi';
+    final bengali = languageCode == 'bn';
+    final prompts = <String, List<String>>{
+      'skin': [
+        'What would you like to check — your concern, routine, or a product?',
+        'Aap kis cheez ke baare mein check karna chahte hain — concern, routine, ya product?',
+        'আপনি কী যাচাই করতে চান — সমস্যা, রুটিন, নাকি কোনো পণ্য?',
+      ],
+      'body': [
+        'Which body-care concern or product would you like help with?',
+        'Aapko kis body-care concern ya product mein help chahiye?',
+        'কোন বডি-কেয়ার সমস্যা বা পণ্য নিয়ে সাহায্য চান?',
+      ],
+      'baby': [
+        'Tell me your baby’s concern, or share a clear product-label photo.',
+        'Baby ki problem bataiye, ya product label ki clear photo share kijiye.',
+        'শিশুর সমস্যাটি বলুন, অথবা পণ্যের লেবেলের পরিষ্কার ছবি দিন।',
+      ],
+      'cloth': [
+        'What would you like to check about this fabric or garment?',
+        'Is fabric ya garment ke baare mein kya check karna hai?',
+        'এই কাপড় বা পোশাক সম্পর্কে কী যাচাই করতে চান?',
+      ],
+      'hair': [
+        'What would you like help with — hair fall, greying, growth, or your routine?',
+        'Aapko kis cheez mein help chahiye — hair fall, greying, growth, ya routine?',
+        'কোন বিষয়ে সাহায্য চান — চুল পড়া, পাকা, বৃদ্ধি, নাকি রুটিন?',
+      ],
+    };
+    final values = prompts[category] ?? prompts['skin']!;
+    return bengali ? values[2] : hindi ? values[1] : values[0];
   }
 
   void _selectBabyAge(String value) {
@@ -647,6 +692,7 @@ String _canonicalFirstLanguage(String label) {
             verdict: result['verdict'] as String?,
             confidenceNote: result['confidence_note'] as String?,
             detailedBreakdown: result['detailed_breakdown'] as String?,
+            productAnalysis: _productAnalysisFrom(result['analysis']),
             modelName: result['model_name'] as String?,
           ),
         );
@@ -890,6 +936,7 @@ String _canonicalFirstLanguage(String label) {
             verdict: result['verdict'] as String?,
             confidenceNote: result['confidence_note'] as String?,
             detailedBreakdown: result['detailed_breakdown'] as String?,
+            productAnalysis: _productAnalysisFrom(result['analysis']),
             modelName: result['model_name'] as String?,
             sources: (result['sources'] as List?)
                     ?.whereType<Map>()
@@ -1010,7 +1057,7 @@ String _canonicalFirstLanguage(String label) {
     final isHinglish = language == 'HINGLISH';
     if (isHindi) {
       return {
-        'assessment': 'GlowGuide आकलन',
+        'assessment': 'Care AI आकलन',
         'breakdown': 'विस्तृत विवरण देखें',
         'hide_breakdown': 'विस्तृत विवरण छिपाएँ',
         'not_suitable': 'उपयुक्त नहीं',
@@ -1023,7 +1070,7 @@ String _canonicalFirstLanguage(String label) {
     }
     if (isBengali) {
       return {
-        'assessment': 'GlowGuide মূল্যায়ন',
+        'assessment': 'Care AI মূল্যায়ন',
         'breakdown': 'বিস্তারিত বিশ্লেষণ দেখুন',
         'hide_breakdown': 'বিস্তারিত বিশ্লেষণ লুকান',
         'not_suitable': 'উপযুক্ত নয়',
@@ -1036,7 +1083,7 @@ String _canonicalFirstLanguage(String label) {
     }
     if (isHinglish) {
       return {
-        'assessment': 'GlowGuide Assessment',
+        'assessment': 'Care AI Assessment',
         'breakdown': 'Detailed breakdown dekhein',
         'hide_breakdown': 'Detailed breakdown chhupayein',
         'not_suitable': 'Suitable nahi hai',
@@ -1048,7 +1095,7 @@ String _canonicalFirstLanguage(String label) {
       }[key] ?? key;
     }
     return {
-      'assessment': 'GLOWGUIDE ASSESSMENT',
+      'assessment': 'CARE AI ASSESSMENT',
       'breakdown': 'View full ingredient breakdown',
       'hide_breakdown': 'Hide detailed breakdown',
       'not_suitable': 'Not Suitable',
@@ -1102,7 +1149,7 @@ String _canonicalFirstLanguage(String label) {
   _text.text = 'Skip this question.';
   _send();
 }
-  void _freezeMessageChips(_GlowMessage target) {
+  void _freezeMessageChips(_GlowMessage target, String selectedOption) {
   final index = _messages.indexOf(target);
   if (index == -1) return;
   setState(() {
@@ -1115,8 +1162,10 @@ String _canonicalFirstLanguage(String label) {
       verdict: target.verdict,
       confidenceNote: target.confidenceNote,
       detailedBreakdown: target.detailedBreakdown,
+      productAnalysis: target.productAnalysis,
       sources: target.sources,
       modelName: target.modelName,
+      selectedOption: selectedOption,
     );
   });
 }
@@ -1280,7 +1329,11 @@ String _canonicalFirstLanguage(String label) {
                   _verdictBadge(message.verdict!),
                   const SizedBox(height: 14),
                 ],
-                                if (message.text.isNotEmpty)
+                if (message.productAnalysis != null) ...[
+                  _GlowProductDecisionCard(analysis: message.productAnalysis!),
+                  const SizedBox(height: 12),
+                ],
+                if (message.text.isNotEmpty && message.selectedOption == null)
                   message.isUser
                       ? Container(
                           padding: const EdgeInsets.symmetric(
@@ -1461,6 +1514,14 @@ String _canonicalFirstLanguage(String label) {
                   const SizedBox(height: 18),
                   _SourceChips(sources: message.sources),
                 ],
+                if (message.verdict != null) ...[
+                  const SizedBox(height: 16),
+                  _VerdictNextActions(
+                    onAskFollowUp: _focusTextInput,
+                    onCheckProduct: _choosePhoto,
+                    onNewConsultation: _newChat,
+                  ),
+                ],
                 if (message.categoryHeaderChips.isNotEmpty) ...[
                   const SizedBox(height: 12),
                   Wrap(
@@ -1499,7 +1560,19 @@ String _canonicalFirstLanguage(String label) {
                   ),
                 ],
 
-                if (_shouldShowCustomInput(message)) ...[
+                if ((message.selectedOption ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _SelectedAnswerReceipt(
+                    question: message.text,
+                    answer: message.selectedOption!,
+                    textColor: chipText,
+                    subText: subText,
+                    borderColor: chipBorder,
+                    background: chipBg,
+                  ),
+                ],
+
+                if (message.selectedOption == null && _shouldShowCustomInput(message)) ...[
                   const SizedBox(height: 12),
                   _CustomTopicInput(
                     hint: message.isLanguageChips
@@ -1550,7 +1623,7 @@ String _canonicalFirstLanguage(String label) {
                       ),
                     ),
                 ],
-                if (message.chips.isNotEmpty) ...[
+                if (message.selectedOption == null && message.chips.isNotEmpty) ...[
                   const SizedBox(height: 10),
                   _ClaudeStyleOptionCard(
                     options: message.chips,
@@ -1565,7 +1638,7 @@ String _canonicalFirstLanguage(String label) {
                     },
                     onSelect: (chip) {
                       if (_sending || _sessionComplete) return;
-                      _freezeMessageChips(message);  
+                      _freezeMessageChips(message, chip);
                       if (message.isLanguageChips) {
                         _selectLanguage(chip);
                       } else if (message.isCategoryChips) {
@@ -1720,6 +1793,9 @@ String _canonicalFirstLanguage(String label) {
                     AiModelSelector(
                       selectedModel: _selectedModel,
                       customModels: AiModelSelector.glowGuideModels,
+                      displayLabel:
+                          _selectedModel == 'gemini' ? 'Fast' : 'Detailed',
+                      menuTitle: 'Advanced model',
                       isPremiumUnlocked: PlanTierGating.isPremiumAiUnlocked(_planTier),
                       onSelected: (value) {
                         setState(() => _selectedModel = value);
@@ -1747,7 +1823,10 @@ String _canonicalFirstLanguage(String label) {
                                 ),
                                 const SizedBox(height: 20),
                                 ElevatedButton(
-                                  onPressed: () => Navigator.pop(ctx),
+                                  onPressed: () {
+                                    Navigator.pop(ctx);
+                                    Navigator.of(context).pushNamed('/subscription');
+                                  },
                                   style: ElevatedButton.styleFrom(backgroundColor: Colors.amber),
                                   child: const Text('Upgrade Now', style: TextStyle(color: Colors.white)),
                                 ),
@@ -1810,7 +1889,7 @@ String _canonicalFirstLanguage(String label) {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                _sessionTitle ?? 'GlowGuide ✨',
+                _sessionTitle ?? 'Care AI',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -1819,6 +1898,15 @@ String _canonicalFirstLanguage(String label) {
                   fontWeight: FontWeight.w700,
                 ),
               ),
+              if (_sessionTitle == null)
+                Text(
+                  'Skin, Hair, Body & Baby Care',
+                  style: TextStyle(
+                    color: subText,
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
               if ((_category ?? '').trim().isNotEmpty &&
                   (_sessionTitle ?? '').trim().isNotEmpty &&
                   _sessionTitle != _category)
@@ -1836,15 +1924,15 @@ String _canonicalFirstLanguage(String label) {
           ),
           iconTheme: IconThemeData(color: subText),
           actions: [
-            IconButton(
-              tooltip: 'New chat',
+            _RoundHeaderAction(
+              tooltip: 'New Care AI chat',
+              icon: Icons.add_comment_rounded,
               onPressed: _newChat,
-              icon: Icon(Icons.add_comment_outlined, color: subText),
             ),
-            IconButton(
-              tooltip: 'Chat history',
+            _RoundHeaderAction(
+              tooltip: 'Care AI history',
+              icon: Icons.shopping_bag_rounded,
               onPressed: _sending || _restoring ? null : _openHistory,
-              icon: Icon(Icons.history_outlined, color: subText),
             ),
           ],
           bottom: PreferredSize(
@@ -2183,8 +2271,10 @@ class _GlowMessage {
     this.verdict,
     this.confidenceNote,
     this.detailedBreakdown,
+    this.productAnalysis,
     this.sources = const [],
     this.modelName,
+    this.selectedOption,
   });
   final String text;
   final bool isUser;
@@ -2203,8 +2293,255 @@ class _GlowMessage {
   final String? verdict;
   final String? confidenceNote;
   final String? detailedBreakdown;
+  final Map<String, dynamic>? productAnalysis;
   final List<Map<String, dynamic>> sources;
   final String? modelName;
+  final String? selectedOption;
+}
+
+class _GlowProductDecisionCard extends StatelessWidget {
+  const _GlowProductDecisionCard({required this.analysis});
+
+  final Map<String, dynamic> analysis;
+
+  List<String> _items(dynamic raw) => (raw as List? ?? const [])
+      .map((item) => item.toString().trim())
+      .where((item) => item.isNotEmpty)
+      .take(3)
+      .toList();
+
+  @override
+  Widget build(BuildContext context) {
+    final comparison = analysis['comparison'] as Map?;
+    final assessments = (analysis['product_assessments'] as List? ?? const [])
+        .whereType<Map>()
+        .toList();
+    final primary = assessments.isNotEmpty ? assessments.first : null;
+    final title = comparison != null ? 'Product comparison' : 'Product fit';
+    final bestMatch = comparison?['best_match']?.toString().trim() ??
+        primary?['product_name']?.toString().trim() ?? '';
+    final why = _items(comparison?['why'] ?? primary?['why']);
+    final avoid = _items(comparison?['what_to_avoid'] ?? primary?['what_to_avoid']);
+    final scheme = Theme.of(context).colorScheme;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: scheme.primary.withOpacity(0.07),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: scheme.primary.withOpacity(0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(comparison != null ? Icons.compare_arrows_rounded : Icons.verified_rounded,
+                  size: 18, color: scheme.primary),
+              const SizedBox(width: 7),
+              Text(title, style: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800)),
+            ],
+          ),
+          if (bestMatch.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text('Best match: $bestMatch', style: const TextStyle(fontWeight: FontWeight.w800)),
+          ],
+          if (comparison != null) ...[
+            const SizedBox(height: 8),
+            for (final item in assessments)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Text(
+                  '${item['product_name'] ?? ''} · ${_verdictLabel(item['verdict'])}',
+                ),
+              ),
+          ],
+          if (why.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            const Text('Why', style: TextStyle(fontWeight: FontWeight.w800)),
+            for (final item in why) Text('• $item'),
+          ],
+          if (avoid.isNotEmpty) ...[
+            const SizedBox(height: 9),
+            const Text('What to avoid', style: TextStyle(fontWeight: FontWeight.w800)),
+            for (final item in avoid) Text('• $item'),
+          ],
+        ],
+      ),
+    );
+  }
+
+  String _verdictLabel(dynamic raw) {
+    switch (raw?.toString()) {
+      case 'good_fit':
+        return 'Good fit';
+      case 'careful':
+        return 'Use with caution';
+      case 'harmful':
+        return 'Not suitable';
+      default:
+        return '';
+    }
+  }
+}
+
+class _SelectedAnswerReceipt extends StatelessWidget {
+  const _SelectedAnswerReceipt({
+    required this.question,
+    required this.answer,
+    required this.textColor,
+    required this.subText,
+    required this.borderColor,
+    required this.background,
+  });
+
+  final String question;
+  final String answer;
+  final Color textColor;
+  final Color subText;
+  final Color borderColor;
+  final Color background;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 11),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  question,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: subText,
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  answer,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  'Selected',
+                  style: TextStyle(
+                    color: subText,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 10),
+          Container(
+            width: 25,
+            height: 25,
+            decoration: BoxDecoration(
+              color: AppTheme.glowGuidePink.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.check_rounded,
+              size: 16,
+              color: AppTheme.glowGuidePink,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _VerdictNextActions extends StatelessWidget {
+  const _VerdictNextActions({
+    required this.onAskFollowUp,
+    required this.onCheckProduct,
+    required this.onNewConsultation,
+  });
+
+  final VoidCallback onAskFollowUp;
+  final VoidCallback onCheckProduct;
+  final VoidCallback onNewConsultation;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        OutlinedButton.icon(
+          onPressed: onAskFollowUp,
+          icon: const Icon(Icons.chat_bubble_outline_rounded, size: 16),
+          label: const Text('Ask follow-up'),
+        ),
+        OutlinedButton.icon(
+          onPressed: onCheckProduct,
+          icon: const Icon(Icons.add_a_photo_outlined, size: 16),
+          label: const Text('Check product'),
+        ),
+        TextButton.icon(
+          onPressed: onNewConsultation,
+          icon: const Icon(Icons.add_comment_outlined, size: 16),
+          label: const Text('New consultation'),
+        ),
+      ],
+    );
+  }
+}
+
+class _RoundHeaderAction extends StatelessWidget {
+  const _RoundHeaderAction({
+    required this.tooltip,
+    required this.icon,
+    required this.onPressed,
+  });
+
+  final String tooltip;
+  final IconData icon;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 3),
+      child: IconButton(
+        tooltip: tooltip,
+        onPressed: onPressed,
+        icon: Icon(icon, size: 19),
+        style: IconButton.styleFrom(
+          backgroundColor: AppTheme.glowGuidePink.withValues(
+            alpha: isDark ? 0.16 : 0.10,
+          ),
+          foregroundColor: AppTheme.glowGuidePink,
+          disabledForegroundColor: AppTheme.glowGuidePink.withValues(alpha: 0.35),
+          fixedSize: const Size(38, 38),
+          shape: const CircleBorder(),
+        ),
+      ),
+    );
+  }
 }
 
 class _DetailedBreakdownExpander extends StatefulWidget {
@@ -2226,7 +2563,7 @@ class _DetailedBreakdownExpander extends StatefulWidget {
 class _DetailedBreakdownExpanderState
     extends State<_DetailedBreakdownExpander>
     with SingleTickerProviderStateMixin {
-  bool _expanded = true;
+  bool _expanded = false;
 
   @override
   Widget build(BuildContext context) {
@@ -2681,14 +3018,22 @@ class _SourceChips extends StatelessWidget {
 
     final seen = <String>{};
     final chips = <Widget>[];
+    final hasLiveResearch = sources.any(
+      (source) => source['source_type']?.toString() == 'web',
+    );
     for (final source in sources) {
       final url = source['url']?.toString();
-      final domain = _domainFrom(url);
+      final domain = source['domain']?.toString().trim().isNotEmpty == true
+          ? source['domain']!.toString()
+          : _domainFrom(url);
       if (domain == null || !seen.add(domain)) continue;
       final baseUrl = AppConfig.resolvedApiBaseUrl.trim();
       final proxyFavicon = baseUrl.isNotEmpty
           ? '$baseUrl/api/v1/glow-guide/favicon?domain=$domain'
           : 'https://www.google.com/s2/favicons?domain=$domain&sz=64';
+      final favicon = source['favicon']?.toString().trim().isNotEmpty == true
+          ? source['favicon']!.toString()
+          : proxyFavicon;
 
       chips.add(
         InkWell(
@@ -2709,7 +3054,7 @@ class _SourceChips extends StatelessWidget {
                 ClipRRect(
                   borderRadius: BorderRadius.circular(4),
                   child: Image.network(
-                    proxyFavicon,
+                    favicon,
                     width: 15,
                     height: 15,
                     fit: BoxFit.contain,
@@ -2742,7 +3087,32 @@ class _SourceChips extends StatelessWidget {
       );
     }
     if (chips.isEmpty) return const SizedBox.shrink();
-    return Wrap(spacing: 8, runSpacing: 8, children: chips);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.verified_outlined,
+              size: 15,
+              color: AppTheme.glowGuidePink,
+            ),
+            const SizedBox(width: 6),
+            Text(
+              hasLiveResearch ? 'Research sources' : 'Saved research sources',
+              style: TextStyle(
+                color: textColor,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        Wrap(spacing: 8, runSpacing: 8, children: chips),
+      ],
+    );
   }
 }
 class _WebSearchBubble extends StatefulWidget {

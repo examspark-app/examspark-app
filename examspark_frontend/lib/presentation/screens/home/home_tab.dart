@@ -1736,16 +1736,16 @@ trailing: const [],
         _FeatureLauncherCard(
           icon: Icons.eco_rounded,
           iconColor: const Color(0xFFD85A30),
-          title: 'GlowGuide Care AI',
-          tagline: 'Care. Simply. Better.',
+          title: 'Care AI',
+          tagline: 'Skin, Hair, Body & Baby Care',
           onTap: () => Navigator.pushNamed(context, '/glow-guide'),
         ),
         const SizedBox(height: 6),
         _FeatureLauncherCard(
           icon: Icons.record_voice_over_rounded,
           iconColor: const Color(0xFF12A594),
-          title: 'English Practice',
-          tagline: 'Speak. Practice. Grow.',
+          title: 'Speak AI',
+          tagline: 'Practice speaking any language',
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
@@ -3320,28 +3320,17 @@ class _FeatureLauncherCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: AppTheme.getCardBackground(context),
-      borderRadius: BorderRadius.circular(12),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(12),
-        onTap: onTap,
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppTheme.getCardBorder(context)),
-          ),
-          child: Row(
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+        child: Row(
             children: [
-              Container(
-                width: 30,
-                height: 30,
-                decoration: BoxDecoration(
-                  color: iconColor.withValues(alpha: 0.14),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Icon(icon, color: iconColor, size: 16),
+              Icon(
+                icon,
+                color: iconColor,
+                size: 24,
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -3367,12 +3356,11 @@ class _FeatureLauncherCard extends StatelessWidget {
                 ),
               ),
               Icon(
-                Icons.chevron_right_rounded,
+                Icons.arrow_forward_rounded,
                 color: AppTheme.getSecondaryText(context),
-                size: 16,
+                size: 18,
               ),
             ],
-          ),
         ),
       ),
     );

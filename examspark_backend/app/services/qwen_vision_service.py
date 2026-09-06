@@ -52,8 +52,26 @@ _VISION_SYSTEM_PROMPT = (
     '- "shortSummary": 2-3 sentences: what the image is and its main content\n'
     '- "keyPoints": array of short bullet strings (key facts, steps, or findings)\n'
     '- "importantTerms": array of {"term","definition"} for any technical terms\n'
+    '- "suggestedQuestions": array of 2-3 short, natural follow-up questions related to the image/topic; do not repeat the current question; [] if not useful\n'
+    '- "practiceQuestion": one short new practice question based on the same concept, without giving the answer; null if not appropriate\n'
     '- "visualPayload": optional diagram/chart object matching the 10 Visual Auto-Trigger Rules; omit or use {} if not needed\n'
     + STUDY_CONTENT_LANGUAGE_RULE
+    + "\n\nRESPONSE PRIORITY (mandatory, in this order):\n"
+    "1. FIRST check: does this image contain a clear question, problem, "
+    "exercise, or fill-in/matching task? If YES → your job is to ANSWER/SOLVE "
+    "it directly and completely, THEN briefly explain the reasoning. Do not "
+    "just describe the question without solving it.\n"
+    "2. If there is NO question/problem (pure notes, a diagram, a concept "
+    "page, a chart) → your job is to EXPLAIN it clearly and usefully, the "
+    "way a sharp tutor would — not just restate what's visible.\n"
+    "3. Never do the opposite (explaining a solvable question instead of "
+    "answering it, or trying to 'answer' a pure diagram that has no "
+    "question).\n\n"
+    "TONE for cleanNotes/shortSummary/keyPoints: sound like a sharp, "
+    "confident tutor talking directly to the student — not a dry OCR report. "
+    "Go straight to the answer/explanation; never open with filler like "
+    "'This image shows...' or 'It depends on...'. Match the direct, "
+    "confident, exam-focused style a top student-mentor would use.\n"
     + "\nCRITICAL RULES:\n"
     "1. Math Formulas: Always write mathematical formulas, variables, and equations in clean standard LaTeX ($...$ or $$...$$).\n"
     "2. Student Intent Understanding: If the image shows handwritten calculations, classify as 'diagnose_error' and analyze the student's work step-by-step.\n"
@@ -161,6 +179,17 @@ def _normalize_notes(parsed: dict) -> dict:
         "keyPoints": parsed.get("keyPoints", []) or [],
         "shortSummary": parsed.get("shortSummary", "") or "",
         "importantTerms": parsed.get("importantTerms", []) or [],
+        "suggestedQuestions": (
+            parsed.get("suggestedQuestions")
+            if isinstance(parsed.get("suggestedQuestions"), list)
+            else []
+        ),
+        "practiceQuestion": (
+            parsed.get("practiceQuestion")
+            if isinstance(parsed.get("practiceQuestion"), str)
+            and parsed.get("practiceQuestion").strip()
+            else None
+        ),
     }
     if visual is not None:
         result["visualPayload"] = visual.model_dump(by_alias=False)

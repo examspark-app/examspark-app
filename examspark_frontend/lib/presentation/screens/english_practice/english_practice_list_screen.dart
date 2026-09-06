@@ -57,7 +57,7 @@ class _EnglishPracticeListScreenState extends State<EnglishPracticeListScreen> {
     final currentTitle =
         (session['title'] as String?)?.trim().isNotEmpty == true
             ? session['title'] as String
-            : 'English Practice';
+            : 'Speak AI';
 
     final action = await showModalBottomSheet<String>(
       context: context,
@@ -213,7 +213,16 @@ class _EnglishPracticeListScreenState extends State<EnglishPracticeListScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('English Practice'),
+        title: const Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Speak AI'),
+            Text(
+              'Practice speaking any language',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+            ),
+          ],
+        ),
         actions: [
           IconButton(
             icon: const Icon(Icons.add_comment_outlined),
@@ -274,7 +283,7 @@ class _EnglishPracticeListScreenState extends State<EnglishPracticeListScreen> {
                               (s['title'] as String?)?.trim().isNotEmpty ==
                                       true
                                   ? s['title'] as String
-                                  : 'English Practice',
+                                  : 'Speak AI',
                             ),
                           ),
                           if (pinned)

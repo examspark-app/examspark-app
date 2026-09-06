@@ -311,7 +311,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
       final rawGreeting = '${r['greeting'] ?? ''}'.trim();
       final parsed = _extractSuggestionsFromText(
         rawGreeting.isEmpty
-            ? 'Welcome! Let’s begin with a small English practice step.'
+            ? 'Welcome! Let’s begin with a small Speak AI practice step.'
             : rawGreeting,
       );
       _messages
@@ -678,9 +678,9 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
         await showDialog<void>(
           context: context,
           builder: (dialogContext) => AlertDialog(
-            title: const Text('Credits needed for Roleplay'),
+            title: const Text('Credits needed for Speak AI'),
             content: Text(
-              'You need at least ${CreditCosts.roleplayMinimumCredits} credits to start Roleplay. You currently have $balance credits.',
+              'You need at least ${CreditCosts.roleplayMinimumCredits} credits to start Speak AI. You currently have $balance credits.',
             ),
             actions: [
               TextButton(
@@ -970,13 +970,26 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             ),
           ),
           const SizedBox(width: 4),
-          Text(
-            'English Practice',
-            style: TextStyle(
-              color: primaryText,
-              fontSize: 17,
-              fontWeight: FontWeight.w700,
-            ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Speak AI',
+                style: TextStyle(
+                  color: primaryText,
+                  fontSize: 17,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              Text(
+                'Practice speaking any language',
+                style: TextStyle(
+                  color: subText,
+                  fontSize: 10.5,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
           ),
                     const Spacer(),
           FilledButton(
@@ -992,7 +1005,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: const Text(
-              'Roleplay',
+              'Speak AI',
               style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
             ),
           ),

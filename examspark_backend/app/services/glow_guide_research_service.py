@@ -7,6 +7,7 @@ import logging
 import re
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from urllib.parse import urlparse
 
 from app.services.embedding_service import EmbeddingError, embed_query, embed_texts
 from app.services.supabase_admin import get_supabase_admin
@@ -67,30 +68,58 @@ def _normalized_query(query: str) -> str:
     return re.sub(r"\s+", " ", (query or "").strip().lower())[:500]
 
 
-def _domains_for_query(query: str) -> list[str]:
-    # Product verification needs cosmetic ingredient databases and brand sites, NOT PubMed exclusively
+_CATEGORY_RESEARCH_DOMAINS = {
+    "skin": ["aad.org", "dermnetnz.org", "cir-safety.org", "fda.gov", "pubmed.ncbi.nlm.nih.gov"],
+    "body": ["aad.org", "dermnetnz.org", "cir-safety.org", "fda.gov", "pubmed.ncbi.nlm.nih.gov"],
+    "baby": ["healthychildren.org", "aad.org", "cir-safety.org", "fda.gov", "pubmed.ncbi.nlm.nih.gov"],
+    "cloth": ["oeko-tex.com", "ftc.gov", "cpsc.gov", "pubmed.ncbi.nlm.nih.gov"],
+    "hair": ["aad.org", "dermnetnz.org", "cir-safety.org", "fda.gov", "pubmed.ncbi.nlm.nih.gov"],
+}
+
+_PRODUCT_BRAND_DOMAINS = {
+    "cerave": "cerave.com", "cetaphil": "cetaphil.com", "minimalist": "beminimalist.co",
+    "ordinary": "theordinary.com", "neutrogena": "neutrogena.com", "sebamed": "sebamed.com",
+    "bioderma": "bioderma.com", "la roche": "laroche-posay.us", "aveeno": "aveeno.com",
+    "eucerin": "eucerinus.com", "vanicream": "vanicream.com", "nivea": "nivea.com",
+    "dove": "dove.com", "garnier": "garnierusa.com", "olay": "olay.com",
+}
+
+
+def _matched_official_product_domains(query: str) -> list[str]:
+    lowered = (query or "").lower()
+    return [domain for brand, domain in _PRODUCT_BRAND_DOMAINS.items() if brand in lowered]
+
+
+def _domain_from_url(url: str | None) -> str | None:
+    try:
+        host = urlparse(url or "").netloc.lower()
+        return host[4:] if host.startswith("www.") else host or None
+    except ValueError:
+        return None
+
+
+def _domains_for_query(query: str, category: str | None = None) -> list[str]:
+    category_domains = _CATEGORY_RESEARCH_DOMAINS.get(category or "", [])
+    # Product verification prioritizes the product's official site alongside
+    # independent ingredient/safety references. Avoid unreviewed blog sources.
     if is_product_query(query):
-        return [
+        return list(dict.fromkeys([
+            *_matched_official_product_domains(query),
             "incidecoder.com",
             "skincarisma.com",
-            "ewg.org",
             "cir-safety.org",
-            "paulaschoice.com",
-            "cerave.com",
-            "cetaphil.com",
-            "beminimalist.co",
-            "theordinary.com",
-        ]
+            "fda.gov",
+            *category_domains,
+        ]))
 
     # Trusted scientific / regulatory sources ONLY for clinical queries
-    _TRUSTED_DOMAINS = [
+    trusted_domains = [
         "pubmed.ncbi.nlm.nih.gov",  # Medical literature
         "nih.gov",                   # National Institutes of Health
         "fda.gov",                   # US FDA (safety, recalls)
         "who.int",                   # World Health Organization
         "dermnetnz.org",             # DermNet NZ (dermatology reference)
         "cir-safety.org",            # Cosmetic Ingredient Review
-        "ewg.org",                   # Environmental Working Group (Skin Deep)
         "ncbi.nlm.nih.gov",          # National Library of Medicine
         "mayoclinic.org",            # Mayo Clinic (consumer health)
         "aad.org",                   # American Academy of Dermatology
@@ -99,7 +128,7 @@ def _domains_for_query(query: str) -> list[str]:
     ]
     if _CURRENT_TERMS.search(query):
         return ["fda.gov", "nih.gov", "pubmed.ncbi.nlm.nih.gov", "who.int", "aad.org"]
-    return _TRUSTED_DOMAINS
+    return list(dict.fromkeys([*category_domains, *trusted_domains]))
 
 
 def _cache_is_fresh(row: dict[str, Any]) -> bool:
@@ -134,7 +163,7 @@ def _run_upsert_sync(rows: list[dict[str, Any]]) -> Any:
     ).execute()
 
 
-async def search_cached_research(query: str) -> dict[str, Any] | None:
+async def search_cached_research(query: str, category: str | None = None) -> dict[str, Any] | None:
     """Return the best fresh research hit, or None without external calls."""
     if not is_targeted_research_query(query):
         return None
@@ -155,6 +184,8 @@ async def search_cached_research(query: str) -> dict[str, Any] | None:
                     "similarity": r.get("similarity"),
                     "title": r.get("title"),
                     "url": r.get("source_url"),
+                    "domain": r.get("source_domain") or _domain_from_url(r.get("source_url")),
+                    "favicon": r.get("favicon_url"),
                     "excerpt": str(r.get("content") or "")[:400],
                 }
                 for r in rows
@@ -195,6 +226,8 @@ async def save_tavily_research(query: str, result: TavilySearchResult) -> None:
             "topic_type": "current" if _CURRENT_TERMS.search(query) else "science_ingredient",
             "title": source.get("title") or "GlowGuide research",
             "source_url": url,
+            "source_domain": source.get("domain") or _domain_from_url(url),
+            "favicon_url": source.get("favicon"),
             "content": content[:6000],
             "fetched_at": datetime.now(timezone.utc).isoformat(),
             "expires_at": expires.isoformat(),
@@ -209,7 +242,7 @@ async def save_tavily_research(query: str, result: TavilySearchResult) -> None:
     await asyncio.to_thread(_run_upsert_sync, rows)
 
 
-async def tavily_research(query: str) -> dict[str, Any] | None:
+async def tavily_research(query: str, category: str | None = None) -> dict[str, Any] | None:
     if not is_targeted_research_query(query):
         return None
 
@@ -223,7 +256,7 @@ async def tavily_research(query: str) -> dict[str, Any] | None:
         feature="glowguide_research",
         search_depth="basic",
         max_results=3,
-        include_domains=_domains_for_query(query),
+        include_domains=_domains_for_query(query, category),
     )
     if not result.usable:
         return None
