@@ -147,7 +147,7 @@ class EnglishPracticeDrawer extends StatelessWidget {
                 ),
               ),
               title: Text(
-                'Care AI',
+                'Beauty Care AI',
                 style: TextStyle(color: primaryText, fontWeight: FontWeight.w600),
               ),
               subtitle: Text(

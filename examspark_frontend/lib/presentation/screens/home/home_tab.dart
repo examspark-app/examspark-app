@@ -1738,7 +1738,7 @@ trailing: const [],
         _FeatureLauncherCard(
           icon: Icons.eco_rounded,
           iconColor: const Color(0xFFD85A30),
-          title: 'Care AI',
+          title: 'Beauty Care AI',
           tagline: 'Skin, Hair, Body & Baby Care',
           onTap: () => Navigator.pushNamed(context, '/glow-guide'),
         ),
@@ -2059,6 +2059,38 @@ trailing: const [],
                       crossAxisAlignment: CrossAxisAlignment.end,
                       children: [
                         if (bubble.imageBytes != null &&
+                            bubble.imageBytes!.isNotEmpty &&
+                            bubble.text.trim().isNotEmpty)
+                          Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              GestureDetector(
+                                onTap: () => _showAttachedImage(
+                                  bubble.imageBytes!,
+                                  bubble.imageFilename,
+                                ),
+                                child: ClipRRect(
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Image.memory(
+                                    bubble.imageBytes!,
+                                    width: 92,
+                                    height: 76,
+                                    fit: BoxFit.cover,
+                                    gaplessPlayback: true,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: _CollapsibleUserText(
+                                  text: bubble.text,
+                                  textColor: _userBubbleTextColor(context),
+                                  bubbleColor: _userBubbleColor(context),
+                                ),
+                              ),
+                            ],
+                          )
+                        else if (bubble.imageBytes != null &&
                             bubble.imageBytes!.isNotEmpty) ...[
                           GestureDetector(
                             onTap: () => _showAttachedImage(
@@ -2080,8 +2112,8 @@ trailing: const [],
                                 borderRadius: BorderRadius.circular(18),
                                 child: ConstrainedBox(
                                   constraints: const BoxConstraints(
-                                      maxWidth: 220,
-                                      maxHeight: 176,
+                                      maxWidth: 156,
+                                      maxHeight: 118,
                                   ),
                                   child: Image.memory(
                                     bubble.imageBytes!,
@@ -2112,7 +2144,9 @@ trailing: const [],
                           ),
                           const SizedBox(height: 8),
                         ],
-                        if (bubble.text.trim().isNotEmpty)
+                        if (bubble.text.trim().isNotEmpty &&
+                          (bubble.imageBytes == null ||
+                            bubble.imageBytes!.isEmpty))
                           _CollapsibleUserText(
                             text: bubble.text,
                             textColor: _userBubbleTextColor(context),

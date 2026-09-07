@@ -30,10 +30,16 @@ Map<String, dynamic>? _productAnalysisFrom(dynamic raw) {
   return value;
 }
 class GlowGuideScreen extends StatefulWidget {
-  const GlowGuideScreen({super.key, this.startFresh = false, this.sessionId});
+  const GlowGuideScreen({
+    super.key,
+    this.startFresh = false,
+    this.sessionId,
+    this.initialLanguage,
+  });
 
   final bool startFresh;
   final String? sessionId;
+  final String? initialLanguage;
 
   @override
   State<GlowGuideScreen> createState() => _GlowGuideScreenState();
@@ -273,6 +279,10 @@ static const _manualLanguageOption = 'Manual entry';
   @override
   void initState() {
     super.initState();
+    final initialLanguage = widget.initialLanguage?.trim();
+    if (initialLanguage != null && initialLanguage.isNotEmpty) {
+      _preferredLanguage = initialLanguage.toUpperCase();
+    }
     _analyticsSessionKey =
         FeatureAnalyticsTracker.instance.startFeature('glowguide');
     _loadPlanTier();
@@ -444,7 +454,7 @@ final latest = sorted.first;
       }
     }
     final raw = firstUserMessage?.text.trim() ?? '';
-    if (raw.isEmpty) return 'Skin Care AI';
+    if (raw.isEmpty) return 'Beauty Care AI';
     if (raw.length <= 56) return raw;
     return '${raw.substring(0, 53)}…';
   }
@@ -457,7 +467,9 @@ final latest = sorted.first;
     setState(() {
       _customInputFlowOpen = false;
       _hasLoadedPreferredLanguage = true;
-      _preferredLanguage = 'MATCH_QUESTION';
+      _preferredLanguage = widget.initialLanguage?.trim().isNotEmpty == true
+          ? widget.initialLanguage!.trim().toUpperCase()
+          : 'MATCH_QUESTION';
     });
     _showCategoryChoices();
   }
@@ -862,7 +874,7 @@ String _canonicalFirstLanguage(String label) {
 
   String _niceTitleFromConcern(String text) {
     final t = text.trim();
-    if (t.isEmpty) return 'Skin Care AI';
+    if (t.isEmpty) return 'Beauty Care AI';
     if (t.length <= 56) return t;
     return '${t.substring(0, 53)}…';
   }
@@ -874,6 +886,17 @@ String _canonicalFirstLanguage(String label) {
     _sending = true; // synchronous lock — closes the gap before setState fires
     final image = _attachment;
     final imageName = _attachmentName;
+    if (text.isNotEmpty) {
+      final detectedLanguage = _languageForUserText(text);
+      final isShortChipLikeReply = text.split(RegExp(r'\s+')).length <= 4;
+      final hasExplicitLanguage =
+          _preferredLanguage.trim().isNotEmpty &&
+          _preferredLanguage.trim().toUpperCase() != 'MATCH_QUESTION';
+      if (detectedLanguage != 'MATCH_QUESTION' &&
+          (!hasExplicitLanguage || !isShortChipLikeReply)) {
+        _preferredLanguage = detectedLanguage;
+      }
+    }
     final languageForRequest = _preferredLanguage;
     final submissionKey =
         '${_sessionId ?? 'new'}:${image != null ? 'photo' : 'text'}:${text.isEmpty ? 'photo' : text}:${DateTime.now().microsecondsSinceEpoch}';
@@ -973,9 +996,13 @@ String _canonicalFirstLanguage(String label) {
 
   void _newChat() {
   if (_sending) return;
+  final languageToCarry = _activeDisplayLanguage;
   Navigator.of(context).pushReplacement(
     MaterialPageRoute(
-      builder: (_) => const GlowGuideScreen(startFresh: true),
+      builder: (_) => GlowGuideScreen(
+        startFresh: true,
+        initialLanguage: languageToCarry,
+      ),
     ),
   );
 }
@@ -1031,7 +1058,7 @@ String _canonicalFirstLanguage(String label) {
       return nice;
     }
     if (category != null && category.isNotEmpty) return category;
-    return 'Skin Care AI';
+    return 'Beauty Care AI';
   }
 
   static const _reverseCategoryMap = {
@@ -1044,7 +1071,7 @@ String _canonicalFirstLanguage(String label) {
 
   String _prettyCategory(String raw) {
     final r = raw.trim();
-    if (r.isEmpty) return 'Skin Care AI';
+    if (r.isEmpty) return 'Beauty Care AI';
     if (_reverseCategoryMap.containsKey(r)) return _reverseCategoryMap[r]!;
     // fallback: sentence case first letter
     return '${r[0].toUpperCase()}${r.substring(1)}';
@@ -1057,7 +1084,7 @@ String _canonicalFirstLanguage(String label) {
     final isHinglish = language == 'HINGLISH';
     if (isHindi) {
       return {
-        'assessment': 'Care AI आकलन',
+        'assessment': 'Beauty Care AI आकलन',
         'breakdown': 'विस्तृत विवरण देखें',
         'hide_breakdown': 'विस्तृत विवरण छिपाएँ',
         'breakdown_subtitle': 'मुख्य सामग्री, कारण और उपयोग की बातें',
@@ -1072,7 +1099,7 @@ String _canonicalFirstLanguage(String label) {
     }
     if (isBengali) {
       return {
-        'assessment': 'Care AI মূল্যায়ন',
+        'assessment': 'Beauty Care AI মূল্যায়ন',
         'breakdown': 'বিস্তারিত বিশ্লেষণ দেখুন',
         'hide_breakdown': 'বিস্তারিত বিশ্লেষণ লুকান',
         'breakdown_subtitle': 'মূল উপাদান, কারণ এবং ব্যবহারের বিষয়গুলি',
@@ -1087,7 +1114,7 @@ String _canonicalFirstLanguage(String label) {
     }
     if (isHinglish) {
       return {
-        'assessment': 'Care AI Assessment',
+        'assessment': 'Beauty Care AI Assessment',
         'breakdown': 'Detailed breakdown dekhein',
         'hide_breakdown': 'Detailed breakdown chhupayein',
         'breakdown_subtitle': 'Main ingredients, reason aur use karne ki baatein',
@@ -1101,7 +1128,7 @@ String _canonicalFirstLanguage(String label) {
       }[key] ?? key;
     }
     return {
-      'assessment': 'CARE AI ASSESSMENT',
+      'assessment': 'BEAUTY CARE AI ASSESSMENT',
       'breakdown': 'View full ingredient breakdown',
       'hide_breakdown': 'Hide detailed breakdown',
       'breakdown_subtitle': 'Key ingredients, reasoning and practical use notes',
@@ -1126,14 +1153,18 @@ String _canonicalFirstLanguage(String label) {
         break;
       }
     }
-    if (RegExp(r'[\u0980-\u09FF]').hasMatch(latestUserText)) {
+    return _languageForUserText(latestUserText);
+  }
+
+  String _languageForUserText(String text) {
+    if (RegExp(r'[\u0980-\u09FF]').hasMatch(text)) {
       return 'BENGALI';
     }
-    if (RegExp(r'[\u0900-\u097F]').hasMatch(latestUserText)) {
+    if (RegExp(r'[\u0900-\u097F]').hasMatch(text)) {
       return 'HINDI';
     }
 
-    final lower = latestUserText.toLowerCase();
+    final lower = text.toLowerCase();
     final hinglishWords = RegExp(
       r'\b(meri|mujhe|mere|mujh|hai|hain|nahi|nahin|kya|kaise|karu|karo|chahiye|acha|accha|problem|ke|ki|ka|main|mein|yaar|batao|dikh raha)\b',
     );
@@ -1677,46 +1708,49 @@ String _canonicalFirstLanguage(String label) {
               children: [
                 if (hasPhoto)
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(4, 4, 4, 2),
+                    padding: const EdgeInsets.fromLTRB(4, 4, 4, 6),
                     child: GestureDetector(
                       onTap: _previewPhoto,
                       child: Stack(
                         clipBehavior: Clip.none,
                         children: [
                           ClipRRect(
-                            borderRadius: BorderRadius.circular(10),
+                            borderRadius: BorderRadius.circular(8),
                             child: Image.memory(
                               _attachment!,
-                              width: 72,
-                              height: 72,
+                              width: 40,
+                              height: 40,
                               fit: BoxFit.cover,
                             ),
                           ),
                           Positioned(
-                            top: -7,
-                            right: -7,
-                            child: IconButton(
-                              tooltip: 'Remove photo',
-                              onPressed: () => setState(() {
+                            top: -6,
+                            right: -6,
+                            child: GestureDetector(
+                              onTap: () => setState(() {
                                 _attachment = null;
                                 _attachmentName = null;
                               }),
-                              constraints: const BoxConstraints(
-                                minWidth: 26,
-                                minHeight: 26,
-                              ),
-                              padding: EdgeInsets.zero,
-                              icon: Icon(
-                                Icons.close_rounded,
-                                size: 16,
-                                color: isDark ? Colors.white : Colors.black54,
-                              ),
-                              style: IconButton.styleFrom(
-                                backgroundColor: isDark
-                                    ? const Color(0xFF2A2A2E)
-                                    : Colors.white,
-                                foregroundColor:
-                                    isDark ? Colors.white : Colors.black54,
+                              child: Container(
+                                width: 18,
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isDark
+                                      ? const Color(0xFF2A2A2E)
+                                      : Colors.white,
+                                  border: Border.all(
+                                    color: isDark
+                                        ? const Color(0xFF3A3A3E)
+                                        : const Color(0xFFE0E0E0),
+                                    width: 0.8,
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.close_rounded,
+                                  size: 12,
+                                  color: isDark ? Colors.white70 : Colors.black54,
+                                ),
                               ),
                             ),
                           ),
@@ -1730,7 +1764,7 @@ String _canonicalFirstLanguage(String label) {
                     controller: _text,
                     focusNode: _textFocus,
                     minLines: 1,
-                    maxLines: 10,
+                    maxLines: 6,
                     textAlign: TextAlign.start,
                     textDirection: TextDirection.ltr,
                     textInputAction: TextInputAction.newline,
@@ -1873,7 +1907,7 @@ String _canonicalFirstLanguage(String label) {
             mainAxisSize: MainAxisSize.min,
             children: [
               Text(
-                _sessionTitle ?? 'Care AI',
+                _sessionTitle ?? 'Beauty Care AI',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: TextStyle(
@@ -1909,12 +1943,12 @@ String _canonicalFirstLanguage(String label) {
           iconTheme: IconThemeData(color: subText),
           actions: [
             _RoundHeaderAction(
-              tooltip: 'New Care AI chat',
+              tooltip: 'New Beauty Care AI chat',
               icon: Icons.add_comment_rounded,
               onPressed: _newChat,
             ),
             _RoundHeaderAction(
-              tooltip: 'Care AI history',
+              tooltip: 'Beauty Care AI history',
               icon: Icons.shopping_bag_rounded,
               onPressed: _sending || _restoring ? null : _openHistory,
             ),
@@ -2583,7 +2617,7 @@ class _OpenTextSection extends StatelessWidget {
   }
 }
 
-class _DetailedBreakdownExpander extends StatefulWidget {
+class _DetailedBreakdownExpander extends StatelessWidget {
   const _DetailedBreakdownExpander({
     required this.breakdown,
     required this.title,
@@ -2597,139 +2631,49 @@ class _DetailedBreakdownExpander extends StatefulWidget {
   final String subtitle;
 
   @override
-  State<_DetailedBreakdownExpander> createState() =>
-      _DetailedBreakdownExpanderState();
-}
-
-class _DetailedBreakdownExpanderState
-    extends State<_DetailedBreakdownExpander>
-    with SingleTickerProviderStateMixin {
-  bool _expanded = false;
-
-  @override
   Widget build(BuildContext context) {
-    final primaryTextColor = AppTheme.getPrimaryText(context);
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        InkWell(
-          onTap: () => setState(() => _expanded = !_expanded),
-          borderRadius: BorderRadius.circular(10),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 2),
-            child: Row(
-              children: [
-                Icon(
-                  _expanded
-                      ? Icons.expand_less_rounded
-                      : Icons.description_outlined,
-                  size: 17,
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.description_outlined, size: 15, color: AppTheme.glowGuidePink),
+              const SizedBox(width: 6),
+              Text(
+                title,
+                style: TextStyle(
                   color: AppTheme.glowGuidePink,
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        _expanded ? widget.expandedTitle : widget.title,
-                        style: TextStyle(
-                          color: AppTheme.glowGuidePink,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        widget.subtitle,
-                        style: TextStyle(
-                          color: AppTheme.getSecondaryText(context),
-                          fontSize: 11.5,
-                          height: 1.35,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Icon(
-                  _expanded
-                      ? Icons.keyboard_arrow_up_rounded
-                      : Icons.keyboard_arrow_down_rounded,
-                  size: 18,
-                  color: AppTheme.glowGuidePink.withValues(alpha: 0.7),
-                ),
-              ],
-            ),
-          ),
-        ),
-        AnimatedCrossFade(
-          duration: const Duration(milliseconds: 250),
-          crossFadeState: _expanded
-              ? CrossFadeState.showSecond
-              : CrossFadeState.showFirst,
-          firstChild: const SizedBox.shrink(),
-          secondChild: Padding(
-            padding: const EdgeInsets.only(top: 16, left: 25),
-            child: SelectionArea(
-                child: MarkdownBody(
-                  data: _formatBulletText(widget.breakdown),
-                  selectable: false,
-                  styleSheet: MarkdownStyleSheet(
-                    p: TextStyle(
-                      color: primaryTextColor,
-                      fontSize: 14,
-                      height: 1.6,
-                      fontFamilyFallback: AppTheme.fontFallback,
-                    ),
-                    h1: TextStyle(
-                      color: primaryTextColor,
-                      fontSize: 18,
-                      fontWeight: FontWeight.w700,
-                      height: 1.4,
-                      fontFamilyFallback: AppTheme.fontFallback,
-                    ),
-                    h2: TextStyle(
-                      color: primaryTextColor,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w700,
-                      height: 1.4,
-                      fontFamilyFallback: AppTheme.fontFallback,
-                    ),
-                    h3: TextStyle(
-                      color: primaryTextColor,
-                      fontSize: 14.5,
-                      fontWeight: FontWeight.w600,
-                      height: 1.4,
-                      fontFamilyFallback: AppTheme.fontFallback,
-                    ),
-                    strong: TextStyle(
-                      color: primaryTextColor,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 14,
-                      fontFamilyFallback: AppTheme.fontFallback,
-                    ),
-                    code: TextStyle(
-                      color: AppTheme.glowGuidePink,
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w700,
-                      fontFamily: null,
-                      backgroundColor: AppTheme.glowGuidePink.withValues(
-                        alpha: Theme.of(context).brightness == Brightness.dark ? 0.18 : 0.12,
-                      ),
-                    ),
-                    listBullet: TextStyle(
-                      color: AppTheme.glowGuidePink,
-                      fontSize: 14,
-                      fontFamilyFallback: AppTheme.fontFallback,
-                    ),
-                    blockSpacing: 12,
-                    listIndent: 16,
-                  ),
+                  fontSize: 12.5,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.3,
                 ),
               ),
+            ],
           ),
-        ),
-      ],
+          const SizedBox(height: 8),
+          Text(
+            subtitle,
+            style: TextStyle(
+              color: AppTheme.getSecondaryText(context),
+              fontSize: 11.5,
+              height: 1.35,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SelectionArea(
+            child: Text(
+              breakdown,
+              style: TextStyle(
+                color: AppTheme.getPrimaryText(context),
+                fontSize: 14.5,
+                height: 1.7,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

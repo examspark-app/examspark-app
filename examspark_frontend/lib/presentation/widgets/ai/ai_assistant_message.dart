@@ -80,7 +80,7 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     const baseFontSize = 15.0;
-    const baseHeight = 1.55;
+    const baseHeight = 1.65;
 
     return MarkdownStyleSheet(
       p: TextStyle(
@@ -129,7 +129,7 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
       ),
       listIndent: 20,
       listBulletPadding: const EdgeInsets.only(right: 8),
-      blockSpacing: 10,
+      blockSpacing: 14,
       code: TextStyle(
         color: primary,
         fontSize: baseFontSize - 1,
@@ -192,7 +192,7 @@ class _AiAssistantMessageState extends State<AiAssistantMessage> {
     final textStyle = TextStyle(
       color: AppTheme.getPrimaryText(context),
       fontSize: 15,
-      height: 1.5,
+      height: 1.6,
       letterSpacing: 0,
       fontWeight: FontWeight.w400,
     );

@@ -73,7 +73,7 @@ class _GlowGuideHistoryScreenState extends State<GlowGuideHistoryScreen> {
     final title = await showDialog<String>(
       context: context,
       builder: (dialogContext) => AlertDialog(
-        title: const Text('Rename Care AI chat'),
+        title: const Text('Rename Beauty Care AI chat'),
         content: TextField(
           controller: controller,
           autofocus: true,
@@ -121,7 +121,7 @@ class _GlowGuideHistoryScreenState extends State<GlowGuideHistoryScreen> {
     final title = session['title']?.toString().trim() ?? '';
     if (title.isNotEmpty) return title;
     final category = session['category_type']?.toString().trim() ?? '';
-    return category.isEmpty ? 'Care AI Chat' : category;
+    return category.isEmpty ? 'Beauty Care AI Chat' : category;
   }
 
   @override
@@ -131,7 +131,7 @@ class _GlowGuideHistoryScreenState extends State<GlowGuideHistoryScreen> {
         title: const Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Care AI History'),
+            Text('Beauty Care AI History'),
             Text(
               'Skin, Hair, Body & Baby Care',
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
@@ -148,7 +148,7 @@ class _GlowGuideHistoryScreenState extends State<GlowGuideHistoryScreen> {
                   FilledButton(onPressed: _load, child: const Text('Retry')),
                 ]))
               : _sessions.isEmpty
-                  ? const Center(child: Text('No Care AI history yet.'))
+                  ? const Center(child: Text('No Beauty Care AI history yet.'))
                   : RefreshIndicator(
                       onRefresh: _load,
                       child: ListView.separated(

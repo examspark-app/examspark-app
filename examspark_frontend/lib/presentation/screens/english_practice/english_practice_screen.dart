@@ -1713,7 +1713,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                 onSubmitted: (_) => _send(),
                 textInputAction: TextInputAction.newline,
                 minLines: 1,
-                maxLines: 10,
+                maxLines: 6,
                 style: TextStyle(
                   color: primaryText,
                   fontSize: 15.5,

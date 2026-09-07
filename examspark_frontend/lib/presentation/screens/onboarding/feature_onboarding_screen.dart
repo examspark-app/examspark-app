@@ -29,6 +29,20 @@ class FeatureOnboardingScreen extends StatelessWidget {
         feature: 'ai',
       ),
       _FeatureCardData(
+        icon: Icons.auto_awesome_outlined,
+        iconColor: const Color(0xFFD85A30),
+        title: 'Beauty Care AI',
+        tagline: 'Skin, Hair, Body & Baby Care',
+        bullets: const [
+          'Science-based skin and body routines',
+          'Baby skin care and cloth guidance',
+          'Chat in your own language',
+        ],
+        ctaLabel: 'Try Beauty Care AI',
+        popular: false,
+        feature: 'glowguide',
+      ),
+      _FeatureCardData(
         icon: Icons.record_voice_over_outlined,
         iconColor: const Color(0xFF12A594),
         title: 'Speak AI',
@@ -41,20 +55,6 @@ class FeatureOnboardingScreen extends StatelessWidget {
         ctaLabel: 'Try Speak AI',
         popular: false,
         feature: 'english',
-      ),
-      _FeatureCardData(
-        icon: Icons.auto_awesome_outlined,
-        iconColor: const Color(0xFFD85A30),
-        title: 'Care AI',
-        tagline: 'Skin, Hair, Body & Baby Care',
-        bullets: const [
-          'Science-based skin and body routines',
-          'Baby skin care and cloth guidance',
-          'Chat in your own language',
-        ],
-        ctaLabel: 'Try Skin care AI',
-        popular: false,
-        feature: 'glowguide',
       ),
     ];
 

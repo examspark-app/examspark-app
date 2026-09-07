@@ -19,7 +19,7 @@ class CreditHistoryDisplay {
       return 'Speak AI';
     }
     if (a == 'glow_guide' || a.contains('glow_guide') || d.contains('glowguide') || d.contains('glow guide')) {
-      return 'Care AI';
+      return 'Beauty Care AI';
     }
     switch (a) {
       case 'audio_transcription':
