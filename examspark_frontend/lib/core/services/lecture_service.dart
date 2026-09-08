@@ -1756,7 +1756,7 @@ class LectureService {
       throw Exception(_extractErrorDetail(response));
     }
   }
-  Future<void> endEnglishRoleplay({
+  Future<Map<String, dynamic>> endEnglishRoleplay({
     required String sessionId,
     required int durationSeconds,
   }) async {
@@ -1773,6 +1773,7 @@ class LectureService {
     );
     if (response.statusCode != 200)
       throw Exception(_extractErrorDetail(response));
+    return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
   Future<List<Map<String, dynamic>>> listEnglishPracticeSessions({

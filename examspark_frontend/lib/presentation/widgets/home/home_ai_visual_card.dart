@@ -350,3 +350,4 @@ class _HomeAiVisualCardState extends State<HomeAiVisualCard> {
       );
     }
   }
+}

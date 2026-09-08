@@ -3222,7 +3222,6 @@ class _SuggestedQuestionsRow extends StatelessWidget {
                       color: AppTheme.getSecondaryText(context),
                     ),
                   ],
-                  ),
                 ),
               ),
             ),
