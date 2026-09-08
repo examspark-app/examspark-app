@@ -289,13 +289,18 @@ class _HomeTabState extends State<HomeTab> with WidgetsBindingObserver {
   }
 
   @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused ||
-        state == AppLifecycleState.inactive ||
-        state == AppLifecycleState.hidden) {
-      _persistChatNow();
-    }
+  @override
+void didChangeAppLifecycleState(AppLifecycleState state) {
+  if (state == AppLifecycleState.paused ||
+      state == AppLifecycleState.inactive ||
+      state == AppLifecycleState.hidden) {
+    _persistChatNow();
   }
+  if (state == AppLifecycleState.resumed) {
+    _loadUserData();
+    SessionLiveSync.instance.refreshAll();
+  }
+}
 
   Future<void> _restoreChatFromDisk() async {
     if (_restoredDisk) return;
@@ -1800,7 +1805,7 @@ trailing: const [],
                 Text(
                   '$timeGreeting, $name 👋',
                   style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    fontSize: 17,
+                    fontSize: 15,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -3372,12 +3377,15 @@ class _FeatureLauncherCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
-        child: Row(
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(18),
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          child: Row(
+            mainAxisSize: MainAxisSize.min, // <-- sirf content jitna width
             children: [
               Icon(
                 icon,
@@ -3385,34 +3393,34 @@ class _FeatureLauncherCard extends StatelessWidget {
                 size: 24,
               ),
               const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      title,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                        fontSize: 13.5,
-                        fontWeight: FontWeight.w700,
-                      ),
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    title,
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
                     ),
-                    Text(
-                      tagline,
-                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: AppTheme.getSecondaryText(context),
-                        fontSize: 11.0,
-                      ),
+                  ),
+                  Text(
+                    tagline,
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: AppTheme.getSecondaryText(context),
+                      fontSize: 11.0,
                     ),
-                  ],
-                ),
+                  ),
+                ],
               ),
+              const SizedBox(width: 10),
               Icon(
                 Icons.arrow_forward_rounded,
                 color: AppTheme.getSecondaryText(context),
                 size: 18,
               ),
             ],
+          ),
         ),
       ),
     );

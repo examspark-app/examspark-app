@@ -957,8 +957,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
     );
   }
 
-  Widget _header(bool isDark) {
-    final primaryText = AppTheme.getPrimaryText(context);
+  
+   Widget _header(bool isDark) {
     final subText = AppTheme.getSecondaryText(context);
     final divider = AppTheme.getCardBorder(context);
     final scaffoldBg = Theme.of(context).scaffoldBackgroundColor;
@@ -977,50 +977,11 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
               tooltip: 'Open menu',
             ),
           ),
-          const SizedBox(width: 4),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: violet.withOpacity(isDark ? 0.14 : 0.10),
-                  borderRadius: BorderRadius.circular(999),
-                ),
-                child: const Text(
-                  'Practice chat',
-                  style: TextStyle(
-                    fontSize: 10.5,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.2,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Language Practice',
-                style: TextStyle(
-                  color: primaryText,
-                  fontSize: 17,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                'Practice speaking any language',
-                style: TextStyle(
-                  color: subText,
-                  fontSize: 10.5,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 6),
-          AiModelSelector(
-            selectedModel: _selectedTextModel,
-            onSelected: _changeTextModel,
+          const Spacer(),
+          IconButton(
+            onPressed: _openModePicker,
+            icon: Icon(Icons.theater_comedy_outlined, size: 24, color: subText),
+            tooltip: 'Practice modes',
           ),
           const SizedBox(width: 4),
           FilledButton(
@@ -1028,23 +989,22 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             style: FilledButton.styleFrom(
               backgroundColor: violet,
               foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(10),
               ),
-              minimumSize: const Size(0, 32),
+              minimumSize: const Size(0, 34),
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: const Text(
               'Roleplay',
-              style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
             ),
           ),
         ],
       ),
     );
   }
-
   Widget _chat(bool isDark) {
     final cardBg = AppTheme.getCardBackground(context);
     final cardBorder = AppTheme.getCardBorder(context);
@@ -1741,14 +1701,18 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             ),
             const SizedBox(height: 8),
             Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                const Spacer(),
-                _pressHoldMicBtn(isDark, subText),
-                const SizedBox(width: 6),
-                _sendBtn(),
-              ],
-            ),
+  crossAxisAlignment: CrossAxisAlignment.center,
+  children: [
+    AiModelSelector(
+      selectedModel: _selectedTextModel,
+      onSelected: _changeTextModel,
+    ),
+    const Spacer(),
+    _pressHoldMicBtn(isDark, subText),
+    const SizedBox(width: 6),
+    _sendBtn(),
+  ],
+),
           ],
         ),
       ),

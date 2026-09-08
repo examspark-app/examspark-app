@@ -26,16 +26,12 @@ import 'package:app_links/app_links.dart';
 import 'package:examspark_frontend/core/payments/payment_service.dart';
 
 // NEW:
-import 'dart:js_interop';
-
-@JS('forceReloadExamSparkApp')
-external void _forceReloadExamSparkAppJS();
+import 'core/web_reload_stub.dart'
+    if (dart.library.js_interop) 'core/web_reload_web.dart';
 
 void _webForceReload() {
   if (!kIsWeb) return;
-  try {
-    _forceReloadExamSparkAppJS();
-  } catch (_) {}
+  forceReloadExamSparkApp();
 }
 
 Future<void> _checkWebVersionBumpAndReload() async {
