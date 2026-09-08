@@ -203,6 +203,15 @@ class _ExamSparkAppState extends State<ExamSparkApp> {
   }
 
   Future<void> _handleNativeUri(Uri uri) async {
+    final referralCode = InviteDeepLink.referralCodeFromUri(uri);
+    if (referralCode != null) {
+      await PendingReferralStore.save(referralCode);
+      final nav = AppNavigation.key.currentState;
+      if (nav != null && SupabaseClient.instance.currentUser == null) {
+        nav.pushNamed('/login', arguments: {'startInSignUp': true});
+      }
+    }
+
     final code = InviteDeepLink.joinCodeFromUri(uri);
 
     if (code == null) return;

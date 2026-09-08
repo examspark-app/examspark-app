@@ -90,6 +90,7 @@ class SupabaseClient {
     return client.auth.signUp(
       email: email,
       password: password,
+      emailRedirectTo: _oauthRedirectUrl(),
       data: referralCode == null || referralCode.trim().isEmpty
           ? null
           : {'referral_code': referralCode.trim().toUpperCase()},

@@ -40,7 +40,7 @@ dependencies:
   posthog_flutter: ^5.36.0
   share_plus: ^10.1.4
   device_info_plus: ^11.5.0
-
+  gal: ^2.3.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

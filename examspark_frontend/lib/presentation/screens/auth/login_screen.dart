@@ -87,6 +87,13 @@ class _LoginScreenState extends State<LoginScreen> {
   void _switchMode(_AuthMode mode) {
     if (_mode == mode || _isLoading) return;
     setState(() => _mode = mode);
+    if (mode == _AuthMode.signUp && _referralController.text.trim().isEmpty) {
+      PendingReferralStore.peek().then((code) {
+        if (mounted && code != null && _referralController.text.trim().isEmpty) {
+          _referralController.text = code;
+        }
+      });
+    }
   }
 
   void _openLegalDoc(String title, String url) {
@@ -140,18 +147,18 @@ class _LoginScreenState extends State<LoginScreen> {
           !await LectureService.instance.checkDeviceAccountLimit(deviceId)) {
         throw StateError('Maximum accounts reached for this device.');
       }
+      final referralToUse = _referralController.text.trim().isNotEmpty
+          ? _referralController.text.trim()
+          : (await PendingReferralStore.peek() ?? '');
       final response = await SupabaseClient.instance.signUpWithEmail(
         email: email,
         password: _passwordController.text,
-        referralCode: _referralController.text,
+        referralCode: referralToUse,
       );
       if (mounted) {
-        if (response.session != null &&
-            _referralController.text.trim().isNotEmpty) {
+        if (response.session != null && referralToUse.isNotEmpty) {
           try {
-            await LectureService.instance.redeemReferral(
-              _referralController.text.trim(),
-            );
+            await LectureService.instance.redeemReferral(referralToUse);
             await PendingReferralStore.clear();
           } catch (_) {}
         }
@@ -163,6 +170,7 @@ class _LoginScreenState extends State<LoginScreen> {
             } catch (_) {}
           }
         }
+        if (!mounted) return;
         if (response.session == null) {
           await Navigator.of(context).push(
             MaterialPageRoute(

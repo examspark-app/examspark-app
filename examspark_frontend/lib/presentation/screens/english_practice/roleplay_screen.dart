@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/core/constants/roleplay_voice_config.dart';
 import 'package:examspark_frontend/core/services/recording_service.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
@@ -1575,6 +1576,7 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   bool _leaving = false;
   bool _stopping = false;
   bool _starting = false;
+  bool _launchingSession = false;
   bool _micEnabled = true;
   bool _inactivityPromptShown = false;
   int _sessionGeneration = 0;
@@ -1585,6 +1587,11 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
       state == RoleplayVoiceState.listening ||
       state == RoleplayVoiceState.userSpeaking;
   bool get processing => state == RoleplayVoiceState.processing;
+  bool get _isLaunching =>
+      _launchingSession ||
+      state == RoleplayVoiceState.generatingOpeningText ||
+      state == RoleplayVoiceState.showingOpeningText ||
+      state == RoleplayVoiceState.generatingOpeningAudio;
 
   Future<Duration> _loadPlayableAudio(Uint8List bytes, String mimeType) async {
     if (bytes.isEmpty) {
@@ -1679,10 +1686,15 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
     int? durationSeconds,
   }) async {
     try {
-      await LectureService.instance.endEnglishRoleplay(
+      final result = await LectureService.instance.endEnglishRoleplay(
         sessionId: id,
         durationSeconds: durationSeconds ?? elapsed.inSeconds,
       );
+      final charged = (result['credits_used'] as num?)?.toInt();
+      final balance = (result['new_balance'] as num?)?.toInt();
+      if (charged != null || balance != null) {
+        unawaited(SessionLiveSync.instance.refreshAll());
+      }
     } catch (_) {
       // Local cleanup and navigation still complete when the network is unavailable.
     }
@@ -2066,6 +2078,7 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   }
 
   Future<void> toggle() async {
+    if (_isLaunching || _starting || processing) return;
     if (state == RoleplayVoiceState.error) {
       await _startListening();
       return;
@@ -2075,8 +2088,23 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
         processing ||
         state == RoleplayVoiceState.aiSpeaking) {
       unawaited(_endCurrentSession(message: 'Roleplay stopped.'));
-    } else {
+      return;
+    }
+
+    _launchingSession = true;
+    if (mounted) {
+      setState(() {
+        state = RoleplayVoiceState.generatingOpeningText;
+        _listeningHint = 'Starting…';
+      });
+    }
+
+    try {
       await _startListening();
+    } finally {
+      if (mounted) {
+        setState(() => _launchingSession = false);
+      }
     }
   }
 
@@ -2105,6 +2133,7 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
     final subText = isDark ? Colors.white70 : const Color(0xFF594AA8);
     final callActive = active || state == RoleplayVoiceState.aiSpeaking;
     final isSpeaking = state == RoleplayVoiceState.aiSpeaking || state == RoleplayVoiceState.userSpeaking;
+    final isLaunching = _isLaunching;
     final isMunna = widget.voiceKey == 'male';
     final personaName = isMunna ? 'Munna' : 'Sonia';
     final avatarPath = isMunna
@@ -2287,14 +2316,19 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
                     onTap: sessionId == null ? null : _toggleMic,
                   ),
                   _callControlButton(
-                    icon: callActive || sessionId != null
-                        ? Icons.stop_rounded
-                        : Icons.play_arrow_rounded,
-                    label: callActive || sessionId != null ? 'Stop' : 'Start',
+                    icon: isLaunching
+                        ? Icons.hourglass_top_rounded
+                        : (callActive || sessionId != null
+                            ? Icons.stop_rounded
+                            : Icons.play_arrow_rounded),
+                    label: isLaunching
+                        ? 'Starting'
+                        : (callActive || sessionId != null ? 'Stop' : 'Start'),
                     bg: _violet,
                     fg: Colors.white,
                     big: true,
-                    onTap: toggle,
+                    isLoading: isLaunching,
+                    onTap: isLaunching ? null : toggle,
                   ),
                   _callControlButton(
                     icon: Icons.refresh_rounded,
@@ -2319,6 +2353,7 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
     required Color fg,
     VoidCallback? onTap,
     bool big = false,
+    bool isLoading = false,
   }) {
     final size = big ? 64.0 : 52.0;
     return Opacity(
@@ -2332,7 +2367,16 @@ with SingleTickerProviderStateMixin, WidgetsBindingObserver {
               width: size,
               height: size,
               decoration: BoxDecoration(shape: BoxShape.circle, color: bg),
-              child: Icon(icon, color: fg, size: big ? 28 : 22),
+              child: isLoading
+                  ? SizedBox(
+                      width: big ? 24 : 18,
+                      height: big ? 24 : 18,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.6,
+                        valueColor: AlwaysStoppedAnimation<Color>(fg),
+                      ),
+                    )
+                  : Icon(icon, color: fg, size: big ? 28 : 22),
             ),
           ),
           const SizedBox(height: 6),

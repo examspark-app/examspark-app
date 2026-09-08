@@ -2,11 +2,11 @@ import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
 import 'package:examspark_frontend/core/constants/credit_costs.dart';
 import 'package:examspark_frontend/core/network/supabase_client.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
 import 'package:examspark_frontend/core/services/recording_service.dart';
+import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_language_picker_screen.dart';
 import 'package:examspark_frontend/presentation/screens/english_practice/english_practice_drawer.dart';
@@ -616,6 +616,20 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
 
         _sending = false;
         _processingVoice = false;
+        final charged = (r['credits_charged'] as num?)?.toInt();
+        final balance = (r['new_balance'] as num?)?.toInt();
+        if (charged != null || balance != null) {
+          unawaited(SessionLiveSync.instance.refreshAll());
+          final details = <String>[];
+          if (charged != null) details.add('$charged credits used');
+          if (balance != null) details.add('$balance credits left');
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(details.join(' • '))),
+            );
+          });
+        }
         if (r['suggest_new_chat'] == true && !_longChatPromptShown) {
           _longChatPromptShown = true;
         }
@@ -640,29 +654,6 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
           duration: const Duration(seconds: 6),
         ),
       );
-    }
-  }
-
-  Future<void> _pickPhoto() async {
-    if (_sending || _sessionId == null) return;
-    final picked = await ImagePicker().pickImage(source: ImageSource.gallery);
-    if (picked == null) return;
-    final bytes = await picked.readAsBytes();
-    if (!mounted) return;
-    try {
-      setState(() => _sending = true);
-      final result = await LectureService.instance.englishPracticePhoto(
-        sessionId: _sessionId!, imageBytes: bytes, filename: picked.name,
-      );
-      if (!mounted) return;
-      setState(() {
-        _messages.add(_Message('Photo: ${result['reply'] ?? ''}', false));
-        _sending = false;
-      });
-      _bottom();
-    } catch (error) {
-      if (mounted) setState(() => _sending = false);
-      if (mounted) setState(() => _error = '$error');
     }
   }
 
@@ -813,6 +804,7 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
         filename: 'english_chat_turn.m4a',
       );
       if (!mounted) return;
+      _showCreditResult(response);
       setState(() {
         _exchangeCount++;
         if (_exchangeCount % 100 == 0) _showModePrompt = true;
@@ -858,6 +850,22 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
         ).showSnackBar(SnackBar(content: Text('$error')));
       }
     }
+  }
+
+  void _showCreditResult(Map<String, dynamic> result) {
+    final charged = (result['credits_charged'] as num?)?.toInt();
+    final balance = (result['new_balance'] as num?)?.toInt();
+    if (charged == null && balance == null) return;
+    unawaited(SessionLiveSync.instance.refreshAll());
+    final parts = <String>[];
+    if (charged != null) parts.add('$charged credits used');
+    if (balance != null) parts.add('$balance credits left');
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(parts.join(' • '))),
+      );
+    });
   }
 
   Future<void> _showLongChatPrompt() async {
@@ -970,11 +978,28 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             ),
           ),
           const SizedBox(width: 4),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: violet.withOpacity(isDark ? 0.14 : 0.10),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: const Text(
+                  'Practice chat',
+                  style: TextStyle(
+                    fontSize: 10.5,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
               Text(
-                'Speak AI',
+                'Language Practice',
                 style: TextStyle(
                   color: primaryText,
                   fontSize: 17,
@@ -989,9 +1014,15 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
                   fontWeight: FontWeight.w500,
                 ),
               ),
-            ],
+              ],
+            ),
           ),
-                    const Spacer(),
+          const SizedBox(width: 6),
+          AiModelSelector(
+            selectedModel: _selectedTextModel,
+            onSelected: _changeTextModel,
+          ),
+          const SizedBox(width: 4),
           FilledButton(
             onPressed: _roleplay,
             style: FilledButton.styleFrom(
@@ -1005,28 +1036,8 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
             child: const Text(
-              'Speak AI',
+              'Roleplay',
               style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
-            ),
-          ),
-
-          const SizedBox(width: 6),
-          FilledButton.icon(
-            onPressed: _openModePicker,
-            style: FilledButton.styleFrom(
-              backgroundColor: violet.withOpacity(0.12),
-              foregroundColor: violet,
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10),
-              ),
-              minimumSize: const Size(0, 32),
-              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-            ),
-            icon: const Icon(Icons.theater_comedy_outlined, size: 14),
-            label: Text(
-              _activeMode ?? 'Mode',
-              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w700),
             ),
           ),
         ],
@@ -1732,10 +1743,6 @@ class _EnglishPracticeScreenState extends State<EnglishPracticeScreen>
             Row(
               crossAxisAlignment: CrossAxisAlignment.center,
               children: [
-                AiModelSelector(
-                  selectedModel: _selectedTextModel,
-                  onSelected: _changeTextModel,
-                ),
                 const Spacer(),
                 _pressHoldMicBtn(isDark, subText),
                 const SizedBox(width: 6),

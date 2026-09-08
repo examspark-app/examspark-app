@@ -66,6 +66,11 @@ class CreditCosts {
   static const int pdfAnalysis = 20;
   static const int ocrImage = 15;
 
+  // GlowGuide — server-side cost depends on whether a photo/research turn is used.
+  static const int glowGuideText = 5;
+  static const int glowGuidePhoto = 10;
+  static const int glowGuideResearch = 10;
+
   // Other
   static const int translate = 8;
   static const int voiceRead = 5;
@@ -185,6 +190,16 @@ class CreditCosts {
         return summaryWithRecording;
       case 'qwen3_text':
         return askAiNormal;
+      case 'glow_guide':
+      case 'glow-guide':
+      case 'glowguide':
+        return glowGuideText;
+      case 'glow_guide_photo':
+      case 'glow-guide-photo':
+        return glowGuidePhoto;
+      case 'glow_guide_research':
+      case 'glow-guide-research':
+        return glowGuideResearch;
       default:
         return 0;
     }

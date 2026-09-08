@@ -27,7 +27,7 @@ from app.services.glow_guide_research_service import (
 )
 
 logger = logging.getLogger(__name__)
-GLOW_GUIDE_TEXT_COST = 2
+GLOW_GUIDE_TEXT_COST = 5
 GLOW_GUIDE_PHOTO_COST = 8
 GLOW_GUIDE_RESEARCH_COST = 10
 OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
@@ -50,7 +50,7 @@ def _log_research_save_result(task: asyncio.Task[None]) -> None:
 
 
 def glow_guide_credit_cost(has_photo: bool) -> int:
-    """GlowGuide charges 2 for text-only, 5 when a photo is attached."""
+    """GlowGuide charges 5 for text-only and 8 when a photo is attached."""
     return GLOW_GUIDE_PHOTO_COST if has_photo else GLOW_GUIDE_TEXT_COST
 
 
@@ -833,10 +833,23 @@ async def turn(
         "hair_type",
         "concern",
         "concern_details",
+        "product_family",
+        "usage_context",
+        "exposure",
+        "user_or_client",
     ):
         value = parsed.get(key)
         if value is not None and str(value).strip():
             next_context[key] = value
+    application_area = parsed.get("application_area")
+    if isinstance(application_area, list):
+        cleaned_application_area = [
+            str(area).strip()
+            for area in application_area
+            if str(area).strip()
+        ]
+        if cleaned_application_area:
+            next_context["application_area"] = cleaned_application_area[:8]
     memory_update = parsed.get("memory_update")
     if isinstance(memory_update, dict):
         memory_fields = _CATEGORY_PROFILE_FIELDS.get(active_category or "skin", _CATEGORY_PROFILE_FIELDS["skin"])

@@ -22,6 +22,7 @@ enum GatedFeature {
   revision,
   importantQuestions,
   mindMap,
+  glowGuide,
   premiumAiModel, // Claude 3.5 Haiku — requires any paid plan (₹199+)
 }
 
@@ -97,6 +98,7 @@ class PlanTierGating {
       case GatedFeature.importantQuestions:
       case GatedFeature.mindMap:
       case GatedFeature.askAi:
+      case GatedFeature.glowGuide:
         return 'Available on Free and all paid plans (uses credits).';
     }
   }
@@ -115,6 +117,10 @@ class PlanTierGating {
       case 'ask_ai':
       case 'ask-rag':
         return GatedFeature.askAi;
+      case 'glow_guide':
+      case 'glow-guide':
+      case 'glowguide':
+        return GatedFeature.glowGuide;
       case 'pdf':
       case 'pdf_ingest':
         return GatedFeature.pdfAnalysis;

@@ -69,10 +69,10 @@ class SubscriptionPlans {
     maxGroups: 0,
     features: [
       '50 credits/month to get started',
-      'Ask AI, PDF, Photo/Diagram (uses credits)',
-      '🎙️ Audio recording + upload included',
-      '⚡ Need more? Upgrade to ₹199 or ₹499 for way more credits',
-      'Upgrade to join Study Groups',
+      'Use for quick Ask AI + study help',
+      'Beauty Care AI access on basics',
+      'Language Practice starter access',
+      'Upgrade later for premium models',
     ],
   );
 
@@ -85,11 +85,11 @@ class SubscriptionPlans {
     maxGroups: 1,
     features: [
       '400 AI Credits / Month',
-      'Ask AI, PDF, Photo & Diagram (uses credits)',
-      '🎙️ Audio recording + upload included',
-      '🎁 FREE Premium Group Join (1 Group Included)',
-      'Monthly Credits Renewal',
-      '⚡ Need more credits? Upgrade to ₹499 for 1,000/month + 3 Groups',
+      'Unlocks better AI model access',
+      'Use for Language Practice + chat learning',
+      'Beauty Care AI stays available',
+      '1 Group included for collaboration',
+      'More room for daily study tasks',
     ],
   );
 
@@ -102,13 +102,11 @@ class SubscriptionPlans {
     maxGroups: 3,
     features: [
       '1,000 AI Credits / Month',
-      'Ask AI, PDF, Photo & Diagram (uses credits)',
-      'English Practice Chat + Speech-to-Text: 3 credits per turn',
-      'Claude Premium Chat model included',
-      'Audio Recording + Upload Unlocked',
-      '🎁 FREE Premium Group Joins (Up to 3 Groups)',
-      'Monthly Credits Renewal',
-      'Subscription bonus: Premium Group Access included',
+      'Unlocks best model access',
+      'Language Practice without friction',
+      'Beauty Care AI + full-study tools',
+      'Claude Premium included',
+      'Up to 3 Group joins included',
     ],
     isPopular: true,
   );
@@ -122,14 +120,11 @@ class SubscriptionPlans {
     maxGroups: 6,
     features: [
       '2,000 AI Credits / Month',
-      'Ask AI, PDF, Photo & Diagram (uses credits)',
-      'English Practice Chat + Speech-to-Text: 3 credits per turn',
-      'Claude Premium Chat model included',
-      'Audio Recording + Upload Unlocked',
-      'Full Access — No Feature Locks',
-      '🎁 FREE Premium Group Joins (Up to 6 Groups)',
-      'Monthly Credits Renewal',
-      'Subscription bonus: Premium Group Access included',
+      'Best model access for every feature',
+      'Language Practice + roleplay ready',
+      'Beauty Care AI included',
+      'Premium usage with more room to explore',
+      'Up to 6 Group joins included',
     ],
   );
 
@@ -143,12 +138,11 @@ class SubscriptionPlans {
     maxGroups: 0,
     features: [
       '10,000 AI Credits / Month',
-      'Bulk Record Lecture',
-      'Audio Unlocked + Full AI Tools',
-      'PDF Export + Shareable Links',
-      'Class / Teacher Dashboard',
-      'Create Unlimited Own Groups (After Verification)',
-      'Manage Your Own Classrooms',
+      'Best model access across all tools',
+      'Language Practice for teaching workflows',
+      'Beauty Care AI + classroom tooling',
+      'Create and manage your own groups',
+      'Built for teacher-scale usage',
     ],
   );
 

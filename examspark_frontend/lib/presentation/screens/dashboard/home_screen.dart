@@ -90,6 +90,13 @@ class _HomeScreenState extends State<HomeScreen> {
                                       color: Colors.grey[600],
                                     ),
                                   ),
+                                  Text(
+                                    CreditUsageDisplay.glowGuideBalanceLine(_creditsBalance),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
                                 ],
                               ),
                             ),

@@ -368,7 +368,7 @@ class _AppShellState extends State<AppShell> with WidgetsBindingObserver {
                       color: iconColor,
                     ),
                     title: const Text(
-                      'Speak AI',
+                      'Language Practice',
                       style: TextStyle(fontSize: 14),
                     ),
                     onTap: () {

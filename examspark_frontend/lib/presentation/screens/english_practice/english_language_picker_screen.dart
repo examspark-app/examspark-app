@@ -69,6 +69,8 @@ class _EnglishLanguagePickerScreenState
     _LangOption('فارسی', 'Persian'),
     _LangOption('தமிழ் (இலங்கை)', 'Tamil (Sri Lanka)'),
     _LangOption('English', 'English'),
+    // Manual language choices stay first; auto-detect is an optional fallback.
+    _LangOption('Auto-detect', 'Auto-detect'),
   ];
 
   static const List<_LangOption> _targetLanguages = [
@@ -138,7 +140,7 @@ class _EnglishLanguagePickerScreenState
   String get _stepSubtitle {
     switch (_step) {
       case _PickerStep.nativeLanguage:
-        return 'This is the language you are most comfortable with. The AI will use it at first to explain things clearly.';
+        return 'Choose manually first for the most accurate explanations. Auto-detect is an optional fallback.';
       case _PickerStep.targetLanguage:
         return 'Choose the language you want to practise. You can learn any language, not just English.';
     }
@@ -334,8 +336,8 @@ class _EnglishLanguagePickerScreenState
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                   colors: isDark
-                      ? [const Color(0xFF241B57), const Color(0xFF15111F)]
-                      : [const Color(0xFFEDE8FE), const Color(0xFFFAF7FF)],
+                      ? [const Color(0xFF1D3557), const Color(0xFF0B1220)]
+                      : [const Color(0xFFE0F2FE), const Color(0xFFF8FAFC)],
                 ),
                 borderRadius: const BorderRadius.only(
                   bottomLeft: Radius.circular(28),
@@ -371,18 +373,41 @@ class _EnglishLanguagePickerScreenState
                   ),
                   const SizedBox(height: 18),
                   Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF2563EB).withOpacity(isDark ? 0.18 : 0.12),
+                      borderRadius: BorderRadius.circular(999),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.tune_rounded, size: 14, color: const Color(0xFF2563EB)),
+                        const SizedBox(width: 6),
+                        const Text(
+                          'Language setup',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
                     width: 52,
                     height: 52,
                     alignment: Alignment.center,
                     decoration: BoxDecoration(
-                      color: violet.withOpacity(isDark ? 0.24 : 0.12),
+                      color: const Color(0xFF2563EB).withOpacity(isDark ? 0.24 : 0.12),
                       borderRadius: BorderRadius.circular(16),
                     ),
                     child: Icon(
                       _step == _PickerStep.nativeLanguage
                           ? Icons.record_voice_over_rounded
                           : Icons.translate_rounded,
-                      color: violet,
+                      color: const Color(0xFF2563EB),
                       size: 26,
                     ),
                   ),

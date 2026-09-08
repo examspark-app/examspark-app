@@ -196,31 +196,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                       const SizedBox(height: 28),
                       _sectionTitle('Student plans'),
                       const SizedBox(height: 12),
-                      ..._studentPlans.map(
-                        (plan) => Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: PlanCard(
-                            plan: plan,
-                            isCurrentPlan: plan.id == _currentPlanId,
-                            onUpgrade: () =>
-                                _initiatePaymentGatewayCheckout(plan),
-                          ),
-                        ),
-                      ),
+                      _buildPlanGrid(_studentPlans),
                     ] else ...[
                       _sectionTitle('Student plans'),
                       const SizedBox(height: 12),
-                      ..._studentPlans.map(
-                        (plan) => Padding(
-                          padding: const EdgeInsets.only(bottom: 16),
-                          child: PlanCard(
-                            plan: plan,
-                            isCurrentPlan: plan.id == _currentPlanId,
-                            onUpgrade: () =>
-                                _initiatePaymentGatewayCheckout(plan),
-                          ),
-                        ),
-                      ),
+                      _buildPlanGrid(_studentPlans),
                       const SizedBox(height: 8),
                       _sectionTitle('Teacher plan'),
                       const SizedBox(height: 4),
@@ -243,7 +223,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                     _sectionTitle('Buy Extra Credits'),
                     const SizedBox(height: 4),
                     Text(
-                      'One-time packs — no plan change',
+                      'Use across Study AI, English Practice & GlowGuide',
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
                             color: AppTheme.getSecondaryText(context),
                           ),
@@ -276,7 +256,30 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     );
   }
 
-  // ← YAHAN PASTE KARO (naya method neeche se shuru)
+  /// Square/compact plan cards in a 2-column grid — premium look via
+  /// PlanCard's own gradient/shadow styling for popular plans.
+  Widget _buildPlanGrid(List<SubscriptionPlan> plans) {
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        childAspectRatio: 0.72,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+      ),
+      itemCount: plans.length,
+      itemBuilder: (context, index) {
+        final plan = plans[index];
+        return PlanCard(
+          plan: plan,
+          isCurrentPlan: plan.id == _currentPlanId,
+          onUpgrade: () => _initiatePaymentGatewayCheckout(plan),
+        );
+      },
+    );
+  }
+
   Widget _buildTrustBanner() {
     return InkWell(
       borderRadius: BorderRadius.circular(AppTheme.borderRadius),
@@ -396,6 +399,13 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
                   color: AppTheme.getSecondaryText(context),
                 ),
           ),
+          const SizedBox(height: 4),
+          Text(
+            CreditUsageDisplay.glowGuideBalanceLine(_remainingCredits),
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: AppTheme.getSecondaryText(context),
+                ),
+          ),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -471,136 +481,23 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
     final packs = SubscriptionPlans.creditPacks;
     if (packs.isEmpty) return const SizedBox.shrink();
 
-    // Best per-credit rate → honest "Best Value" badge (real math, no fake claim).
     final bestId = packs
         .reduce((a, b) =>
             a.effectiveRupeePerCredit <= b.effectiveRupeePerCredit ? a : b)
         .id;
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: AppTheme.getAccentTint(context).withValues(alpha: 0.35),
-        borderRadius: BorderRadius.circular(AppTheme.borderRadius + 4),
-        border: Border.all(
-          color: AppTheme.accentColor.withValues(alpha: 0.18),
-        ),
-      ),
-      child: GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 1.55,
-          crossAxisSpacing: 10,
-          mainAxisSpacing: 10,
-        ),
-        itemCount: packs.length,
-        itemBuilder: (context, index) {
-          final pack = packs[index];
-          final isBest = pack.id == bestId;
-          final rate = pack.effectiveRupeePerCredit;
-
-          return InkWell(
+    return Column(
+      children: packs.map((pack) {
+        final isBest = pack.id == bestId;
+        return Padding(
+          padding: const EdgeInsets.only(bottom: 12),
+          child: _CreditPackCard(
+            pack: pack,
+            isBest: isBest,
             onTap: _paying ? null : () => _confirmPackPurchase(pack),
-            borderRadius: BorderRadius.circular(14),
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                Container(
-                  padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
-                  decoration: BoxDecoration(
-                    color: isBest
-                        ? AppTheme.accentColor
-                        : AppTheme.getCardBackground(context),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(
-                      color: isBest
-                          ? AppTheme.accentColor
-                          : AppTheme.getCardBorder(context),
-                      width: isBest ? 1.4 : 1,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        '${pack.credits}',
-                        style: TextStyle(
-                          fontSize: 19,
-                          fontWeight: FontWeight.w800,
-                          color: isBest
-                              ? Colors.white
-                              : AppTheme.getPrimaryText(context),
-                        ),
-                      ),
-                      Text(
-                        'credits',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isBest
-                              ? Colors.white.withValues(alpha: 0.85)
-                              : AppTheme.getSecondaryText(context),
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            '₹${pack.priceInr}',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: isBest
-                                  ? Colors.white
-                                  : AppTheme.accentColor,
-                            ),
-                          ),
-                          Text(
-                            '₹${rate.toStringAsFixed(2)}/credit',
-                            style: TextStyle(
-                              fontSize: 9.5,
-                              color: isBest
-                                  ? Colors.white.withValues(alpha: 0.75)
-                                  : AppTheme.getSecondaryText(context),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                ),
-                if (isBest)
-                  Positioned(
-                    top: -8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 3,
-                      ),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: AppTheme.accentColor),
-                      ),
-                      child: Text(
-                        'Best Value',
-                        style: TextStyle(
-                          fontSize: 9,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.accentColor,
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-          );
-        },
-      ),
+          ),
+        );
+      }).toList(),
     );
   }
 
@@ -981,7 +878,202 @@ class _SubscriptionScreenState extends State<SubscriptionScreen> {
   }
 }
 
-// ==================== PLAN CARD WIDGET ====================
+// ==================== CREDIT PACK CARD (Credits on top, Price below) ====================
+
+class _CreditPackCard extends StatelessWidget {
+  final CreditPackDef pack;
+  final bool isBest;
+  final VoidCallback? onTap;
+
+  const _CreditPackCard({
+    required this.pack,
+    required this.isBest,
+    required this.onTap,
+  });
+
+  List<String> get _benefits {
+    if (pack.credits >= 5000) {
+      return [
+        'Best for heavy daily use across all tools',
+        'Never run out mid-session',
+      ];
+    }
+    if (pack.credits >= 1000) {
+      return [
+        'Great for weekly study + practice sessions',
+        'Covers Study AI, English Practice & GlowGuide',
+      ];
+    }
+    return [
+      'Quick top-up when you need it',
+      'No plan change required',
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: isBest
+                ? LinearGradient(
+                    colors: [
+                      AppTheme.accentColor,
+                      AppTheme.accentColor.withValues(alpha: 0.85),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : null,
+            color: isBest ? null : AppTheme.getCardBackground(context),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(
+              color: isBest
+                  ? AppTheme.accentColor
+                  : AppTheme.getCardBorder(context),
+              width: isBest ? 1.4 : 1,
+            ),
+            boxShadow: isBest
+                ? [
+                    BoxShadow(
+                      color: AppTheme.accentColor.withValues(alpha: 0.25),
+                      blurRadius: 16,
+                      offset: const Offset(0, 6),
+                    ),
+                  ]
+                : null,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: isBest
+                          ? Colors.white.withValues(alpha: 0.2)
+                          : AppTheme.getAccentTint(context),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(
+                      Icons.bolt_rounded,
+                      color: isBest ? Colors.white : AppTheme.accentColor,
+                      size: 22,
+                    ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Text(
+                          '${pack.credits} Credits',
+                          style: TextStyle(
+                            fontSize: 19,
+                            fontWeight: FontWeight.w800,
+                            color: isBest
+                                ? Colors.white
+                                : AppTheme.getPrimaryText(context),
+                          ),
+                        ),
+                        if (isBest) ...[
+                          const SizedBox(width: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 3,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(20),
+                            ),
+                            child: Text(
+                              'Best Value',
+                              style: TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.bold,
+                                color: AppTheme.accentColor,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'One-time top-up',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: isBest
+                      ? Colors.white.withValues(alpha: 0.85)
+                      : AppTheme.getSecondaryText(context),
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                '₹${pack.priceInr}',
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.w800,
+                  color: isBest ? Colors.white : AppTheme.accentColor,
+                ),
+              ),
+              const SizedBox(height: 14),
+              Divider(
+                height: 1,
+                color: isBest
+                    ? Colors.white.withValues(alpha: 0.25)
+                    : AppTheme.getCardBorder(context),
+              ),
+              const SizedBox(height: 12),
+              ..._benefits.map(
+                (b) => Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Icon(
+                        Icons.check_circle_rounded,
+                        size: 15,
+                        color: isBest
+                            ? Colors.white.withValues(alpha: 0.9)
+                            : AppTheme.accentColor,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          b,
+                          style: TextStyle(
+                            fontSize: 12.5,
+                            color: isBest
+                                ? Colors.white.withValues(alpha: 0.92)
+                                : AppTheme.getSecondaryText(context),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ==================== PLAN CARD WIDGET (Square/Compact, Premium) ====================
 
 class PlanCard extends StatelessWidget {
   final SubscriptionPlan plan;
@@ -1000,142 +1092,228 @@ class PlanCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isFree = plan.price == 0;
+    final isPremium = plan.isPopular;
+
     return Container(
-      padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: AppTheme.getCardBackground(context),
-        borderRadius: BorderRadius.circular(AppTheme.borderRadius),
+        gradient: isPremium
+            ? LinearGradient(
+                colors: [
+                  AppTheme.accentColor.withValues(alpha: 0.08),
+                  AppTheme.getCardBackground(context),
+                ],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              )
+            : null,
+        color: isPremium ? null : AppTheme.getCardBackground(context),
+        borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isCurrentPlan || plan.isPopular
+          color: isCurrentPlan || isPremium
               ? AppTheme.accentColor
               : AppTheme.getCardBorder(context),
-          width: isCurrentPlan || plan.isPopular ? 2 : 1,
+          width: isCurrentPlan || isPremium ? 1.6 : 1,
         ),
+        boxShadow: isPremium
+            ? [
+                BoxShadow(
+                  color: AppTheme.accentColor.withValues(alpha: 0.14),
+                  blurRadius: 14,
+                  offset: const Offset(0, 5),
+                ),
+              ]
+            : null,
       ),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
             children: [
               Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Row(
                   children: [
-                    Text(
-                      plan.name,
-                      style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                          ),
+                    Flexible(
+                      child: Text(
+                        plan.name,
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                      ),
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      isFree ? '₹0' : '₹${plan.price}/month',
-                      style: Theme.of(context).textTheme.displayLarge?.copyWith(
-                            fontSize: 28,
-                            fontWeight: FontWeight.bold,
-                            color: AppTheme.accentColor,
-                          ),
-                    ),
+                    if (isPremium) ...[
+                      const SizedBox(width: 4),
+                      Icon(
+                        Icons.workspace_premium_rounded,
+                        size: 14,
+                        color: AppTheme.accentColor,
+                      ),
+                    ],
                   ],
                 ),
               ),
-              if (plan.isPopular)
-                Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: AppTheme.accentColor,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: const Text(
-                    'Most Popular',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
             ],
           ),
-          const SizedBox(height: 8),
+          if (isPremium) ...[
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    AppTheme.accentColor,
+                    AppTheme.accentColor.withValues(alpha: 0.7),
+                  ],
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'Popular',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 9,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+          ],
+          const SizedBox(height: 6),
           Text(
             '${plan.credits} credits/month',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: AppTheme.getSecondaryText(context),
+                  fontWeight: FontWeight.w500,
+                  fontSize: 11,
                 ),
           ),
-          const SizedBox(height: 16),
-          const Divider(),
-          const SizedBox(height: 16),
-          Text(
-            'What you get',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.getSecondaryText(context),
-                ),
-          ),
-          const SizedBox(height: 10),
-          ...plan.features.map(
-            (feature) => Padding(
-              padding: const EdgeInsets.only(bottom: 10),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    decoration: BoxDecoration(
-                      color: AppTheme.accentColor.withValues(alpha: 0.12),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.check,
-                      size: 13,
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(
+                isFree ? '₹0' : '₹${plan.price}',
+                style: Theme.of(context).textTheme.displayLarge?.copyWith(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
                       color: AppTheme.accentColor,
                     ),
+              ),
+              if (!isFree) ...[
+                const SizedBox(width: 3),
+                Text(
+                  '/mo',
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: AppTheme.getSecondaryText(context),
                   ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      feature,
-                      style: Theme.of(context).textTheme.bodyMedium,
+                ),
+              ],
+            ],
+          ),
+          const SizedBox(height: 10),
+          Expanded(
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isPremium
+                    ? AppTheme.accentColor.withValues(alpha: 0.06)
+                    : AppTheme.getAccentTint(context).withValues(alpha: 0.3),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: SingleChildScrollView(
+                physics: const NeverScrollableScrollPhysics(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: plan.features.map(
+                    (feature) => Padding(
+                      padding: const EdgeInsets.only(bottom: 6),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Container(
+                            margin: const EdgeInsets.only(top: 1),
+                            width: 13,
+                            height: 13,
+                            decoration: BoxDecoration(
+                              color: AppTheme.accentColor.withValues(alpha: 0.15),
+                              shape: BoxShape.circle,
+                            ),
+                            alignment: Alignment.center,
+                            child: Icon(
+                              Icons.check,
+                              size: 8,
+                              color: AppTheme.accentColor,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Expanded(
+                            child: Text(
+                              feature,
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                    height: 1.25,
+                                    fontSize: 10.5,
+                                  ),
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                  ).toList(),
+                ),
               ),
             ),
           ),
-          const SizedBox(height: 20),
+          const SizedBox(height: 10),
           SizedBox(
             width: double.infinity,
-            height: 48,
+            height: 38,
             child: isCurrentPlan
                 ? OutlinedButton(
                     onPressed: null,
                     style: OutlinedButton.styleFrom(
                       foregroundColor: AppTheme.getSecondaryText(context),
                       side: BorderSide(color: AppTheme.getCardBorder(context)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      padding: EdgeInsets.zero,
                     ),
-                    child: const Text('Current Plan'),
+                    child: const Text('Current', style: TextStyle(fontSize: 12)),
                   )
                 : isFree
                     ? OutlinedButton(
                         onPressed: null,
-                        child: const Text('Included on signup'),
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: EdgeInsets.zero,
+                        ),
+                        child: const Text('Included', style: TextStyle(fontSize: 12)),
                       )
                     : ElevatedButton(
                         onPressed: onUpgrade,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: plan.isPopular
+                          backgroundColor: isPremium
                               ? AppTheme.accentColor
                               : AppTheme.getPrimaryText(context),
-                          foregroundColor: plan.isPopular
+                          foregroundColor: isPremium
                               ? Colors.white
                               : AppTheme.getCardBackground(context),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: EdgeInsets.zero,
                         ),
-                        child: Text(upgradeLabel),
+                        child: Text(
+                          upgradeLabel,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 12),
+                        ),
                       ),
           ),
         ],

@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/widgets/app_toast.dart';
 import 'package:examspark_frontend/presentation/widgets/smart_educational_content.dart';
-
+import 'dart:typed_data';
+import 'dart:ui' as ui;
+import 'package:flutter/rendering.dart';
+import 'package:gal/gal.dart';
 /// Dedicated Visual Card under Home AI answer — never dump diagrams into chat text.
 /// Founder Lock: Home AI Mobile UX (Jul 18, 2026).
 class HomeAiVisualCard extends StatefulWidget {
@@ -23,6 +26,8 @@ class HomeAiVisualCard extends StatefulWidget {
 
 class _HomeAiVisualCardState extends State<HomeAiVisualCard> {
   late bool _expanded;
+  final GlobalKey _captureKey = GlobalKey();
+  bool _downloading = false;
 
   @override
   void initState() {
@@ -163,9 +168,15 @@ class _HomeAiVisualCardState extends State<HomeAiVisualCard> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  SmartEducationalContent(
-                    markdownBody: '',
-                    visualPayload: data,
+                  RepaintBoundary(
+                    key: _captureKey,
+                    child: Container(
+                      color: AppTheme.getCardBackground(context),
+                      child: SmartEducationalContent(
+                        markdownBody: '',
+                        visualPayload: data,
+                      ),
+                    ),
                   ),
                   const SizedBox(height: 6),
                   Row(
@@ -183,9 +194,20 @@ class _HomeAiVisualCardState extends State<HomeAiVisualCard> {
                       ),
                       const SizedBox(width: 6),
                       TextButton.icon(
-                        onPressed: () => _downloadVisual(context, data),
-                        icon: const Icon(Icons.download_rounded, size: 16),
-                        label: const Text('Download', style: TextStyle(fontSize: 11.5)),
+                        onPressed: _downloading
+                            ? null
+                            : () => _downloadVisual(context, data),
+                        icon: _downloading
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.download_rounded, size: 16),
+                        label: Text(
+                          _downloading ? 'Saving…' : 'Download',
+                          style: const TextStyle(fontSize: 11.5),
+                        ),
                         style: TextButton.styleFrom(
                           foregroundColor: AppTheme.accentColor,
                           visualDensity: VisualDensity.compact,
@@ -208,49 +230,123 @@ class _HomeAiVisualCardState extends State<HomeAiVisualCard> {
   }
 
   void _showFullView(BuildContext context, VisualPayloadData data) {
+    final fullViewKey = GlobalKey();
+    var isSaving = false;
     showDialog(
       context: context,
-      builder: (ctx) => Dialog.fullscreen(
-        backgroundColor: AppTheme.getCardBackground(ctx),
-        child: SafeArea(
-          child: Column(
-            children: [
-              AppBar(
-                title: const Text(
-                  'Visual Explanation',
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => Dialog.fullscreen(
+          backgroundColor: AppTheme.getCardBackground(ctx),
+          child: SafeArea(
+            child: Column(
+              children: [
+                AppBar(
+                  title: const Text(
+                    'Visual Explanation',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  leading: IconButton(
+                    icon: const Icon(Icons.close_rounded),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                  backgroundColor: Colors.transparent,
+                  elevation: 0,
+                  actions: [
+                    Padding(
+                      padding: const EdgeInsets.only(right: 8),
+                      child: TextButton.icon(
+                        onPressed: isSaving
+                            ? null
+                            : () async {
+                                setDialogState(() => isSaving = true);
+                                await _downloadVisualFromKey(
+                                  context,
+                                  fullViewKey,
+                                );
+                                setDialogState(() => isSaving = false);
+                              },
+                        icon: isSaving
+                            ? const SizedBox(
+                                width: 14,
+                                height: 14,
+                                child: CircularProgressIndicator(strokeWidth: 2),
+                              )
+                            : const Icon(Icons.download_rounded, size: 18),
+                        label: Text(isSaving ? 'Saving…' : 'Download'),
+                        style: TextButton.styleFrom(
+                          foregroundColor: AppTheme.accentColor,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-                leading: IconButton(
-                  icon: const Icon(Icons.close_rounded),
-                  onPressed: () => Navigator.pop(ctx),
-                ),
-                backgroundColor: Colors.transparent,
-                elevation: 0,
-              ),
-              Expanded(
-                child: InteractiveViewer(
-                  minScale: 0.8,
-                  maxScale: 4.0,
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: SmartEducationalContent(
-                      markdownBody: '',
-                      visualPayload: data,
+                Expanded(
+                  child: InteractiveViewer(
+                    minScale: 0.8,
+                    maxScale: 4.0,
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(16),
+                      child: RepaintBoundary(
+                        key: fullViewKey,
+                        child: Container(
+                          color: AppTheme.getCardBackground(ctx),
+                          child: SmartEducationalContent(
+                            markdownBody: '',
+                            visualPayload: data,
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
     );
   }
 
-  void _downloadVisual(BuildContext context, VisualPayloadData data) {
-    AppToast.show(
-      'Visual diagram saved to Study Workspace!',
-      isError: false,
-    );
+  Future<void> _downloadVisual(BuildContext context, VisualPayloadData data) async {
+    if (_downloading) return;
+    setState(() => _downloading = true);
+    await _downloadVisualFromKey(context, _captureKey);
+    if (mounted) setState(() => _downloading = false);
   }
-}
+
+  /// Shared capture-and-save logic — used by both the collapsed card's
+  /// Download button and the Full View dialog's Download action.
+  Future<void> _downloadVisualFromKey(
+    BuildContext context,
+    GlobalKey key,
+  ) async {
+    try {
+      final boundary = key.currentContext?.findRenderObject()
+          as RenderRepaintBoundary?;
+      if (boundary == null) {
+        throw StateError('Visual content not ready to capture.');
+      }
+      // Wait one frame in case a layout pass is still in progress.
+      if (boundary.debugNeedsPaint) {
+        await Future<void>.delayed(const Duration(milliseconds: 50));
+      }
+      final image = await boundary.toImage(pixelRatio: 3.0);
+      final byteData = await image.toByteData(format: ui.ImageByteFormat.png);
+      final bytes = byteData?.buffer.asUint8List();
+      if (bytes == null || bytes.isEmpty) {
+        throw StateError('Could not render visual to an image.');
+      }
+      await Gal.putImageBytes(
+        bytes,
+        name: 'sonaxia_visual_${DateTime.now().millisecondsSinceEpoch}',
+      );
+      if (!mounted) return;
+      AppToast.show('Visual diagram saved to your gallery!', isError: false);
+    } catch (error) {
+      if (!mounted) return;
+      AppToast.show(
+        'Could not save the diagram. Please try again.',
+        isError: true,
+      );
+    }
+  }

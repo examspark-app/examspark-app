@@ -53,6 +53,8 @@ class CreditHistoryDisplay {
       case 'subscription_monthly':
       case 'payment_grant':
         return 'Credits Added';
+      case 'referral_reward':
+        return 'Referral Reward';
       case 'refund':
         return 'Refund Adjustment';
       default:
@@ -81,6 +83,9 @@ class CreditHistoryDisplay {
     final d = (description ?? '').toLowerCase();
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    if (a == 'referral_reward' || d.contains('referral')) {
+      return (Icons.card_giftcard_rounded, isDark ? const Color(0xFFFFB74D) : const Color(0xFFFB8C00));
+    }
     if (a == 'english_practice' || a.contains('english_practice') || d.contains('english practice')) {
       return (Icons.record_voice_over_rounded, isDark ? const Color(0xFF26A69A) : const Color(0xFF12A594));
     }
@@ -142,6 +147,8 @@ class CreditHistoryDisplay {
     }
     if (a == 'ask_ai' ||
         a == 'ask_ai_web' ||
+      a == 'glow_guide' ||
+      a.startsWith('glow_guide') ||
         a == 'home_ai_vision' ||
         a.startsWith('home_ai')) {
       return filterAskAi;

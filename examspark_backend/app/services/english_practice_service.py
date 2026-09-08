@@ -1037,6 +1037,20 @@ async def start_session(user_id: str, model: str = "qwen3") -> dict:
     memory_context = learning_memory.format_memory_context(
         learning_memory.load_memory(user_id, target), mode="chat"
     )
+    is_auto_detect_native = native.strip().casefold() in {
+        "auto-detect",
+        "auto detect",
+        "match_question",
+    }
+    greeting_language_instruction = (
+        "Do not assume a help language yet. Keep this greeting very short and "
+        "ask the learner to reply naturally; detect their help language from "
+        "their first meaningful reply."
+        if is_auto_detect_native
+        else f"Welcome the learner warmly IN {native} (the student's own native "
+        f"language — write it using {native}'s own everyday script and phrasing, "
+        "never another language's template)."
+    )
     system_text = _system_prompt(
         native_language=native,
         target_focus=None,
@@ -1050,10 +1064,8 @@ async def start_session(user_id: str, model: str = "qwen3") -> dict:
                 "role": "user",
                 "content": (
                     f"(system: This is the very first greeting turn of a brand new "
-                    f"conversation. Welcome the learner warmly IN {native} (the "
-                    f"student's own native language — write it using {native}'s own "
-                    f"everyday script and phrasing, never another language's "
-                    f"template), keep it short and EXCITED — like running into a "
+                    f"conversation. {greeting_language_instruction} Keep it short "
+                    f"and EXCITED — like running into a "
                     f"friend who wants to finally learn something together, not a "
                     f"reception desk.\n\n"
                     f"FRIEND-ENERGY CALIBRATION: Do NOT just flatly say the "
@@ -1175,7 +1187,7 @@ async def send_message(
     clean, suggestions, mcq = _split_and_extract(raw_reply)
     reply = clean or "Okay, let's continue."
     try:
-        deduct_credits(
+        new_balance = deduct_credits(
             user_id,
             _CREDIT_COST,
             description="English Practice chat turn",
@@ -1195,6 +1207,8 @@ async def send_message(
     _schedule_reply_tts(user_id, reply)
     result: dict = {
         "reply": reply,
+        "credits_charged": _CREDIT_COST,
+        "new_balance": new_balance,
         "suggestions": suggestions,
         "message_count": existing_count + 2,
         "suggest_new_chat": existing_count + 2 >= _NEW_CHAT_SUGGESTION_THRESHOLD,

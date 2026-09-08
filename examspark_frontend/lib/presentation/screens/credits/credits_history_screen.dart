@@ -183,6 +183,8 @@ class _CreditsHistoryScreenState extends State<CreditsHistoryScreen> {
           RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'),
           (m) => '${m[1]},',
         );
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final valueColor = isDark ? Colors.white : AppTheme.babyPink;
     return Padding(
       padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
       child: Container(
@@ -199,7 +201,9 @@ class _CreditsHistoryScreenState extends State<CreditsHistoryScreen> {
             Text(
               'This Month',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: AppTheme.getSecondaryText(context),
+                    color: isDark
+                        ? AppTheme.darkSecondaryText
+                        : AppTheme.getSecondaryText(context),
                     fontWeight: FontWeight.w600,
                   ),
             ),
@@ -208,14 +212,16 @@ class _CreditsHistoryScreenState extends State<CreditsHistoryScreen> {
               '$spentLabel Credits Used',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: AppTheme.babyPink,
+                    color: valueColor,
                   ),
             ),
             const SizedBox(height: 4),
             Text(
               _renewLabel,
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: AppTheme.getSecondaryText(context),
+                    color: isDark
+                        ? AppTheme.darkSecondaryText
+                        : AppTheme.getSecondaryText(context),
                   ),
             ),
           ],

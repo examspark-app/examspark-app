@@ -110,7 +110,9 @@ class _ChatBubble {
 
   /// AI-suggested follow-up questions (sequential reveal chips).
   final List<String> suggestedQuestions;
+  bool suggestedQuestionsUsed = false;
   final String? practiceQuestion;
+  bool practiceQuestionSubmitted = false;
 
   /// In-memory photo for this session's user bubble (not persisted to disk).
   final Uint8List? imageBytes;
@@ -1746,7 +1748,7 @@ trailing: const [],
         _FeatureLauncherCard(
           icon: Icons.record_voice_over_rounded,
           iconColor: const Color(0xFF12A594),
-          title: 'Speak AI',
+          title: 'Language Practice',
           tagline: 'Practice speaking any language',
           onTap: () => Navigator.push(
             context,
@@ -2036,7 +2038,8 @@ trailing: const [],
             hasVisual = rawVisual != null && rawVisual.isNotEmpty;
           }
           final hasActions = bubble.showStudyActions ||
-              bubble.suggestedQuestions.isNotEmpty ||
+              (bubble.suggestedQuestions.isNotEmpty &&
+                !bubble.suggestedQuestionsUsed) ||
               bubble.practiceQuestion != null;
           final hasImage = (bubble.imageBytes != null &&
                   bubble.imageBytes!.isNotEmpty) ||
@@ -2176,7 +2179,8 @@ trailing: const [],
                   },
                   trailing:
                       (bubble.showStudyActions ||
-                          bubble.suggestedQuestions.isNotEmpty)
+                      (bubble.suggestedQuestions.isNotEmpty &&
+                        !bubble.suggestedQuestionsUsed))
                       ? Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           mainAxisSize: MainAxisSize.min,
@@ -2218,7 +2222,16 @@ trailing: const [],
                               const SizedBox(height: 10),
                               _SuggestedQuestionsRow(
                                 questions: bubble.suggestedQuestions,
-                                onTap: (q) => _handleSend(q),
+                                onTap: (q) {
+                                  if (_isSending ||
+                                      bubble.suggestedQuestionsUsed) {
+                                    return;
+                                  }
+                                  setState(() {
+                                    bubble.suggestedQuestionsUsed = true;
+                                  });
+                                  unawaited(_handleSend(q));
+                                },
                               ),
                             ],
 
@@ -2227,7 +2240,15 @@ trailing: const [],
                               const SizedBox(height: 10),
                               _PracticeQuestionBox(
                                 question: bubble.practiceQuestion!,
+                                submitted: bubble.practiceQuestionSubmitted,
                                 onSubmit: (studentAnswer) {
+                                  if (_isSending ||
+                                      bubble.practiceQuestionSubmitted) {
+                                    return;
+                                  }
+                                  setState(() {
+                                    bubble.practiceQuestionSubmitted = true;
+                                  });
                                   final wrapped =
                                       'PRACTICE ANSWER CHECK — you asked '
                                       'this practice question: "${bubble.practiceQuestion}" '
@@ -2236,7 +2257,7 @@ trailing: const [],
                                       'The student answered: "$studentAnswer". '
                                       'Judge it like a teacher per the '
                                       'JUDGING MODE rules.';
-                                  _handleSend(wrapped);
+                                  unawaited(_handleSend(wrapped));
                                 },
                               ),
                             ],
@@ -3155,35 +3176,15 @@ class _CollapsibleUserTextState extends State<_CollapsibleUserText> {
   }
 }
 
-/// AI-suggested follow-up question chips — reveal one at a time
-/// (teacher-style "ek baat, phir agli"), not all at once.
-class _SuggestedQuestionsRow extends StatefulWidget {
+/// AI-suggested follow-up question chips.
+///
+/// This stays stateless because chat rows are virtualized by ListView.builder;
+/// delayed reveal state would reset when a row leaves and re-enters the viewport.
+class _SuggestedQuestionsRow extends StatelessWidget {
   final List<String> questions;
   final ValueChanged<String> onTap;
 
   const _SuggestedQuestionsRow({required this.questions, required this.onTap});
-
-  @override
-  State<_SuggestedQuestionsRow> createState() => _SuggestedQuestionsRowState();
-}
-
-class _SuggestedQuestionsRowState extends State<_SuggestedQuestionsRow> {
-  int _visibleCount = 0;
-
-  @override
-  void initState() {
-    super.initState();
-    _revealNext();
-  }
-
-  void _revealNext() {
-    if (!mounted || _visibleCount >= widget.questions.length) return;
-    Future.delayed(Duration(milliseconds: _visibleCount == 0 ? 200 : 350), () {
-      if (!mounted) return;
-      setState(() => _visibleCount++);
-      _revealNext();
-    });
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -3191,39 +3192,36 @@ class _SuggestedQuestionsRowState extends State<_SuggestedQuestionsRow> {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        for (var i = 0; i < _visibleCount; i++)
-          AnimatedOpacity(
-            duration: const Duration(milliseconds: 250),
-            opacity: 1,
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 6),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(10),
-                onTap: () => widget.onTap(widget.questions[i]),
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 10,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: AppTheme.getCardBorder(context)),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          widget.questions[i],
-                          style: const TextStyle(fontSize: 13.5),
-                        ),
+        for (var i = 0; i < questions.length; i++)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: InkWell(
+              borderRadius: BorderRadius.circular(10),
+              onTap: () => onTap(questions[i]),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                decoration: BoxDecoration(
+                  border: Border.all(color: AppTheme.getCardBorder(context)),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        questions[i],
+                        style: const TextStyle(fontSize: 13.5),
                       ),
-                      Icon(
-                        Icons.arrow_forward_rounded,
-                        size: 16,
-                        color: AppTheme.getSecondaryText(context),
-                      ),
-                    ],
+                    ),
+                    Icon(
+                      Icons.arrow_forward_rounded,
+                      size: 16,
+                      color: AppTheme.getSecondaryText(context),
+                    ),
+                  ],
                   ),
                 ),
               ),
@@ -3237,9 +3235,14 @@ class _SuggestedQuestionsRowState extends State<_SuggestedQuestionsRow> {
 /// Teacher-style practice check — question + answer box + submit.
 class _PracticeQuestionBox extends StatefulWidget {
   final String question;
+  final bool submitted;
   final ValueChanged<String> onSubmit;
 
-  const _PracticeQuestionBox({required this.question, required this.onSubmit});
+  const _PracticeQuestionBox({
+    required this.question,
+    required this.submitted,
+    required this.onSubmit,
+  });
 
   @override
   State<_PracticeQuestionBox> createState() => _PracticeQuestionBoxState();
@@ -3248,6 +3251,20 @@ class _PracticeQuestionBox extends StatefulWidget {
 class _PracticeQuestionBoxState extends State<_PracticeQuestionBox> {
   final TextEditingController _controller = TextEditingController();
   bool _submitted = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _submitted = widget.submitted;
+  }
+
+  @override
+  void didUpdateWidget(covariant _PracticeQuestionBox oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.submitted && !_submitted) {
+      _submitted = true;
+    }
+  }
 
   @override
   void dispose() {

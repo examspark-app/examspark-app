@@ -8,6 +8,7 @@ import 'package:examspark_frontend/core/router/invite_deep_link.dart';
 import 'package:examspark_frontend/core/services/fcm_push_service.dart';
 import 'package:examspark_frontend/core/services/notification_inbox_controller.dart';
 import 'package:examspark_frontend/core/services/pending_invite_store.dart';
+import 'package:examspark_frontend/core/services/pending_referral_store.dart';
 import 'package:examspark_frontend/core/services/app_update_service.dart';
 import 'package:examspark_frontend/core/services/web_reload.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
@@ -137,11 +138,23 @@ class _AuthGateState extends State<AuthGate> {
           _profileFuture = SupabaseClient.instance.getUserProfile(userId);
         }
       });
-      final referralCode =
-          session.user.userMetadata?['referral_code'] as String?;
-      if (referralCode != null && referralCode.trim().isNotEmpty) {
-        unawaited(LectureService.instance.redeemReferral(referralCode));
-      }
+      PendingReferralStore.peek().then((pendingCode) {
+        final metadataCode =
+            session.user.userMetadata?['referral_code'] as String?;
+        final effectiveCode =
+            (metadataCode != null && metadataCode.trim().isNotEmpty)
+                ? metadataCode.trim()
+                : (pendingCode != null && pendingCode.trim().isNotEmpty)
+                    ? pendingCode.trim()
+                    : null;
+        if (effectiveCode != null) {
+          LectureService.instance.redeemReferral(effectiveCode).then((_) {
+            PendingReferralStore.clear();
+          }).catchError((_) {
+            PendingReferralStore.clear();
+          });
+        }
+      });
       unawaited(_registerDeviceForSignedInUser());
       // Register FCM token after login (phone). Start in-app + web desktop inbox.
       unawaited(FcmPushService.instance.registerTokenWithBackend());
@@ -219,8 +232,8 @@ class _AuthGateState extends State<AuthGate> {
                 return;
               }
               final started = await AppUpdateService.instance.startInAppUpdate();
-              if (!started && ctx != null && ctx!.mounted) {
-                ScaffoldMessenger.of(ctx!).showSnackBar(
+              if (!started && ctx != null && ctx.mounted) {
+                ScaffoldMessenger.of(ctx).showSnackBar(
                   const SnackBar(
                     content: Text(
                       'In-app update is not available for this installation yet.',
@@ -376,22 +389,18 @@ class _AuthGateState extends State<AuthGate> {
                   MaterialPageRoute(builder: (_) => const AppShell()),
                   (route) => false,
                 );
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (_) => const EnglishPracticeEntry(),
-                  ),
-                );
+                AppNavigation.key.currentState?.push(
+  MaterialPageRoute(builder: (_) => const EnglishPracticeEntry()),
+);
                 return;
               }
               Navigator.of(context).pushAndRemoveUntil(
                 MaterialPageRoute(builder: (_) => const AppShell()),
                 (route) => false,
               );
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const GlowGuideScreen()),
-              );
+              AppNavigation.key.currentState?.push(
+  MaterialPageRoute(builder: (_) => const GlowGuideScreen()),
+);
             },
           );
         }

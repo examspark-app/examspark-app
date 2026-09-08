@@ -9,6 +9,7 @@ import 'package:examspark_frontend/core/network/supabase_client.dart'
 import 'package:examspark_frontend/core/constants/plan_tier_gating.dart';
 import 'package:examspark_frontend/core/services/feature_analytics_tracker.dart';
 import 'package:examspark_frontend/core/services/lecture_service.dart';
+import 'package:examspark_frontend/core/services/session_live_sync.dart';
 import 'package:examspark_frontend/core/theme/app_theme.dart';
 import 'package:examspark_frontend/presentation/screens/glow_guide/glow_guide_history_screen.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -47,7 +48,7 @@ class GlowGuideScreen extends StatefulWidget {
 
 class _GlowGuideScreenState extends State<GlowGuideScreen> {
   static const _categoryDetails = <String, ({IconData icon, Color color, String description})>{
-    'Skin Care': (
+    'Skin / Face': (
       icon: Icons.face_retouching_natural_rounded,
       color: Color(0xFFE91E63),
       description: 'Skincare routines, tips, and product advice for healthy, glowing skin.',
@@ -57,17 +58,17 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
       color: Color(0xFFFF9800),
       description: 'Body care tips, moisturization, and hygiene for soft, healthy skin.',
     ),
-    'Baby Skin Care': (
+    'Baby Care': (
       icon: Icons.child_care_rounded,
       color: Color(0xFFFFC107),
       description: 'Gentle care tips and safe product advice for your baby\'s delicate skin.',
     ),
-    'Cloth Guide': (
+    'Cloth / Fabric': (
       icon: Icons.checkroom_rounded,
       color: Color(0xFF4CAF50),
       description: 'Fabric care tips, stain removal, and best washing practices.',
     ),
-    'Hair Care': (
+    'Hair / Scalp': (
       icon: Icons.face_3_rounded,
       color: Color(0xFF2196F3),
       description: 'Hair care routines, solutions for hair problems and growth tips.',
@@ -186,11 +187,11 @@ class _GlowGuideScreenState extends State<GlowGuideScreen> {
   }
 
   static const _categories = [
-    ('Skin Care', Icons.face_retouching_natural_outlined),
-    ('Hair Care', Icons.content_cut_outlined),
+    ('Skin / Face', Icons.face_retouching_natural_outlined),
+    ('Hair / Scalp', Icons.content_cut_outlined),
     ('Body Care', Icons.spa_outlined),
-    ('Cloth Guide', Icons.checkroom_outlined),
-    ('Baby Skin Care', Icons.child_friendly_outlined),
+    ('Cloth / Fabric', Icons.checkroom_outlined),
+    ('Baby Care', Icons.child_friendly_outlined),
   ];
 
   static const _typeOwnOption = 'Something else — I\'ll type it';
@@ -661,6 +662,29 @@ String _canonicalFirstLanguage(String label) {
     _sendSilentTurn('Gender: $clean.');
   }
 
+  void _showCreditResult(Map<String, dynamic> result) {
+    final charged = (result['credits_charged'] as num?)?.toInt();
+    final balance = (result['new_balance'] as num?)?.toInt();
+    if (charged == null && balance == null) return;
+
+    // SessionLiveSync is the shared source used by the app's CreditsPill.
+    // Refreshing it here keeps Home, tabs, and the top bar in sync after a
+    // GlowGuide charge without creating a second balance state.
+    unawaited(SessionLiveSync.instance.refreshAll());
+    if (!mounted) return;
+    final parts = <String>[];
+    if (charged != null) parts.add('$charged credits used');
+    if (balance != null) parts.add('$balance credits left');
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        SnackBar(
+          content: Text(parts.join(' • ')),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+  }
+
   /// Sends a turn to the backend without adding a visible user bubble —
   /// used right after category selection so the AI's first reply is the
   /// very next thing shown, tailored to this category from the start.
@@ -711,6 +735,7 @@ String _canonicalFirstLanguage(String label) {
         _sending = false;
         _sessionComplete = result['session_complete'] == true;
       });
+      _showCreditResult(result);
       _scrollToBottom();
     } catch (error) {
       if (!mounted) return;
@@ -848,11 +873,11 @@ String _canonicalFirstLanguage(String label) {
   }
 
   static const _categoryMap = {
-    'Skin Care': 'skin',
+    'Skin / Face': 'skin',
     'Body Care': 'body',
-    'Baby Skin Care': 'baby',
-    'Cloth Guide': 'cloth',
-    'Hair Care': 'hair',
+    'Baby Care': 'baby',
+    'Cloth / Fabric': 'cloth',
+    'Hair / Scalp': 'hair',
   };
 
   Future<void> _selectCategory(String label) async {
@@ -974,6 +999,7 @@ String _canonicalFirstLanguage(String label) {
         _usedWebSearch = result['used_web_search'] == true;
         _webSearchStatus = null;
       });
+      _showCreditResult(result);
       _scrollToBottom();
       if (_usedWebSearch) _showResearchSourceNotice();
       if (_sessionComplete) _promptNewChat();
@@ -1062,11 +1088,11 @@ String _canonicalFirstLanguage(String label) {
   }
 
   static const _reverseCategoryMap = {
-    'skin': 'Skin Care',
+    'skin': 'Skin / Face',
     'body': 'Body Care',
-    'baby': 'Baby Skin Care',
-    'cloth': 'Cloth Guide',
-    'hair': 'Hair Care',
+    'baby': 'Baby Care',
+    'cloth': 'Cloth / Fabric',
+    'hair': 'Hair / Scalp',
   };
 
   String _prettyCategory(String raw) {
@@ -2044,7 +2070,7 @@ String _canonicalFirstLanguage(String label) {
   }
 
   Widget _buildTopGuideBanner(BuildContext context, bool isDark) {
-    final categoryName = _prettyCategory(_category ?? 'Skin Care');
+    final categoryName = _prettyCategory(_category ?? 'skin');
     final bgColors = isDark
         ? [const Color(0xFF231E34), const Color(0xFF2A1C28)]
         : [const Color(0xFFF7F2FE), const Color(0xFFFDF0F6)];

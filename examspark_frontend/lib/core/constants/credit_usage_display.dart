@@ -16,10 +16,19 @@ class CreditUsageDisplay {
     return creditsRemaining ~/ CreditCosts.askAiNormal;
   }
 
+  static int estimateGlowGuideChats(int creditsRemaining) {
+    if (CreditCosts.glowGuideText <= 0) return 0;
+    return creditsRemaining ~/ CreditCosts.glowGuideText;
+  }
+
   /// Recommended primary dashboard line.
   static String primaryBalanceLine(int creditsRemaining) {
     final sessions = estimateLectureSessions(creditsRemaining);
     return '≈ $sessions Lecture Sessions (if used only for recording)';
+  }
+
+  static String glowGuideBalanceLine(int creditsRemaining) {
+    return '≈ ${estimateGlowGuideChats(creditsRemaining)} Beauty Care AI chats (text estimate)';
   }
 
   static const String multiStatDisclaimer =
